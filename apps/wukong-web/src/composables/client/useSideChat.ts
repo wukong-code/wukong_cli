@@ -13,7 +13,7 @@ import type { AppMessage } from '../../api/types';
 import type { WukongEventConnection } from '../../api/types';
 import { messagesToTurns } from '../messagesToTurns';
 import type { ChatTurn } from '../../types';
-import type { ExtendedState } from '../useWukongWebClient';
+import type { ExtendedState } from '../useKimiWebClient';
 
 export interface UseSideChatDeps {
   pushOperationFailure: (

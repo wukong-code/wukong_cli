@@ -3,6 +3,7 @@ dist/
 dist-web/
 dist-single/
 dist-native/
+.node-sea/
 .tmp-api-extractor/
 coverage/
 *.tsbuildinfo

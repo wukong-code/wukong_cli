@@ -3,7 +3,7 @@
 // still missing, show a full-page login entry instead of an in-app banner.
 
 import { computed, onUnmounted, ref, watch, type Ref } from 'vue';
-import type { useWukongWebClient } from './useWukongWebClient';
+import type { useWukongWebClient } from './useKimiWebClient';
 
 type WukongWebClient = ReturnType<typeof useWukongWebClient>;
 

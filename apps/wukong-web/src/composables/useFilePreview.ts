@@ -5,7 +5,7 @@
 import { computed, ref, type Ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import type { FileData, FilePreviewRequest, ToolMedia } from '../types';
-import type { useWukongWebClient } from './useWukongWebClient';
+import type { useWukongWebClient } from './useKimiWebClient';
 
 type WukongWebClient = ReturnType<typeof useWukongWebClient>;
 

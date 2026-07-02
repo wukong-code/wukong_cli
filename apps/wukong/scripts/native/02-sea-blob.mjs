@@ -67,11 +67,19 @@ async function writeSeaConfig(target) {
   );
 }
 
+import { ensureSeaNodeBinary } from './sea-node.mjs';
+
+async function getSeaNodePath() {
+  if (process.env.WUKONG_SEA_NODE_PATH) return process.env.WUKONG_SEA_NODE_PATH;
+  return ensureSeaNodeBinary();
+}
+
 export async function runSeaBlobStep() {
   await ensureBundleExists();
   const target = targetTriple();
   await writeSeaConfig(target);
-  await run(process.execPath, ['--experimental-sea-config', nativeSeaConfigPath()]);
+  const seaNodePath = await getSeaNodePath();
+  await run(seaNodePath, ['--experimental-sea-config', nativeSeaConfigPath()]);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

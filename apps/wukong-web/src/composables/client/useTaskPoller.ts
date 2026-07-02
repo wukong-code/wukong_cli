@@ -6,7 +6,7 @@ import { computed, ref, watch, type ComputedRef, type Ref } from 'vue';
 import { getWukongWebApi } from '../../api';
 import type { AppTask } from '../../api/types';
 import { keepLiveSubagents } from '../../lib/taskMerge';
-import type { ExtendedState } from '../useWukongWebClient';
+import type { ExtendedState } from '../useKimiWebClient';
 
 const TASK_OUTPUT_POLL_INTERVAL_MS = 1000;
 const TASK_OUTPUT_POLL_BYTES = 4096;

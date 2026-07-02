@@ -1,63 +1,52 @@
-import { copyFile, mkdir, stat } from 'node:fs/promises';
-import { resolve } from 'node:path';
+import { mkdir, stat } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 
-import { fail, run, tryRun } from './exec.mjs';
+import { run } from './exec.mjs';
 import {
   appRoot,
   nativeBinDir,
   nativeBinPath,
   nativeBlobPath,
-  SEA_SENTINEL_FUSE,
+  nativeIntermediatesDir,
+  nativeSeaConfigPath,
   targetTriple,
 } from './paths.mjs';
+import { ensureSeaNodeBinary } from './sea-node.mjs';
 
-function postjectPath() {
-  const command = process.platform === 'win32' ? 'postject.cmd' : 'postject';
-  return resolve(appRoot, 'node_modules/.bin', command);
+async function getSeaNodePath() {
+  if (process.env.WUKONG_SEA_NODE_PATH) return process.env.WUKONG_SEA_NODE_PATH;
+  return ensureSeaNodeBinary();
 }
 
 async function ensureBlobExists() {
   try {
     await stat(nativeBlobPath());
   } catch {
-    fail(`SEA blob not found at ${nativeBlobPath()}. Run 02-sea-blob.mjs first.`);
+    throw new Error(`SEA blob not found at ${nativeBlobPath()}. Run 02-sea-blob.mjs first.`);
   }
 }
 
-async function copyNodeExecutable(target) {
-  await mkdir(nativeBinDir(target), { recursive: true });
-  const out = nativeBinPath(target);
-  await copyFile(process.execPath, out);
-  if (process.platform !== 'win32') {
-    await run('chmod', ['755', out]);
-  }
-}
-
-async function removeSignatureIfNeeded(target) {
-  const out = nativeBinPath(target);
-  if (process.platform === 'darwin') {
-    await tryRun('codesign', ['--remove-signature', out]);
-  }
-  if (process.platform === 'win32') {
-    await tryRun('signtool', ['remove', '/s', out]);
-  }
-}
-
-async function injectSeaBlob(target) {
-  const out = nativeBinPath(target);
-  const args = [out, 'NODE_SEA_BLOB', nativeBlobPath(), '--sentinel-fuse', SEA_SENTINEL_FUSE];
-  if (process.platform === 'darwin') {
-    args.push('--macho-segment-name', 'NODE_SEA');
-  }
-  await run(postjectPath(), args);
+async function writeBuildSeaConfig(target) {
+  const baseConfig = JSON.parse(await readFile(nativeSeaConfigPath(), 'utf-8'));
+  const buildConfig = {
+    ...baseConfig,
+    output: nativeBinPath(target),
+  };
+  const buildConfigPath = `${nativeIntermediatesDir()}/sea-build-config.json`;
+  await writeFile(buildConfigPath, `${JSON.stringify(buildConfig, null, 2)}\n`);
+  return buildConfigPath;
 }
 
 export async function runInjectStep() {
   const target = targetTriple();
   await ensureBlobExists();
-  await copyNodeExecutable(target);
-  await removeSignatureIfNeeded(target);
-  await injectSeaBlob(target);
+  await mkdir(nativeBinDir(target), { recursive: true });
+
+  const seaNodePath = await getSeaNodePath();
+  const buildConfigPath = await writeBuildSeaConfig(target);
+
+  console.log(`Building single executable with Node SEA: ${nativeBinPath(target)}`);
+  await run(seaNodePath, ['--build-sea', buildConfigPath]);
 }
 
 if (import.meta.url === `file://${process.argv[1]}`) {

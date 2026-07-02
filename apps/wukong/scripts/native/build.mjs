@@ -10,6 +10,8 @@ import { run } from './exec.mjs';
 import { appRoot, nativeIntermediatesDir } from './paths.mjs';
 import { BUILT_IN_CATALOG_ENV } from '../built-in-catalog.mjs';
 
+import { ensureSeaNodeBinary } from './sea-node.mjs';
+
 const { values } = parseArgs({
   options: {
     profile: { type: 'string', default: 'local' },
@@ -34,6 +36,9 @@ function ensureNodeVersion() {
 
 ensureNodeVersion();
 console.log(`==> Native build (profile=${profile})`);
+
+const seaNodePath = await ensureSeaNodeBinary();
+process.env.WUKONG_SEA_NODE_PATH = seaNodePath;
 
 if (profile === 'release' && process.env[BUILT_IN_CATALOG_ENV] === undefined) {
   const catalogPath = resolve(nativeIntermediatesDir(), 'built-in-catalog.json');

@@ -11,7 +11,7 @@ import type { AppMessage, AppModel, AppProvider, AppSession, AppSkill, ThinkingL
 import { safeGetString, safeSetString, STORAGE_KEYS } from '../../lib/storage';
 import { coerceThinkingForModel } from '../../lib/modelThinking';
 import type { ActivityState } from '../../types';
-import type { ExtendedState } from '../useWukongWebClient';
+import type { ExtendedState } from '../useKimiWebClient';
 
 const STARRED_MODELS_STORAGE_KEY = STORAGE_KEYS.starredModels;
 
