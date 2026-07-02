@@ -7,8 +7,8 @@
 ## 从源码运行
 
 ```bash
-git clone https://github.com/mutnpc/wukong.git
-cd wukong
+git clone https://github.com/mutnpc/wukong_cli.git
+cd wukong_cli
 pnpm install
 pnpm dev:cli
 ```

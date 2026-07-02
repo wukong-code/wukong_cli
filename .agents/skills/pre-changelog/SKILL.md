@@ -25,7 +25,7 @@ Pick the one with `headRefName: changeset-release/main`; record `number`, `url` 
 changesets already pre-generates `apps/wukong/CHANGELOG.md` inside the release PR. Extract the new version block from the diff:
 
 ```bash
-gh api repos/mutnpc/wukong/pulls/<RELEASE>/files \
+gh api repos/mutnpc/wukong_cli/pulls/<RELEASE>/files \
   --jq '.[] | select(.filename=="apps/wukong/CHANGELOG.md") | .patch'
 ```
 

@@ -10,7 +10,7 @@ We take security seriously. **Please do not open a public issue for security vul
 
 Preferred channel:
 
-- GitHub Security Advisories — https://github.com/mutnpc/wukong/security/advisories/new
+- GitHub Security Advisories — https://github.com/mutnpc/wukong_cli/security/advisories/new
   (private disclosure, tracked with the codebase)
 
 Alternative channel:

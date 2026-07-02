@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-[文档](docs/README.md) · [Issues](https://github.com/mutnpc/wukong/issues) · [English](README.md)
+[文档](docs/README.md) · [Issues](https://github.com/mutnpc/wukong_cli/issues) · [English](README.md)
 
 ## 什么是 Wukong CLI
 
@@ -37,8 +37,8 @@ wukong upgrade                 # 升级 Wukong
 当前仓库没有经过验证的 `install.sh`、Homebrew formula 或正式发布安装文档。开发时使用 workspace 脚本：
 
 ```sh
-git clone https://github.com/mutnpc/wukong.git
-cd wukong
+git clone https://github.com/mutnpc/wukong_cli.git
+cd wukong_cli
 pnpm install
 pnpm dev:cli
 ```

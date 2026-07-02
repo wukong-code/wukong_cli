@@ -61,7 +61,7 @@ const config = withMermaid(defineConfig({
       },
     ],
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/mutnpc/wukong' },
+      { icon: 'github', link: 'https://github.com/mutnpc/wukong_cli' },
     ],
   },
 

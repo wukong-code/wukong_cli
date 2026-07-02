@@ -16,7 +16,7 @@ const copy = computed(() => isZh.value
       primaryText: '查看用户指南',
       primaryHref: '/user-guide',
       secondaryText: '在 GitHub 查看',
-      secondaryHref: 'https://github.com/mutnpc/wukong',
+      secondaryHref: 'https://github.com/mutnpc/wukong_cli',
     }
   : {
       titleLead: 'Wukong',
@@ -26,7 +26,7 @@ const copy = computed(() => isZh.value
       primaryText: 'Read the user guide',
       primaryHref: '/user-guide',
       secondaryText: 'View on GitHub',
-      secondaryHref: 'https://github.com/mutnpc/wukong',
+      secondaryHref: 'https://github.com/mutnpc/wukong_cli',
     })
 </script>
 

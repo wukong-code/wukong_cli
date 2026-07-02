@@ -2,7 +2,7 @@
 
 [![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
 
-[Documentation](docs/README.md) · [Issues](https://github.com/mutnpc/wukong/issues) · [中文](README.zh-CN.md)
+[Documentation](docs/README.md) · [Issues](https://github.com/mutnpc/wukong_cli/issues) · [中文](README.zh-CN.md)
 
 ## What Is Wukong CLI
 
@@ -37,8 +37,8 @@ Run `wukong --help` for the complete option list.
 This repository does not currently ship a verified `install.sh`, Homebrew formula, or published package documentation. Use the workspace scripts while developing:
 
 ```sh
-git clone https://github.com/mutnpc/wukong.git
-cd wukong
+git clone https://github.com/mutnpc/wukong_cli.git
+cd wukong_cli
 pnpm install
 pnpm dev:cli
 ```

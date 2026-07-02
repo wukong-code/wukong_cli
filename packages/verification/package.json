@@ -5,14 +5,14 @@
   "description": "Deterministic verification, risk scanning, and guard policy for Wukong CLI",
   "license": "MIT",
   "author": "Wukong Team",
-  "homepage": "https://github.com/mutnpc/wukong/tree/main/packages/verification#readme",
+  "homepage": "https://github.com/mutnpc/wukong_cli/tree/main/packages/verification#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mutnpc/wukong.git",
+    "url": "git+https://github.com/mutnpc/wukong_cli.git",
     "directory": "packages/verification"
   },
   "bugs": {
-    "url": "https://github.com/mutnpc/wukong/issues"
+    "url": "https://github.com/mutnpc/wukong_cli/issues"
   },
   "keywords": [
     "wukong",

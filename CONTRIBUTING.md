@@ -27,7 +27,7 @@ We only merge PRs aligned with the roadmap. Drive-by refactors without context a
 
 This is the Wukong CLI pnpm monorepo. The most relevant entry points are:
 
-- `apps/wukong` — CLI / TUI (`@wukong.today/wukong-cli`)
+- `apps/wukong` — CLI / TUI (`@wukong/wukong`)
 - `apps/vis` — session replay & debugging visualizer
 - `packages/node-sdk` — public TypeScript SDK
 - `packages/agent-core`, `kosong`, `kaos`, `oauth`, `telemetry` — internal engine packages
@@ -40,8 +40,8 @@ For the full project map, see [AGENTS.md](AGENTS.md).
 Prerequisites: Node.js >= 24.15.0, pnpm 10.33.0, Git.
 
 ```sh
-git clone https://github.com/mutnpc/wukong.git
-cd wukong
+git clone https://github.com/mutnpc/wukong_cli.git
+cd wukong_cli
 pnpm install
 ```
 
