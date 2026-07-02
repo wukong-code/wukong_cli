@@ -1,8 +1,6 @@
 # Wukong CLI
 
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-
-[文档](docs/README.md) · [Issues](https://github.com/mutnpc/wukong_cli/issues) · [English](README.md)
+[文档](docs/README.md) · [English](README.md)
 
 ## 什么是 Wukong CLI
 
@@ -68,7 +66,7 @@ pnpm lint       # oxlint
 pnpm build      # 构建所有包
 ```
 
-完整贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+完整内部贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 商业化重构
 
@@ -81,4 +79,4 @@ P0 本地 CLI 命令已经实现。剩余文档继续追踪 `wukong_verify`、�
 
 ## 许可证
 
-基于 [MIT](LICENSE) 协议发布。
+本软件为专有内部软件，详见 [LICENSE](LICENSE)。

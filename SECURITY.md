@@ -2,21 +2,20 @@
 
 ## Supported Versions
 
-Currently, Wukong only provides security support for the latest released version.
+Security support is provided only for the currently deployed internal version.
 
 ## Reporting a Vulnerability
 
-We take security seriously. **Please do not open a public issue for security vulnerabilities.**
+We take security seriously. **Please do not open a public issue or discussion for
+security vulnerabilities.**
 
-Preferred channel:
+Report internally through the appropriate private channel (e.g. internal security
+mailing list or chat). Include:
 
-- GitHub Security Advisories — https://github.com/mutnpc/wukong_cli/security/advisories/new
-  (private disclosure, tracked with the codebase)
-
-Alternative channel:
-
-- Email: security@wukong.today (please include "[security]" in the subject)
-- General inquiries: hi@wukong.today
+- Affected version (output of `wukong --version`)
+- Reproduction steps
+- Impact assessment
+- Any suggested mitigation
 
 ## What to Include
 
@@ -27,8 +26,9 @@ Alternative channel:
 
 ## Our Response
 
-We will acknowledge your report and provide an initial assessment as soon as we can.
+We will acknowledge your report and provide an initial assessment as soon as we
+can.
 
-## Public Disclosure
+## Disclosure
 
-We will coordinate with you on disclosure timing once a fix is ready.
+Disclosure timing and scope will be coordinated internally once a fix is ready.

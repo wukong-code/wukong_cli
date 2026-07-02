@@ -1,8 +1,6 @@
 # Wukong CLI
 
-[![License](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
-
-[Documentation](docs/README.md) · [Issues](https://github.com/mutnpc/wukong_cli/issues) · [中文](README.zh-CN.md)
+[Documentation](docs/README.md) · [中文](README.zh-CN.md)
 
 ## What Is Wukong CLI
 
@@ -68,7 +66,7 @@ pnpm lint       # oxlint
 pnpm build      # build all packages
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for the contribution guide.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for the internal contribution guide.
 
 ## Commercial Refactor
 
@@ -81,4 +79,4 @@ The P0 local CLI commands are implemented. The remaining docs track follow-up wo
 
 ## License
 
-Released under the [MIT License](LICENSE).
+This is proprietary internal software. See [LICENSE](LICENSE).

@@ -2,7 +2,7 @@
   "name": "@wukong/monorepo",
   "version": "0.1.1",
   "private": true,
-  "license": "MIT",
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "postinstall": "node scripts/fix-node-pty-perms.mjs",

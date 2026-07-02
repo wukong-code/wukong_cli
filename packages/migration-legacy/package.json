@@ -2,7 +2,7 @@
   "name": "@wukong/migration-legacy",
   "version": "0.1.14",
   "description": "Migrate wukong-cli (~/.wukong/) data into wukong (~/.wukong/).",
-  "license": "MIT",
+  "license": "UNLICENSED",
   "type": "module",
   "private": true,
   "files": [

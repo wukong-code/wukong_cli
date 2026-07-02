@@ -2,7 +2,7 @@
   "name": "@wukong/wukong-web",
   "version": "0.1.2",
   "private": true,
-  "license": "MIT",
+  "license": "UNLICENSED",
   "type": "module",
   "scripts": {
     "dev": "vite",

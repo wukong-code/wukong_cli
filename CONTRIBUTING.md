@@ -1,27 +1,21 @@
-# Contributing to Wukong CLI
+# Contributing to Wukong CLI (Internal)
 
-Thanks for taking the time to contribute! This project moves quickly, and thoughtful contributions from the community are what keep it sharp. The guide below walks you through how we work so your PR has the best chance of landing smoothly.
+This is an internal project. All contributions must be made by team members with
+access to this repository.
 
 ## Before You Start
 
-Wukong CLI already has opinions on CLI/TUI behavior, agent workflows, and public APIs. If your change shifts that direction, open an issue first so we can align before you invest time in a PR.
+Wukong CLI has opinions on CLI/TUI behavior, agent workflows, and internal APIs.
+If your change shifts that direction, discuss it with the team before investing
+significant time.
 
-We hold AI-assisted contributions to the same standard as hand-written ones. **You should understand what you submit** — what changed, how it behaves at the edges, and why it fits this codebase. If you cannot explain that, the PR is not ready for review.
-
-We only merge PRs aligned with the roadmap. Drive-by refactors without context are unlikely to land.
-
-**Discuss first** — open an issue before coding. PRs without prior discussion may be closed without review:
-
-- New features or user-visible behavior changes (regardless of size)
-- Refactors or other changes larger than ~100 lines
-- Public API or compatibility changes
-- Bug fixes where the cause or fix approach is still unclear
-
-**Can open a PR directly** — link an existing issue when there is one:
-
-- Clear, reproducible bug fixes with a focused diff
-- Typos, documentation-only changes, and small CI/build fixes
-- Small changes that clearly match an existing issue or maintainer request
+- You should understand what you submit — what changed, how it behaves at the
+  edges, and why it fits this codebase.
+- We only merge changes aligned with the roadmap. Drive-by refactors without
+  context are unlikely to land.
+- Discuss first for new user-visible behavior, refactors larger than ~100 lines,
+  public API or compatibility changes, and bug fixes where the cause or fix is
+  still unclear.
 
 ## Project Layout
 
@@ -29,9 +23,9 @@ This is the Wukong CLI pnpm monorepo. The most relevant entry points are:
 
 - `apps/wukong` — CLI / TUI (`@wukong/wukong`)
 - `apps/vis` — session replay & debugging visualizer
-- `packages/node-sdk` — public TypeScript SDK
+- `packages/node-sdk` — internal TypeScript SDK
 - `packages/agent-core`, `kosong`, `kaos`, `oauth`, `telemetry` — internal engine packages
-- `docs/` — VitePress bilingual docs site
+- `docs/` — internal documentation
 
 For the full project map, see [AGENTS.md](AGENTS.md).
 
@@ -49,7 +43,7 @@ Useful scripts:
 
 - `pnpm dev:cli` — run the CLI in dev mode
 - `pnpm test` — run tests (vitest)
-- `pnpm typecheck` — TypeScript check (note: builds packages first)
+- `pnpm typecheck` — TypeScript check (builds packages first)
 - `pnpm lint` — oxlint
 - `pnpm lint:fix` — oxlint with auto-fix
 - `pnpm build` — build all packages
@@ -71,34 +65,33 @@ All commits and PR titles must follow [Conventional Commits](https://www.convent
 | perf     | Performance improvement                     | perf(session): batch event flushes        |
 | style    | Formatting only (no logic)                  | style: apply oxlint --fix                 |
 
-PR titles are enforced by the `pr-title-checker` workflow — a non-conforming title will block merge.
+PR titles are enforced by the `pr-title-checker` workflow — a non-conforming
+title will block merge.
 
 ## Changesets
 
-This repo uses [changesets](https://github.com/changesets/changesets) to manage versioning and releases.
+This repo uses [changesets](https://github.com/changesets/changesets) to manage
+internal versioning.
 
-- Every PR that affects release artifacts (code, behavior, public API) **must** include a changeset.
+- Every PR that affects release artifacts (code, behavior, public API) should
+  include a changeset.
 - Docs-only, test-only, or CI-only PRs may skip changesets.
-- Generate one with `pnpm changeset` and follow the prompts (which packages are touched, which bump level).
-- For repo-specific conventions on package selection and bump levels, see `.changeset/README.md`. When working in this repo with coding agents, use the `gen-changesets` skill.
+- Generate one with `pnpm changeset` and follow the prompts.
+- For repo-specific conventions, see `.changeset/README.md` and the
+  `gen-changesets` skill.
 
 ## Pull Requests
 
-Use the [PR template](.github/pull_request_template.md) when opening a feature pull request.
-
-PR titles must follow [Conventional Commits](#commit-convention); CI runs `pnpm lint`, `pnpm typecheck`, and `pnpm test` on every PR. Update user-facing docs in `docs/` when behavior changes — use the `gen-docs` skill when working with coding agents.
-
-## Code Style
-
-- TypeScript across the codebase.
-- Linting via `oxlint` (config in `.oxlintrc.json`).
-- Auto-formatting via `pnpm lint:fix`.
-- Follow existing local patterns when the lint rules do not cover a style choice.
+Use the [PR template](.github/pull_request_template.md) when opening a feature
+pull request. PR titles must follow Conventional Commits; CI runs `pnpm lint`,
+`pnpm typecheck`, and `pnpm test` on every PR. Update internal docs in `docs/`
+when behavior changes.
 
 ## Reporting Security Issues
 
-Found a security issue? Please see [SECURITY.md](SECURITY.md) instead of opening a public issue.
+Found a security issue? Please see [SECURITY.md](SECURITY.md). Do not open a
+public issue or share sensitive details in an unprotected channel.
 
 ## License
 
-By contributing to this repository, you agree that your contributions will be licensed under the [MIT License](LICENSE).
+This is proprietary internal software. See [LICENSE](LICENSE).
