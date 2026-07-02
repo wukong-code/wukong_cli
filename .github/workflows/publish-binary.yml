@@ -1,0 +1,56 @@
+name: Publish binary release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-artifacts:
+    name: Build native binaries
+    uses: ./.github/workflows/_native-build.yml
+    with:
+      upload-artifact-prefix: wukong-native
+      retention-days: 1
+      sign-macos: false
+
+  publish-native-assets:
+    name: Publish to public release repo
+    needs:
+      - native-artifacts
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Download native artifacts
+        uses: actions/download-artifact@v8
+        with:
+          pattern: wukong-native-*
+          path: dist-native-release
+          merge-multiple: true
+
+      - name: Ensure public release exists
+        env:
+          GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          if ! gh release view "$RELEASE_TAG" --repo mutnpc/wukong-cli >/dev/null 2>&1; then
+            gh release create "$RELEASE_TAG" \
+              --repo mutnpc/wukong-cli \
+              --title "Wukong CLI ${RELEASE_TAG}" \
+              --notes "Binary release ${RELEASE_TAG}"
+          fi
+
+      - name: Upload assets to public release
+        env:
+          GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: gh release upload "$RELEASE_TAG" dist-native-release/* --clobber --repo mutnpc/wukong-cli
