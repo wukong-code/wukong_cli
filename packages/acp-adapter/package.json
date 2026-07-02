@@ -1,0 +1,48 @@
+{
+  "name": "@wukong/acp-adapter",
+  "version": "0.3.1",
+  "private": true,
+  "description": "Agent Client Protocol adapter for wukong",
+  "license": "MIT",
+  "author": "Wukong Team",
+  "type": "module",
+  "imports": {
+    "#/*": [
+      "./src/*.ts",
+      "./src/*/index.ts"
+    ]
+  },
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "publishConfig": {
+    "access": "public",
+    "exports": {
+      ".": {
+        "types": "./dist/index.d.mts",
+        "import": "./dist/index.mjs",
+        "default": "./dist/index.mjs"
+      }
+    },
+    "provenance": true
+  },
+  "files": [
+    "dist",
+    "README.md"
+  ],
+  "scripts": {
+    "build": "tsdown",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@agentclientprotocol/sdk": "^0.23.0",
+    "@wukong/agent-core": "workspace:^",
+    "@wukong/kaos": "workspace:^",
+    "@wukong/wukong-sdk": "workspace:^"
+  }
+}

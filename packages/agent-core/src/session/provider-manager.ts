@@ -1,0 +1,446 @@
+import type { Logger } from '#/logging/types';
+import type { ProviderConfig as KosongProviderConfig, ModelCapability, ProviderRequestAuth } from '@wukong/kosong';
+import { APIStatusError, getModelCapability, UNKNOWN_CAPABILITY } from '@wukong/kosong';
+import { parseWukongCustomHeaders } from '@wukong/wukong-oauth';
+import type { WukongConfig, ModelAlias, OAuthRef, ProviderConfig, ProviderType } from '../config';
+import { ErrorCodes, isWukongError, WukongError } from '../errors';
+
+export interface BearerTokenProvider {
+  getAccessToken(options?: { readonly force?: boolean }): Promise<string>;
+}
+
+export type OAuthTokenProviderResolver = (
+  providerName: string,
+  oauthRef?: OAuthRef,
+) => BearerTokenProvider | undefined;
+
+export interface ResolvedRuntimeProvider {
+  readonly providerName: string;
+  readonly provider: KosongProviderConfig;
+  readonly modelCapabilities: ModelCapability;
+  /** Declared 'always_thinking' capability — the model cannot disable thinking. */
+  readonly alwaysThinking?: boolean;
+  readonly maxOutputSize?: number;
+  /** Configured provider wire type (`provider.type`), before any model-level protocol override. */
+  readonly type: ProviderType;
+  /** Model-level protocol override (`alias.protocol`); when set, takes precedence over `type` for transport selection. */
+  readonly protocol: ModelAlias['protocol'];
+}
+
+interface ProviderManagerOptions {
+  readonly config: WukongConfig | (() => WukongConfig);
+  readonly wukongRequestHeaders?: Record<string, string>;
+  readonly resolveOAuthTokenProvider?: OAuthTokenProviderResolver;
+  readonly promptCacheKey?: string;
+  // remove before commit
+  readonly adaptiveThinkingOverride?: () => boolean | undefined;
+}
+
+type AuthorizedRequest = <T>(
+  request: (auth: ProviderRequestAuth) => Promise<T>,
+) => Promise<T>;
+
+export interface ModelProvider {
+  readonly defaultModel?: string;
+  resolveProviderConfig(model: string): ResolvedRuntimeProvider;
+  resolveAuth?(model: string, options?: { readonly log?: Logger }): AuthorizedRequest | undefined;
+}
+
+export class SingleModelProvider implements ModelProvider {
+  constructor(
+    private readonly providerConfig: KosongProviderConfig,
+    private readonly modelCapabilities: ModelCapability = UNKNOWN_CAPABILITY,
+  ) {}
+
+  get defaultModel(): string {
+    return this.providerConfig.model;
+  }
+
+  resolveProviderConfig(model: string): ResolvedRuntimeProvider {
+    if (model !== this.providerConfig.model) {
+      throw new WukongError(
+        ErrorCodes.CONFIG_INVALID,
+        `Model "${model}" is not supported by SingleModelProvider.`,
+      );
+    }
+    return {
+      modelCapabilities: this.modelCapabilities,
+      providerName: 'single-model-provider',
+      provider: this.providerConfig,
+      type: this.providerConfig.type,
+      protocol: undefined,
+    };
+  }
+}
+
+export class ProviderManager implements ModelProvider {
+  constructor(private readonly options: ProviderManagerOptions) {}
+
+  private get config(): WukongConfig {
+    const { config } = this.options;
+    return typeof config === 'function' ? config() : config;
+  }
+
+  resolveProviderConfig(model: string): ResolvedRuntimeProvider {
+    const alias = this.config.models?.[model];
+    if (alias === undefined) {
+      throw new WukongError(
+        ErrorCodes.CONFIG_INVALID,
+        `Model "${model}" is not configured in config.toml. Add a [models."${model}"] entry with max_context_size.`,
+      );
+    }
+
+    const providerName = alias.provider ?? this.config.defaultProvider;
+    if (providerName === undefined) {
+      throw new WukongError(
+        ErrorCodes.CONFIG_INVALID,
+        `Model "${model}" must define a provider in config.toml.`,
+      );
+    }
+
+    const providerConfig = this.config.providers[providerName];
+    if (providerConfig === undefined) {
+      throw new WukongError(
+        ErrorCodes.CONFIG_INVALID,
+        `Provider "${providerName}" for model "${model}" is not configured.`,
+      );
+    }
+
+    if (!Number.isInteger(alias.maxContextSize) || alias.maxContextSize <= 0) {
+      throw new WukongError(
+        ErrorCodes.CONFIG_INVALID,
+        `Model "${model}" must define a positive max_context_size in config.toml.`,
+      );
+    }
+
+    // remove before commit
+    const adaptiveThinkingOverride = this.options.adaptiveThinkingOverride?.();
+    const effectiveAdaptiveThinking = adaptiveThinkingOverride ?? alias.adaptiveThinking;
+    const provider = toKosongProviderConfig(
+      providerConfig,
+      alias.model,
+      alias.protocol,
+      this.options.wukongRequestHeaders,
+      alias.maxOutputSize,
+      alias.reasoningKey,
+      this.options.promptCacheKey,
+      effectiveAdaptiveThinking,
+      alias.betaApi,
+    );
+
+    return {
+      providerName,
+      provider,
+      modelCapabilities: resolveModelCapabilities(alias, provider),
+      alwaysThinking: (alias.capabilities ?? []).some(
+        (c) => c.trim().toLowerCase() === 'always_thinking',
+      ),
+      maxOutputSize: alias.maxOutputSize,
+      type: providerConfig.type,
+      protocol: alias.protocol,
+    };
+  }
+
+  resolveAuth(
+    model: string,
+    options?: { readonly log?: Logger },
+  ): AuthorizedRequest | undefined {
+    const { providerName } = this.resolveProviderConfig(model);
+    const providerConfig = this.config.providers[providerName];
+    if (providerConfig?.oauth === undefined) return undefined;
+
+    if (providerApiKey(providerConfig) !== undefined) {
+      // oauth + apiKey on the same provider makes request auth ambiguous:
+      // provider construction would prefer apiKey while runtime auth resolves
+      // OAuth. Reject it so misconfiguration surfaces at model resolution.
+      throw new WukongError(
+        ErrorCodes.CONFIG_INVALID,
+        `Provider "${providerName}" has both apiKey and oauth set in config.toml — they are mutually exclusive. Remove one.`,
+      );
+    }
+
+    const loginRequired = (cause?: unknown): WukongError =>
+      new WukongError(
+        ErrorCodes.AUTH_LOGIN_REQUIRED,
+        `OAuth provider "${providerName}" requires login before it can be used.`,
+        cause === undefined ? undefined : { cause },
+      );
+
+    const tokenProvider = this.options.resolveOAuthTokenProvider?.(providerName, providerConfig.oauth);
+    if (tokenProvider === undefined) {
+      return async () => {
+        throw loginRequired();
+      };
+    }
+
+    const log = options?.log;
+    const fetchAuth = async (force: boolean): Promise<ProviderRequestAuth> => {
+      let apiKey: string;
+      try {
+        apiKey = await tokenProvider.getAccessToken(force ? { force: true } : undefined);
+      } catch (error) {
+        // login-required is an expected state (the user must /login); don't
+        // warn. Other failures (connection errors, etc.) are logged once for
+        // diagnosis and then propagated — chatWithRetry does not retry them.
+        if (!isWukongError(error) || error.code !== ErrorCodes.AUTH_LOGIN_REQUIRED) {
+          log?.warn('oauth token fetch failed', { providerName, error });
+        }
+        throw error;
+      }
+      if (apiKey.trim().length === 0) throw loginRequired();
+      return { apiKey };
+    };
+
+    return async (request) => {
+      let auth = await fetchAuth(false);
+      for (let refreshed = false; ; refreshed = true) {
+        try {
+          return await request(auth);
+        } catch (error) {
+          if (!(error instanceof APIStatusError) || error.statusCode !== 401) throw error;
+          if (refreshed) {
+            throw new WukongError(
+              ErrorCodes.AUTH_LOGIN_REQUIRED,
+              'OAuth provider credentials were rejected. Send /login to login.',
+              {
+                cause: error,
+                details: { statusCode: error.statusCode, requestId: error.requestId },
+              },
+            );
+          }
+          auth = await fetchAuth(true);
+        }
+      }
+    };
+  }
+}
+
+function resolveModelCapabilities(
+  alias: ModelAlias,
+  provider: KosongProviderConfig,
+): ModelCapability {
+  const declared = new Set((alias.capabilities ?? []).map((c) => c.trim().toLowerCase()));
+  const detected = getModelCapability(provider.type, provider.model);
+
+  return {
+    image_in: declared.has('image_in') || detected.image_in,
+    video_in: declared.has('video_in') || detected.video_in,
+    audio_in: declared.has('audio_in') || detected.audio_in,
+    thinking: declared.has('thinking') || declared.has('always_thinking') || detected.thinking,
+    tool_use: declared.has('tool_use') || detected.tool_use,
+    max_context_tokens: alias.maxContextSize,
+  };
+}
+
+function toKosongProviderConfig(
+  provider: ProviderConfig,
+  model: string,
+  modelProtocol: ModelAlias['protocol'],
+  wukongRequestHeaders: Record<string, string> | undefined,
+  maxOutputSize: number | undefined,
+  reasoningKey: string | undefined,
+  promptCacheKey: string | undefined,
+  adaptiveThinking: boolean | undefined,
+  betaApi: boolean | undefined,
+): KosongProviderConfig {
+  const effectiveType = modelProtocol === 'anthropic' ? 'anthropic' : provider.type;
+  const envCustomHeaders = parseWukongCustomHeaders();
+  switch (effectiveType) {
+    case 'anthropic': {
+      const baseUrl = providerValue(provider.baseUrl, provider.env, 'ANTHROPIC_BASE_URL');
+      return {
+        type: 'anthropic',
+        model,
+        baseUrl:
+          modelProtocol === 'anthropic' && baseUrl !== undefined
+            ? baseUrl.replace(/\/v1\/?$/, '')
+            : baseUrl,
+        apiKey: providerApiKey(provider),
+        ...(maxOutputSize !== undefined ? { defaultMaxTokens: maxOutputSize } : {}),
+        ...(adaptiveThinking !== undefined ? { adaptiveThinking } : {}),
+        ...(betaApi !== undefined ? { betaApi } : {}),
+        // Session affinity: Anthropic's analog of OpenAI `prompt_cache_key` is
+        // `metadata.user_id` on the Messages API (cache-affinity / end-user id).
+        ...(promptCacheKey !== undefined ? { metadata: { user_id: promptCacheKey } } : {}),
+        // When a Wukong provider is routed through the Anthropic transport
+        // (`protocol: 'anthropic'`), upstream is the managed Wukong endpoint,
+        // so align its full outbound identity headers (User-Agent + X-Wukong-*)
+        // with the Wukong OpenAI transport. Plain Anthropic providers only
+        // receive the unified `User-Agent` (no `X-Wukong-*` device identity),
+        // matching the other non-Wukong transports. Provider `customHeaders`
+        // still win on conflict.
+        ...defaultHeadersField(
+          provider.type === 'wukong' && modelProtocol === 'anthropic'
+            ? { ...envCustomHeaders, ...wukongRequestHeaders, ...provider.customHeaders }
+            : { ...envCustomHeaders, ...wukongUserAgentHeader(wukongRequestHeaders), ...provider.customHeaders },
+        ),
+      };
+    }
+    case 'openai':
+      return {
+        type: 'openai',
+        model,
+        baseUrl: providerValue(provider.baseUrl, provider.env, 'OPENAI_BASE_URL'),
+        apiKey: providerApiKey(provider),
+        reasoningKey,
+        ...defaultHeadersField({
+          ...envCustomHeaders,
+          ...wukongUserAgentHeader(wukongRequestHeaders),
+          ...provider.customHeaders,
+        }),
+      };
+    case 'wukong':
+      return {
+        type: 'wukong',
+        model,
+        baseUrl: providerValue(provider.baseUrl, provider.env, 'WUKONG_BASE_URL'),
+        apiKey: providerApiKey(provider),
+        generationKwargs: { prompt_cache_key: promptCacheKey },
+        ...defaultHeadersField({
+          ...envCustomHeaders,
+          ...wukongRequestHeaders,
+          ...provider.customHeaders,
+        }),
+      };
+    case 'google-genai':
+      return {
+        type: 'google-genai',
+        model,
+        apiKey: providerApiKey(provider),
+        ...defaultHeadersField({
+          ...envCustomHeaders,
+          ...wukongUserAgentHeader(wukongRequestHeaders),
+          ...provider.customHeaders,
+        }),
+      };
+    case 'openai_responses':
+      return {
+        type: 'openai_responses',
+        model,
+        baseUrl: providerValue(provider.baseUrl, provider.env, 'OPENAI_BASE_URL'),
+        apiKey: providerApiKey(provider),
+        ...defaultHeadersField({
+          ...envCustomHeaders,
+          ...wukongUserAgentHeader(wukongRequestHeaders),
+          ...provider.customHeaders,
+        }),
+      };
+    case 'vertexai': {
+      const useServiceAccount = hasVertexAIServiceEnv(provider);
+      return {
+        type: 'vertexai',
+        model,
+        vertexai: useServiceAccount,
+        apiKey: useServiceAccount ? undefined : providerApiKey(provider),
+        project: vertexAIProject(provider),
+        location: vertexAILocation(provider),
+        ...defaultHeadersField({
+          ...envCustomHeaders,
+          ...wukongUserAgentHeader(wukongRequestHeaders),
+          ...provider.customHeaders,
+        }),
+      };
+    }
+    default: {
+      const exhaustive: never = effectiveType;
+      throw new WukongError(
+        ErrorCodes.MODEL_CONFIG_INVALID,
+        `Unsupported provider type: ${String(exhaustive)}`,
+      );
+    }
+  }
+}
+
+// Returns a fresh `defaultHeaders` field for a kosong provider config so
+// resolved instances never share a header object. Omits the key entirely when
+// there are no headers — callers and tests rely on `'defaultHeaders' in provider`.
+function defaultHeadersField(
+  headers: Record<string, string> | undefined,
+): { defaultHeaders?: Record<string, string> } {
+  if (headers === undefined || Object.keys(headers).length === 0) return {};
+  return { defaultHeaders: { ...headers } };
+}
+
+// Extract just the `User-Agent` from the Wukong identity headers so non-Wukong
+// providers (OpenAI, Anthropic, Google, Vertex) also identify as
+// `wukong-cli/<version>` without leaking the `X-Wukong-*` device identity
+// headers to third-party endpoints. The full `wukongRequestHeaders` set stays
+// reserved for the Wukong transport (and the Wukong-routed Anthropic transport),
+// where upstream is the managed Wukong endpoint.
+function wukongUserAgentHeader(
+  wukongRequestHeaders: Record<string, string> | undefined,
+): Record<string, string> {
+  const userAgent = wukongRequestHeaders?.['User-Agent'];
+  return userAgent === undefined ? {} : { 'User-Agent': userAgent };
+}
+
+function providerApiKey(provider: ProviderConfig): string | undefined {
+  switch (provider.type) {
+    case 'anthropic':
+      return providerValue(provider.apiKey, provider.env, 'ANTHROPIC_API_KEY');
+    case 'openai':
+    case 'openai_responses':
+      return providerValue(provider.apiKey, provider.env, 'OPENAI_API_KEY');
+    case 'wukong':
+      return providerValue(provider.apiKey, provider.env, 'WUKONG_API_KEY');
+    case 'google-genai':
+      return providerValue(provider.apiKey, provider.env, 'GOOGLE_API_KEY');
+    case 'vertexai':
+      return (
+        nonEmptyString(provider.apiKey) ??
+        envValue(provider.env, 'VERTEXAI_API_KEY') ??
+        envValue(provider.env, 'GOOGLE_API_KEY')
+      );
+    default: {
+      const exhaustive: never = provider.type;
+      throw new WukongError(
+        ErrorCodes.MODEL_CONFIG_INVALID,
+        `Unsupported provider type: ${String(exhaustive)}`,
+      );
+    }
+  }
+}
+
+function hasVertexAIServiceEnv(provider: ProviderConfig): boolean {
+  return vertexAIProject(provider) !== undefined && vertexAILocation(provider) !== undefined;
+}
+
+function vertexAIProject(provider: ProviderConfig): string | undefined {
+  return envValue(provider.env, 'GOOGLE_CLOUD_PROJECT');
+}
+
+function vertexAILocation(provider: ProviderConfig): string | undefined {
+  return (
+    envValue(provider.env, 'GOOGLE_CLOUD_LOCATION') ??
+    locationFromVertexAIBaseUrl(provider.baseUrl)
+  );
+}
+
+function providerValue(
+  configured: string | undefined,
+  env: Record<string, string> | undefined,
+  envKey: string,
+): string | undefined {
+  return nonEmptyString(configured) ?? envValue(env, envKey);
+}
+
+function envValue(env: Record<string, string> | undefined, key: string): string | undefined {
+  return nonEmptyString(env?.[key]);
+}
+
+function nonEmptyString(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed === undefined || trimmed.length === 0 ? undefined : trimmed;
+}
+
+function locationFromVertexAIBaseUrl(baseUrl: string | undefined): string | undefined {
+  const url = nonEmptyString(baseUrl);
+  if (url === undefined) return undefined;
+  try {
+    const host = new URL(url).hostname;
+    const suffix = '-aiplatform.googleapis.com';
+    return host.endsWith(suffix) ? nonEmptyString(host.slice(0, -suffix.length)) : undefined;
+  } catch {
+    return undefined;
+  }
+}

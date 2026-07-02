@@ -1,0 +1,39 @@
+{
+  "name": "@wukong/verification",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Deterministic verification, risk scanning, and guard policy for Wukong CLI",
+  "license": "MIT",
+  "author": "Wukong Team",
+  "homepage": "https://github.com/mutnpc/wukong/tree/main/packages/verification#readme",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mutnpc/wukong.git",
+    "directory": "packages/verification"
+  },
+  "bugs": {
+    "url": "https://github.com/mutnpc/wukong/issues"
+  },
+  "keywords": [
+    "wukong",
+    "verification",
+    "risk",
+    "guard"
+  ],
+  "files": [
+    "dist"
+  ],
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./src/index.ts",
+      "default": "./src/index.ts"
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "clean": "rm -rf dist"
+  }
+}
