@@ -45,11 +45,11 @@ jobs:
             target: linux-x64
           - os: ubuntu-24.04-arm
             target: linux-arm64
-          - os: macos-15-intel
+          - os: macos-13
             target: darwin-x64
-          - os: macos-15
+          - os: macos-latest
             target: darwin-arm64
-          - os: windows-2025-vs2026
+          - os: windows-latest
             target: win32-x64
           - os: windows-11-arm
             target: win32-arm64
