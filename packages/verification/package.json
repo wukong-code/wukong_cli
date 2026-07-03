@@ -2,7 +2,7 @@
   "name": "@wukong/verification",
   "version": "0.1.0",
   "private": true,
-  "description": "Deterministic verification, risk scanning, and guard policy for Wukong CLI",
+  "description": "Deterministic verification, risk scanning, and guard policy for Wukong Code",
   "license": "MIT",
   "author": "Wukong Team",
   "homepage": "https://github.com/mutnpc/wukong_cli/tree/main/packages/verification#readme",

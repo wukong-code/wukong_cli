@@ -13,7 +13,7 @@ import { runLoginFlow } from './login-flow';
 export function registerLoginCommand(parent: Command): void {
   parent
     .command('login')
-    .description('Authenticate with Wukong CLI via the device-code flow.')
+    .description('Authenticate with Wukong Code via the device-code flow.')
     .action(async () => {
       await runLoginFlow();
     });

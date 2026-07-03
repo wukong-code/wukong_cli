@@ -110,7 +110,7 @@ export function registerAcpCommand(parent: Command): void {
       };
       try {
         await runAcpServer(harness, {
-          agentInfo: { name: 'Wukong CLI', version: getVersion() },
+          agentInfo: { name: 'Wukong Code', version: getVersion() },
           slashCommands: resolveSlashCommands,
           ...(terminalAuthEnv ? { terminalAuthEnv } : {}),
           ...(legacyCommand !== undefined && legacyCommand.length > 0

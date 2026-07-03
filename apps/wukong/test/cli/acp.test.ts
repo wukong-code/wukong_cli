@@ -63,7 +63,7 @@ describe('wukong acp', () => {
     const optsArg = vi.mocked(runAcpServer).mock.calls[0]?.[1];
     expect(optsArg).toEqual(
       expect.objectContaining({
-        agentInfo: { name: 'Wukong CLI', version: expect.any(String) },
+        agentInfo: { name: 'Wukong Code', version: expect.any(String) },
       }),
     );
     expect(exitSpy).toHaveBeenCalledWith(0);
