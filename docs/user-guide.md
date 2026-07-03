@@ -1,4 +1,4 @@
-# Wukong CLI 用户指南
+# Wukong Code 用户指南
 
 > 适用范围: 当前 `wukong_cli` 新 Kimi-code base
 > 更新时间: 2026-07-02
@@ -19,7 +19,7 @@ pnpm dev:cli
 pnpm -C apps/wukong run dev:cli-only --help
 ```
 
-当前没有经过验证的 `https://wukong.today/install.sh`、Homebrew formula 或 `@wukong.today/wukong-cli` 安装路径。package metadata 当前使用 `@wukong/wukong`。
+当前没有经过验证的 `https://wukong.today/install.sh`、Homebrew formula 或旧 `@wukong.today/wukong-cli` 安装路径。package metadata 当前发布包名为 `@wukong.today/code`。
 
 ## 5 分钟快速开始
 

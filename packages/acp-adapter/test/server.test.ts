@@ -121,7 +121,7 @@ describe('AcpServer + AgentSideConnection', () => {
   it('initialize returns the supplied agentInfo', async () => {
     const harness = {} as WukongHarness;
     const { agentStream, clientStream } = makeInMemoryStreamPair();
-    const agentInfo = { name: 'Wukong CLI', version: '9.9.9-test' };
+    const agentInfo = { name: 'Wukong Code', version: '9.9.9-test' };
     new AgentSideConnection(
       (c) => new AcpServer(harness, c, { agentInfo }),
       agentStream,

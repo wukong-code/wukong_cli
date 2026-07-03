@@ -23,7 +23,7 @@ import {
   normalizePluginId,
 } from './types';
 
-// Hidden Wukong CLI subcommand that re-enters as a Node interpreter.
+// Hidden Wukong Code subcommand that re-enters as a Node interpreter.
 // Used as fallback when an MCP server declares `"command": "node"` but the
 // user is running a single-binary Wukong build that doesn't have `node` on PATH.
 const WUKONG_NODE_FALLBACK_SUBCOMMAND = '__plugin_run_node';

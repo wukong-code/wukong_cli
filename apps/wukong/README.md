@@ -1,6 +1,6 @@
-# @wukong/wukong
+# @wukong.today/code
 
-> The Wukong CLI app: a local-first terminal AI agent built on the current Kimi-code base.
+> The Wukong Code CLI app: a local-first terminal AI coding agent.
 
 ## Current Scope
 
@@ -34,16 +34,16 @@ From the monorepo root:
 pnpm install
 pnpm -C apps/wukong run dev:cli-only --help
 pnpm -C apps/wukong run dev
-pnpm --filter @wukong/wukong run typecheck
+pnpm --filter @wukong.today/code run typecheck
 ```
 
 The package runtime engine is `>=22.19.0`; the monorepo development engine is stricter and currently requires Node.js `>=24.15.0`.
 
 ## Package Name
 
-The current package name is `@wukong/wukong`.
+The published package name is `@wukong.today/code`.
 
-Do not document `@wukong.today/wukong-cli` or the `wukong.today/install.*` scripts unless the release pipeline is updated and verified.
+The internal workspace name remains `@wukong/wukong` for historical reasons; do not use the legacy `@wukong.today/wukong-cli` name.
 
 ## Repository
 

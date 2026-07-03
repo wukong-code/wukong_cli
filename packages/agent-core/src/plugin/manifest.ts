@@ -19,7 +19,7 @@ const WUKONG_PLUGIN_ROOT_PATH = 'wukong.plugin.json';
 const WUKONG_PLUGIN_DIR_PATH = '.wukong-plugin/plugin.json';
 
 // Fields that look like third-party runtime extensions (Claude / Codex / old
-// Wukong CLI). We do not run them; emit an info diagnostic so plugin authors and
+// Wukong Code). We do not run them; emit an info diagnostic so plugin authors and
 // users can see why a field is silently ignored.
 const UNSUPPORTED_RUNTIME_FIELDS = [
   'tools',

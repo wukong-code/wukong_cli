@@ -705,7 +705,7 @@ team_rules(
 - 新增本技术方案。
 - 在商业方案中标注 legacy 资产与新 base 当前状态。
 - 修正 README / docs 中对 `verify/guard` 的完成度描述。
-- 明确当前包名为 `@wukong/wukong`,旧 `@wukong.today/wukong-cli` 不再作为当前文档入口。
+- 明确当前发布包名为 `@wukong.today/code`，旧 `@wukong.today/wukong-cli` 不再作为当前文档入口。
 
 验收:
 

@@ -87,7 +87,7 @@ export class CoreProcessService extends Disposable implements ICoreProcessServic
     // identity). Without this, WukongCore's outbound fetch carries the
     // default Node fetch User-Agent and the managed Wukong-for-Coding
     // endpoint rejects with 40340 ("only available for Coding Agents
-    // such as Wukong CLI, Claude Code, …"). Mirrors what `SDKRpcClient`
+    // such as Wukong Code, Claude Code, …"). Mirrors what `SDKRpcClient`
     // does for the in-process TUI path (node-sdk's sdk-rpc-client.ts).
     // Caller-supplied `wukongRequestHeaders` always wins; absent that, we
     // synthesize from `options.identity`. Hosts that pass neither
