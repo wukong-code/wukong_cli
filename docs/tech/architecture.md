@@ -3,7 +3,7 @@
 > 版本: v2.0
 > 日期: 2026-07-02
 > 适用范围: `wukong_cli` 新 Kimi-code base
-> 状态: 当前架构 + P0 商业化命令已实现
+> 状态: 当前架构 + P0 本地验证闭环已实现
 
 ## 1. 当前事实
 
@@ -34,12 +34,17 @@ wukong migrate
 wukong upgrade
 ```
 
-商业化重构已经补齐的 P0 命令是：
+商业化重构已经补齐的 P0 本地闭环是：
 
 ```text
 wukong verify
 wukong scan
 wukong guard
+/verify
+/scan
+/guard
+/report
+wukong_verify
 ```
 
 ## 2. 架构原则
@@ -49,6 +54,7 @@ wukong guard
 
 2. **CLI 只做输入输出编排**
    `apps/wukong/src/cli/sub/*` 只解析参数、调用核心包、格式化输出和设置 exit code。
+   `apps/wukong/src/tui/commands/verification.ts` 和 `packages/agent-core/src/tools/builtin/verification/wukong-verify.ts` 也复用同一核心包。
 
 3. **确定性验证先于 AI review**
    P0 `verify` 默认不调用模型，必须离线可用。AI 深度 review 放到 P1。
@@ -65,8 +71,8 @@ wukong guard
 flowchart TD
   CLI["apps/wukong CLI"] --> VerifyCmd["verify / scan / guard commands"]
   VerifyCmd --> Verification["@wukong/verification"]
-  TUI["apps/wukong TUI"] -. future slash commands .-> Verification
-  AgentCore["packages/agent-core"] -. future wukong_verify tool .-> Verification
+  TUI["apps/wukong TUI slash commands"] --> Verification
+  AgentCore["packages/agent-core wukong_verify tool"] --> Verification
   Server["packages/server"] -. future local API .-> Verification
 
   Verification --> GitInspector["GitInspector"]
@@ -243,18 +249,19 @@ P0 本地文件：
 
 1. `packages/verification/test/*`: core unit tests。
 2. `apps/wukong/test/cli/verification-commands.test.ts`: CLI command registration / smoke tests。
-3. `pnpm --filter @wukong/verification test`。
-4. `pnpm --filter @wukong/wukong run typecheck`。
-5. `pnpm -C apps/wukong run dev:cli-only -- verify --no-report`。
-6. `pnpm -C apps/wukong run dev:cli-only -- scan --json`。
-7. `pnpm -C apps/wukong run dev:cli-only -- guard --status`。
+3. `apps/wukong/test/tui/commands/verification.test.ts`: TUI verification slash command handlers。
+4. `packages/agent-core/test/tools/wukong-verify.test.ts`: agent tool execution and structured summary。
+5. `pnpm --filter @wukong/verification test`。
+6. `pnpm --filter @wukong/wukong run typecheck`。
+7. `pnpm --filter @wukong/agent-core run typecheck`。
+8. `pnpm -C apps/wukong run dev:cli-only -- verify --no-report`。
+9. `pnpm -C apps/wukong run dev:cli-only -- scan --json`。
+10. `pnpm -C apps/wukong run dev:cli-only -- guard --status`。
 
 ## 9. 后续扩展
 
 P1:
 
-- `wukong_verify` agent tool。
-- TUI slash commands `/verify`、`/scan`。
 - report history。
 - `review --deep`。
 

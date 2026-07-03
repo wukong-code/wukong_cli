@@ -11,7 +11,7 @@ import type { Command } from 'commander';
 
 export function registerMigrateCommand(parent: Command, onMigrate: () => void): void {
   parent
-    .command('migrate')
+    .command('migrate', { hidden: true })
     .description('Migrate data from a legacy wukong-cli installation into wukong.')
     .action(() => {
       onMigrate();

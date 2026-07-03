@@ -6,7 +6,7 @@
 
 Wukong CLI is a local-first terminal AI agent based on the current Kimi-code base. It provides an interactive TUI, prompt mode, provider management, ACP integration, a local web/server mode, session export, migration, diagnostics, and visualization.
 
-The commercial verification direction now has a local P0 command-line loop: `wukong verify`, `wukong scan`, and `wukong guard`. Cloud sync, hosted reports, deep review, and agent-tool integration remain planned work.
+The commercial verification direction now has a local P0 loop: `wukong verify`, `wukong scan`, `wukong guard`, matching TUI slash commands, and the `wukong_verify` builtin agent tool. Cloud sync, hosted reports, billing, team rules, and deep review remain planned work.
 
 ## Current Command Surface
 
@@ -75,7 +75,7 @@ The current product direction is to turn Wukong into a verification and delivery
 - [Commercial refactor plan](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [Technical implementation plan](docs/tech/commercial-refactor-implementation.md)
 
-The P0 local CLI commands are implemented. The remaining docs track follow-up work such as `wukong_verify`, cloud reports, team rules, and deep review.
+The P0 local CLI commands, TUI verification commands, and `wukong_verify` agent tool are implemented. The remaining docs track follow-up work such as cloud reports, billing, team rules, and deep review.
 
 ## License
 

@@ -310,6 +310,9 @@ importers:
       '@wukong/protocol':
         specifier: workspace:^
         version: link:../protocol
+      '@wukong/verification':
+        specifier: workspace:^
+        version: link:../verification
       '@wukong/wukong-oauth':
         specifier: workspace:^
         version: link:../oauth

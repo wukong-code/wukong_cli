@@ -53,6 +53,12 @@ import {
 import { handleSwarmCommand } from './swarm';
 import { handleUndoCommand } from './undo';
 import { handleWebCommand } from './web';
+import {
+  handleVerifySlashCommand,
+  handleScanSlashCommand,
+  handleGuardSlashCommand,
+  handleReportSlashCommand,
+} from './verification';
 
 // ---------------------------------------------------------------------------
 // Re-exports — keep existing consumers working
@@ -335,6 +341,18 @@ async function handleBuiltInSlashCommand(
       return;
     case 'web':
       await handleWebCommand(host);
+      return;
+    case 'verify':
+      await handleVerifySlashCommand(host, args);
+      return;
+    case 'scan':
+      await handleScanSlashCommand(host);
+      return;
+    case 'guard':
+      await handleGuardSlashCommand(host, args);
+      return;
+    case 'report':
+      await handleReportSlashCommand(host);
       return;
     default:
       host.showError(`Unknown slash command: /${String(name)}`);

@@ -756,17 +756,31 @@ pnpm -C apps/wukong run dev:cli-only -- guard -- rm -rf /tmp/wukong-test
 pnpm -C apps/wukong run dev:cli-only -- guard --disable
 ```
 
-### Milestone 4: `wukong_verify` tool
+### Milestone 4: `wukong_verify` tool - 已完成
 
 - 在 `agent-core` 新增 builtin verification tool。
 - 复用 `@wukong/verification`。
-- 确认 MCP / ACP 暴露路径。
+- 返回 structured summary。
+- 添加 agent tool 单元测试。
 
 验收:
 
 - 外部 agent 能调用 `wukong_verify`。
 - tool 返回 structured result。
 - failed 时 agent 能看到失败命令和风险。
+
+### Milestone 4.5: TUI verification slash commands - 已完成
+
+- 新增 `/verify`、`/scan`、`/guard`、`/report`。
+- TUI handler 复用 `@wukong/verification`。
+- `/report` 读取 workspace 内最新 verification/scan report。
+- 添加 TUI handler 单元测试。
+
+验收:
+
+```bash
+pnpm --filter @wukong/wukong exec vitest run test/tui/commands/verification.test.ts
+```
 
 ### Milestone 5: 云端报告与商业化接口
 

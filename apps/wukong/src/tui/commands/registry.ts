@@ -134,6 +134,35 @@ function formatDirectoryCompletionValue(argumentPrefix: string, parentInput: str
 
 export const BUILTIN_SLASH_COMMANDS = [
   {
+    name: 'verify',
+    aliases: [],
+    description: 'Run deterministic verification on the current workspace',
+    priority: 70,
+    availability: 'idle-only',
+  },
+  {
+    name: 'scan',
+    aliases: [],
+    description: 'Scan the current workspace for delivery risks',
+    priority: 70,
+    availability: 'idle-only',
+  },
+  {
+    name: 'guard',
+    aliases: [],
+    description: 'Show Wukong guard status',
+    priority: 70,
+    argumentHint: '[status]',
+    availability: 'always',
+  },
+  {
+    name: 'report',
+    aliases: [],
+    description: 'Open the most recent verification or scan report',
+    priority: 70,
+    availability: 'always',
+  },
+  {
     name: 'yolo',
     aliases: ['yes'],
     description: 'Toggle auto-approve mode',

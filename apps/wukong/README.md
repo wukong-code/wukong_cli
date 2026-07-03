@@ -24,7 +24,7 @@ wukong migrate
 wukong upgrade
 ```
 
-`verify`, `scan`, and `guard` are implemented as the local P0 commercial refactor commands. `sync`, `today`, hosted reports, deep review, and agent-tool integration remain planned follow-up work.
+`verify`, `scan`, `guard`, matching TUI slash commands, and the `wukong_verify` builtin agent tool are implemented as the local P0 commercial refactor loop. `sync`, `today`, hosted reports, billing, team rules, and deep review remain planned follow-up work.
 
 ## Development
 

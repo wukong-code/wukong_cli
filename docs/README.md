@@ -37,7 +37,7 @@ wukong upgrade
 
 ## 商业化文档
 
-这些文档记录当前 P0 实现和后续计划。`verify`、`scan`、`guard` 已作为 top-level CLI 命令实现；`wukong_verify` agent tool、sync/today、云端报告和团队能力仍是后续工作：
+这些文档记录当前 P0 实现和后续计划。`verify`、`scan`、`guard` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/report` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。sync/today、云端报告、计费和团队能力仍是后续工作：
 
 - [商业化与产品重构方案](business/COMMERCIAL_REFACTOR_PLAN.md)
   定义产品定位、商业模型、目标命令结构和路线图。
@@ -50,11 +50,11 @@ wukong upgrade
 - [登录与同步验收计划](test/test-login-sync.md)
   记录登录与同步能力进入实现阶段前应满足的验收条件。
 - [Verification CLI 自动化测试计划](test/verification-cli-test-plan.md)
-  记录 `verify`、`scan`、`guard` 的核心测试、CLI smoke 和后续测试 TODO。
+  记录 `verify`、`scan`、`guard`、TUI slash commands 和 `wukong_verify` 的核心测试、CLI smoke 和后续测试 TODO。
 
 ## 当前最高优先级 TODO
 
-1. 把 `wukong_verify` 接入新 base 的 agent/tool 体系，不复活旧 `packages/mcp-server`。
-2. 增加 TUI slash commands: `/verify`、`/scan`、`/guard status`。
-3. 实现 sync/today/report history 时先定义本地数据模型和 redaction 边界。
+1. 实现 report history / redaction metadata，避免未来云端报告上传源码 diff 或敏感片段。
+2. 统一发布渠道、package version、安装文档和收费边界。
+3. 实现 sync/today 时先定义本地数据模型和 redaction 边界。
 4. 在文档站重新发布前，补齐实际页面或保持当前单层文档结构，不再链接不存在的 `/en/guides/*`、`/zh/guides/*`。

@@ -22,7 +22,7 @@ import { registerWebAliasCommand } from './web-alias';
 
 export function registerServerCommand(program: Command): void {
   const server = program
-    .command('server')
+    .command('server', { hidden: true })
     .description('Run the local Wukong server (REST + WebSocket + web UI).');
 
   buildRunCommand(

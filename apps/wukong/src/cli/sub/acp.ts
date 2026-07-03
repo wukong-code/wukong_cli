@@ -37,7 +37,7 @@ import { runLoginFlow } from './login-flow';
 
 export function registerAcpCommand(parent: Command): void {
   parent
-    .command('acp')
+    .command('acp', { hidden: true })
     .description('Run wukong as an Agent Client Protocol (ACP) server over stdio.')
     .option(
       '--login',

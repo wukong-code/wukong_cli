@@ -27,7 +27,7 @@ export class WelcomeComponent implements Component {
     const activeModel = this.state.availableModels[this.state.model];
 
     if (safeWidth < 24) {
-      const title = chalk.bold.hex(currentTheme.palette.primary)('Welcome to Wukong!');
+      const title = chalk.bold.hex(currentTheme.palette.primary)('悟空 Wukong');
       const prompt = isLoggedOut
         ? chalk.hex(currentTheme.palette.warning)('Run /login or /provider to get started.')
         : chalk.hex(currentTheme.palette.textDim)('Send /help for help information.');
@@ -49,7 +49,7 @@ export class WelcomeComponent implements Component {
     const textWidth = Math.max(4, innerWidth - logoWidth - gap.length);
 
     const rightRow0 = truncateToWidth(
-      chalk.bold.hex(currentTheme.palette.primary)('Welcome to Wukong!'),
+      chalk.bold.hex(currentTheme.palette.primary)('悟空 Wukong'),
       textWidth,
       '…',
     );

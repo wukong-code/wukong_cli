@@ -102,7 +102,7 @@ export async function handleVis(deps: VisDeps, opts: VisOptions): Promise<void> 
 
 export function registerVisCommand(parent: Command, overrides?: Partial<VisDeps>): void {
   parent
-    .command('vis')
+    .command('vis', { hidden: true })
     .description('Launch the session visualizer in your browser.')
     .option('--port <number>', 'Port to bind. Default: auto-pick a free port.')
     .option('--host <host>', 'Host to bind. Default: 127.0.0.1.')

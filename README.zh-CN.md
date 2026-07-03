@@ -6,7 +6,7 @@
 
 Wukong CLI 是基于当前 Kimi-code base 的本地优先终端 AI agent。当前仓库已经具备交互式 TUI、单次 prompt 模式、provider 管理、ACP 集成、本地 server/web UI、session 导出、迁移、doctor 诊断和可视化能力。
 
-商业化方向会把 Wukong 重构为 AI 生成代码的验证与交付证据工具。当前 P0 本地命令行闭环已经包含 `wukong verify`、`wukong scan`、`wukong guard`；云同步、托管报告、深度 review 和 agent tool 集成仍是后续工作。
+商业化方向会把 Wukong 重构为 AI 生成代码的验证与交付证据工具。当前 P0 本地闭环已经包含 `wukong verify`、`wukong scan`、`wukong guard`、对应 TUI slash commands，以及 `wukong_verify` 内置 agent tool；云同步、托管报告、计费、团队规则和深度 review 仍是后续工作。
 
 ## 当前命令面
 
@@ -75,7 +75,7 @@ pnpm build      # 构建所有包
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [技术实现方案](docs/tech/commercial-refactor-implementation.md)
 
-P0 本地 CLI 命令已经实现。剩余文档继续追踪 `wukong_verify`、云端报告、团队规则和深度 review 等后续工作。
+P0 本地 CLI 命令、TUI 验证命令和 `wukong_verify` agent tool 已经实现。剩余文档继续追踪云端报告、计费、团队规则和深度 review 等后续工作。
 
 ## 许可证
 

@@ -30,6 +30,12 @@ export { handleForkCommand, handleInitCommand, handleTitleCommand } from './sess
 export { handleUndoCommand } from './undo';
 export { handleWebCommand } from './web';
 export {
+  handleVerifySlashCommand,
+  handleScanSlashCommand,
+  handleGuardSlashCommand,
+  handleReportSlashCommand,
+} from './verification';
+export {
   promptApiKey,
   promptCatalogProviderSelection,
   promptFeedbackInput,
