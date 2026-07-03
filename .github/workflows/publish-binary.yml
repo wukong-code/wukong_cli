@@ -37,6 +37,27 @@ jobs:
           path: dist-native-release
           merge-multiple: true
 
+      - name: Generate release notes
+        id: notes
+        env:
+          RELEASE_TAG: ${{ github.ref_name }}
+        run: |
+          # Find the previous semver tag
+          PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | awk -v cur="$RELEASE_TAG" '$0 != cur {print; exit}')
+
+          {
+            echo "## What's Changed"
+            echo ""
+            if [ -n "$PREVIOUS_TAG" ]; then
+              git log --pretty=format:'- %s' "$PREVIOUS_TAG..$RELEASE_TAG" -- | sed 's/ (#[0-9]*)//g'
+            else
+              git log --pretty=format:'- %s' "$RELEASE_TAG" -- | head -50
+            fi
+          } > release-notes.md
+
+          echo "Previous tag: ${PREVIOUS_TAG:-none}"
+          cat release-notes.md
+
       - name: Ensure public release exists
         env:
           GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
@@ -46,7 +67,11 @@ jobs:
             gh release create "$RELEASE_TAG" \
               --repo mutnpc/wukong-code \
               --title "Wukong Code ${RELEASE_TAG}" \
-              --notes "Binary release ${RELEASE_TAG}"
+              --notes-file release-notes.md
+          else
+            gh release edit "$RELEASE_TAG" \
+              --repo mutnpc/wukong-code \
+              --notes-file release-notes.md
           fi
 
       - name: Upload assets to public release
