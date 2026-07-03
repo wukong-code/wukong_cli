@@ -23,18 +23,12 @@ function nodePlatformTag(target) {
   if (platform === 'linux' && arch === 'arm64') return 'linux-arm64';
   if (platform === 'linux' && arch === 'x64') return 'linux-x64';
   if (platform === 'win32' && arch === 'x64') return 'win-x64';
+  if (platform === 'win32' && arch === 'arm64') return 'win-arm64';
   throw new Error(`Unsupported target for Node.js SEA build: ${target}`);
 }
 
-function hostPlatformTag() {
-  const platform = process.platform;
-  const arch = process.arch;
-  if (platform === 'darwin' && arch === 'arm64') return 'darwin-arm64';
-  if (platform === 'darwin' && arch === 'x64') return 'darwin-x64';
-  if (platform === 'linux' && arch === 'arm64') return 'linux-arm64';
-  if (platform === 'linux' && arch === 'x64') return 'linux-x64';
-  if (platform === 'win32' && arch === 'x64') return 'win-x64';
-  throw new Error(`Unsupported platform/arch for SEA build: ${platform} ${arch}`);
+function hostTarget() {
+  return `${process.platform}-${process.arch}`;
 }
 
 function resolveTarget() {
@@ -129,13 +123,12 @@ async function downloadOfficialNode(target = resolveTarget()) {
 
 export async function ensureSeaNodeBinary() {
   const target = resolveTarget();
-  const hostTag = hostPlatformTag();
-  const targetTag = nodePlatformTag(target);
+  const host = hostTarget();
 
-  // When cross-compiling (e.g. darwin-x64 on an arm64 Mac) we must use a
-  // Node.js binary that matches the target architecture as the SEA base.
-  // The system Node.js is only valid when it matches the requested target.
-  if (targetTag === hostTag) {
+  // When the requested target matches the host architecture we can reuse the
+  // system Node.js if it already supports single-executable applications.
+  // For cross-compilation we must download a Node.js binary for the target.
+  if (target === host) {
     const usableNode = await findUsableSystemNode();
     if (usableNode !== null) {
       console.log(`Using system Node.js binary for SEA build: ${usableNode}`);
