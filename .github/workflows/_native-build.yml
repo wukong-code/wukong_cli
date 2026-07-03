@@ -97,10 +97,12 @@ jobs:
 
       - name: Build native executable (release profile, macOS signed)
         if: runner.os == 'macOS' && inputs.sign-macos
+        shell: bash
         run: pnpm --filter @wukong.today/code run build:native:release
 
       - name: Build native executable (local profile)
         if: '!(runner.os == ''macOS'' && inputs.sign-macos)'
+        shell: bash
         run: pnpm --filter @wukong.today/code run build:native:sea
 
       - name: Notarize macOS binary
@@ -117,9 +119,11 @@ jobs:
         uses: ./.github/actions/macos-keychain-cleanup
 
       - name: Smoke test native executable
+        shell: bash
         run: pnpm --filter @wukong.today/code run test:native:smoke
 
       - name: Package native artifact
+        shell: bash
         run: pnpm --filter @wukong.today/code run package:native
 
       - name: Upload native artifact
