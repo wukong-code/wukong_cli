@@ -19,8 +19,8 @@ export const SUPPORTED_TARGETS = Object.freeze([
 ]);
 
 const clipboardSubpackageByTarget = Object.freeze({
-  'darwin-arm64': '@mariozechner/clipboard-darwin-arm64',
-  'darwin-x64': '@mariozechner/clipboard-darwin-x64',
+  'darwin-arm64': '@mariozechner/clipboard-darwin-universal',
+  'darwin-x64': '@mariozechner/clipboard-darwin-universal',
   'linux-arm64': '@mariozechner/clipboard-linux-arm64-gnu',
   'linux-x64': '@mariozechner/clipboard-linux-x64-gnu',
   'win32-arm64': '@mariozechner/clipboard-win32-arm64-msvc',

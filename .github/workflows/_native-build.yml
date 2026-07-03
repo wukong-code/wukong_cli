@@ -45,7 +45,7 @@ jobs:
             target: linux-x64
           - os: ubuntu-24.04-arm
             target: linux-arm64
-          - os: macos-13
+          - os: macos-latest
             target: darwin-x64
           - os: macos-latest
             target: darwin-arm64
@@ -53,6 +53,9 @@ jobs:
             target: win32-x64
           - os: windows-11-arm
             target: win32-arm64
+
+    env:
+      WUKONG_CODE_BUILD_TARGET: ${{ matrix.target }}
 
     steps:
       - name: Checkout
@@ -119,6 +122,11 @@ jobs:
         uses: ./.github/actions/macos-keychain-cleanup
 
       - name: Smoke test native executable
+        if: |
+          !(
+            (endsWith(matrix.target, '-x64') && runner.arch != 'X64') ||
+            (endsWith(matrix.target, '-arm64') && runner.arch != 'ARM64')
+          )
         shell: bash
         run: pnpm --filter @wukong.today/code run test:native:smoke
 

@@ -6,13 +6,27 @@ import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
 
 import { run } from './exec.mjs';
-import { appRoot } from './paths.mjs';
+import { appRoot, targetTriple } from './paths.mjs';
 
 const OFFICIAL_NODE_VERSION = 'v26.4.0';
 const NODE_SEA_CACHE_DIR = resolve(appRoot, '.node-sea');
 const SENTINEL = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2';
 
-function platformTag() {
+/**
+ * Map a Wukong target triple (e.g. darwin-x64, win32-x64) to the Node.js
+ * distribution tag used in the official Node.js release tarballs.
+ */
+function nodePlatformTag(target) {
+  const [platform, arch] = target.split('-');
+  if (platform === 'darwin' && arch === 'arm64') return 'darwin-arm64';
+  if (platform === 'darwin' && arch === 'x64') return 'darwin-x64';
+  if (platform === 'linux' && arch === 'arm64') return 'linux-arm64';
+  if (platform === 'linux' && arch === 'x64') return 'linux-x64';
+  if (platform === 'win32' && arch === 'x64') return 'win-x64';
+  throw new Error(`Unsupported target for Node.js SEA build: ${target}`);
+}
+
+function hostPlatformTag() {
   const platform = process.platform;
   const arch = process.arch;
   if (platform === 'darwin' && arch === 'arm64') return 'darwin-arm64';
@@ -23,19 +37,25 @@ function platformTag() {
   throw new Error(`Unsupported platform/arch for SEA build: ${platform} ${arch}`);
 }
 
-function cachedNodePath() {
-  const tag = platformTag();
+function resolveTarget() {
+  const envTarget = process.env.WUKONG_CODE_BUILD_TARGET;
+  if (envTarget) return envTarget;
+  return targetTriple();
+}
+
+function cachedNodePath(target = resolveTarget()) {
+  const tag = nodePlatformTag(target);
   const ext = process.platform === 'win32' ? '.exe' : '';
   return resolve(NODE_SEA_CACHE_DIR, `node-${OFFICIAL_NODE_VERSION}-${tag}`, 'bin', `node${ext}`);
 }
 
-function tarPath() {
-  const tag = platformTag();
+function tarPath(target = resolveTarget()) {
+  const tag = nodePlatformTag(target);
   return resolve(NODE_SEA_CACHE_DIR, `node-${OFFICIAL_NODE_VERSION}-${tag}.tar.gz`);
 }
 
-function downloadUrl() {
-  const tag = platformTag();
+function downloadUrl(target = resolveTarget()) {
+  const tag = nodePlatformTag(target);
   return `https://nodejs.org/download/release/${OFFICIAL_NODE_VERSION}/node-${OFFICIAL_NODE_VERSION}-${tag}.tar.gz`;
 }
 
@@ -77,10 +97,10 @@ async function findUsableSystemNode() {
   return null;
 }
 
-async function downloadOfficialNode() {
-  const binPath = cachedNodePath();
-  const archivePath = tarPath();
-  const extractDir = resolve(NODE_SEA_CACHE_DIR, `node-${OFFICIAL_NODE_VERSION}-${platformTag()}`);
+async function downloadOfficialNode(target = resolveTarget()) {
+  const binPath = cachedNodePath(target);
+  const archivePath = tarPath(target);
+  const extractDir = resolve(NODE_SEA_CACHE_DIR, `node-${OFFICIAL_NODE_VERSION}-${nodePlatformTag(target)}`);
 
   if (await nodeBinaryHasSentinel(binPath)) {
     console.log(`Using cached official Node.js binary for SEA build: ${binPath}`);
@@ -88,10 +108,10 @@ async function downloadOfficialNode() {
   }
 
   await mkdir(NODE_SEA_CACHE_DIR, { recursive: true });
-  console.log(`Downloading official Node.js ${OFFICIAL_NODE_VERSION} for SEA build...`);
-  console.log(`URL: ${downloadUrl()}`);
+  console.log(`Downloading official Node.js ${OFFICIAL_NODE_VERSION} for target ${target}...`);
+  console.log(`URL: ${downloadUrl(target)}`);
 
-  const response = await fetch(downloadUrl());
+  const response = await fetch(downloadUrl(target));
   if (!response.ok) {
     throw new Error(`Failed to download Node.js: ${response.status} ${response.statusText}`);
   }
@@ -108,11 +128,20 @@ async function downloadOfficialNode() {
 }
 
 export async function ensureSeaNodeBinary() {
-  const usableNode = await findUsableSystemNode();
-  if (usableNode !== null) {
-    console.log(`Using system Node.js binary for SEA build: ${usableNode}`);
-    return usableNode;
+  const target = resolveTarget();
+  const hostTag = hostPlatformTag();
+  const targetTag = nodePlatformTag(target);
+
+  // When cross-compiling (e.g. darwin-x64 on an arm64 Mac) we must use a
+  // Node.js binary that matches the target architecture as the SEA base.
+  // The system Node.js is only valid when it matches the requested target.
+  if (targetTag === hostTag) {
+    const usableNode = await findUsableSystemNode();
+    if (usableNode !== null) {
+      console.log(`Using system Node.js binary for SEA build: ${usableNode}`);
+      return usableNode;
+    }
   }
 
-  return downloadOfficialNode();
+  return downloadOfficialNode(target);
 }
