@@ -1,4 +1,23 @@
-# @wukong/wukong
+# @wukong.today/code
+
+## 0.0.6
+
+### Patch Changes
+
+- Rebrand TUI welcome card to "Wukong Code" and simplify platform selector to OAuth-only.
+
+## 0.0.5
+
+### Patch Changes
+
+- Support win32-arm64 host and cross-compile targets.
+- Cross-compile darwin-x64 on macOS runners and fix Windows shell issues in CI.
+
+## 0.0.3
+
+### Patch Changes
+
+- Earlier patch release.
 
 ## 0.20.3
 
