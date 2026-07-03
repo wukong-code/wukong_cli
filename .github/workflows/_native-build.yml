@@ -88,7 +88,10 @@ jobs:
       - name: Build Wukong web assets
         # The SEA blob step embeds apps/wukong/dist-web; build the web app
         # and stage its assets before producing the native executable.
+        # Also generate the vis-web single-file asset so the native bundle
+        # can embed it instead of leaving a dynamic import in the SEA bundle.
         run: |
+          node apps/wukong/scripts/build-vis-asset.mjs
           pnpm --filter @wukong/wukong-web run build
           node apps/wukong/scripts/copy-web-assets.mjs
 
