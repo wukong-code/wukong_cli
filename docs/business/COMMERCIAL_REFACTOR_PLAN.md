@@ -1,7 +1,7 @@
 # Wukong CLI 商业化与产品重构方案
 
-> 版本: v1.1
-> 日期: 2026-07-02
+> 版本: v1.2
+> 日期: 2026-07-03
 > 当前范围: `wukong_cli` 新 Kimi-code base
 > 技术落地: [商业化重构技术实现方案](../tech/commercial-refactor-implementation.md)
 
@@ -102,17 +102,84 @@ Wukong 不和代码 agent 比写代码速度，而是补上 agent 最薄弱的�
 
 ## 4. 商业模型
 
-商业化不应限制本地 `verify` 的基本使用。更合理的付费边界是云端协作、深度模型审查、报告托管、团队策略和审计。
+商业化不应限制本地 `verify` 的基本使用。更合理的付费边界是云端协作、深度模型审查、报告托管、团队策略、审计和 Wukong 自有 API 服务。
+
+核心收费原则：
+
+```text
+用户自带 API Key = 模型成本归用户
+Wukong 收费 = 验证流程、报告托管、PR 协作、团队治理和审计证据
+Wukong 托管模型调用 = 作为可选 credits / add-on 收费
+```
 
 | 层级 | 建议权益 |
 |---|---|
-| Free | 本地 verify/scan、本地报告、基础 guard |
-| Pro | 深度 review、更多 report history、分享链接、增强 guard rules |
-| Team | 共享规则、团队仪表盘、审计日志、组织模板 |
+| Free | BYOK、本地 verify/scan、本地报告、基础 guard |
+| Pro | BYOK、hosted reports、report history、分享链接、增强 guard rules、可选 managed review credits |
+| Team | org-level BYOK、GitHub PR comment/gate、共享规则、团队审计日志、组织模板 |
 | Enterprise | 私有部署、合规、SSO、SLA、私有 runner |
-| Credits | 深度模型审查、批量验证、托管报告额度 |
+| Credits / Add-on | Wukong 托管模型调用、深度 review、批量验证、托管报告额度 |
 
-### 4.1 不建议收费的基础能力
+### 4.1 API Key 与 API 服务收费边界
+
+Wukong 支持用户自带 API Key，但 BYOK 不代表所有功能都应免费。需要把模型调用成本和 Wukong 产品服务拆开。
+
+| 模式 | 谁承担模型成本 | Wukong 可以收什么钱 | 推荐收费方式 |
+|---|---|---|---|
+| BYOK：用户自带 OpenAI/Anthropic/Gemini/DeepSeek 等 key | 用户 | 编排、redaction、hosted report、report history、PR comment/gate、team rules、audit log | Free 入口 + Pro/Team subscription |
+| Wukong Managed Model：Wukong 提供托管模型调用 | Wukong | 深度 review、风险解释、修复建议、批量审查 | credits / usage add-on |
+| Wukong Product APIs：Wukong 自有 API 服务 | Wukong | report upload/share、rules evaluate、PR gate、audit events、redaction、Slack/GitHub integration | subscription + quota + overage |
+
+推荐的 API 服务边界：
+
+| API 服务 | 是否适合收费 | 收费理由 |
+|---|---|---|
+| `/api/report/upload` | 是 | 托管 redacted report、存储、权限和分享链接 |
+| `/api/report/share` | 是 | 对外展示、访问控制和长期留存 |
+| `/api/pr/comment` | 是 | GitHub App 集成、PR 协作和自动评论 |
+| `/api/pr/gate` | 是 | 合并前策略判断和状态检查 |
+| `/api/rules/evaluate` | 是 | 团队规则、路径策略和风险阈值 |
+| `/api/redact` | 是 | 上传前脱敏、敏感片段过滤和安全边界 |
+| `/api/audit/events` | 是 | 团队审计、override 留痕和责任链 |
+| 纯模型 proxy / 原样转发第三方 API | 不建议 | 容易变成低价值 API 转售，合规和信任风险高 |
+
+收费示例：
+
+```text
+Free
+- BYOK
+- Local scan / verify / markdown report
+- No hosted report history
+
+Pro $8-12/user/month
+- BYOK
+- 100 hosted reports/month
+- Report history and share links
+- Optional managed review credits
+
+Team $99-299/team/month or $15-29/user/month
+- Org-level BYOK
+- 500 PR checks/month
+- GitHub App, PR comments, PR gates
+- Team rules, audit log, shared reports
+- Overage: $0.10-$0.30/check or report
+
+Managed AI Add-on
+- Wukong provides model calls
+- Credit-based billing
+- Example: $10 / 500 review credits
+```
+
+合规和信任边界：
+
+1. 不把 Wukong 定位成第三方模型 API 的低价转售代理。
+2. 如果 Wukong 代付模型成本，必须明确标注 managed model / credits / usage。
+3. 如果用户 BYOK，Wukong 不应对用户自己的 token 用量再按 token 加价。
+4. 默认只上传 metadata / redacted report，不上传完整源码 diff。
+5. 用户 key、org-level key 和 Wukong managed key 必须隔离存储、隔离审计。
+6. Team/Enterprise 应提供私有 runner 或 self-hosted 方案，降低源码和密钥出域顾虑。
+
+### 4.2 不建议收费的基础能力
 
 这些能力应作为免费入口，负责证明产品价值和扩大使用面：
 
@@ -124,7 +191,7 @@ Wukong 不和代码 agent 比写代码速度，而是补上 agent 最薄弱的�
 | 本地 Markdown report | 本地证据报告应作为免费闭环的一部分 |
 | provider/login/doctor/export | 属于基础 CLI 使用、诊断和迁移能力 |
 
-### 4.2 适合收费的功能
+### 4.3 适合收费的功能
 
 付费点应建立在“团队协作、云端证据、模型成本、审计责任”上，而不是限制本地基础命令。
 
@@ -132,6 +199,8 @@ Wukong 不和代码 agent 比写代码速度，而是补上 agent 最薄弱的�
 |---|---|---|---|
 | Hosted Reports / 分享链接 | Pro / Team | 上传 redacted report，生成可分享链接，保留历史记录 | 待实现 |
 | Deep Review Credits | Pro / Credits | 用模型做深度代码审查、风险解释和修复建议 | 待实现 |
+| Wukong Product APIs | Pro / Team | report upload/share、PR comment/gate、rules evaluate、redaction、audit events | 待实现 |
+| Managed Model Add-on | Pro / Team / Credits | Wukong 提供托管模型调用，解决用户不想配置 key 的场景 | 待实现 |
 | Team Rules | Team | 团队统一验证命令、风险阈值、路径策略和 guard policy | 待实现 |
 | GitHub PR Gate / CI Gate | Team | PR 自动跑 verify/scan，发布检查状态和 report link | 待实现 |
 | Audit Log | Team / Enterprise | 记录谁验证、谁 override、失败原因和最终交付证据 | 待实现 |
@@ -141,14 +210,15 @@ Wukong 不和代码 agent 比写代码速度，而是补上 agent 最薄弱的�
 | Private Runner / 私有部署 | Enterprise | 私有网络内运行验证、保留源码不出域 | 待实现 |
 | SSO / 合规 / SLA | Enterprise | 企业采购和合规要求 | 待实现 |
 
-### 4.3 收费优先级
+### 4.4 收费优先级
 
 建议按以下顺序推进：
 
 1. Hosted Reports：最接近当前本地 report，付费价值直接。
-2. Deep Review Credits：能把模型成本和增值能力对应起来。
+2. Wukong Product APIs：把 hosted report、PR comment/gate、rules、audit 变成可计费服务边界。
 3. Team Rules + PR Gate：把个人工具变成团队流程。
-4. Audit Log：服务团队负责人和企业合规场景。
+4. Deep Review Credits / Managed Model Add-on：把模型成本和增值能力对应起来，但不要早于报告和 PR 工作流。
+5. Audit Log：服务团队负责人和企业合规场景。
 
 当前阶段适合做 **付费试点 / design partner**，不适合直接做公开自助订阅。公开收费前至少需要完成 hosted report、billing entitlement、发布安装路径和团队/个人套餐边界。
 
