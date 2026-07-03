@@ -1,10 +1,7 @@
-import { OPEN_PLATFORMS } from '@wukong/wukong-oauth';
-
 import { ChoicePickerComponent, type ChoiceOption } from './choice-picker';
 
 const PLATFORM_OPTIONS: readonly ChoiceOption[] = [
   { value: 'wukong', label: 'Wukong (OAuth)' },
-  ...OPEN_PLATFORMS.map((platform) => ({ value: platform.id, label: platform.name })),
 ];
 
 export interface PlatformSelectorOptions {

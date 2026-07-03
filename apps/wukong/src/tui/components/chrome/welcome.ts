@@ -1,6 +1,6 @@
 /**
  * Welcome panel shown at the top of the TUI.
- * Renders a round-bordered box with the logo, session, model, and version.
+ * Renders a compact startup card with the product mark, session, model, and version.
  */
 
 import type { Component } from '@earendil-works/pi-tui';
@@ -27,7 +27,7 @@ export class WelcomeComponent implements Component {
     const activeModel = this.state.availableModels[this.state.model];
 
     if (safeWidth < 24) {
-      const title = chalk.bold.hex(currentTheme.palette.primary)('悟空 Wukong');
+      const title = chalk.bold.hex(currentTheme.palette.primary)('Wukong Code');
       const prompt = isLoggedOut
         ? chalk.hex(currentTheme.palette.warning)('Run /login or /provider to get started.')
         : chalk.hex(currentTheme.palette.textDim)('Send /help for help information.');
@@ -43,13 +43,14 @@ export class WelcomeComponent implements Component {
     const pad = '  ';
 
     // Logo + side-by-side text.
-    const logo = ['▐█▛█▛█▌', '▐█████▌'] as const;
+    const logo = ['  ▪ ▪  ', '       '] as const;
     const logoWidth = Math.max(...logo.map((row) => visibleWidth(row)));
     const gap = '  ';
     const textWidth = Math.max(4, innerWidth - logoWidth - gap.length);
 
+    const avatar = (s: string): string => chalk.hex('#050505').bgHex(currentTheme.palette.primary)(s);
     const rightRow0 = truncateToWidth(
-      chalk.bold.hex(currentTheme.palette.primary)('悟空 Wukong'),
+      chalk.bold.hex(currentTheme.palette.primary)('Wukong Code'),
       textWidth,
       '…',
     );
@@ -62,8 +63,8 @@ export class WelcomeComponent implements Component {
     );
 
     let renderedHeaderLines = [
-      primary(logo[0].padEnd(logoWidth)) + gap + rightRow0,
-      primary(logo[1].padEnd(logoWidth)) + gap + rightRow1,
+      avatar(logo[0].padEnd(logoWidth)) + gap + rightRow0,
+      avatar(logo[1].padEnd(logoWidth)) + gap + rightRow1,
     ];
     if (isRainbowDancing()) {
       renderedHeaderLines = renderDanceWelcomeHeader(logo, textWidth, rightRow1);
@@ -86,11 +87,7 @@ export class WelcomeComponent implements Component {
 
     const contentLines: string[] = [...renderedHeaderLines, '', ...infoLines];
 
-    const lines: string[] = [
-      '',
-      primary('╭' + '─'.repeat(safeWidth - 2) + '╮'),
-      primary('│') + ' '.repeat(safeWidth - 2) + primary('│'),
-    ];
+    const lines: string[] = ['', primary('╭' + '─'.repeat(safeWidth - 2) + '╮')];
 
     for (const content of contentLines) {
       const truncated = truncateToWidth(content, innerWidth, '…');
@@ -99,7 +96,6 @@ export class WelcomeComponent implements Component {
       lines.push(primary('│') + pad + truncated + ' '.repeat(rightPad) + primary('│'));
     }
 
-    lines.push(primary('│') + ' '.repeat(safeWidth - 2) + primary('│'));
     lines.push(primary('╰' + '─'.repeat(safeWidth - 2) + '╯'));
     lines.push('');
 

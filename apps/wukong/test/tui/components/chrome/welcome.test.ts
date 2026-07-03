@@ -47,7 +47,7 @@ function truecolorCodes(text: string): Set<string> {
 
 /** The two header rows (logo + title) of the rendered welcome box. */
 function headerOf(lines: string[]): string {
-  return [lines[3], lines[4]].join('\n');
+  return [lines[2], lines[3]].join('\n');
 }
 
 function setDanceView(colored: boolean, phase: number): void {
@@ -76,8 +76,8 @@ describe('WelcomeComponent', () => {
   it('renders the banner in a single brand color by default', () => {
     const codes = truecolorCodes(headerOf(new WelcomeComponent(appState).render(80)));
 
-    // No rainbow by default — just the brand primary (plus the dim tagline).
-    expect(codes.size).toBeLessThanOrEqual(2);
+    // No rainbow by default — just the avatar, brand primary, and dim tagline.
+    expect(codes.size).toBeLessThanOrEqual(3);
   });
 
   it('paints the banner in rainbow while colored', () => {
