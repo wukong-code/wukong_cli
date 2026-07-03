@@ -41,6 +41,7 @@ import {
   sanitizeToolCallId,
   type ToolCallIdPolicy,
 } from './tool-call-id';
+import { isModelWithoutReasoningEffort } from './capability-registry';
 
 // Inbound: scan in priority order; first string value wins. Outbound: the first
 // entry doubles as the default field we serialize ThinkPart back into. Both
@@ -531,8 +532,13 @@ export class OpenAILegacyChatProvider implements ChatProvider {
     // (e.g. One API) that require reasoning_effort when messages contain reasoning_content.
     // Skip when the caller already pinned reasoning_effort via withGenerationKwargs —
     // their value would otherwise be silently overwritten below.
+    // Skip for providers that do not support reasoning_effort (DeepSeek, Qwen, etc.).
     // See: https://github.com/mutnpc/wukong/issues/1616
-    if (reasoningEffort === undefined && kwargs['reasoning_effort'] === undefined) {
+    if (
+      reasoningEffort === undefined &&
+      kwargs['reasoning_effort'] === undefined &&
+      !isModelWithoutReasoningEffort(this._model)
+    ) {
       const hasThinkPart = history.some((message) =>
         message.content.some((part) => part.type === 'think'),
       );
@@ -565,7 +571,7 @@ export class OpenAILegacyChatProvider implements ChatProvider {
       createParams['stream_options'] = { include_usage: true };
     }
 
-    if (reasoningEffort !== undefined) {
+    if (reasoningEffort !== undefined && !isModelWithoutReasoningEffort(this._model)) {
       createParams['reasoning_effort'] = reasoningEffort;
     }
 

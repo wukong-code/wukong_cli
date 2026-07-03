@@ -142,6 +142,50 @@ describe('getModelCapability: openai', () => {
   it('unknown OpenAI-legacy model → UNKNOWN_CAPABILITY', () => {
     expect(getModelCapability('openai', 'gpt-mystery')).toEqual(UNKNOWN_CAPABILITY);
   });
+
+  // --- DeepSeek family ---
+
+  it('deepseek-v4 → image_in + thinking + tool_use', () => {
+    const cap = getModelCapability('openai', 'deepseek-v4');
+    expect(cap.image_in).toBe(true);
+    expect(cap.thinking).toBe(true);
+    expect(cap.tool_use).toBe(true);
+  });
+
+  it('deepseek-v4-pro → same capabilities as v4', () => {
+    const cap = getModelCapability('openai', 'deepseek-v4-pro');
+    expect(cap.image_in).toBe(true);
+    expect(cap.thinking).toBe(true);
+    expect(cap.tool_use).toBe(true);
+  });
+
+  it('deepseek-v4-flash → same capabilities as v4', () => {
+    const cap = getModelCapability('openai', 'deepseek-v4-flash');
+    expect(cap.image_in).toBe(true);
+    expect(cap.thinking).toBe(true);
+    expect(cap.tool_use).toBe(true);
+  });
+
+  it('openrouter-prefixed deepseek-v4 → still recognized', () => {
+    const cap = getModelCapability('openai', 'deepseek/deepseek-v4-pro');
+    expect(cap.image_in).toBe(true);
+    expect(cap.thinking).toBe(true);
+    expect(cap.tool_use).toBe(true);
+  });
+
+  it('deepseek-reasoner → thinking + tool_use, image_in=false', () => {
+    const cap = getModelCapability('openai', 'deepseek-reasoner');
+    expect(cap.thinking).toBe(true);
+    expect(cap.tool_use).toBe(true);
+    expect(cap.image_in).toBe(false);
+  });
+
+  it('deepseek-chat → tool_use, thinking=false, image_in=true', () => {
+    const cap = getModelCapability('openai', 'deepseek-chat');
+    expect(cap.tool_use).toBe(true);
+    expect(cap.thinking).toBe(false);
+    expect(cap.image_in).toBe(true);
+  });
 });
 
 describe('getModelCapability: openai_responses', () => {

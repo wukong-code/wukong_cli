@@ -115,6 +115,49 @@ const GEMINI_THINKING_MULTIMODAL_TOOL_CAPABILITY: ModelCapability = Object.freez
   max_context_tokens: 0,
 });
 
+const DEEPSEEK_V4_TOOL_THINKING_VISION_CAPABILITY: ModelCapability = Object.freeze({
+  image_in: true,
+  video_in: false,
+  audio_in: false,
+  thinking: true,
+  tool_use: true,
+  max_context_tokens: 0,
+});
+
+const DEEPSEEK_REASONER_CAPABILITY: ModelCapability = Object.freeze({
+  image_in: false,
+  video_in: false,
+  audio_in: false,
+  thinking: true,
+  tool_use: true,
+  max_context_tokens: 0,
+});
+
+const DEEPSEEK_CHAT_CAPABILITY: ModelCapability = Object.freeze({
+  image_in: true,
+  video_in: false,
+  audio_in: false,
+  thinking: false,
+  tool_use: true,
+  max_context_tokens: 0,
+});
+
+// DeepSeek model name patterns for use outside the catalog (e.g. provider
+// parameter decisions). Exported so openai-legacy can skip reasoning_effort.
+const DEEPSEEK_MODEL_PATTERN = /deepseek/;
+
+function isDeepSeekV4Model(modelName: string): boolean {
+  return modelName.includes('deepseek-v4');
+}
+
+function isDeepSeekReasonerModel(modelName: string): boolean {
+  return modelName === 'deepseek-reasoner' || modelName.endsWith('/deepseek-reasoner');
+}
+
+function isDeepSeekChatModel(modelName: string): boolean {
+  return modelName === 'deepseek-chat' || modelName.endsWith('/deepseek-chat');
+}
+
 const OPENAI_LEGACY_CAPABILITY_CATALOG: readonly CapabilityCatalogEntry[] = [
   {
     matches: isOpenAIReasoningModel,
@@ -127,6 +170,18 @@ const OPENAI_LEGACY_CAPABILITY_CATALOG: readonly CapabilityCatalogEntry[] = [
   {
     matches: (name) => name.startsWith('gpt-3.5-turbo'),
     capability: OPENAI_TEXT_TOOL_CAPABILITY,
+  },
+  {
+    matches: isDeepSeekV4Model,
+    capability: DEEPSEEK_V4_TOOL_THINKING_VISION_CAPABILITY,
+  },
+  {
+    matches: isDeepSeekReasonerModel,
+    capability: DEEPSEEK_REASONER_CAPABILITY,
+  },
+  {
+    matches: isDeepSeekChatModel,
+    capability: DEEPSEEK_CHAT_CAPABILITY,
   },
 ];
 
@@ -175,6 +230,19 @@ function capabilityFromCatalog(
     }
   }
   return UNKNOWN_CAPABILITY;
+}
+
+/**
+ * Whether the given model name belongs to a provider that does NOT support
+ * OpenAI's `reasoning_effort` parameter. Models from DeepSeek, Qwen, and
+ * other OpenAI-compatible third-party APIs reject this parameter.
+ *
+ * Exported for use by {@link OpenAILegacyChatProvider} to decide whether to
+ * inject `reasoning_effort` into chat-completions requests.
+ */
+export function isModelWithoutReasoningEffort(modelName: string): boolean {
+  const lower = modelName.toLowerCase();
+  return DEEPSEEK_MODEL_PATTERN.test(lower);
 }
 
 export function getOpenAILegacyModelCapability(modelName: string): ModelCapability {

@@ -868,7 +868,7 @@ describe('OpenAILegacyChatProvider', () => {
       expect(body['reasoning_effort']).toBe('high');
     });
 
-    it.each(['deepseek/deepseek-v4-flash', 'gpt-5.4-pro', 'some-model'])(
+    it.each(['gpt-5.4-pro', 'some-model'])(
       '.withThinking("xhigh") passes through reasoning_effort for model %s',
       async (model) => {
         const provider = createProvider({ model }).withThinking('xhigh');
@@ -878,6 +878,20 @@ describe('OpenAILegacyChatProvider', () => {
         const body = await captureRequestBody(provider, '', [], history);
 
         expect(body['reasoning_effort']).toBe('xhigh');
+        expect(provider.thinkingEffort).toBe('xhigh');
+      },
+    );
+
+    it.each(['deepseek-v4', 'deepseek-v4-pro', 'deepseek/deepseek-v4-flash'])(
+      '.withThinking("xhigh") does NOT inject reasoning_effort for DeepSeek model %s',
+      async (model) => {
+        const provider = createProvider({ model }).withThinking('xhigh');
+        const history: Message[] = [
+          { role: 'user', content: [{ type: 'text', text: 'Think' }], toolCalls: [] },
+        ];
+        const body = await captureRequestBody(provider, '', [], history);
+
+        expect(body['reasoning_effort']).toBeUndefined();
         expect(provider.thinkingEffort).toBe('xhigh');
       },
     );
@@ -908,7 +922,8 @@ describe('OpenAILegacyChatProvider', () => {
 
       expect(openAIChatModel['reasoning_effort']).toBe('xhigh');
       expect(openAIProModel['reasoning_effort']).toBe('xhigh');
-      expect(deepSeekModel['reasoning_effort']).toBe('xhigh');
+      // DeepSeek does not support reasoning_effort.
+      expect(deepSeekModel['reasoning_effort']).toBeUndefined();
     });
   });
 
@@ -999,6 +1014,49 @@ describe('OpenAILegacyChatProvider', () => {
       const body = await captureRequestBody(provider, '', [], history);
 
       expect(body['reasoning_effort']).toBe('high');
+    });
+
+    it('does NOT auto-inject reasoning_effort for deepseek-v4 when history has ThinkPart', async () => {
+      const provider = createProvider({ model: 'deepseek-v4' });
+      const history: Message[] = [
+        { role: 'user', content: [{ type: 'text', text: 'Hello' }], toolCalls: [] },
+        {
+          role: 'assistant',
+          content: [
+            { type: 'think', think: 'Thinking...' },
+            { type: 'text', text: 'Hi!' },
+          ],
+          toolCalls: [],
+        },
+        { role: 'user', content: [{ type: 'text', text: 'How are you?' }], toolCalls: [] },
+      ];
+      const body = await captureRequestBody(provider, '', [], history);
+
+      expect(body['reasoning_effort']).toBeUndefined();
+    });
+
+    it('still round-trips reasoning_content for deepseek-v4', async () => {
+      const provider = createProvider({ model: 'deepseek-v4' });
+      const history: Message[] = [
+        { role: 'user', content: [{ type: 'text', text: 'q' }], toolCalls: [] },
+        {
+          role: 'assistant',
+          content: [
+            { type: 'think', think: 'inner monologue' },
+            { type: 'text', text: 'answer' },
+          ],
+          toolCalls: [],
+        },
+        { role: 'user', content: [{ type: 'text', text: 'next' }], toolCalls: [] },
+      ];
+      const body = await captureRequestBody(provider, '', [], history);
+      const messages = body['messages'] as Record<string, unknown>[];
+
+      expect(messages[1]).toEqual({
+        role: 'assistant',
+        content: 'answer',
+        reasoning_content: 'inner monologue',
+      });
     });
   });
 
