@@ -189,7 +189,7 @@ describe('runShell', () => {
     expect(mocks.wukongHarnessConstructor).toHaveBeenCalledWith(
       expect.objectContaining({
         identity: expect.objectContaining({
-          userAgentProduct: 'wukong-cli',
+          userAgentProduct: 'wukong-code',
           version: '1.2.3-test',
         }),
         sessionStartedProperties: { yolo: true, auto: false, plan: true, afk: false },
@@ -209,7 +209,7 @@ describe('runShell', () => {
       homeDir: '/tmp/wukong-test-home',
       deviceId: 'device-1',
       enabled: true,
-      appName: 'wukong-cli',
+      appName: 'wukong-code',
       version: '1.2.3-test',
       uiMode: 'shell',
       model: 'k2',

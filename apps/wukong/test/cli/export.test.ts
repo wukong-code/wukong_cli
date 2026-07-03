@@ -408,7 +408,7 @@ describe('wukong export', () => {
       homeDir: '/tmp/wukong-export-home',
       deviceId: 'device-1',
       enabled: true,
-      appName: 'wukong-cli',
+      appName: 'wukong-code',
       version: expect.any(String),
       uiMode: 'shell',
       model: 'k2',

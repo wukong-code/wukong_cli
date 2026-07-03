@@ -34,7 +34,7 @@ describe('install prompt helpers', () => {
 
 describe('promptForInstallChoice', () => {
   it('renders changelog hyperlink in the prompt output', async () => {
-    const CHANGELOG_URL = 'https://github.com/mutnpc/wukong/blob/main/apps/wukong/CHANGELOG.md';
+    const CHANGELOG_URL = 'https://github.com/mutnpc/wukong-code/blob/main/CHANGELOG.md';
 
     const input = Object.assign(new EventEmitter(), {
       isRaw: false,
@@ -54,7 +54,7 @@ describe('promptForInstallChoice', () => {
     const promptPromise = promptForInstallChoice({
       currentVersion: '0.4.0',
       target: { version: '0.5.0' },
-      installCommand: 'npm install -g @wukong/wukong@0.5.0',
+      installCommand: 'npm install -g @wukong.today/code@0.5.0',
       installSource: 'npm-global',
       input,
       output,

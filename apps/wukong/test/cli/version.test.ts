@@ -20,9 +20,9 @@ describe('cli version helpers', () => {
     expect(getVersion()).toBe(pkg.version);
   });
 
-  it('builds default headers with the wukong-cli user-agent', () => {
+  it('builds default headers with the wukong-code user-agent', () => {
     const headers = buildWukongDefaultHeaders('1.2.3');
 
-    expect(headers['User-Agent']).toBe('wukong-cli/1.2.3');
+    expect(headers['User-Agent']).toBe('wukong-code/1.2.3');
   });
 });

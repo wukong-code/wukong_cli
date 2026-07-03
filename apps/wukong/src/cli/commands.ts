@@ -27,13 +27,13 @@ export function createProgram(
   onUpgrade: UpgradeCommandHandler = () => {},
 ): Command {
   const program = new Command(CLI_COMMAND_NAME)
-    .description('The Starting Point for Next-Gen Agents')
+    .description('Wukong Code — local-first AI coding agent in your terminal.')
     .version(version, '-V, --version')
     .allowUnknownOption(false)
     .configureHelp({ helpWidth: 100 })
     .helpOption('-h, --help', 'Show help.')
     .usage('[options] [command]')
-    .addHelpText('after', '\nDocumentation:        https://github.com/mutnpc/wukong_cli/tree/main/docs\n');
+    .addHelpText('after', '\nDocumentation:        https://wukong.today/docs\n');
 
   program
     .addOption(

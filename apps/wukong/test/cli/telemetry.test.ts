@@ -63,7 +63,7 @@ describe('initializeServerTelemetry', () => {
 
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith(
       expect.objectContaining({
-        appName: 'wukong-cli',
+        appName: 'wukong-code',
         version: '1.2.3',
         uiMode: 'web',
         model: 'wukong-k2',
