@@ -1,11 +1,11 @@
 import { ErrorCodes } from '@wukong/wukong-sdk';
 
-export const PRODUCT_NAME = 'Wukong';
+export const PRODUCT_NAME = 'Wukong Code';
 export const CLI_COMMAND_NAME = 'wukong';
 export const PROCESS_NAME = 'wukong';
 
 // Used in telemetry app names and HTTP User-Agent headers.
-export const CLI_USER_AGENT_PRODUCT = 'wukong-cli';
+export const CLI_USER_AGENT_PRODUCT = 'wukong-code';
 export const CLI_UI_MODE = 'shell';
 // Telemetry ui_mode for the `wukong web` / `wukong server run` host. Same product
 // as the CLI (CLI_USER_AGENT_PRODUCT); the surface is distinguished by ui_mode.
@@ -15,7 +15,7 @@ export const WEB_UI_MODE = 'web';
 export const CLI_SHUTDOWN_TIMEOUT_MS = 3000;
 
 // Published npm package name; this can differ from the executable command.
-export const NPM_PACKAGE_NAME = '@wukong/wukong';
+export const NPM_PACKAGE_NAME = '@wukong.today/code';
 
 // App-owned data paths. SDK/core runtime config is intentionally not routed here.
 export const WUKONG_CODE_HOME_ENV = 'WUKONG_CODE_HOME';
@@ -40,7 +40,7 @@ export const DEFAULT_OAUTH_PROVIDER_NAME = 'managed:wukong';
 // auto-propagates instead of silently breaking the startup recovery path.
 export const OAUTH_LOGIN_REQUIRED_CODE = ErrorCodes.AUTH_LOGIN_REQUIRED;
 
-export const FEEDBACK_ISSUE_URL = 'https://github.com/mutnpc/wukong_cli/issues';
+export const FEEDBACK_ISSUE_URL = 'https://github.com/mutnpc/wukong-code/issues';
 
 // Sent in the feedback `version` field so the backend can distinguish this
 // TypeScript client from clients that send a bare version.

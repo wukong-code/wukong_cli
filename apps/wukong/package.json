@@ -1,17 +1,17 @@
 {
-  "name": "@wukong/wukong",
+  "name": "@wukong.today/code",
   "version": "0.0.1",
-  "description": "The Starting Point for Next-Gen Agents",
+  "description": "Wukong Code — AI agent for code verification and delivery",
   "license": "UNLICENSED",
-  "author": "Wukong Team",
-  "homepage": "https://github.com/mutnpc/wukong_cli/tree/main/apps/wukong#readme",
+  "author": "Wukong Code Team",
+  "homepage": "https://github.com/mutnpc/wukong-code/tree/main/apps/wukong#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mutnpc/wukong_cli.git",
+    "url": "git+https://github.com/mutnpc/wukong-code.git",
     "directory": "apps/wukong"
   },
   "bugs": {
-    "url": "https://github.com/mutnpc/wukong_cli/issues"
+    "url": "https://github.com/mutnpc/wukong-code/issues"
   },
   "keywords": [
     "wukong",

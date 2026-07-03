@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Postinstall hook for @wukong/wukong.
+ * Postinstall hook for @wukong.today/code.
  *
  * Goal: when this package is installed globally, ensure typing `wukong`
  * invokes the new TypeScript CLI. The npm `package.json` bin field
@@ -43,7 +43,7 @@
  *
  * ## Workflow
  *
- * What runs when a user types `npm install -g @wukong/wukong`
+ * What runs when a user types `npm install -g @wukong.today/code`
  * (or the yarn / pnpm equivalent):
  *
  *   1. The manager extracts the package and runs lifecycle scripts.

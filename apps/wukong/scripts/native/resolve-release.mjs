@@ -3,7 +3,7 @@ import { resolve } from 'node:path';
 
 import { appRoot } from './paths.mjs';
 
-const packageName = '@wukong/wukong';
+const packageName = '@wukong.today/code';
 const packageJson = JSON.parse(
   await readFile(resolve(appRoot, 'package.json'), 'utf-8'),
 );

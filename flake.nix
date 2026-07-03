@@ -94,7 +94,7 @@
         "@wukong/wukong-oauth"
         "@wukong/protocol"
         "@wukong/wukong-telemetry"
-        "@wukong/wukong"
+        "@wukong.today/code"
         "@wukong/wukong-web"
         "@wukong/vis"
         "@wukong/vis-server"
@@ -192,8 +192,9 @@
               # directory is missing. Build the web app and stage its assets
               # before producing the native executable.
               pnpm --filter=@wukong/wukong-web run build
+              node apps/wukong/scripts/build-vis-asset.mjs
               node apps/wukong/scripts/copy-web-assets.mjs
-              pnpm --filter=@wukong/wukong run build:native:sea
+              pnpm --filter=@wukong.today/code run build:native:sea
               runHook postBuild
             '';
 

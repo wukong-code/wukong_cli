@@ -42,10 +42,10 @@ jobs:
           GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
           RELEASE_TAG: ${{ github.ref_name }}
         run: |
-          if ! gh release view "$RELEASE_TAG" --repo mutnpc/wukong-cli >/dev/null 2>&1; then
+          if ! gh release view "$RELEASE_TAG" --repo mutnpc/wukong-code >/dev/null 2>&1; then
             gh release create "$RELEASE_TAG" \
-              --repo mutnpc/wukong-cli \
-              --title "Wukong CLI ${RELEASE_TAG}" \
+              --repo mutnpc/wukong-code \
+              --title "Wukong Code ${RELEASE_TAG}" \
               --notes "Binary release ${RELEASE_TAG}"
           fi
 
@@ -53,4 +53,4 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
           RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release upload "$RELEASE_TAG" dist-native-release/* --clobber --repo mutnpc/wukong-cli
+        run: gh release upload "$RELEASE_TAG" dist-native-release/* --clobber --repo mutnpc/wukong-code
