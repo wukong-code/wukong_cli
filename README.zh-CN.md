@@ -1,12 +1,12 @@
-# Wukong CLI
+# Wukong Code
 
 [文档](docs/README.md) · [English](README.md)
 
-## 什么是 Wukong CLI
+## 什么是 Wukong Code
 
-Wukong CLI 是基于当前 Kimi-code base 的本地优先终端 AI agent。当前仓库已经具备交互式 TUI、单次 prompt 模式、provider 管理、ACP 集成、本地 server/web UI、session 导出、迁移、doctor 诊断和可视化能力。
+Wukong Code 是基于当前 Kimi-code base 的本地优先终端 AI coding agent。当前仓库已经具备交互式 TUI、单次 prompt 模式、provider 管理、ACP 集成、本地 server/web UI、session 导出、迁移、doctor 诊断和可视化能力。
 
-商业化方向会把 Wukong 重构为 AI 生成代码的验证与交付证据工具。当前 P0 本地闭环已经包含 `wukong verify`、`wukong scan`、`wukong guard`、对应 TUI slash commands，以及 `wukong_verify` 内置 agent tool；云同步、托管报告、计费、团队规则和深度 review 仍是后续工作。
+商业化方向会把 Wukong Code 重构为 AI 生成代码的验证与交付证据工具。当前 P0 本地闭环已经包含 `wukong verify`、`wukong scan`、`wukong guard`、对应 TUI slash commands，以及 `wukong_verify` 内置 agent tool；云同步、托管报告、计费、团队规则和深度 review 仍是后续工作。
 
 ## 当前命令面
 
@@ -25,14 +25,14 @@ wukong doctor                  # 校验配置文件
 wukong export [sessionId]      # 导出 session ZIP
 wukong vis [sessionId]         # 打开 session visualizer
 wukong migrate                 # 迁移 legacy wukong-cli 数据
-wukong upgrade                 # 升级 Wukong
+wukong upgrade                 # 升级 Wukong Code
 ```
 
 完整参数以 `wukong --help` 为准。
 
 ## 从源码运行
 
-当前仓库没有经过验证的 `install.sh`、Homebrew formula 或正式发布安装文档。开发时使用 workspace 脚本：
+这是内部实现仓库（`mutnpc/wukong_cli`）。公开下载与安装请访问 [wukong.today](https://wukong.today)。开发时使用 workspace 脚本：
 
 ```sh
 git clone https://github.com/mutnpc/wukong_cli.git
@@ -47,7 +47,7 @@ pnpm dev:cli
 pnpm -C apps/wukong run dev:cli-only --help
 ```
 
-当前 package metadata 使用 `@wukong/wukong`；不要继续使用旧的 `@wukong.today/wukong-cli` 名称，除非未来 release 明确恢复。
+当前发布包名为 `@wukong.today/code`；不要继续使用旧的 `@wukong.today/wukong-cli` 名称。
 
 ## 本地开发
 
@@ -70,7 +70,7 @@ pnpm build      # 构建所有包
 
 ## 商业化重构
 
-当前产品方向是把 Wukong 做成 AI 生成代码的验证与交付证据工具。实现计划见：
+当前产品方向是把 Wukong Code 做成 AI 生成代码的验证与交付证据工具。实现计划见：
 
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [技术实现方案](docs/tech/commercial-refactor-implementation.md)

@@ -1,11 +1,10 @@
-# Contributing to Wukong CLI (Internal)
+# Contributing to Wukong Code (Internal)
 
-This is an internal project. All contributions must be made by team members with
-access to this repository.
+This is the internal implementation repository for Wukong Code. All contributions must be made by team members with access to this repository.
 
 ## Before You Start
 
-Wukong CLI has opinions on CLI/TUI behavior, agent workflows, and internal APIs.
+Wukong Code has opinions on CLI/TUI behavior, agent workflows, and internal APIs.
 If your change shifts that direction, discuss it with the team before investing
 significant time.
 
@@ -19,7 +18,7 @@ significant time.
 
 ## Project Layout
 
-This is the Wukong CLI pnpm monorepo. The most relevant entry points are:
+This is the Wukong Code pnpm monorepo. The most relevant entry points are:
 
 - `apps/wukong` — CLI / TUI (`@wukong/wukong`)
 - `apps/vis` — session replay & debugging visualizer

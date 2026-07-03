@@ -1,12 +1,12 @@
-# Wukong CLI 文档索引
+# Wukong Code 文档索引
 
 > 最后更新: 2026-07-02
-> 当前事实基线: `wukong_cli` 新 Kimi-code base
+> 当前事实基线: `wukong_cli` 内部实现仓库，产品名称为 **Wukong Code**
 > 状态说明: 本目录区分 **当前已实现** 与 **商业化后续待实现**。
 
 ## 当前已实现
 
-这些文档可以作为当前 `wukong_cli` 的事实来源：
+这些文档可以作为当前 Wukong Code 的事实来源：
 
 - [用户指南](user-guide.md)
   只描述当前 top-level CLI 能力、源码运行方式和本地数据位置。

@@ -1,10 +1,10 @@
-# Wukong CLI
+# Wukong Code
 
 [Documentation](docs/README.md) · [中文](README.zh-CN.md)
 
-## What Is Wukong CLI
+## What Is Wukong Code
 
-Wukong CLI is a local-first terminal AI agent based on the current Kimi-code base. It provides an interactive TUI, prompt mode, provider management, ACP integration, a local web/server mode, session export, migration, diagnostics, and visualization.
+Wukong Code is a local-first terminal AI coding agent based on the current Kimi-code base. It provides an interactive TUI, prompt mode, provider management, ACP integration, a local web/server mode, session export, migration, diagnostics, and visualization.
 
 The commercial verification direction now has a local P0 loop: `wukong verify`, `wukong scan`, `wukong guard`, matching TUI slash commands, and the `wukong_verify` builtin agent tool. Cloud sync, hosted reports, billing, team rules, and deep review remain planned work.
 
@@ -25,14 +25,14 @@ wukong doctor                  # validate configuration files
 wukong export [sessionId]      # export a session ZIP
 wukong vis [sessionId]         # open the session visualizer
 wukong migrate                 # migrate legacy wukong-cli data
-wukong upgrade                 # upgrade Wukong
+wukong upgrade                 # upgrade Wukong Code
 ```
 
 Run `wukong --help` for the complete option list.
 
 ## Install From Source
 
-This repository does not currently ship a verified `install.sh`, Homebrew formula, or published package documentation. Use the workspace scripts while developing:
+This repository (`mutnpc/wukong_cli`) is the internal implementation. Public downloads use the release repository `mutnpc/wukong-code` and the one-line installer at [wukong.today](https://wukong.today). For development, use the workspace scripts:
 
 ```sh
 git clone https://github.com/mutnpc/wukong_cli.git
@@ -47,7 +47,7 @@ To run only the CLI entrypoint:
 pnpm -C apps/wukong run dev:cli-only --help
 ```
 
-Package metadata currently uses `@wukong/wukong`; do not use the legacy `@wukong.today/wukong-cli` name unless a future release explicitly reintroduces it.
+The published package name is `@wukong.today/code`; do not use the legacy `@wukong.today/wukong-cli` name.
 
 ## Development
 
@@ -70,7 +70,7 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the internal contribution guide.
 
 ## Commercial Refactor
 
-The current product direction is to turn Wukong into a verification and delivery-evidence tool for AI-generated code. The implementation plan is tracked in:
+The current product direction is to turn Wukong Code into a verification and delivery-evidence tool for AI-generated code. The implementation plan is tracked in:
 
 - [Commercial refactor plan](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [Technical implementation plan](docs/tech/commercial-refactor-implementation.md)
