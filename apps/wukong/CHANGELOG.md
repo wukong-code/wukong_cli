@@ -1,5 +1,11 @@
 # @wukong.today/code
 
+## 0.0.7
+
+### Patch Changes
+
+- Point default OAuth host to wukong.today for CLI device-code login.
+
 ## 0.0.6
 
 ### Patch Changes
