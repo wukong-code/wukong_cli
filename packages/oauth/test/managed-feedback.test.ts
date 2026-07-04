@@ -23,7 +23,7 @@ const SAMPLE_BODY: SubmitFeedbackBody = {
 
 describe('wukongFeedbackUrl', () => {
   it('appends /feedback to the default base URL', () => {
-    expect(wukongFeedbackUrl()).toBe('https://api.wukong.today/v1/feedback');
+    expect(wukongFeedbackUrl()).toBe('https://wukong.today/api/v1/feedback');
   });
 
   it('honours WUKONG_CODE_BASE_URL and trims trailing slashes', () => {

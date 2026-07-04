@@ -49,7 +49,7 @@ describe('provisionManagedWukongConfig', () => {
     expect(
       resolveWukongOAuthKey({
         oauthHost: 'https://auth.wukong.today/',
-        baseUrl: 'https://api.wukong.today/v1/',
+        baseUrl: 'https://wukong.today/api/v1/',
       }),
     ).toBe(WUKONG_CODE_OAUTH_KEY);
   });
@@ -76,7 +76,7 @@ describe('provisionManagedWukongConfig', () => {
     expect(
       resolveWukongOAuthRef({
         oauthHost: 'https://auth.wukong.today/',
-        baseUrl: 'https://api.wukong.today/v1/',
+        baseUrl: 'https://wukong.today/api/v1/',
       }),
     ).toEqual({ storage: 'file', key: WUKONG_CODE_OAUTH_KEY, oauthHost: undefined });
 
@@ -231,7 +231,7 @@ describe('provisionManagedWukongConfig', () => {
     expect(result.models[0]?.supportsToolUse).toBe(true);
     expect(result.models[1]?.supportsToolUse).toBe(false);
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.wukong.today/v1/models',
+      'https://wukong.today/api/v1/models',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer oauth-access-token',
@@ -253,7 +253,7 @@ describe('provisionManagedWukongConfig', () => {
     expect(config.models?.['wukong/stale']).toBeUndefined();
     expect(config.providers[WUKONG_CODE_PROVIDER_NAME]).toMatchObject({
       type: 'wukong',
-      baseUrl: 'https://api.wukong.today/v1',
+      baseUrl: 'https://wukong.today/api/v1',
       apiKey: '',
       oauth: { storage: 'file', key: 'oauth/wukong' },
     });
@@ -266,7 +266,7 @@ describe('provisionManagedWukongConfig', () => {
     });
     expect(config.models?.['wukong/wukong-k2.5']?.capabilities).toBeUndefined();
     expect(config.services?.wukongSearch).toMatchObject({
-      baseUrl: 'https://api.wukong.today/v1/search',
+      baseUrl: 'https://wukong.today/api/v1/search',
       apiKey: '',
       oauth: { storage: 'file', key: 'oauth/wukong' },
     });
@@ -628,8 +628,8 @@ describe('provisionManagedWukongConfig', () => {
         },
       },
       services: {
-        wukongSearch: { baseUrl: 'https://api.wukong.today/v1/search' },
-        wukongFetch: { baseUrl: 'https://api.wukong.today/v1/fetch' },
+        wukongSearch: { baseUrl: 'https://wukong.today/api/v1/search' },
+        wukongFetch: { baseUrl: 'https://wukong.today/api/v1/fetch' },
         customService: { baseUrl: 'https://service.example.test' },
       },
       raw: {
@@ -649,8 +649,8 @@ describe('provisionManagedWukongConfig', () => {
           },
         },
         services: {
-          wukong_search: { base_url: 'https://api.wukong.today/v1/search' },
-          wukong_fetch: { base_url: 'https://api.wukong.today/v1/fetch' },
+          wukong_search: { base_url: 'https://wukong.today/api/v1/search' },
+          wukong_fetch: { base_url: 'https://wukong.today/api/v1/fetch' },
         },
       },
     };
@@ -805,12 +805,12 @@ describe('provisionManagedWukongConfig', () => {
       },
       services: {
         wukongSearch: {
-          baseUrl: 'https://api.wukong.today/v1/search',
+          baseUrl: 'https://wukong.today/api/v1/search',
           apiKey: '',
           oauth: { storage: 'file', key: 'oauth/wukong' },
         },
         wukongFetch: {
-          baseUrl: 'https://api.wukong.today/v1/fetch',
+          baseUrl: 'https://wukong.today/api/v1/fetch',
           apiKey: '',
           oauth: { storage: 'file', key: 'oauth/wukong' },
         },
@@ -1084,7 +1084,7 @@ function makeModelInfo(
   };
 }
 
-const WUKONG_BASE_URL = 'https://api.wukong.today/v1';
+const WUKONG_BASE_URL = 'https://wukong.today/api/v1';
 
 describe('managed protocol routing', () => {
   it('reads protocol from the /models response', async () => {
