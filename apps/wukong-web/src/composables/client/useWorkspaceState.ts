@@ -32,7 +32,7 @@ import type {
   PermissionMode,
   WorkspaceView,
 } from '../../types';
-import type { ExtendedState, PromptAttachment } from '../useKimiWebClient';
+import type { ExtendedState, PromptAttachment } from '../useWukongWebClient';
 import type { UseModelProviderState } from './useModelProviderState';
 import type { UseSideChat } from './useSideChat';
 import type { UseTaskPoller } from './useTaskPoller';

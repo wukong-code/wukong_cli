@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { useData, withBase } from 'vitepress'
 import { computed } from 'vue'
-import WukongLogo from './KimiLogo.vue'
+import WukongLogo from './WukongLogo.vue'
 
 const { lang } = useData()
 
@@ -12,7 +12,7 @@ const copy = computed(() => isZh.value
       titleLead: 'Wukong',
       titleAccent: 'CLI',
       titleTail: ' CLI',
-      tagline: '当前 Kimi-code base 文档与商业化验证工具重构计划',
+      tagline: '当前 Wukong CLI 文档与商业化验证工具重构计划',
       primaryText: '查看用户指南',
       primaryHref: '/user-guide',
       secondaryText: '在 GitHub 查看',
@@ -22,7 +22,7 @@ const copy = computed(() => isZh.value
       titleLead: 'Wukong',
       titleAccent: 'CLI',
       titleTail: ' CLI',
-      tagline: 'Current Kimi-code base docs and the commercial verification refactor plan',
+      tagline: 'Current Wukong CLI docs and the commercial verification refactor plan',
       primaryText: 'Read the user guide',
       primaryHref: '/user-guide',
       secondaryText: 'View on GitHub',

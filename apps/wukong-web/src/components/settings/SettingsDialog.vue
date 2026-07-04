@@ -9,7 +9,7 @@ import { useDialogFocus } from '../../composables/useDialogFocus';
 import LanguageSwitcher from './LanguageSwitcher.vue';
 import { serverEndpointLabel } from '../../api/config';
 import { downloadTraceLog, isTraceEnabled } from '../../debug/trace';
-import type { ColorScheme, Theme } from '../../composables/useKimiWebClient';
+import type { ColorScheme, Theme } from '../../composables/useWukongWebClient';
 import type { AppConfig, AppConfigProvider, AppModel } from '../../api/types';
 
 const { t } = useI18n();

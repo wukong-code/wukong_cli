@@ -4,7 +4,7 @@
 import { computed, ref, watch, type Ref } from 'vue';
 import type { AgentMember, ToolDiffTarget } from '../types';
 import type { DetailTarget } from './useFilePreview';
-import type { useWukongWebClient } from './useKimiWebClient';
+import type { useWukongWebClient } from './useWukongWebClient';
 import { buildEditDiffLines, extractEditPath, findToolCallById } from '../lib/toolDiff';
 import { toolLabel } from '../lib/toolMeta';
 import { clampPanelWidth, panelMaxWidth, useViewportWidth } from './useViewportWidth';
