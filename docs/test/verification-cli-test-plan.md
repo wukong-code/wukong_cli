@@ -1,8 +1,8 @@
 # Verification CLI 自动化测试计划
 
-> 日期: 2026-07-02
-> 范围: `@wukong/verification`、`wukong verify`、`wukong scan`、`wukong guard`、TUI slash commands、`wukong_verify`
-> 状态: P0 已实现并纳入自动化测试
+> 日期: 2026-07-07
+> 范围: `@wukong/verification`、`wukong verify`、`wukong scan`、`wukong guard`、TUI slash commands（含 `/goal`）、`wukong_verify`；P0.5 的 `/loop`、`/proof`、`/judge` 为待实现测试项
+> 状态: P0 已实现并纳入自动化测试；P0.5 待实现
 
 ## 1. 测试目标
 
@@ -78,3 +78,30 @@ tsx --tsconfig apps/wukong/tsconfig.dev.json \
 1. 增加真实 git repo fixture，覆盖 staged + unstaged diff 混合场景。
 2. 增加 Windows shell command parsing 测试。
 3. 如果 P1 实现 shell hook 安装，必须增加 profile 幂等写入和 disable 安全测试。
+
+## 6. P0.5 测试 TODO（`/loop`、`/proof`、`/judge`）
+
+这些命令尚未实现，以下为实现后必须覆盖的测试项：
+
+### `/proof` Merge Proof Report
+
+- `wukong proof` 在干净项目产出 `PASS` 报告，含 changed files / tests / typecheck / secrets scan / recommendation。
+- 在含 placeholder / secret / 失败测试的项目产出 `BLOCKED` 并定位原因。
+- `wukong proof --strict` 在仅有 warning 时也判 `BLOCKED`。
+- `wukong proof --json` 输出符合 `ProofResult` schema。
+- `/proof` TUI slash command 渲染 Merge Proof Report。
+
+### `/judge` evaluator-only 审查
+
+- `wukong judge`（默认 `--assume-broken`）在 verify failed 或有 high-risk 时判 `BLOCK`。
+- 在 verify passed 且 clean 时判 `PASS`。
+- `--strict` 在 medium risk 时判 `BLOCK`。
+- `/judge` 不触发任何写操作（不写代码、不改文件）。
+
+### `/loop` 会话级 loop 编排
+
+- `wukong loop "<goal>" --until "verify-pass"` 在会话内持续驱动直到 verify 通过。
+- 停止条件由 deterministic verification 判断，**不**由 agent 自评（必须有测试断言这点）。
+- `--max-iterations` 达到上限时返回 `max-iterations` 状态，不假装成功。
+- `--dry-run` 不实际驱动 agent，只校验参数与停止条件。
+- `loop` 可被人随时 stop，停止后返回 `stopped` 状态与最后一轮 verification 快照。

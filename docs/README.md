@@ -1,8 +1,23 @@
 # Wukong Code 文档索引
 
-> 最后更新: 2026-07-02
+> 最后更新: 2026-07-07
 > 当前事实基线: `wukong_cli` 内部实现仓库，产品名称为 **Wukong Code**
 > 状态说明: 本目录区分 **当前已实现** 与 **商业化后续待实现**。
+
+## 产品定位
+
+> **AI 负责写代码，Wukong 负责判断能不能合并。**
+> Wukong Code 是 AI Coding Loop 的控制层与验证层（proof layer for AI-written code）。
+
+命令分层对应 loop engineering：
+
+| 层 | 命令 | 状态 |
+|---|---|---|
+| 编排层 | `/loop` | 待实现（核心） |
+| 执行核 | `/goal` | 已实现 |
+| 工具层 | `/verify` `/scan` `/guard` | 已实现 |
+| 证据层 | `/proof` | 待实现（Wow Moment） |
+| 评估层 | `/judge` | 待实现 |
 
 ## 当前已实现
 
@@ -14,6 +29,8 @@
   描述当前 CLI/TUI app 的文件边界和代码约定。
 - [根 README](../README.md) / [中文 README](../README.zh-CN.md)
   面向仓库入口的当前能力说明。
+- [产品路线图](../ROADMAP.md)
+  记录从本地验证闭环到 loop 控制层、hosted reports、Pro Preview、PR gate、Team Pilot 的交付顺序和验收标准。
 
 当前可用 top-level commands 以 `wukong --help` 为准，主要包括：
 
@@ -37,12 +54,12 @@ wukong upgrade
 
 ## 商业化文档
 
-这些文档记录当前 P0 实现和后续计划。`verify`、`scan`、`guard` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/report` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。sync/today、云端报告、计费和团队能力仍是后续工作：
+这些文档记录当前 P0 实现和后续计划。`verify`、`scan`、`guard` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/report`、`/goal` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。下一个重点是 `/loop`、`/proof`、`/judge`（Milestone 0.5）。sync/today、云端报告、计费和团队能力仍是后续工作：
 
 - [商业化与产品重构方案](business/COMMERCIAL_REFACTOR_PLAN.md)
-  定义产品定位、商业模型、目标命令结构和路线图。
+  定义产品定位、商业模型、目标命令结构（含 loop/proof/judge）和路线图。
 - [商业化重构技术实现方案](tech/commercial-refactor-implementation.md)
-  定义 `@wukong/verification`、`wukong verify`、`wukong scan`、`wukong guard`、agent tool 的实现方案。
+  定义 `@wukong/verification`、`wukong verify`、`wukong scan`、`wukong guard`、agent tool 以及 `/loop`、`/proof`、`/judge` 的实现方案。
 - [最新技术架构](tech/architecture.md)
   定义当前新 Kimi-code base 与 P0 verification/guard 架构。
 - [产品设计文档](design/design.md)
@@ -54,7 +71,8 @@ wukong upgrade
 
 ## 当前最高优先级 TODO
 
-1. 实现 report history / redaction metadata，避免未来云端报告上传源码 diff 或敏感片段。
-2. 统一发布渠道、package version、安装文档和收费边界。
-3. 实现 sync/today 时先定义本地数据模型和 redaction 边界。
-4. 在文档站重新发布前，补齐实际页面或保持当前单层文档结构，不再链接不存在的 `/en/guides/*`、`/zh/guides/*`。
+1. 实现 `/loop`（会话级 loop 编排）、`/proof`（Merge Proof Report）、`/judge`（evaluator-only 审查）—— Milestone 0.5。
+2. 实现 report history / redaction metadata，避免未来云端报告上传源码 diff 或敏感片段。
+3. 统一发布渠道、package version、安装文档和收费边界。
+4. 实现 sync/today 时先定义本地数据模型和 redaction 边界。
+5. 在文档站重新发布前，补齐实际页面或保持当前单层文档结构，不再链接不存在的 `/en/guides/*`、`/zh/guides/*`。

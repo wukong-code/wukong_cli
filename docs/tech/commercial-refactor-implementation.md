@@ -1,7 +1,7 @@
 # Wukong 商业化重构技术实现方案
 
-> 版本: v1.1
-> 日期: 2026-07-02
+> 版本: v1.2
+> 日期: 2026-07-07
 > 对应商业方案: `docs/business/COMMERCIAL_REFACTOR_PLAN.md`
 > 适用范围: `wukong_cli` 新 Kimi-code base；legacy 代码只作为迁移参考；web/计费不在本轮修改范围内。
 
@@ -11,7 +11,7 @@
 
 ### 1.1 技术目标
 
-本方案的目标是把 Wukong 从 "Kimi-code base + 旧版 companion 残留" 重构为 **AI 生成代码的验证与交付证据工具**。
+本方案的目标是把 Wukong 从 "Kimi-code base + 旧版 companion 残留" 重构为 **AI Coding Loop 的控制层与验证层（proof layer for AI-written code）**。
 
 P0 必须交付的真实能力是:
 
@@ -20,6 +20,12 @@ P0 必须交付的真实能力是:
 3. `wukong guard`: 拦截或确认高风险终端命令。
 4. `wukong_verify`: 让外部 AI agent 通过 MCP / tool 方式调用验证。
 5. 报告和本地统计为后续云端、团队与商业化能力提供数据基础。
+
+P0.5 必须交付的核心能力是（见 §14）:
+
+6. `wukong loop` / `/loop`: 会话级 loop 编排,把"写 → 验 → 修"串成自动循环,是产品组织核心。
+7. `wukong proof` / `/proof`: Merge Proof Report,把 verify+scan+report 串成可分享的合并证据（Wow Moment）。
+8. `wukong judge` / `/judge`: evaluator-only 审查,复用 verification 引擎,只审不写。
 
 ### 1.2 当前事实
 
@@ -139,6 +145,9 @@ packages/verification/
 apps/wukong/src/cli/sub/verify.ts
 apps/wukong/src/cli/sub/scan.ts
 apps/wukong/src/cli/sub/guard.ts
+apps/wukong/src/cli/sub/loop.ts        # P0.5
+apps/wukong/src/cli/sub/proof.ts       # P0.5
+apps/wukong/src/cli/sub/judge.ts       # P0.5
 apps/wukong/src/cli/sub/review.ts      # P1
 apps/wukong/src/cli/sub/ship.ts        # P1
 apps/wukong/src/cli/sub/retro.ts       # P1
@@ -150,6 +159,9 @@ apps/wukong/src/cli/sub/retro.ts       # P1
 registerVerifyCommand(program);
 registerScanCommand(program);
 registerGuardCommand(program);
+registerLoopCommand(program);   // P0.5
+registerProofCommand(program);  // P0.5
+registerJudgeCommand(program);  // P0.5
 ```
 
 ### 3.3 Agent / MCP 工具新增位置
@@ -608,6 +620,220 @@ wukong test --coverage
 
 ---
 
+## 8.5 P0.5: `loop` / `proof` / `judge`
+
+这三个命令是下一个重点（对应 ROADMAP Milestone 0.5）。`loop` 是产品组织核心，`proof` 是 Wow Moment，`judge` 是差异化记忆点。三者都构建在 `@wukong/verification` 与已实现的 `/goal` 之上，不引入新核心引擎。
+
+### 8.5.1 `wukong loop` / `/loop` — 会话级 loop 编排（核心）
+
+#### 定位
+
+`/loop` 是 AI Coding Loop 的**编排层**。与 `/goal` 的关系：
+
+- `/goal` 是**执行核**：给定一个任务，让 agent 跑到完成。
+- `/loop` 是**编排层**：持续地、自动地驱动 agent，给定目标 + 可验证停止条件，循环执行 "prompt agent → 改代码 → verify → 判断 → 继续或停止"，把人从持续手动 prompt agent 的位置移出来。
+
+关键原则（来自 loop engineering）：**停止判断不能由写代码的同一个 agent 自己做**，必须由 deterministic verification 或独立 evaluator 决定。
+
+#### 命令契约
+
+```bash
+# TUI
+/loop "<目标>" until "<停止条件>"
+/loop "fix all failing tests" until "tests pass and no high-risk findings"
+/loop status
+/loop pause
+/loop resume
+/loop stop
+
+# CLI（会话级形态：在当前进程内跑一个 loop 后退出）
+wukong loop "fix all failing tests" --until "tests pass and no high-risk findings"
+wukong loop --max-iterations 5
+wukong loop --dry-run
+```
+
+#### 核心类型
+
+```ts
+export interface LoopOptions {
+  goal: string;                      // 自然语言目标
+  stopCondition: StopCondition;      // 可验证停止条件
+  maxIterations?: number;            // 默认 10，防失控
+  iterationTimeoutMs?: number;       // 单轮超时
+  evaluator: 'verify' | 'judge';     // 用谁判断停止，默认 verify
+  cwd?: string;
+}
+
+export interface StopCondition {
+  kind: 'verify-pass'                // verify status === passed
+      | 'scan-clean'                 // 无 high-risk findings
+      | 'custom';                    // 自定义断言（P0.5 先支持 verify-pass / scan-clean）
+}
+
+export interface LoopResult {
+  status: 'completed' | 'stopped' | 'max-iterations' | 'error';
+  iterations: number;
+  finalVerification?: VerificationResult;   // 最后一轮的验证结果
+  history: VerificationResult[];            // 每轮 verify 快照
+  startedAt: string;
+  endedAt: string;
+}
+```
+
+#### 实现流程
+
+```mermaid
+sequenceDiagram
+  participant U as User
+  participant L as Loop Orchestrator
+  participant A as Agent (写代码)
+  participant V as Verification (verify/scan)
+
+  U->>L: goal + stopCondition
+  loop 直到 stopCondition 或 maxIterations
+    L->>A: prompt agent 改代码朝目标推进
+    A-->>L: 改动完成
+    L->>V: runVerification / runScan
+    V-->>L: VerificationResult
+    L->>L: 评估 stopCondition（不由 agent 判断）
+    alt 条件满足
+      L-->>U: completed + finalVerification
+    else 未满足
+      L->>A: 把失败/风险反馈注入下一轮 prompt
+    end
+  end
+```
+
+#### 与现有 `/goal` 的集成
+
+`/loop` 的单轮执行复用 `/goal` 的任务驱动能力；`/loop` 额外提供：
+
+- 可验证停止条件（`/goal` 是"agent 自己说完成"，`/loop` 是"verification 说完成"）。
+- 多轮编排 + 反馈注入（把上轮失败命令/风险写进下轮 prompt）。
+- 迭代历史快照。
+
+#### P0.5 边界
+
+- 只做**会话级** loop：当前 TUI 会话 / 当前 CLI 进程内。退出即结束。
+- 不做 cron/daemon（归 hosted/CI，Milestone 3+）。
+- 停止条件 P0.5 只支持 `verify-pass` 和 `scan-clean`，`custom` 留后续。
+- `evaluator` P0.5 支持 `verify`；`judge` 作为 evaluator 在 `judge` 命令实现后接入。
+
+---
+
+### 8.5.2 `wukong proof` / `/proof` — Merge Proof Report（Wow Moment）
+
+#### 定位
+
+把 `verify` → `scan` → `report` 串成一个固定格式的 **Merge Proof Report**，回答"AI 写的这段代码能不能合并"。这是产品第一个 Wow Moment：用户第一次明确知道 AI 写的代码到底能不能 ship。
+
+#### 命令契约
+
+```bash
+# TUI
+/proof
+/proof --strict        # 有 warning 也算 BLOCKED
+
+# CLI
+wukong proof
+wukong proof --json
+wukong proof --report ./reports/merge-proof.md
+wukong proof --strict
+```
+
+退出码：`passed` → 0，`blocked`（failed 或 strict 下 warning）→ 1。
+
+#### Merge Proof Report 格式
+
+```text
+MERGE PROOF REPORT
+
+Status: PASS / BLOCKED
+Generated: 2026-07-07T12:00:00Z
+
+Changed files: 8
+Tests:          142 passed, 0 failed
+Typecheck:      passed
+Lint:           passed
+Secrets scan:   clean
+Risky changes:  2 warnings
+Guard violations: none
+
+Recommendation:
+  Safe to open PR, but review auth/session changes manually.
+
+Full detail: ./wukong-verification-report.md
+```
+
+#### 核心类型
+
+```ts
+export interface ProofResult {
+  status: 'pass' | 'blocked';
+  recommendation: string;            // 基于风险生成的自然语言建议
+  summary: {
+    changedFiles: number;
+    commandsRun: number;
+    failedCommands: number;
+    risksFound: number;
+    highRisks: number;
+    guardViolations: number;
+  };
+  verification: VerificationResult;  // 内嵌完整 verify 结果
+  scan: ScanResult;                  // 内嵌完整 scan 结果
+  generatedAt: string;
+  reportPath?: string;
+}
+```
+
+#### 实现要点
+
+- `proof` 是 verify + scan 的**编排 + 重排版**，不新增检测能力。
+- 复用 `runVerification`（已含 risk scan）+ `renderVerificationReport`。
+- 新增 `renderMergeProofReport(proof: ProofResult): string` 渲染器，放在 `packages/verification/src/proof.ts`。
+- `recommendation` 由风险类型映射生成（如 `diff.secret_like_changed` → "review secret file changes manually"），P0.5 不用模型。
+
+---
+
+### 8.5.3 `wukong judge` / `/judge` — evaluator-only 审查（差异化记忆点）
+
+#### 定位
+
+`/judge` 是 generator/evaluator 分离里的 **evaluator**：不写代码，只审查 AI 写的代码，默认怀疑（`--assume-broken`）。品牌契合"火眼金睛，识别妖怪代码"。它也可以作为 `/loop` 的 `evaluator`。
+
+#### 命令契约
+
+```bash
+# TUI
+/judge
+/judge --assume-broken      # 默认即如此，显式声明
+/judge --strict             # warning 也判 BLOCK
+
+# CLI
+wukong judge
+wukong judge --json
+wukong judge --strict
+```
+
+退出码：`pass` → 0，`block` → 1。
+
+#### 行为
+
+| 输入 | `--assume-broken`（默认）行为 |
+|---|---|
+| verify failed | BLOCK |
+| verify passed，有 high-risk | BLOCK |
+| verify passed，有 medium risk | PASS with warnings（`--strict` 则 BLOCK） |
+| verify passed，clean | PASS |
+
+#### 实现要点
+
+- 复用 `runVerification` + `runScan`，**不调用模型**（P0.5 纯 deterministic）。
+- 与 `/proof` 共用 `ProofResult`，区别在判定的激进程度和输出语气（judge 默认 BLOCK 倾向）。
+- 未来 `/review --deep` 才接入模型做语义审查，消耗 credits；`/judge` 保持免费 deterministic。
+
+---
+
 ## 9. 后续云端与商业化接入
 
 本节只定义 `wukong_cli` 需要预留的数据边界。具体 web/API/计费实现不在本轮 `wukong_cli` 修改范围内。
@@ -795,6 +1021,30 @@ pnpm --filter @wukong/wukong exec vitest run test/tui/commands/verification.test
 - 登录上传失败不影响本地报告生成。
 - 上传 payload 通过 redaction 测试。
 
+### Milestone 4.75: Loop 控制层 + Merge Proof（P0.5）
+
+对应 §8.5。这是 P0 完成后、云端商业化之前的下一个重点。
+
+交付:
+
+- `packages/verification/src/proof.ts`: `renderMergeProofReport`、`buildProofResult`。
+- `apps/wukong/src/cli/sub/loop.ts`、`proof.ts`、`judge.ts` 及 `commands.ts` 注册。
+- TUI slash commands `/loop`、`/proof`、`/judge` 及 dispatch。
+- `/loop` 复用 `/goal` 执行核 + verification 停止判断。
+
+验收:
+
+```bash
+pnpm -C apps/wukong run dev:cli-only -- proof --json
+pnpm -C apps/wukong run dev:cli-only -- judge --json
+pnpm -C apps/wukong run dev:cli-only -- loop "fix failing tests" --until "verify-pass" --max-iterations 3
+```
+
+- 干净项目 `proof` 产出 PASS；含 placeholder/secret/失败测试产出 BLOCKED 并定位原因。
+- `judge --assume-broken` 在不干净项目直接 BLOCK。
+- `loop` 在会话内对一个目标持续驱动，停止条件由 verification 判断，不由 agent 自评。
+- `loop` 达到 max-iterations 时明确返回 `max-iterations` 状态，不假装成功。
+
 ---
 
 ## 11. 测试策略
@@ -808,8 +1058,10 @@ pnpm --filter @wukong/wukong exec vitest run test/tui/commands/verification.test
 - diff parser。
 - risk scanner。
 - report writer。
+- merge proof report 渲染。
 - policy engine。
 - shell hook render/parse/remove。
+- loop orchestrator（停止条件判断、max-iterations、反馈注入）。
 
 ### 11.2 Fixture tests
 
@@ -833,6 +1085,9 @@ packages/verification/test/fixtures/
 - `wukong verify --no-report`
 - `wukong scan --json`
 - `wukong guard --status`
+- `wukong proof --json`
+- `wukong judge --json`
+- `wukong loop ... --max-iterations 1 --dry-run`
 
 ### 11.4 Safety tests
 
@@ -857,6 +1112,9 @@ packages/verification/test/fixtures/
 | report 泄露敏感信息 | 高 | 本地报告默认完整,外部上传默认 metadata + redacted report |
 | cloud/sandbox 过早承诺 | 高 | P0 不做完整云终端和隔离沙盒 |
 | 包名和安装名不一致 | 高 | 发布前统一 package name、docs、install script |
+| `/loop` 失控（agent 持续烧 token） | 高 | max-iterations 默认上限、单轮超时、dry-run、人可随时 stop |
+| `/loop` 停止条件由 agent 自评 | 高 | 停止判断必须由 deterministic verification 决定，禁止 agent 自评 |
+| `/loop` 被误当成 cron/daemon | 中 | 文档与 help 明确会话级形态，跨会话归 hosted/CI |
 
 ---
 
@@ -864,15 +1122,19 @@ packages/verification/test/fixtures/
 
 最终推荐执行顺序:
 
-1. `@wukong/verification`
-2. `wukong verify`
-3. `wukong scan`
-4. `wukong guard`
-5. `wukong_verify` tool
-6. report history / share link
-7. `review --deep`
-8. team rules / audit log interface
-9. sandbox / external cloud execution
+1. `@wukong/verification`（已完成）
+2. `wukong verify`（已完成）
+3. `wukong scan`（已完成）
+4. `wukong guard`（已完成）
+5. `wukong_verify` tool（已完成）
+6. `/goal` 持续修复（已完成）
+7. `wukong proof` + `wukong judge`（Merge Proof + evaluator，P0.5）
+8. `wukong loop`（会话级 loop 编排，P0.5 核心）
+9. report history / share link
+10. `review --deep`
+11. team rules / audit log interface
+12. 跨会话 loop（hosted/CI daemon）
+13. sandbox / external cloud execution
 
-只要前五项完成,Wukong 的商业内核就真实成立:
-**AI agent 写完代码后,Wukong 提供可复用的验证、风险识别、命令防护和交付证据。**
+前六项已完成，Wukong 的验证内核真实成立。第 7-8 项（proof/judge/loop）把内核升级成 **AI Coding Loop 的控制层**，是下一个重点:
+**AI agent 写完代码后，Wukong 持续驱动验证、产出合并证据，并判断能不能合并。**

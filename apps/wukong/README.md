@@ -1,6 +1,6 @@
 # @wukong.today/code
 
-> The Wukong Code CLI app: a local-first terminal AI coding agent.
+> The Wukong Code CLI app: a local-first terminal AI coding agent — the control and verification layer for AI Coding Loops.
 
 ## Current Scope
 
@@ -24,7 +24,7 @@ wukong migrate
 wukong upgrade
 ```
 
-`verify`, `scan`, `guard`, matching TUI slash commands, and the `wukong_verify` builtin agent tool are implemented as the local P0 commercial refactor loop. `sync`, `today`, hosted reports, billing, team rules, and deep review remain planned follow-up work.
+`verify`, `scan`, `guard`, matching TUI slash commands (`/verify`, `/scan`, `/guard`, `/report`, `/goal`), and the `wukong_verify` builtin agent tool are implemented as the local P0 commercial refactor loop. The next milestone (P0.5) adds `/loop`, `/proof`, and `/judge`. `sync`, `today`, hosted reports, billing, team rules, and deep review remain planned follow-up work.
 
 ## Development
 

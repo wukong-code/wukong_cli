@@ -1,8 +1,9 @@
 # Wukong Code 用户指南
 
 > 适用范围: 当前 `wukong_cli` 新 Kimi-code base
-> 更新时间: 2026-07-02
-> 原则: 本文只写当前可执行的能力。`verify`、`scan`、`guard`、TUI 验证 slash commands 和 `wukong_verify` agent tool 已实现；`sync`、`today`、hosted reports、计费和团队规则仍未完成。
+> 更新时间: 2026-07-07
+> 定位: AI 负责写代码，Wukong 负责判断能不能合并 —— AI Coding Loop 的控制层与验证层。
+> 原则: 本文只写当前可执行的能力。`verify`、`scan`、`guard`、TUI 验证 slash commands（`/verify`、`/scan`、`/guard`、`/report`、`/goal`）和 `wukong_verify` agent tool 已实现；`loop`、`proof`、`judge`、`sync`、`today`、hosted reports、计费和团队规则仍未完成。
 
 ## 从源码运行
 

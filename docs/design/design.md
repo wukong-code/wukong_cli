@@ -1,18 +1,19 @@
 # Wukong Code 产品设计文档
 
-> 版本: v1.1
-> 日期: 2026-07-02
+> 版本: v1.2
+> 日期: 2026-07-07
 > 状态: 目标设计文档，不代表所有命令已实现。
 
 ## 1. 设计基线
 
-当前 `wukong_cli` 新 base 已经提供交互式终端 AI agent 能力。商业化设计的目标是在这个底座上加入验证、风险扫描、命令防护和交付证据。
+当前 `wukong_cli` 新 base 已经提供交互式终端 AI agent 能力。商业化设计的目标是在这个底座上加入验证、风险扫描、命令防护、交付证据，并把它们用 `/loop` 编排成 AI Coding Loop 的控制层。
 
-当前已实现的 top-level command 以 `wukong --help` 为准。`verify`、`scan`、`guard` 已实现；`journey`、`today`、云端报告和 agent tool 仍是目标体验。
+当前已实现的 top-level command 以 `wukong --help` 为准。`verify`、`scan`、`guard`、`/goal` 已实现；`loop`、`proof`、`judge`、`journey`、`today`、云端报告仍是目标体验。
 
 ## 2. 产品定位
 
-> Wukong 是 AI 生成代码的验证与交付证据工具。
+> **AI 负责写代码，Wukong 负责判断能不能合并。**
+> Wukong 是 AI Coding Loop 的控制层与验证层（proof layer for AI-written code）。
 
 设计重点不是虚拟宠物、情绪陪伴或泛聊天，而是：
 
@@ -20,6 +21,9 @@
 - 让风险在提交前被看见。
 - 让团队能复用规则和报告。
 - 让终端中的高风险操作多一道确认。
+- 用 `/loop` 把"写 → 验 → 修"串成自动循环，把人从持续手动 prompt agent 的位置移出来。
+- 用 `/proof` 产出可截图、可分享的 Merge Proof Report 作为 Wow Moment。
+- 用 `/judge` 做只审不写的 evaluator，默认怀疑 AI 写的代码。
 
 ## 3. 信息架构
 
@@ -64,6 +68,24 @@ wukong guard --stats
 wukong guard -- rm -rf ./tmp
 ```
 
+TUI 内已实现 `/verify`、`/scan`、`/guard`、`/report`、`/goal`（含队列管理）。
+
+### P0.5 目标命令（待实现）
+
+```bash
+# 会话级 loop 编排（核心）
+wukong loop "fix all failing tests" --until "verify-pass"
+/loop "fix failing tests" until "tests pass and no high-risk findings"
+
+# Merge Proof Report（Wow Moment）
+wukong proof
+/proof
+
+# evaluator-only 审查（默认怀疑）
+wukong judge --assume-broken
+/judge
+```
+
 ### 设计原则
 
 1. 默认离线可用。
@@ -71,6 +93,8 @@ wukong guard -- rm -rf ./tmp
 3. 失败时说明具体命令、退出码和风险。
 4. JSON 输出适合 agent/CI，Markdown report 适合人读。
 5. Guard 必须明确 best-effort，不做不可绕过承诺。
+6. `/loop` 停止判断必须由 deterministic verification 决定，不能由写代码的 agent 自评。
+7. `/loop` 有 max-iterations 上限和单轮超时，人可随时 stop；不做 cron/daemon 重形态。
 
 ## 5. 输出格式
 

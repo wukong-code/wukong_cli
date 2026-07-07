@@ -1,9 +1,10 @@
 # Wukong Code 最新技术架构
 
-> 版本: v2.0
-> 日期: 2026-07-02
+> 版本: v2.1
+> 日期: 2026-07-07
 > 适用范围: `wukong_cli` 新 Kimi-code base
-> 状态: 当前架构 + P0 本地验证闭环已实现
+> 状态: 当前架构 + P0 本地验证闭环 + `/goal` 已实现；`/loop`、`/proof`、`/judge` 为 P0.5 待实现
+> 产品定位: AI Coding Loop 的控制层与验证层（proof layer for AI-written code）
 
 ## 1. 当前事实
 
@@ -34,7 +35,7 @@ wukong migrate
 wukong upgrade
 ```
 
-商业化重构已经补齐的 P0 本地闭环是：
+商业化重构已经补齐的 P0 本地闭环与执行核是：
 
 ```text
 wukong verify
@@ -44,20 +45,32 @@ wukong guard
 /scan
 /guard
 /report
+/goal          # 单任务跑到验证条件满足（loop 的执行核）
 wukong_verify
+```
+
+下一个重点 P0.5（待实现）会把这套工具编排成 AI Coding Loop 的控制层：
+
+```text
+wukong loop    # 会话级 loop 编排（核心）
+wukong proof   # Merge Proof Report（Wow Moment）
+wukong judge   # evaluator-only 审查
 ```
 
 ## 2. 架构原则
 
 1. **验证核心独立成包**
-   `verify`、`scan`、agent tool、未来 CI/server 都复用同一个 `@wukong/verification`。
+   `verify`、`scan`、agent tool、未来 CI/server 都复用同一个 `@wukong/verification`。`proof`、`judge` 也复用同一核心，不引入新检测引擎。
 
 2. **CLI 只做输入输出编排**
    `apps/wukong/src/cli/sub/*` 只解析参数、调用核心包、格式化输出和设置 exit code。
    `apps/wukong/src/tui/commands/verification.ts` 和 `packages/agent-core/src/tools/builtin/verification/wukong-verify.ts` 也复用同一核心包。
 
 3. **确定性验证先于 AI review**
-   P0 `verify` 默认不调用模型，必须离线可用。AI 深度 review 放到 P1。
+   P0 `verify`、P0.5 `proof`/`judge` 默认不调用模型，必须离线可用。AI 深度 review 放到 P1。
+
+4. **loop 停止判断不由 agent 自评**
+   `/loop` 的停止条件必须由 deterministic verification（`verify`/`judge`）决定，禁止写代码的 agent 自评完成。
 
 4. **guard 是 best-effort 防护**
    P0 guard 是交互式 shell 风险确认层，不宣传不可绕过。更强隔离以后再接 sandbox/tool-policy。

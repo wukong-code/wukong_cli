@@ -1,12 +1,14 @@
 # Wukong Code
 
-[Documentation](docs/README.md) · [中文](README.zh-CN.md)
+[Documentation](docs/README.md) · [Roadmap](ROADMAP.md) · [中文](README.zh-CN.md)
 
 ## What Is Wukong Code
 
-Wukong Code is a local-first terminal AI coding agent based on the current Kimi-code base. It provides an interactive TUI, prompt mode, provider management, ACP integration, a local web/server mode, session export, migration, diagnostics, and visualization.
+> **AI can write the code. Wukong proves whether it should ship.**
 
-The commercial verification direction now has a local P0 loop: `wukong verify`, `wukong scan`, `wukong guard`, matching TUI slash commands, and the `wukong_verify` builtin agent tool. Cloud sync, hosted reports, billing, team rules, and deep review remain planned work.
+Wukong Code is a local-first terminal AI coding agent built as the **control and verification layer for AI Coding Loops**. It does not compete with Cursor / Claude Code / Codex on writing code; it answers the question they leave open: *can this AI-written code be merged?*
+
+The local P0 loop is implemented: `wukong verify`, `wukong scan`, `wukong guard`, matching TUI slash commands (`/verify`, `/scan`, `/guard`, `/report`, `/goal`), and the `wukong_verify` builtin agent tool. The next focus (Milestone 0.5) is `/loop` (session-level loop orchestration), `/proof` (Merge Proof Report), and `/judge` (evaluator-only review) — all planned. Cloud sync, hosted reports, billing, team rules, and deep review remain planned work.
 
 ## Current Command Surface
 
@@ -27,6 +29,8 @@ wukong vis [sessionId]         # open the session visualizer
 wukong migrate                 # migrate legacy wukong-cli data
 wukong upgrade                 # upgrade Wukong Code
 ```
+
+Planned commands (not yet implemented): `wukong loop`, `wukong proof`, `wukong judge`, `wukong ship`, `wukong review`.
 
 Run `wukong --help` for the complete option list.
 
@@ -70,12 +74,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for the internal contribution guide.
 
 ## Commercial Refactor
 
-The current product direction is to turn Wukong Code into a verification and delivery-evidence tool for AI-generated code. The implementation plan is tracked in:
+The current product direction is to turn Wukong Code into the **proof layer for AI-written code** — the control and verification layer of an AI Coding Loop. The implementation plan is tracked in:
 
+- [Roadmap](ROADMAP.md)
 - [Commercial refactor plan](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [Technical implementation plan](docs/tech/commercial-refactor-implementation.md)
 
-The P0 local CLI commands, TUI verification commands, and `wukong_verify` agent tool are implemented. The remaining docs track follow-up work such as cloud reports, billing, team rules, and deep review.
+The P0 local CLI commands, TUI verification commands, and `wukong_verify` agent tool are implemented. The next milestone adds `/loop`, `/proof`, and `/judge`. The remaining docs track follow-up work such as cloud reports, billing, team rules, and deep review.
 
 ## License
 

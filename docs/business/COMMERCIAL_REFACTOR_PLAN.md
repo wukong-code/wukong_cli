@@ -1,13 +1,13 @@
 # Wukong Code 商业化与产品重构方案
 
-> 版本: v1.2
-> 日期: 2026-07-03
+> 版本: v1.3
+> 日期: 2026-07-07
 > 当前范围: `wukong_cli` 新 Kimi-code base
 > 技术落地: [商业化重构技术实现方案](../tech/commercial-refactor-implementation.md)
 
 ## 0. 当前事实
 
-当前 `wukong_cli` 已经整体替换为 Kimi-code base。它有完整的 CLI/TUI/agent/provider/server/ACP 底座，并已经落地 P0 本地验证闭环。
+当前 `wukong_cli` 已经整体替换为 Kimi-code base。它有完整的 CLI/TUI/agent/provider/server/ACP 底座，并已经落地 P0 本地验证闭环与 `/goal` 持续修复。
 
 当前 top-level CLI 已有：
 
@@ -29,13 +29,18 @@ wukong migrate
 wukong upgrade
 ```
 
+已实现的 TUI slash commands 包括 `/verify`、`/scan`、`/guard`、`/report`、`/goal`（含队列）。
+
 当前 top-level CLI 尚未实现：
 
 ```text
-wukong review
-wukong test
-wukong ship
-wukong retro
+wukong loop      # 会话级 loop 编排（Milestone 0.5 核心）
+wukong proof     # Merge Proof Report（Wow Moment）
+wukong judge     # evaluator-only 审查
+wukong ship      # 发布 gate（更靠后）
+wukong review    # AI 辅助代码审查（P1）
+wukong test      # 项目测试入口（P1）
+wukong retro     # 迭代复盘（P1）
 wukong sync
 wukong today
 wukong journey
@@ -47,32 +52,45 @@ wukong journey
 
 Wukong 的商业化方向是：
 
-> AI 生成代码的验证与交付证据工具。
+> **The proof layer for AI-written code — AI Coding Loop 的控制层与验证层。**
 
-用户在 Claude Code、Cursor、Copilot、Codex 或其他 agent 生成代码后，用 Wukong 运行确定性检查、扫描风险、生成证据报告，再决定是否相信、提交或合并。
+Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 写完代码后最薄弱的一环：**这段代码能不能合并**。一句话定位：
 
-Wukong 不和代码 agent 比写代码速度，而是补上 agent 最薄弱的一环：
+> AI can write the code. Wukong proves whether it should ship.
+
+产品围绕 Loop Engineering 组织，命令分层对应 loop 的不同职责：
+
+| 层 | 命令 | 职责 | 状态 |
+|---|---|---|---|
+| 编排层 | `/loop` | 持续驱动 agent + 验证 + 修复，无需人手动 prompt | 待实现（核心） |
+| 执行核 | `/goal` | 单任务跑到验证条件满足 | 已实现 |
+| 工具层 | `/verify` `/scan` `/guard` | deterministic proof：跑检查、扫风险、拦命令 | 已实现 |
+| 证据层 | `/proof` | 把三件套串成 Merge Proof Report | 待实现（Wow Moment） |
+| 评估层 | `/judge` | evaluator-only，只审不写，默认怀疑 | 待实现 |
+
+用户在 Claude Code、Cursor、Copilot、Codex 或其他 agent 生成代码后，用 Wukong 运行确定性检查、扫描风险、生成证据报告，再决定是否相信、提交或合并。Wukong 补上 agent 最薄弱的一环：
 
 - 验证是否真的跑过。
 - 识别 placeholder、mock、skipped test、secret-looking diff、危险命令等风险。
-- 产出可被人和团队审计的交付证据。
+- 产出可被人和团队审计的交付证据（Merge Proof）。
 - 在终端层约束 agent 的高风险操作。
+- 用 `/loop` 把"写 → 验 → 修"串成自动循环，把人从持续 prompt agent 的位置移出来。
 
 ## 2. 悟空能力映射
 
 | 悟空能力 | 产品含义 | CLI 目标 |
 |---|---|---|
-| 火眼金睛 | 风险识别 | `scan`、risk rules、secret scan |
-| 金箍棒 | 标准化验证执行 | `verify`、`test`、`ship`、report |
+| 火眼金睛 | 风险识别 + 只审不写 | `scan`、risk rules、secret scan、`judge` |
+| 金箍棒 | 标准化验证执行 | `verify`、`proof`、`test`、`ship`、report |
 | 紧箍咒 | 权限约束 | `guard`、policy、command confirmation |
 | 分身术 | agent 能力分发 | `wukong_verify` tool / MCP bridge |
-| 筋斗云 | 远程/同步能力 | `sync`、cloud reports，P1+ |
+| 筋斗云 | 持续驱动与远程能力 | `loop`（会话级）、`sync`、cloud reports |
 | 七十二变 | 专家模式 | future prompt/tool profiles |
 | 取经路 | 成长与复盘 | stats、streak、retro，P1+ |
 
 ## 3. 目标命令结构
 
-### P0: 本地闭环
+### P0: 本地闭环（已完成）
 
 | 命令 | 状态 | 目标 |
 |---|---|---|
@@ -80,7 +98,16 @@ Wukong 不和代码 agent 比写代码速度，而是补上 agent 最薄弱的�
 | `wukong scan` | 已实现 | 只读风险扫描，不运行项目命令 |
 | `wukong guard` | 已实现 | 本地 guard 状态、统计和命令风险阻断 |
 | `wukong_verify` tool | 已实现 | 让外部 agent 在完成前调用验证 |
-| `/verify`、`/scan`、`/guard`、`/report` | 已实现 | 让 TUI 会话内可运行验证、扫描、guard 状态和查看报告 |
+| `/verify`、`/scan`、`/guard`、`/report` | 已实现 | TUI 会话内运行验证、扫描、guard 状态和查看报告 |
+| `/goal` | 已实现 | 单任务跑到验证条件满足，含队列管理 |
+
+### P0.5: Loop 控制层 + Merge Proof（下一个重点）
+
+| 命令 | 状态 | 目标 |
+|---|---|---|
+| `wukong loop` / `/loop` | 待实现 | 会话级 loop 编排：持续驱动 agent + 验证 + 修复，核心 |
+| `wukong proof` / `/proof` | 待实现 | 把 verify+scan+report 串成 Merge Proof Report（Wow Moment） |
+| `wukong judge` / `/judge` | 待实现 | evaluator-only 审查，默认 `--assume-broken`，只审不写 |
 
 ### P1: 工作流扩展
 
@@ -88,7 +115,7 @@ Wukong 不和代码 agent 比写代码速度，而是补上 agent 最薄弱的�
 |---|---|---|
 | `wukong review` | 待实现 | AI 辅助代码审查，消耗 credits 或本地模型 |
 | `wukong test` | 待实现 | 项目测试入口和模板化测试策略 |
-| `wukong ship` | 待实现 | 发布前验证、报告和 checklist |
+| `wukong ship` | 待实现 | proof + 版本/changelog/dry-run 发布前 gate |
 | `wukong retro` | 待实现 | 生成迭代复盘和质量趋势 |
 
 ### P2: 云端与团队
@@ -98,7 +125,18 @@ Wukong 不和代码 agent 比写代码速度，而是补上 agent 最薄弱的�
 | cloud reports | 待实现 | 上传 metadata/redacted report，支持分享 |
 | team rules | 待实现 | 团队共享验证规则和 guard policy |
 | audit log | 待实现 | 记录验证、拦截和发布证据 |
+| 跨会话 loop（hosted/CI） | 待实现 | daemon / CI 形态的持续性 loop，归 Milestone 3+ |
 | sync/today/journey | 待实现 | 基于真实 stats 做上下文和成长体系 |
+
+## 3.1 Loop Engineering 三层叙事（如实标注状态）
+
+参考 Andrew Ng 的三层 loop 框架，Wukong 的对应关系与真实状态如下。对外叙事可用，但未实现的层不得宣称已可用：
+
+| 层 | 含义 | Wukong 对应 | 状态 |
+|---|---|---|---|
+| 第一层：Agentic Coding Loop | agent 写代码 → 跑测试 → 修错 → 再跑 | `/loop` + `/goal` + `/verify` + `/scan` + `/guard` | 工具层已实现，`/loop` 编排待实现 |
+| 第二层：Developer Feedback Loop | 人看报告、决定接受、更新规则 | `/proof`、`/report`、`/sessions`、`/undo`、`/rules`(待实现) | 一半已实现 |
+| 第三层：External Feedback Loop | 用户 bug、CI 失败、issue、PR review 回到 loop | GitHub Issues、CI、Sentry、Linear、Slack 集成 | 未实现，归 hosted/CI |
 
 ## 4. 商业模型
 
@@ -232,7 +270,15 @@ Managed AI Add-on
 4. `wukong guard` CLI command，先做 best-effort interactive guard。
 5. `wukong_verify` builtin agent tool。
 6. TUI slash commands: `/verify`、`/scan`、`/guard`、`/report`。
-7. fixtures、unit tests、CLI/TUI/tool smoke tests。
+7. `/goal` 持续修复（单任务跑到验证条件满足，含队列）。
+8. fixtures、unit tests、CLI/TUI/tool smoke tests。
+
+### P0.5 下一个重点：Loop 控制层 + Merge Proof
+
+1. `/loop` 会话级 loop 编排：持续驱动 agent + 验证 + 修复（产品核心）。
+2. `/proof` Merge Proof Report：verify+scan+report 固定格式汇总（Wow Moment）。
+3. `/judge` evaluator-only 审查：默认 `--assume-broken`，复用 verification 引擎。
+4. 文档与官网 hero 切换到 loop control plane / proof-layer 叙事。
 
 ### 下一个 P0/P1 交界
 
@@ -247,6 +293,7 @@ Managed AI Add-on
 - 不做“不可绕过”的安全承诺。
 - 不发布尚未存在的 install script、Homebrew formula 或旧包名。
 - 不把 legacy `packages/cli` / `packages/mcp-server` 复制为长期架构。
+- 不把 `/loop` 做成 CLI cron/daemon 重形态；跨会话持续性归 hosted/CI。
 
 ## 6. Guard 产品口径
 
@@ -295,4 +342,6 @@ P1 之后再评估：
 
 ## 9. 结论
 
-Wukong 的可商业化内核已经有本地 CLI/TUI/agent 闭环：deterministic verification、risk scan、best-effort guard、report 和 `wukong_verify`。下一步应做 hosted reports、redaction/report history、团队规则和计费边界，把本地验证价值转成可收费的协作与审计能力。
+Wukong 的可商业化内核已经有本地 CLI/TUI/agent 闭环：deterministic verification、risk scan、best-effort guard、report、`wukong_verify` 和 `/goal`。下一个重点（P0.5）是用 `/loop` 把这套工具编排成 AI Coding Loop 的控制层，并以 `/proof` 作为可截图、可分享的 Wow Moment、`/judge` 作为差异化记忆点。这之后，hosted reports、redaction/report history、团队规则、跨会话 loop（hosted/CI）和计费边界，把本地验证价值转成可收费的协作与审计能力。
+
+一句话：**AI 负责写代码，Wukong 负责判断能不能合并，并用 loop 持续驱动这件事直到成立。**

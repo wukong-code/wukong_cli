@@ -1,12 +1,14 @@
 # Wukong Code
 
-[文档](docs/README.md) · [English](README.md)
+[文档](docs/README.md) · [路线图](ROADMAP.md) · [English](README.md)
 
 ## 什么是 Wukong Code
 
-Wukong Code 是基于当前 Kimi-code base 的本地优先终端 AI coding agent。当前仓库已经具备交互式 TUI、单次 prompt 模式、provider 管理、ACP 集成、本地 server/web UI、session 导出、迁移、doctor 诊断和可视化能力。
+> **AI 负责写代码，Wukong 负责判断能不能合并。**
 
-商业化方向会把 Wukong Code 重构为 AI 生成代码的验证与交付证据工具。当前 P0 本地闭环已经包含 `wukong verify`、`wukong scan`、`wukong guard`、对应 TUI slash commands，以及 `wukong_verify` 内置 agent tool；云同步、托管报告、计费、团队规则和深度 review 仍是后续工作。
+Wukong Code 是本地优先的终端 AI coding agent，定位是 **AI Coding Loop 的控制层与验证层**。它不和 Cursor / Claude Code / Codex 拼写代码，而是补上它们留下的问题：*这段 AI 写的代码能不能合并？*
+
+当前 P0 本地闭环已实现：`wukong verify`、`wukong scan`、`wukong guard`、对应 TUI slash commands（`/verify`、`/scan`、`/guard`、`/report`、`/goal`），以及 `wukong_verify` 内置 agent tool。下一个重点（Milestone 0.5）是 `/loop`（会话级 loop 编排）、`/proof`（Merge Proof Report）、`/judge`（只审不写的 evaluator）——均待实现。云同步、托管报告、计费、团队规则和深度 review 仍是后续工作。
 
 ## 当前命令面
 
@@ -27,6 +29,8 @@ wukong vis [sessionId]         # 打开 session visualizer
 wukong migrate                 # 迁移 legacy wukong-cli 数据
 wukong upgrade                 # 升级 Wukong Code
 ```
+
+待实现命令：`wukong loop`、`wukong proof`、`wukong judge`、`wukong ship`、`wukong review`。
 
 完整参数以 `wukong --help` 为准。
 
@@ -70,12 +74,13 @@ pnpm build      # 构建所有包
 
 ## 商业化重构
 
-当前产品方向是把 Wukong Code 做成 AI 生成代码的验证与交付证据工具。实现计划见：
+当前产品方向是把 Wukong Code 做成 **AI 写代码时代的合并前验证层** —— AI Coding Loop 的控制层与验证层。实现计划见：
 
+- [产品路线图](ROADMAP.md)
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [技术实现方案](docs/tech/commercial-refactor-implementation.md)
 
-P0 本地 CLI 命令、TUI 验证命令和 `wukong_verify` agent tool 已经实现。剩余文档继续追踪云端报告、计费、团队规则和深度 review 等后续工作。
+P0 本地 CLI 命令、TUI 验证命令和 `wukong_verify` agent tool 已经实现。下一个 milestone 会加入 `/loop`、`/proof`、`/judge`。剩余文档继续追踪云端报告、计费、团队规则和深度 review 等后续工作。
 
 ## 许可证
 
