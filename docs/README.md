@@ -13,8 +13,10 @@
 
 | 层 | 命令 | 状态 |
 |---|---|---|
-| 编排层 | `/loop` | 待实现（核心） |
-| 执行核 | `/goal` | 已实现 |
+| Turn-based | TUI 默认 | 已实现 |
+| Goal-based | `/goal` | 已实现 |
+| Time-based（本机） | `/loop` | 待实现（核心） |
+| Time-based（云端） | `/schedule` | 待实现（归 hosted） |
 | 工具层 | `/verify` `/scan` `/guard` | 已实现 |
 | 证据层 | `/proof` | 待实现（Wow Moment） |
 | 评估层 | `/judge` | 待实现 |
@@ -54,12 +56,12 @@ wukong upgrade
 
 ## 商业化文档
 
-这些文档记录当前 P0 实现和后续计划。`verify`、`scan`、`guard` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/report`、`/goal` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。下一个重点是 `/loop`、`/proof`、`/judge`（Milestone 0.5）。sync/today、云端报告、计费和团队能力仍是后续工作：
+这些文档记录当前 P0 实现和后续计划。`verify`、`scan`、`guard` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/report`、`/goal` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。下一个重点是 `/loop`（本机 interval）、`/proof`、`/judge`（Milestone 0.5）；`/schedule`（云端例程）归 hosted。sync/today、云端报告、计费和团队能力仍是后续工作：
 
 - [商业化与产品重构方案](business/COMMERCIAL_REFACTOR_PLAN.md)
-  定义产品定位、商业模型、目标命令结构（含 loop/proof/judge）和路线图。
+  定义产品定位、商业模型、目标命令结构（含 loop/proof/judge/schedule）和路线图。
 - [商业化重构技术实现方案](tech/commercial-refactor-implementation.md)
-  定义 `@wukong/verification`、`wukong verify`、`wukong scan`、`wukong guard`、agent tool 以及 `/loop`、`/proof`、`/judge` 的实现方案。
+  定义 `@wukong/verification`、`wukong verify`、`wukong scan`、`wukong guard`、agent tool 以及 `/loop`、`/proof`、`/judge`、`/schedule` 的实现方案。
 - [最新技术架构](tech/architecture.md)
   定义当前新 Kimi-code base 与 P0 verification/guard 架构。
 - [产品设计文档](design/design.md)
@@ -71,7 +73,7 @@ wukong upgrade
 
 ## 当前最高优先级 TODO
 
-1. 实现 `/loop`（会话级 loop 编排）、`/proof`（Merge Proof Report）、`/judge`（evaluator-only 审查）—— Milestone 0.5。
+1. 实现 `/loop`（本机 interval loop）、`/proof`（Merge Proof Report）、`/judge`（evaluator-only 审查）—— Milestone 0.5。
 2. 实现 report history / redaction metadata，避免未来云端报告上传源码 diff 或敏感片段。
 3. 统一发布渠道、package version、安装文档和收费边界。
 4. 实现 sync/today 时先定义本地数据模型和 redaction 边界。

@@ -34,7 +34,8 @@ wukong upgrade
 当前 top-level CLI 尚未实现：
 
 ```text
-wukong loop      # 会话级 loop 编排（Milestone 0.5 核心）
+wukong loop      # 本机 interval loop（Milestone 0.5 核心，关机即停）
+wukong schedule  # 云端例程（归 hosted，Milestone 3+）
 wukong proof     # Merge Proof Report（Wow Moment）
 wukong judge     # evaluator-only 审查
 wukong ship      # 发布 gate（更靠后）
@@ -58,15 +59,19 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 
 > AI can write the code. Wukong proves whether it should ship.
 
-产品围绕 Loop Engineering 组织，命令分层对应 loop 的不同职责：
+产品围绕 Loop Engineering 组织。参考 Claude Code 的 loop 分类（按"怎么触发 / 怎么停止"两个维度），Wukong 覆盖同样的 loop 谱系：
 
-| 层 | 命令 | 职责 | 状态 |
-|---|---|---|---|
-| 编排层 | `/loop` | 持续驱动 agent + 验证 + 修复，无需人手动 prompt | 待实现（核心） |
-| 执行核 | `/goal` | 单任务跑到验证条件满足 | 已实现 |
-| 工具层 | `/verify` `/scan` `/guard` | deterministic proof：跑检查、扫风险、拦命令 | 已实现 |
-| 证据层 | `/proof` | 把三件套串成 Merge Proof Report | 待实现（Wow Moment） |
-| 评估层 | `/judge` | evaluator-only，只审不写，默认怀疑 | 待实现 |
+| Loop 类型 | 触发 | 停止 | Wukong 命令 | 状态 |
+|---|---|---|---|---|
+| Turn-based | 用户 prompt | agent 自判完成 | TUI 默认 agentic loop | 已实现 |
+| Goal-based | 实时手动 | 目标达成 or 回合上限 | `/goal` | 已实现 |
+| Time-based（本机） | 时间间隔 | 取消 or 工作完成 | `/loop` | 待实现（核心） |
+| Time-based（云端） | 计划 | 任务达标退出，例程持续 | `/schedule` | 待实现（归 hosted） |
+| 工具层 | 手动/被 loop 调用 | 单次 | `/verify` `/scan` `/guard` | 已实现 |
+| 证据层 | 手动 | 单次 | `/proof` | 待实现（Wow Moment） |
+| 评估层 | 手动/被 loop 调用 | 单次 | `/judge` | 待实现 |
+
+`/loop`（本机 interval，关机即停）和 `/schedule`（云端例程，机器关了也跑）拆开实现：`/loop` 在 CLI 本机做，`/schedule` 归 hosted（Milestone 3+）。`/goal` 和 `/loop` 的停止判断不由写代码的 agent 自评——用 deterministic verification、独立 evaluator（`/judge`），或挂载自定义验证 skill。
 
 用户在 Claude Code、Cursor、Copilot、Codex 或其他 agent 生成代码后，用 Wukong 运行确定性检查、扫描风险、生成证据报告，再决定是否相信、提交或合并。Wukong 补上 agent 最薄弱的一环：
 
@@ -74,7 +79,7 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 - 识别 placeholder、mock、skipped test、secret-looking diff、危险命令等风险。
 - 产出可被人和团队审计的交付证据（Merge Proof）。
 - 在终端层约束 agent 的高风险操作。
-- 用 `/loop` 把"写 → 验 → 修"串成自动循环，把人从持续 prompt agent 的位置移出来。
+- 用 `/loop`（本机）和 `/schedule`（云端）把"写 → 验 → 修"串成自动循环，把人从持续 prompt agent 的位置移出来。
 
 ## 2. 悟空能力映射
 
@@ -84,7 +89,7 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 | 金箍棒 | 标准化验证执行 | `verify`、`proof`、`test`、`ship`、report |
 | 紧箍咒 | 权限约束 | `guard`、policy、command confirmation |
 | 分身术 | agent 能力分发 | `wukong_verify` tool / MCP bridge |
-| 筋斗云 | 持续驱动与远程能力 | `loop`（会话级）、`sync`、cloud reports |
+| 筋斗云 | 持续驱动与远程能力 | `loop`（本机 interval）、`schedule`（云端例程）、`sync`、cloud reports |
 | 七十二变 | 专家模式 | future prompt/tool profiles |
 | 取经路 | 成长与复盘 | stats、streak、retro，P1+ |
 
@@ -105,9 +110,9 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 
 | 命令 | 状态 | 目标 |
 |---|---|---|
-| `wukong loop` / `/loop` | 待实现 | 会话级 loop 编排：持续驱动 agent + 验证 + 修复，核心 |
+| `wukong loop` / `/loop` | 待实现 | 本机 interval loop：按时间间隔重复驱动 agent + 验证 + 修复，关机即停，核心 |
 | `wukong proof` / `/proof` | 待实现 | 把 verify+scan+report 串成 Merge Proof Report（Wow Moment） |
-| `wukong judge` / `/judge` | 待实现 | evaluator-only 审查，默认 `--assume-broken`，只审不写 |
+| `wukong judge` / `/judge` | 待实现 | evaluator-only 审查，默认 `--assume-broken`，只审不写；也是 loop 的第二-agent reviewer |
 
 ### P1: 工作流扩展
 
@@ -125,7 +130,7 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 | cloud reports | 待实现 | 上传 metadata/redacted report，支持分享 |
 | team rules | 待实现 | 团队共享验证规则和 guard policy |
 | audit log | 待实现 | 记录验证、拦截和发布证据 |
-| 跨会话 loop（hosted/CI） | 待实现 | daemon / CI 形态的持续性 loop，归 Milestone 3+ |
+| `/schedule` 云端例程 | 待实现 | 机器关了也跑的 time-based loop，归 hosted（Milestone 3+） |
 | sync/today/journey | 待实现 | 基于真实 stats 做上下文和成长体系 |
 
 ## 3.1 Loop Engineering 三层叙事（如实标注状态）
@@ -134,9 +139,18 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 
 | 层 | 含义 | Wukong 对应 | 状态 |
 |---|---|---|---|
-| 第一层：Agentic Coding Loop | agent 写代码 → 跑测试 → 修错 → 再跑 | `/loop` + `/goal` + `/verify` + `/scan` + `/guard` | 工具层已实现，`/loop` 编排待实现 |
-| 第二层：Developer Feedback Loop | 人看报告、决定接受、更新规则 | `/proof`、`/report`、`/sessions`、`/undo`、`/rules`(待实现) | 一半已实现 |
+| 第一层：Agentic Coding Loop | agent 写代码 → 跑测试 → 修错 → 再跑 | `/loop`（本机）+ `/schedule`（云端）+ `/goal` + `/verify` + `/scan` + `/guard` | 工具层 + `/goal` 已实现，`/loop`/`/schedule` 待实现 |
+| 第二层：Developer Feedback Loop | 人看报告、决定接受、更新规则 | `/proof`、`/judge`、`/report`、`/sessions`、`/undo`、`/rules`(待实现) | 一半已实现 |
 | 第三层：External Feedback Loop | 用户 bug、CI 失败、issue、PR review 回到 loop | GitHub Issues、CI、Sentry、Linear、Slack 集成 | 未实现，归 hosted/CI |
+
+## 3.2 Loop 代码质量保障原则
+
+借鉴 Claude Code 的 loop 设计经验，loop 输出质量取决于围绕它的系统。设计 loop（`/goal`、`/loop`、`/schedule`）时遵循：
+
+1. **保持代码库整洁**：agent 遵循 codebase 已有的模式和约定。
+2. **给 agent 自验证能力**：用 deterministic verification（`verify`/`scan`）和自定义验证 skill 编码"什么叫好"；检查越定量越有效。
+3. **文档可达**：框架/库文档保持最新最佳实践。
+4. **用第二 agent 做审查**：fresh context 的 reviewer 偏见更少——这正是 `/judge` 的定位，loop 的每轮或出口可挂载 `/judge` 对抗性审查。
 
 ## 4. 商业模型
 
@@ -275,7 +289,7 @@ Managed AI Add-on
 
 ### P0.5 下一个重点：Loop 控制层 + Merge Proof
 
-1. `/loop` 会话级 loop 编排：持续驱动 agent + 验证 + 修复（产品核心）。
+1. `/loop` 本机 interval loop：按时间间隔持续驱动 agent + 验证 + 修复，关机即停（产品核心）。
 2. `/proof` Merge Proof Report：verify+scan+report 固定格式汇总（Wow Moment）。
 3. `/judge` evaluator-only 审查：默认 `--assume-broken`，复用 verification 引擎。
 4. 文档与官网 hero 切换到 loop control plane / proof-layer 叙事。
@@ -293,7 +307,7 @@ Managed AI Add-on
 - 不做“不可绕过”的安全承诺。
 - 不发布尚未存在的 install script、Homebrew formula 或旧包名。
 - 不把 legacy `packages/cli` / `packages/mcp-server` 复制为长期架构。
-- 不把 `/loop` 做成 CLI cron/daemon 重形态；跨会话持续性归 hosted/CI。
+- 不把 `/schedule`（云端例程）在本机做；`/loop`（本机 interval，关机即停）和 `/schedule`（云端）拆开，跨机器持续性归 hosted。
 
 ## 6. Guard 产品口径
 

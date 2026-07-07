@@ -23,7 +23,7 @@ P0 必须交付的真实能力是:
 
 P0.5 必须交付的核心能力是（见 §14）:
 
-6. `wukong loop` / `/loop`: 会话级 loop 编排,把"写 → 验 → 修"串成自动循环,是产品组织核心。
+6. `wukong loop` / `/loop`: 本机 interval loop,按时间间隔把"写 → 验 → 修"串成自动循环,关机即停,是产品组织核心。
 7. `wukong proof` / `/proof`: Merge Proof Report,把 verify+scan+report 串成可分享的合并证据（Wow Moment）。
 8. `wukong judge` / `/judge`: evaluator-only 审查,复用 verification 引擎,只审不写。
 
@@ -72,6 +72,16 @@ P0.5 必须交付的核心能力是（见 §14）:
 5. **不复活旧 mcp-server 架构**
    - legacy 的 MCP tool 定义可以迁移。
    - 但新实现应接入新 base 的 `agent-core` / MCP / plugin 架构。
+
+6. **loop 停止判断不由 agent 自评**
+   - `/goal`、`/loop`、`/schedule` 的停止判断必须由 deterministic verification（`verify`/`scan`）、独立 evaluator（`/judge`），或自定义验证 skill 决定。
+   - 禁止写代码的 agent 自己判断"我完成了"。
+
+7. **loop 质量靠系统而非靠运气**（借鉴 Claude Code）
+   - 保持 codebase 整洁：agent 遵循已有模式和约定。
+   - 给 agent 自验证能力：用 verification + verify-skill 编码"什么叫好"，检查越定量越有效。
+   - 文档可达：框架/库文档保持最新最佳实践。
+   - 第二 agent 审查：`/judge` 提供 fresh-context 对抗性审查，loop 出口可挂载。
 
 ---
 
@@ -145,9 +155,10 @@ packages/verification/
 apps/wukong/src/cli/sub/verify.ts
 apps/wukong/src/cli/sub/scan.ts
 apps/wukong/src/cli/sub/guard.ts
-apps/wukong/src/cli/sub/loop.ts        # P0.5
+apps/wukong/src/cli/sub/loop.ts        # P0.5（本机 interval）
 apps/wukong/src/cli/sub/proof.ts       # P0.5
 apps/wukong/src/cli/sub/judge.ts       # P0.5
+apps/wukong/src/cli/sub/schedule.ts    # P2（云端例程，归 hosted）
 apps/wukong/src/cli/sub/review.ts      # P1
 apps/wukong/src/cli/sub/ship.ts        # P1
 apps/wukong/src/cli/sub/retro.ts       # P1
@@ -624,32 +635,36 @@ wukong test --coverage
 
 这三个命令是下一个重点（对应 ROADMAP Milestone 0.5）。`loop` 是产品组织核心，`proof` 是 Wow Moment，`judge` 是差异化记忆点。三者都构建在 `@wukong/verification` 与已实现的 `/goal` 之上，不引入新核心引擎。
 
-### 8.5.1 `wukong loop` / `/loop` — 会话级 loop 编排（核心）
+### 8.5.1 `wukong loop` / `/loop` — 本机 interval loop（核心）
 
 #### 定位
 
-`/loop` 是 AI Coding Loop 的**编排层**。与 `/goal` 的关系：
+`/loop` 是 AI Coding Loop 的**编排层**。按 Claude Code 的 loop 分类，它属于 **time-based loop（本机）**——按时间间隔重复驱动 agent。与其它命令的关系：
 
-- `/goal` 是**执行核**：给定一个任务，让 agent 跑到完成。
-- `/loop` 是**编排层**：持续地、自动地驱动 agent，给定目标 + 可验证停止条件，循环执行 "prompt agent → 改代码 → verify → 判断 → 继续或停止"，把人从持续手动 prompt agent 的位置移出来。
+- `/goal` 是 **goal-based loop**：实时手动触发，跑到完成或回合上限。
+- `/loop` 是 **time-based loop（本机）**：按 interval（如 `/loop 5m ...`）重复运行，**关机即停**。
+- `/schedule` 是 **time-based loop（云端）**：云端例程，机器关了也跑。归 hosted（Milestone 3+），不在 P0.5。
 
-关键原则（来自 loop engineering）：**停止判断不能由写代码的同一个 agent 自己做**，必须由 deterministic verification 或独立 evaluator 决定。
+三者都遵循同一个关键原则（来自 loop engineering）：**停止判断不能由写代码的同一个 agent 自己做**，必须由 deterministic verification、独立 evaluator，或自定义验证 skill 决定。
 
 #### 命令契约
 
 ```bash
-# TUI
-/loop "<目标>" until "<停止条件>"
-/loop "fix all failing tests" until "tests pass and no high-risk findings"
+# TUI — 本机 interval loop
+/loop 5m "<目标>" until "<停止条件>"
+/loop 5m "check my PR, address review comments, fix failing CI" until "verify-pass"
 /loop status
 /loop pause
 /loop resume
 /loop stop
 
-# CLI（会话级形态：在当前进程内跑一个 loop 后退出）
-wukong loop "fix all failing tests" --until "tests pass and no high-risk findings"
-wukong loop --max-iterations 5
-wukong loop --dry-run
+# CLI（本机：在当前进程内按 interval 重复，关机即停）
+wukong loop --every 5m "fix all failing tests" --until "verify-pass"
+wukong loop --every 5m "<目标>" --until "scan-clean" --max-iterations 5
+wukong loop --every 5m "<目标>" --until "verify-pass" --dry-run
+
+# 云端例程（不在 P0.5，归 hosted）
+wukong schedule every hour "check feedback channel"   # Milestone 3+
 ```
 
 #### 核心类型
@@ -657,17 +672,19 @@ wukong loop --dry-run
 ```ts
 export interface LoopOptions {
   goal: string;                      // 自然语言目标
+  everyMs: number;                   // 触发间隔（time-based loop 的核心）
   stopCondition: StopCondition;      // 可验证停止条件
   maxIterations?: number;            // 默认 10，防失控
   iterationTimeoutMs?: number;       // 单轮超时
-  evaluator: 'verify' | 'judge';     // 用谁判断停止，默认 verify
   cwd?: string;
 }
 
 export interface StopCondition {
   kind: 'verify-pass'                // verify status === passed
       | 'scan-clean'                 // 无 high-risk findings
-      | 'custom';                    // 自定义断言（P0.5 先支持 verify-pass / scan-clean）
+      | 'judge-pass'                 // /judge 判 PASS（对抗性审查出口）
+      | 'skill';                     // 挂载自定义验证 skill
+  skillName?: string;                // kind === 'skill' 时指定验证 skill
 }
 
 export interface LoopResult {
@@ -680,44 +697,47 @@ export interface LoopResult {
 }
 ```
 
+`StopCondition.kind` 从原来的三选一扩展到四选一，新增 `skill`：借鉴 Claude Code 把人工验证步骤写成 verify-skill 的模式（如 `verify-frontend-change`：启 dev server → 浏览器交互 → 截图 → 查 console → 跑 Lighthouse）。这让 loop 的停止条件能覆盖 deterministic verify 检测不到的端到端/语义验证。
+
 #### 实现流程
 
 ```mermaid
 sequenceDiagram
   participant U as User
-  participant L as Loop Orchestrator
+  participant L as Loop Orchestrator (timer)
   participant A as Agent (写代码)
-  participant V as Verification (verify/scan)
+  participant V as Verification (verify/scan/judge/skill)
 
-  U->>L: goal + stopCondition
-  loop 直到 stopCondition 或 maxIterations
+  U->>L: goal + everyMs + stopCondition
+  loop 每 everyMs，直到 stopCondition 或 maxIterations 或人取消
     L->>A: prompt agent 改代码朝目标推进
     A-->>L: 改动完成
-    L->>V: runVerification / runScan
-    V-->>L: VerificationResult
-    L->>L: 评估 stopCondition（不由 agent 判断）
+    L->>V: 按 stopCondition.kind 评估（verify/scan/judge/skill）
+    V-->>L: 结果
     alt 条件满足
       L-->>U: completed + finalVerification
     else 未满足
       L->>A: 把失败/风险反馈注入下一轮 prompt
     end
   end
+  note over L: 机器关机/进程退出即停；云端持续性是 /schedule
 ```
 
 #### 与现有 `/goal` 的集成
 
 `/loop` 的单轮执行复用 `/goal` 的任务驱动能力；`/loop` 额外提供：
 
-- 可验证停止条件（`/goal` 是"agent 自己说完成"，`/loop` 是"verification 说完成"）。
+- 时间触发（`everyMs`）——`/goal` 是手动触发，`/loop` 是定时触发。
+- 可验证停止条件（`/goal` 是"agent 自己说完成"，`/loop` 是"verification/skill 说完成"）。
 - 多轮编排 + 反馈注入（把上轮失败命令/风险写进下轮 prompt）。
 - 迭代历史快照。
 
 #### P0.5 边界
 
-- 只做**会话级** loop：当前 TUI 会话 / 当前 CLI 进程内。退出即结束。
-- 不做 cron/daemon（归 hosted/CI，Milestone 3+）。
-- 停止条件 P0.5 只支持 `verify-pass` 和 `scan-clean`，`custom` 留后续。
-- `evaluator` P0.5 支持 `verify`；`judge` 作为 evaluator 在 `judge` 命令实现后接入。
+- 只做**本机** `/loop`：按 interval 在当前 TUI 会话 / 当前 CLI 进程内重复。**关机即停。**
+- 不做 `/schedule` 云端例程（归 hosted，Milestone 3+）。
+- 停止条件 P0.5 支持 `verify-pass`、`scan-clean`、`judge-pass`；`skill` 在验证 skill 机制落地后接入（P0.5 末或 P1 初）。
+- token 失控防护：`maxIterations` 默认上限、单轮超时、人可随时 stop、`--dry-run`。
 
 ---
 
@@ -1114,7 +1134,7 @@ packages/verification/test/fixtures/
 | 包名和安装名不一致 | 高 | 发布前统一 package name、docs、install script |
 | `/loop` 失控（agent 持续烧 token） | 高 | max-iterations 默认上限、单轮超时、dry-run、人可随时 stop |
 | `/loop` 停止条件由 agent 自评 | 高 | 停止判断必须由 deterministic verification 决定，禁止 agent 自评 |
-| `/loop` 被误当成 cron/daemon | 中 | 文档与 help 明确会话级形态，跨会话归 hosted/CI |
+| `/loop` 被误当成 cron/daemon | 中 | 文档与 help 明确本机 interval 形态（关机即停），`/schedule` 才是云端例程 |
 
 ---
 
@@ -1129,7 +1149,7 @@ packages/verification/test/fixtures/
 5. `wukong_verify` tool（已完成）
 6. `/goal` 持续修复（已完成）
 7. `wukong proof` + `wukong judge`（Merge Proof + evaluator，P0.5）
-8. `wukong loop`（会话级 loop 编排，P0.5 核心）
+8. `wukong loop`（本机 interval loop，P0.5 核心）
 9. report history / share link
 10. `review --deep`
 11. team rules / audit log interface

@@ -8,7 +8,7 @@
 
 Wukong Code 是本地优先的终端 AI coding agent，定位是 **AI Coding Loop 的控制层与验证层**。它不和 Cursor / Claude Code / Codex 拼写代码，而是补上它们留下的问题：*这段 AI 写的代码能不能合并？*
 
-当前 P0 本地闭环已实现：`wukong verify`、`wukong scan`、`wukong guard`、对应 TUI slash commands（`/verify`、`/scan`、`/guard`、`/report`、`/goal`），以及 `wukong_verify` 内置 agent tool。下一个重点（Milestone 0.5）是 `/loop`（会话级 loop 编排）、`/proof`（Merge Proof Report）、`/judge`（只审不写的 evaluator）——均待实现。云同步、托管报告、计费、团队规则和深度 review 仍是后续工作。
+当前 P0 本地闭环已实现：`wukong verify`、`wukong scan`、`wukong guard`、对应 TUI slash commands（`/verify`、`/scan`、`/guard`、`/report`、`/goal`），以及 `wukong_verify` 内置 agent tool。下一个重点（Milestone 0.5）是 `/loop`（本机 interval loop）、`/proof`（Merge Proof Report）、`/judge`（只审不写的 evaluator）——均待实现；`/schedule`（云端例程）随 hosted 推进。云同步、托管报告、计费、团队规则和深度 review 仍是后续工作。
 
 ## 当前命令面
 
@@ -30,7 +30,7 @@ wukong migrate                 # 迁移 legacy wukong-cli 数据
 wukong upgrade                 # 升级 Wukong Code
 ```
 
-待实现命令：`wukong loop`、`wukong proof`、`wukong judge`、`wukong ship`、`wukong review`。
+待实现命令：`wukong loop`（本机 interval）、`wukong proof`、`wukong judge`、`wukong ship`、`wukong review`、`wukong schedule`（云端例程）。
 
 完整参数以 `wukong --help` 为准。
 

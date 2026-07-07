@@ -8,7 +8,7 @@
 
 Wukong Code is a local-first terminal AI coding agent built as the **control and verification layer for AI Coding Loops**. It does not compete with Cursor / Claude Code / Codex on writing code; it answers the question they leave open: *can this AI-written code be merged?*
 
-The local P0 loop is implemented: `wukong verify`, `wukong scan`, `wukong guard`, matching TUI slash commands (`/verify`, `/scan`, `/guard`, `/report`, `/goal`), and the `wukong_verify` builtin agent tool. The next focus (Milestone 0.5) is `/loop` (session-level loop orchestration), `/proof` (Merge Proof Report), and `/judge` (evaluator-only review) — all planned. Cloud sync, hosted reports, billing, team rules, and deep review remain planned work.
+The local P0 loop is implemented: `wukong verify`, `wukong scan`, `wukong guard`, matching TUI slash commands (`/verify`, `/scan`, `/guard`, `/report`, `/goal`), and the `wukong_verify` builtin agent tool. The next focus (Milestone 0.5) is `/loop` (local interval loop), `/proof` (Merge Proof Report), and `/judge` (evaluator-only review) — all planned; `/schedule` (cloud routine) follows with hosted. Cloud sync, hosted reports, billing, team rules, and deep review remain planned work.
 
 ## Current Command Surface
 
@@ -30,7 +30,7 @@ wukong migrate                 # migrate legacy wukong-cli data
 wukong upgrade                 # upgrade Wukong Code
 ```
 
-Planned commands (not yet implemented): `wukong loop`, `wukong proof`, `wukong judge`, `wukong ship`, `wukong review`.
+Planned commands (not yet implemented): `wukong loop` (local interval), `wukong proof`, `wukong judge`, `wukong ship`, `wukong review`, `wukong schedule` (cloud routine).
 
 Run `wukong --help` for the complete option list.
 

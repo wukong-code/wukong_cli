@@ -6,7 +6,7 @@
 
 ## 1. 设计基线
 
-当前 `wukong_cli` 新 base 已经提供交互式终端 AI agent 能力。商业化设计的目标是在这个底座上加入验证、风险扫描、命令防护、交付证据，并把它们用 `/loop` 编排成 AI Coding Loop 的控制层。
+当前 `wukong_cli` 新 base 已经提供交互式终端 AI agent 能力。商业化设计的目标是在这个底座上加入验证、风险扫描、命令防护、交付证据，并用 `/loop`（本机）和 `/schedule`（云端）把它们编排成 AI Coding Loop 的控制层。
 
 当前已实现的 top-level command 以 `wukong --help` 为准。`verify`、`scan`、`guard`、`/goal` 已实现；`loop`、`proof`、`judge`、`journey`、`today`、云端报告仍是目标体验。
 
@@ -21,7 +21,7 @@
 - 让风险在提交前被看见。
 - 让团队能复用规则和报告。
 - 让终端中的高风险操作多一道确认。
-- 用 `/loop` 把"写 → 验 → 修"串成自动循环，把人从持续手动 prompt agent 的位置移出来。
+- 用 `/loop`（本机 interval，关机即停）把"写 → 验 → 修"串成自动循环；用 `/schedule`（云端例程）让它在机器关了之后也跑。把人从持续手动 prompt agent 的位置移出来。
 - 用 `/proof` 产出可截图、可分享的 Merge Proof Report 作为 Wow Moment。
 - 用 `/judge` 做只审不写的 evaluator，默认怀疑 AI 写的代码。
 
@@ -73,9 +73,12 @@ TUI 内已实现 `/verify`、`/scan`、`/guard`、`/report`、`/goal`（含队�
 ### P0.5 目标命令（待实现）
 
 ```bash
-# 会话级 loop 编排（核心）
-wukong loop "fix all failing tests" --until "verify-pass"
-/loop "fix failing tests" until "tests pass and no high-risk findings"
+# 本机 interval loop（核心，关机即停）
+wukong loop --every 5m "fix all failing tests" --until "verify-pass"
+/loop 5m "fix failing tests" until "tests pass and no high-risk findings"
+
+# 云端例程（归 hosted，更靠后）
+wukong schedule every hour "check feedback channel"
 
 # Merge Proof Report（Wow Moment）
 wukong proof
@@ -93,8 +96,8 @@ wukong judge --assume-broken
 3. 失败时说明具体命令、退出码和风险。
 4. JSON 输出适合 agent/CI，Markdown report 适合人读。
 5. Guard 必须明确 best-effort，不做不可绕过承诺。
-6. `/loop` 停止判断必须由 deterministic verification 决定，不能由写代码的 agent 自评。
-7. `/loop` 有 max-iterations 上限和单轮超时，人可随时 stop；不做 cron/daemon 重形态。
+6. `/loop`、`/schedule` 停止判断必须由 deterministic verification、独立 evaluator（`/judge`）或自定义验证 skill 决定，不能由写代码的 agent 自评。
+7. `/loop` 有 max-iterations 上限和单轮超时，人可随时 stop；`/loop`（本机，关机即停）和 `/schedule`（云端例程）拆开，跨机器持续性归 hosted。
 
 ## 5. 输出格式
 

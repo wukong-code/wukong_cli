@@ -52,7 +52,7 @@ wukong_verify
 下一个重点 P0.5（待实现）会把这套工具编排成 AI Coding Loop 的控制层：
 
 ```text
-wukong loop    # 会话级 loop 编排（核心）
+wukong loop    # 本机 interval loop（核心，关机即停）
 wukong proof   # Merge Proof Report（Wow Moment）
 wukong judge   # evaluator-only 审查
 ```

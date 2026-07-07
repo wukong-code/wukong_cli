@@ -98,7 +98,7 @@ tsx --tsconfig apps/wukong/tsconfig.dev.json \
 - `--strict` 在 medium risk 时判 `BLOCK`。
 - `/judge` 不触发任何写操作（不写代码、不改文件）。
 
-### `/loop` 会话级 loop 编排
+### `/loop` 本机 interval loop
 
 - `wukong loop "<goal>" --until "verify-pass"` 在会话内持续驱动直到 verify 通过。
 - 停止条件由 deterministic verification 判断，**不**由 agent 自评（必须有测试断言这点）。
