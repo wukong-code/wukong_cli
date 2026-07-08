@@ -44,6 +44,18 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run test
 
+  test-install:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install bats
+        run: sudo apt-get update && sudo apt-get install -y bats
+
+      - name: Run install script tests
+        run: bats tests/install.bats
+
   test-windows:
     runs-on: windows-latest
     # Temporarily disabled while Windows tests are being stabilized.
