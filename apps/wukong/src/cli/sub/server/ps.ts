@@ -51,7 +51,7 @@ export function registerPsCommand(server: Command): void {
     });
 }
 
-async function handlePsCommand(opts: { json?: boolean }): Promise<void> {
+export async function handlePsCommand(opts: { json?: boolean }): Promise<void> {
   const lock = getLiveLock();
   if (!lock) {
     throw new Error(
@@ -105,7 +105,7 @@ async function fetchConnections(origin: string, token: string): Promise<Connecti
   }
 }
 
-function formatTable(connections: ConnectionInfo[]): string {
+export function formatTable(connections: ConnectionInfo[]): string {
   if (connections.length === 0) {
     return 'No active clients.\n';
   }
@@ -128,7 +128,7 @@ function formatTable(connections: ConnectionInfo[]): string {
   return `${lines.join('\n')}\n`;
 }
 
-function formatAge(iso: string): string {
+export function formatAge(iso: string): string {
   const ms = Date.now() - Date.parse(iso);
   if (!Number.isFinite(ms) || ms < 0) return '-';
   const seconds = Math.floor(ms / 1000);
@@ -141,7 +141,7 @@ function formatAge(iso: string): string {
   return `${String(days)}d`;
 }
 
-function truncate(value: string, max: number): string {
+export function truncate(value: string, max: number): string {
   if (value.length <= max) return value;
   if (max <= 1) return value.slice(0, max);
   return `${value.slice(0, max - 1)}…`;

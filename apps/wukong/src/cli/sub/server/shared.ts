@@ -100,13 +100,13 @@ export function parseAllowedHostArgs(raw: readonly string[] | undefined): string
     .filter((entry) => entry.length > 0);
 }
 
-function parseHost(raw: string | boolean | undefined): string {
+export function parseHost(raw: string | boolean | undefined): string {
   if (raw === undefined || raw === false) return DEFAULT_SERVER_HOST;
   if (raw === true || raw === '') return DEFAULT_LAN_HOST;
   return raw;
 }
 
-function parseIdleGraceMs(raw: string | undefined): number {
+export function parseIdleGraceMs(raw: string | undefined): number {
   if (raw === undefined) return DEFAULT_IDLE_GRACE_MS;
   const n = Number.parseInt(raw, 10);
   if (!Number.isFinite(n) || n < 0) {
