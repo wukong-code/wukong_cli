@@ -14,12 +14,13 @@
 | 层 | 命令 | 状态 |
 |---|---|---|
 | Turn-based | TUI 默认 | 已实现 |
-| Goal-based | `/goal` | 已实现 |
-| Time-based（本机） | `/loop` | 待实现（核心） |
+| Goal-based | `/goal` | 已实现（verification gate 待实现，归 M0.5） |
+| Time-based（本机迭代） | `/loop` | 待实现（核心；`--every` 节流复用 cron scheduler） |
+| Time-based（本机巡检） | cron 工具（CronCreate 等） | 已实现（会话内 recurring/one-shot） |
 | Time-based（云端） | `/schedule` | 待实现（归 hosted） |
 | 工具层 | `/verify` `/scan` `/guard` | 已实现 |
 | 证据层 | `/proof` | 待实现（Wow Moment） |
-| 评估层 | `/judge` | 待实现 |
+| 评估层 | `/judge` | 待实现（deterministic 先行，`--agent` 后置） |
 
 ## 当前已实现
 
@@ -33,6 +34,8 @@
   面向仓库入口的当前能力说明。
 - [产品路线图](../ROADMAP.md)
   记录从本地验证闭环到 loop 控制层、hosted reports、Pro Preview、PR gate、Team Pilot 的交付顺序和验收标准。
+- [执行层 TODO](../TODO.md)
+  按 ROADMAP milestone 拆解的任务清单，记录当前重点（Milestone 0.5）、暂缓项和已完成基线。
 
 当前可用 top-level commands 以 `wukong --help` 为准，主要包括：
 
@@ -54,14 +57,16 @@ wukong migrate
 wukong upgrade
 ```
 
+其中 `acp`、`server`、`migrate` 当前为 hidden 命令，不出现在 `wukong --help` 默认输出中，此处列出仅为完整性。
+
 ## 商业化文档
 
-这些文档记录当前 P0 实现和后续计划。`verify`、`scan`、`guard` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/report`、`/goal` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。下一个重点是 `/loop`（本机 interval）、`/proof`、`/judge`（Milestone 0.5）；`/schedule`（云端例程）归 hosted。sync/today、云端报告、计费和团队能力仍是后续工作：
+这些文档记录当前 P0 实现和后续计划。`verify`、`scan`、`guard` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/report`、`/goal` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。下一个重点是 Milestone 0.5，按 `/proof` → `/judge` → `/goal` verification gate → `/loop`（本机迭代 loop）的顺序实施；`/schedule`（云端例程）归 hosted。sync/today、云端报告、计费和团队能力仍是后续工作：
 
 - [商业化与产品重构方案](business/COMMERCIAL_REFACTOR_PLAN.md)
   定义产品定位、商业模型、目标命令结构（含 loop/proof/judge/schedule）和路线图。
 - [商业化重构技术实现方案](tech/commercial-refactor-implementation.md)
-  定义 `@wukong/verification`、`wukong verify`、`wukong scan`、`wukong guard`、agent tool 以及 `/loop`、`/proof`、`/judge`、`/schedule` 的实现方案。
+  定义 `@wukong/verification`、`wukong verify`、`wukong scan`、`wukong guard`、agent tool 以及 `/proof`、`/judge`、`/goal` verification gate、`/loop`、`/schedule` 的实现方案。
 - [最新技术架构](tech/architecture.md)
   定义当前新 Kimi-code base 与 P0 verification/guard 架构。
 - [产品设计文档](design/design.md)
@@ -73,7 +78,9 @@ wukong upgrade
 
 ## 当前最高优先级 TODO
 
-1. 实现 `/loop`（本机 interval loop）、`/proof`（Merge Proof Report）、`/judge`（evaluator-only 审查）—— Milestone 0.5。
+任务级清单以 [../TODO.md](../TODO.md) 为准，本节只保留方向摘要：
+
+1. 按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序实现 Milestone 0.5（`/loop` 为本机迭代 loop，复用 agent-core cron scheduler 与 goal gate，不新写定时引擎）。
 2. 实现 report history / redaction metadata，避免未来云端报告上传源码 diff 或敏感片段。
 3. 统一发布渠道、package version、安装文档和收费边界。
 4. 实现 sync/today 时先定义本地数据模型和 redaction 边界。

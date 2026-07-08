@@ -3,7 +3,7 @@
 > 版本: v2.1
 > 日期: 2026-07-07
 > 适用范围: `wukong_cli` 新 Kimi-code base
-> 状态: 当前架构 + P0 本地验证闭环 + `/goal` 已实现；`/loop`、`/proof`、`/judge` 为 P0.5 待实现
+> 状态: 当前架构 + P0 本地验证闭环 + `/goal` 已实现；P0.5 待实现（实施顺序 `/proof` → `/judge` → `/goal` verification gate → `/loop`）
 > 产品定位: AI Coding Loop 的控制层与验证层（proof layer for AI-written code）
 
 ## 1. 当前事实
@@ -45,16 +45,17 @@ wukong guard
 /scan
 /guard
 /report
-/goal          # 单任务跑到验证条件满足（loop 的执行核）
+/goal          # 单任务驱动 agent 多轮推进（loop 的执行核；完成判定当前为 agent 自评，verification gate 归 P0.5）
 wukong_verify
 ```
 
-下一个重点 P0.5（待实现）会把这套工具编排成 AI Coding Loop 的控制层：
+下一个重点 P0.5（待实现，按实施顺序）会把这套工具编排成 AI Coding Loop 的控制层：
 
 ```text
-wukong loop    # 本机 interval loop（核心，关机即停）
-wukong proof   # Merge Proof Report（Wow Moment）
-wukong judge   # evaluator-only 审查
+wukong proof   # Merge Proof Report（Wow Moment，第 1 步）
+wukong judge   # evaluator-only 判定（第 2 步，deterministic 先行）
+goal gate      # /goal verification gate（第 3 步，/loop 硬前置）
+wukong loop    # 本机迭代 loop（第 4 步，核心，关机即停；--every 节流复用 cron scheduler）
 ```
 
 ## 2. 架构原则
@@ -70,12 +71,12 @@ wukong judge   # evaluator-only 审查
    P0 `verify`、P0.5 `proof`/`judge` 默认不调用模型，必须离线可用。AI 深度 review 放到 P1。
 
 4. **loop 停止判断不由 agent 自评**
-   `/loop` 的停止条件必须由 deterministic verification（`verify`/`judge`）决定，禁止写代码的 agent 自评完成。
+   `/loop` 的停止条件必须由 deterministic verification（`verify`/`scan`/`judge`）决定，禁止写代码的 agent 自评完成。落地方式是 `/goal` verification gate（P0.5）；`/loop` 不新写定时引擎，`--every` 节流复用 agent-core cron scheduler。
 
-4. **guard 是 best-effort 防护**
+5. **guard 是 best-effort 防护**
    P0 guard 是交互式 shell 风险确认层，不宣传不可绕过。更强隔离以后再接 sandbox/tool-policy。
 
-5. **不复活旧 `packages/cli` / `packages/mcp-server`**
+6. **不复活旧 `packages/cli` / `packages/mcp-server`**
    legacy 文档和旧 MCP server 架构不再作为实现依据。
 
 ## 3. 目标模块图

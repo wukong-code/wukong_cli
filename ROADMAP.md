@@ -7,6 +7,7 @@
 
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [商业化重构技术实现方案](docs/tech/commercial-refactor-implementation.md)
+- [TODO.md](TODO.md)：本仓库执行层任务清单，按本 ROADMAP 的 milestone 拆解
 - `wukong_web/TODO.md`：官网与托管产品 TODO，位于 sibling web 仓库中
 
 ## 产品判断
@@ -31,17 +32,19 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 | 层 | Wukong 能力 | 触发 | 停止 | 状态 |
 |---|---|---|---|---|
 | Turn-based | TUI 默认 agentic loop | 用户 prompt | agent 自判完成 | 已实现 |
-| Goal-based `/goal` | 单任务跑到可验证条件满足 | 实时手动 | 目标达成 or 回合上限 | 已实现 |
-| Time-based `/loop` | 本机 interval 重复运行 | 时间间隔（`/loop 5m ...`） | 取消 or 工作完成 | 待实现（核心） |
+| Goal-based `/goal` | 单任务驱动 agent 多轮推进 | 实时手动 | agent 自评完成 or 回合/预算上限 | 已实现（verification gate 待实现，归 M0.5） |
+| Time-based `/loop` | 本机迭代驱动 agent 直到验证通过 | 手动启动，轮次自动衔接（`--every` 可选节流） | 停止条件满足 or 迭代上限 or 取消 | 待实现（核心） |
 | Cloud routine `/schedule` | 云端例程，机器关了也跑 | 计划 | 任务达标退出，例程持续 | 待实现（归 hosted） |
 | 工具层 `/verify` `/scan` `/guard` | deterministic proof | 手动/被 loop 调用 | 单次 | 已实现 |
 | 证据层 `/proof` | 把三件套串成 Merge Proof Report | 手动 | 单次 | 待实现（Wow Moment） |
 | 评估层 `/judge` | evaluator-only，只审不写，默认怀疑 | 手动/被 loop 调用 | 单次 | 待实现 |
 
-- `/loop` 是本机时间触发（关机即停），`/schedule` 是云端例程（机器关了也跑）。两者拆开：`/loop` 现在能做，`/schedule` 归 hosted（Milestone 3+）。
-- `/goal` 和 `/loop` 的停止判断不由写代码的 agent 自评：用 deterministic verification（`verify`/`scan`）或独立 evaluator（`/judge`），也可挂载自定义验证 skill。
+- `/loop` 的核心语义是**迭代直到验证通过**（iterate-until-verified）：上一轮验证未过就注入失败反馈立即开始下一轮；`--every` 只是可选的轮间最小间隔（节流），用于等 CI 等外部反馈的场景。**关机即停。**
+- 定时巡检型任务（"每小时 check PR"）不属于 `/loop`：本机由已实现的 agent-core cron 工具承载，云端归 `/schedule`（hosted，Milestone 3+）。
+- `/loop` 不新写引擎：时间触发复用 agent-core 已有的 cron scheduler，执行核复用 `/goal`。
+- 停止判断不由写代码的 agent 自评。注意：当前 `/goal` 的完成判定仍是 agent 自评 + 回合/预算上限，M0.5 必须先给 `/goal` 出口加 deterministic verification gate（agent 宣布完成 → 强制 verify/scan/judge → 未过打回），`/loop` 复用该 gate。
 - `/proof` 是第一个 Wow Moment：AI 写完后一键生成合并证据。
-- `/judge` 是差异化记忆点：火眼金睛，只审不写；也是 loop 的第二-agent reviewer。
+- `/judge` 只审不写：M0.5 默认是 deterministic 对抗性判定（复用 proof 引擎，BLOCK 倾向）；fresh-context 第二 agent 审查（`--agent`）落地前，不对外宣传"第二 agent reviewer"。
 - 托管报告、PR gates、team rules、audit log 是真正能收费的团队能力，但仍未实现。
 
 免费版负责让开发者愿意安装、使用、截图和分享；付费版负责解决团队真实痛点：报告历史、PR 证据、共享策略、权限、计费和审计。
@@ -68,10 +71,11 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 | 模块 | 状态 | 为什么重要 |
 |---|---|---|
-| `/loop` 本机 interval loop | 未实现 | 产品的组织核心：本机按时间间隔重复驱动 agent + 验证 + 修复，关机即停 |
-| `/schedule` 云端例程 | 未实现 | 机器关了也跑的例程，归 hosted（Milestone 3+） |
+| `/goal` verification gate | 未实现 | `/loop` 的硬前置：把 `/goal` 完成判定从 agent 自评升级为 deterministic gate |
+| `/loop` 本机迭代 loop | 未实现 | 产品的组织核心：迭代驱动 agent + 验证 + 修复直到停止条件满足，关机即停 |
+| `/schedule` 云端例程 | 未实现 | 机器关了也跑的例程，归 hosted（Milestone 3+）；本机定时巡检先用已实现的 cron 工具 |
 | `/proof` Merge Proof Report | 未实现 | 第一个 Wow Moment：把 verify+scan+report 串成可读的合并证据 |
-| `/judge` evaluator-only 审查 | 未实现 | 差异化记忆点：只审不写，默认怀疑 AI 代码；也是 loop 的第二-agent reviewer |
+| `/judge` evaluator-only 判定 | 未实现 | 只审不写，默认怀疑 AI 代码；deterministic 模式先行，`--agent` 第二-agent 审查后置 |
 | `/ship` 发布 gate | 未实现 | proof + 版本/changelog/dry-run，更靠后的发布前 gate |
 | Hosted report upload | 未实现 | 把本地 verify 变成可收费 Web 能力 |
 | Report history | 未实现 | Pro Preview 的核心留存能力 |
@@ -94,8 +98,9 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 6. 每个 milestone 必须有可见用户路径和验收方式，不能只完成路由或表结构。
 7. 优先做 Wow Moment（`/proof`）和差异化记忆点（`/judge`），不在 hot 窗口期堆大而全功能。
 8. 不把 Loop Engineering 第三层（GitHub/CI/Sentry 外部反馈集成）写成已具备能力，集成未完成前只作为叙事。
-9. `/loop`（本机 interval，关机即停）和 `/schedule`（云端例程）拆开实现：`/loop` 在 CLI 本机做，`/schedule` 归 hosted（Milestone 3+）。
-10. loop 的停止判断不由写代码的 agent 自评：用 deterministic verification 或独立 evaluator，也可挂载自定义验证 skill（借鉴 Claude Code 的 verify-skill 模式）。
+9. `/loop`（本机迭代，关机即停）和定时巡检拆开：迭代收敛归 `/loop`，本机巡检用已实现的 cron 工具，云端例程归 `/schedule`（hosted，Milestone 3+）。
+10. loop 的停止判断不由写代码的 agent 自评：用 deterministic verification 或独立 evaluator，也可挂载自定义验证 skill（借鉴 Claude Code 的 verify-skill 模式）。前提是先落地 `/goal` verification gate。
+11. 不重复造轮子：`/loop` 的时间触发复用 agent-core cron scheduler，执行核复用 `/goal`，proof/judge 复用 verification 引擎。
 
 ## Milestone 0: Public Install And Local Proof
 
@@ -125,27 +130,34 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 目标：在 Loop Engineering 热度的窗口期内，用最低成本打出真正的产品核心——不是一个"更好的 coding agent"，而是一个 **AI Coding Loop 的控制层**。把已实现的工具层（verify/scan/guard/goal）用 `/loop` 编排起来，并以 `/proof` 作为可分享的 Wow Moment。
 
+实施顺序固定为：**`/proof` → `/judge` → `/goal` verification gate → `/loop`**。理由：proof/judge 只是 verify+scan 的编排与重排版，便宜且先产出可分享物；judge-pass 与 goal gate 是 loop 停止判断的前提；loop 最后落地时只做编排，不引入新引擎。
+
 ### 交付项
 
-**A. `/loop` 本机 interval loop（核心）**
-
-- `/loop` TUI slash command + `wukong loop` CLI subcommand。
-- 形态：本机按时间间隔重复驱动 agent——给定目标与验证条件，按 interval（如 `/loop 5m ...`）自动 prompt agent → 运行 → verify → 判断 → 继续或停止，直到满足停止条件或人取消。**关机即停。**
-- 停止条件由可验证断言表达（如 `tests pass and no high-risk findings`），停止判断不由写代码的 agent 自己做；用 deterministic verification（`verify`/`scan`）、独立 evaluator（`/judge`），或挂载自定义验证 skill。
-- 与已实现的 `/goal` 关系：`/goal` 是单任务执行核（goal-based loop），`/loop` 是时间触发的编排层（time-based loop），每轮可注入一个 goal + 验证。
-- 跨机器的云端持续性（机器关了也跑）归 `/schedule`（hosted，Milestone 3+），不在本 milestone。
-
-**B. `/proof` Merge Proof Report（Wow Moment）**
+**A. `/proof` Merge Proof Report（第 1 步，Wow Moment）**
 
 - `/proof` TUI slash command + `wukong proof` CLI subcommand：依次运行 `verify` → `scan` → 汇总成一个固定格式的 Merge Proof Report。
 - Merge Proof Report 字段：Status（PASS / BLOCKED）、changed files、tests pass/fail、typecheck、secrets scan、risky changes、guard violations、recommendation。
 - 报告输出为本地 Markdown + JSON，离线可用。
 
-**C. `/judge` evaluator-only 审查（差异化记忆点）**
+**B. `/judge` evaluator-only 判定（第 2 步）**
 
 - `/judge` TUI slash command + `wukong judge` CLI subcommand：默认 `--assume-broken`，复用 verification 引擎，只审不写，输出 BLOCK/PASS 结论。
+- 默认模式是 deterministic 判定（离线免费）；fresh-context 第二 agent 审查（`--agent`，BYOK）排在 M0.5 末或 P1 初，落地前不对外宣传"第二 agent reviewer"。
 
-**D. 文案**
+**C. `/goal` verification gate（第 3 步，`/loop` 硬前置）**
+
+- 现状：`/goal` 的完成判定是 agent 自评（agent 调用 goal 工具宣布 completed），可选 verify 字段只是自由文本提示，与"停止判断不由 agent 自评"的原则冲突。
+- 交付：`/goal` 增加可选停止条件（verify-pass / scan-clean / judge-pass）；agent 宣布完成时自动运行对应评估，未过则拒绝完成并把失败反馈注入下一回合，受回合/预算上限约束。
+
+**D. `/loop` 本机迭代 loop（第 4 步，核心）**
+
+- `/loop` TUI slash command + `wukong loop` CLI subcommand。
+- 核心语义 iterate-until-verified：驱动 agent 朝目标推进 → goal gate 评估 → 未过则注入失败反馈立即开始下一轮，直到停止条件满足、达到迭代上限或人取消。**关机即停。**
+- `--every` 是可选的轮间最小间隔（节流，用于等 CI 等外部反馈），由 agent-core cron scheduler 驱动，不新写 timer。
+- 定时巡检型任务不塞进 `/loop`：本机用 cron 工具，云端归 `/schedule`（hosted，Milestone 3+）。
+
+**E. 文案**
 
 - 文档与官网 hero 文案切换到 loop control plane / proof-layer 叙事。
 
@@ -154,16 +166,18 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - 不做 `/ship` 发布 gate（更靠后，依赖 proof 先稳定）。
 - 不做 `/schedule` 云端例程（归 hosted，Milestone 3+）。
 - 不在此 milestone 接 hosted upload。
+- 不为 `/loop` 新写定时引擎（复用 cron scheduler）。
 
 验收：
 
-- `wukong loop 5m "<目标>"` / `/loop` 在本机按间隔持续驱动：agent 改代码 → verify → 不通过则继续，直到停止条件满足或人取消；关机即停。
-- 停止条件可验证，且停止判断不由写代码的 agent 自己做（支持 verify/scan、judge、或自定义验证 skill）。
 - `wukong proof` / `/proof` 在干净项目产出 PASS 报告。
 - 在含 placeholder/secret/失败测试的项目产出 BLOCKED 报告，并定位原因。
 - `wukong judge --assume-broken` 在不干净项目直接给 BLOCK。
+- 带停止条件的 `/goal`：agent 宣布完成但 verify 失败时，gate 拒绝完成并注入反馈继续，不由 agent 自评过关。
+- `wukong loop "<目标>" --until verify-pass` / `/loop` 持续驱动：agent 改代码 → gate 评估 → 未过则继续，直到停止条件满足、达到迭代上限或人取消；关机即停。
+- `/loop` 达到迭代上限时明确返回 max-iterations 状态，不假装成功。
 - 报告可被人读懂并定位失败原因。
-- 官网 hero 切换为 loop control plane / proof-layer 文案后，不出现任何未实现能力的承诺（尤其不宣称 `/schedule` 云端例程、CI 集成已可用）。
+- 官网 hero 切换为 loop control plane / proof-layer 文案后，不出现任何未实现能力的承诺（尤其不宣称 `/schedule` 云端例程、CI 集成、第二-agent 审查已可用）。
 
 ## Milestone 1: Hosted Reports MVP
 
@@ -312,7 +326,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 近期工作：
 
-- 实现 `/loop`（本机 interval loop，Milestone 0.5 核心）、`/proof`（Merge Proof Report）、`/judge`（evaluator-only 审查）。
+- 按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序实现 Milestone 0.5（`/loop` 为本机迭代 loop，复用 cron scheduler 与 goal gate）。
 - 给 `verify` 和 `scan` 增加登录态 report upload。
 - 上传前提供 opt-in 和清晰 redaction preview。
 - JSON output 增加 Web report API 需要的字段。
@@ -325,7 +339,8 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - 在 report upload 闭环完成前，不把本地 agent 强行搬到 hosted web app。
 - 付费 evidence 工作流未成立前，不继续堆游戏化功能。
 - 不把本地 deterministic verification 放到付费墙后。
-- 不把 `/schedule`（云端例程）在本机做；`/loop`（本机 interval，关机即停）和 `/schedule`（云端）拆开，跨机器持续性归 hosted。
+- 不把 `/schedule`（云端例程）在本机做；`/loop`（本机迭代，关机即停）与定时巡检（本机 cron 工具 / 云端 `/schedule`）拆开，跨机器持续性归 hosted。
+- 不为 `/loop` 新写定时引擎；`--every` 节流必须复用 agent-core cron scheduler。
 
 ## Commercial Readiness Gates
 

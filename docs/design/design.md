@@ -21,9 +21,9 @@
 - 让风险在提交前被看见。
 - 让团队能复用规则和报告。
 - 让终端中的高风险操作多一道确认。
-- 用 `/loop`（本机 interval，关机即停）把"写 → 验 → 修"串成自动循环；用 `/schedule`（云端例程）让它在机器关了之后也跑。把人从持续手动 prompt agent 的位置移出来。
+- 用 `/loop`（本机迭代，关机即停）把"写 → 验 → 修"串成自动循环直到验证通过；定时巡检本机用 cron 工具，云端用 `/schedule`（例程，机器关了也跑）。把人从持续手动 prompt agent 的位置移出来。
 - 用 `/proof` 产出可截图、可分享的 Merge Proof Report 作为 Wow Moment。
-- 用 `/judge` 做只审不写的 evaluator，默认怀疑 AI 写的代码。
+- 用 `/judge` 做只审不写的 evaluator，默认怀疑 AI 写的代码（deterministic 判定先行，`--agent` 第二-agent 审查后置）。
 
 ## 3. 信息架构
 
@@ -70,23 +70,27 @@ wukong guard -- rm -rf ./tmp
 
 TUI 内已实现 `/verify`、`/scan`、`/guard`、`/report`、`/goal`（含队列管理）。
 
-### P0.5 目标命令（待实现）
+### P0.5 目标命令（待实现，实施顺序 proof → judge → goal gate → loop）
 
 ```bash
-# 本机 interval loop（核心，关机即停）
-wukong loop --every 5m "fix all failing tests" --until "verify-pass"
-/loop 5m "fix failing tests" until "tests pass and no high-risk findings"
-
-# 云端例程（归 hosted，更靠后）
-wukong schedule every hour "check feedback channel"
-
-# Merge Proof Report（Wow Moment）
+# Merge Proof Report（Wow Moment，第 1 步）
 wukong proof
 /proof
 
-# evaluator-only 审查（默认怀疑）
+# evaluator-only 判定（默认怀疑，第 2 步）
 wukong judge --assume-broken
 /judge
+
+# goal verification gate（第 3 步，/loop 硬前置）
+/goal "<目标>" --until verify-pass
+
+# 本机迭代 loop（核心，第 4 步，关机即停）
+wukong loop "fix all failing tests" --until verify-pass
+wukong loop "<目标>" --until verify-pass --every 10m   # 可选节流：等 CI 等外部反馈
+/loop "fix failing tests" until verify-pass
+
+# 定时巡检不归 /loop：本机用 cron 工具（已实现），云端例程归 hosted
+wukong schedule every hour "check feedback channel"    # Milestone 3+
 ```
 
 ### 设计原则
@@ -96,8 +100,8 @@ wukong judge --assume-broken
 3. 失败时说明具体命令、退出码和风险。
 4. JSON 输出适合 agent/CI，Markdown report 适合人读。
 5. Guard 必须明确 best-effort，不做不可绕过承诺。
-6. `/loop`、`/schedule` 停止判断必须由 deterministic verification、独立 evaluator（`/judge`）或自定义验证 skill 决定，不能由写代码的 agent 自评。
-7. `/loop` 有 max-iterations 上限和单轮超时，人可随时 stop；`/loop`（本机，关机即停）和 `/schedule`（云端例程）拆开，跨机器持续性归 hosted。
+6. `/loop`、`/schedule` 停止判断必须由 deterministic verification、独立 evaluator（`/judge`）或自定义验证 skill 决定，不能由写代码的 agent 自评；落地方式是 `/goal` verification gate（当前 `/goal` 完成判定仍是 agent 自评，gate 归 M0.5）。
+7. `/loop` 有 max-iterations 上限和单轮超时，人可随时 stop；核心语义是迭代直到验证通过，`--every` 只是可选轮间节流（复用 cron scheduler）；定时巡检本机归 cron 工具，跨机器持续性归 `/schedule`（hosted）。
 
 ## 5. 输出格式
 

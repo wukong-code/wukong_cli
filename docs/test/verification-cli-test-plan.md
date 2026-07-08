@@ -1,8 +1,8 @@
 # Verification CLI 自动化测试计划
 
 > 日期: 2026-07-07
-> 范围: `@wukong/verification`、`wukong verify`、`wukong scan`、`wukong guard`、TUI slash commands（含 `/goal`）、`wukong_verify`；P0.5 的 `/loop`、`/proof`、`/judge` 为待实现测试项
-> 状态: P0 已实现并纳入自动化测试；P0.5 待实现
+> 范围: `@wukong/verification`、`wukong verify`、`wukong scan`、`wukong guard`、TUI slash commands（含 `/goal`）、`wukong_verify`；P0.5 的 `/proof`、`/judge`、`/goal` verification gate、`/loop` 为待实现测试项
+> 状态: P0 已实现并纳入自动化测试；P0.5 待实现（实施顺序 proof → judge → goal gate → loop）
 
 ## 1. 测试目标
 
@@ -79,11 +79,11 @@ tsx --tsconfig apps/wukong/tsconfig.dev.json \
 2. 增加 Windows shell command parsing 测试。
 3. 如果 P1 实现 shell hook 安装，必须增加 profile 幂等写入和 disable 安全测试。
 
-## 6. P0.5 测试 TODO（`/loop`、`/proof`、`/judge`）
+## 6. P0.5 测试 TODO（按实施顺序：`/proof` → `/judge` → goal gate → `/loop`）
 
-这些命令尚未实现，以下为实现后必须覆盖的测试项：
+这些能力尚未实现，以下为实现后必须覆盖的测试项：
 
-### `/proof` Merge Proof Report
+### 第 1 步：`/proof` Merge Proof Report
 
 - `wukong proof` 在干净项目产出 `PASS` 报告，含 changed files / tests / typecheck / secrets scan / recommendation。
 - 在含 placeholder / secret / 失败测试的项目产出 `BLOCKED` 并定位原因。
@@ -91,17 +91,29 @@ tsx --tsconfig apps/wukong/tsconfig.dev.json \
 - `wukong proof --json` 输出符合 `ProofResult` schema。
 - `/proof` TUI slash command 渲染 Merge Proof Report。
 
-### `/judge` evaluator-only 审查
+### 第 2 步：`/judge` evaluator-only 判定
 
 - `wukong judge`（默认 `--assume-broken`）在 verify failed 或有 high-risk 时判 `BLOCK`。
 - 在 verify passed 且 clean 时判 `PASS`。
 - `--strict` 在 medium risk 时判 `BLOCK`。
 - `/judge` 不触发任何写操作（不写代码、不改文件）。
+- deterministic 默认模式不发起任何模型调用（必须有测试断言这点）；`--agent` 模式落地后单独补只读工具约束测试。
 
-### `/loop` 本机 interval loop
+### 第 3 步：`/goal` verification gate（`/loop` 硬前置）
 
-- `wukong loop "<goal>" --until "verify-pass"` 在会话内持续驱动直到 verify 通过。
-- 停止条件由 deterministic verification 判断，**不**由 agent 自评（必须有测试断言这点）。
+- 带停止条件的 goal：agent 宣布 completed 且 verify 通过时，goal 才进入 completed。
+- agent 宣布 completed 但 verify 失败时，gate 拒绝完成，失败反馈注入下一回合 prompt，goal 继续推进。
+- gate 评估结果（`GoalGateResult.verification`）写入 goal 快照。
+- 无停止条件的 goal 保持现状行为（agent 自评），不受 gate 影响。
+- 回合/预算上限在 gate 打回场景下仍然生效，不会无限循环。
+
+### 第 4 步：`/loop` 本机迭代 loop
+
+- `wukong loop "<goal>" --until verify-pass` 在会话内持续驱动直到 verify 通过。
+- 停止条件由 goal verification gate 判断，**不**由写代码的 agent 自评（必须有测试断言这点）。
+- 默认紧循环：上一轮 gate 未过后立即开始下一轮，无隐式等待。
+- `--every` 设置时，轮间等待由 agent-core cron scheduler 驱动（断言无第二套 timer 实现）。
 - `--max-iterations` 达到上限时返回 `max-iterations` 状态，不假装成功。
 - `--dry-run` 不实际驱动 agent，只校验参数与停止条件。
 - `loop` 可被人随时 stop，停止后返回 `stopped` 状态与最后一轮 verification 快照。
+- `LoopResult.history` 与每轮 gate 的 `VerificationResult` 快照一致。

@@ -29,12 +29,14 @@ wukong migrate
 wukong upgrade
 ```
 
-已实现的 TUI slash commands 包括 `/verify`、`/scan`、`/guard`、`/report`、`/goal`（含队列）。
+其中 `acp`、`server`、`migrate` 当前为 hidden 命令，不出现在 `wukong --help` 默认输出中；对外命令面以 `wukong --help` 为准。
+
+已实现的 TUI slash commands 包括 `/verify`、`/scan`、`/guard`、`/report`、`/goal`（含队列）。agent-core 另已实现会话内 cron 调度工具（CronCreate/CronList/CronDelete，支持 recurring/one-shot、持久化与 resume 恢复），是 `/loop` 时间触发的复用基础。
 
 当前 top-level CLI 尚未实现：
 
 ```text
-wukong loop      # 本机 interval loop（Milestone 0.5 核心，关机即停）
+wukong loop      # 本机迭代 loop（Milestone 0.5 核心，关机即停）
 wukong schedule  # 云端例程（归 hosted，Milestone 3+）
 wukong proof     # Merge Proof Report（Wow Moment）
 wukong judge     # evaluator-only 审查
@@ -64,14 +66,14 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 | Loop 类型 | 触发 | 停止 | Wukong 命令 | 状态 |
 |---|---|---|---|---|
 | Turn-based | 用户 prompt | agent 自判完成 | TUI 默认 agentic loop | 已实现 |
-| Goal-based | 实时手动 | 目标达成 or 回合上限 | `/goal` | 已实现 |
-| Time-based（本机） | 时间间隔 | 取消 or 工作完成 | `/loop` | 待实现（核心） |
+| Goal-based | 实时手动 | agent 自评 + 回合/预算上限（verification gate 归 P0.5） | `/goal` | 已实现（gate 待实现） |
+| Time-based（本机） | 手动启动，轮次自动衔接（`--every` 可选节流） | 停止条件满足 or 迭代上限 or 取消 | `/loop` | 待实现（核心） |
 | Time-based（云端） | 计划 | 任务达标退出，例程持续 | `/schedule` | 待实现（归 hosted） |
 | 工具层 | 手动/被 loop 调用 | 单次 | `/verify` `/scan` `/guard` | 已实现 |
 | 证据层 | 手动 | 单次 | `/proof` | 待实现（Wow Moment） |
 | 评估层 | 手动/被 loop 调用 | 单次 | `/judge` | 待实现 |
 
-`/loop`（本机 interval，关机即停）和 `/schedule`（云端例程，机器关了也跑）拆开实现：`/loop` 在 CLI 本机做，`/schedule` 归 hosted（Milestone 3+）。`/goal` 和 `/loop` 的停止判断不由写代码的 agent 自评——用 deterministic verification、独立 evaluator（`/judge`），或挂载自定义验证 skill。
+`/loop` 的核心语义是**迭代直到验证通过**（关机即停）：轮次自动衔接，`--every` 只是可选的轮间节流；时间触发复用 agent-core 已有 cron scheduler，不新写定时引擎。定时巡检型任务本机由 cron 工具承载，云端归 `/schedule`（hosted，Milestone 3+）。停止判断不由写代码的 agent 自评——注意当前 `/goal` 的完成判定仍是 agent 自评，P0.5 必须先给 `/goal` 出口落地 deterministic verification gate，`/loop` 复用该 gate，评估用 verify/scan、独立 evaluator（`/judge`）或自定义验证 skill。
 
 用户在 Claude Code、Cursor、Copilot、Codex 或其他 agent 生成代码后，用 Wukong 运行确定性检查、扫描风险、生成证据报告，再决定是否相信、提交或合并。Wukong 补上 agent 最薄弱的一环：
 
@@ -89,7 +91,7 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 | 金箍棒 | 标准化验证执行 | `verify`、`proof`、`test`、`ship`、report |
 | 紧箍咒 | 权限约束 | `guard`、policy、command confirmation |
 | 分身术 | agent 能力分发 | `wukong_verify` tool / MCP bridge |
-| 筋斗云 | 持续驱动与远程能力 | `loop`（本机 interval）、`schedule`（云端例程）、`sync`、cloud reports |
+| 筋斗云 | 持续驱动与远程能力 | `loop`（本机迭代）、cron 工具（本机巡检，已实现）、`schedule`（云端例程）、`sync`、cloud reports |
 | 七十二变 | 专家模式 | future prompt/tool profiles |
 | 取经路 | 成长与复盘 | stats、streak、retro，P1+ |
 
@@ -108,11 +110,14 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 
 ### P0.5: Loop 控制层 + Merge Proof（下一个重点）
 
+实施顺序固定为 proof → judge → goal gate → loop：
+
 | 命令 | 状态 | 目标 |
 |---|---|---|
-| `wukong loop` / `/loop` | 待实现 | 本机 interval loop：按时间间隔重复驱动 agent + 验证 + 修复，关机即停，核心 |
-| `wukong proof` / `/proof` | 待实现 | 把 verify+scan+report 串成 Merge Proof Report（Wow Moment） |
-| `wukong judge` / `/judge` | 待实现 | evaluator-only 审查，默认 `--assume-broken`，只审不写；也是 loop 的第二-agent reviewer |
+| `wukong proof` / `/proof` | 待实现（第 1 步） | 把 verify+scan+report 串成 Merge Proof Report（Wow Moment） |
+| `wukong judge` / `/judge` | 待实现（第 2 步） | evaluator-only 判定，默认 `--assume-broken`，只审不写；deterministic 模式先行，`--agent` 第二-agent 审查后置 |
+| `/goal` verification gate | 待实现（第 3 步） | 把 `/goal` 完成判定从 agent 自评升级为 deterministic gate，是 `/loop` 的硬前置 |
+| `wukong loop` / `/loop` | 待实现（第 4 步，核心） | 本机迭代 loop：驱动 agent + 验证 + 修复直到停止条件满足；复用 cron scheduler 与 goal gate，关机即停 |
 
 ### P1: 工作流扩展
 
@@ -150,7 +155,7 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 1. **保持代码库整洁**：agent 遵循 codebase 已有的模式和约定。
 2. **给 agent 自验证能力**：用 deterministic verification（`verify`/`scan`）和自定义验证 skill 编码"什么叫好"；检查越定量越有效。
 3. **文档可达**：框架/库文档保持最新最佳实践。
-4. **用第二 agent 做审查**：fresh context 的 reviewer 偏见更少——这正是 `/judge` 的定位，loop 的每轮或出口可挂载 `/judge` 对抗性审查。
+4. **用第二 agent 做审查**：fresh context 的 reviewer 偏见更少——这是 `/judge --agent` 的目标形态（P0.5 末 / P1 初）。P0.5 默认的 `/judge` 是 deterministic 判定，落地前不对外宣传"第二 agent 审查"。
 
 ## 4. 商业模型
 
@@ -289,10 +294,11 @@ Managed AI Add-on
 
 ### P0.5 下一个重点：Loop 控制层 + Merge Proof
 
-1. `/loop` 本机 interval loop：按时间间隔持续驱动 agent + 验证 + 修复，关机即停（产品核心）。
-2. `/proof` Merge Proof Report：verify+scan+report 固定格式汇总（Wow Moment）。
-3. `/judge` evaluator-only 审查：默认 `--assume-broken`，复用 verification 引擎。
-4. 文档与官网 hero 切换到 loop control plane / proof-layer 叙事。
+1. `/proof` Merge Proof Report：verify+scan+report 固定格式汇总（Wow Moment，第 1 步）。
+2. `/judge` evaluator-only 判定：默认 `--assume-broken`，deterministic 模式复用 verification 引擎（第 2 步）。
+3. `/goal` verification gate：agent 宣布完成 → 强制 deterministic 评估 → 未过打回（第 3 步，`/loop` 硬前置）。
+4. `/loop` 本机迭代 loop：驱动 agent + 验证 + 修复直到停止条件满足，复用 cron scheduler 与 goal gate，关机即停（第 4 步，产品核心）。
+5. 文档与官网 hero 切换到 loop control plane / proof-layer 叙事。
 
 ### 下一个 P0/P1 交界
 
@@ -307,7 +313,8 @@ Managed AI Add-on
 - 不做“不可绕过”的安全承诺。
 - 不发布尚未存在的 install script、Homebrew formula 或旧包名。
 - 不把 legacy `packages/cli` / `packages/mcp-server` 复制为长期架构。
-- 不把 `/schedule`（云端例程）在本机做；`/loop`（本机 interval，关机即停）和 `/schedule`（云端）拆开，跨机器持续性归 hosted。
+- 不把 `/schedule`（云端例程）在本机做；`/loop`（本机迭代，关机即停）与定时巡检（本机 cron 工具 / 云端 `/schedule`）拆开，跨机器持续性归 hosted。
+- 不为 `/loop` 新写定时引擎；时间触发复用 agent-core cron scheduler。
 
 ## 6. Guard 产品口径
 
@@ -356,6 +363,6 @@ P1 之后再评估：
 
 ## 9. 结论
 
-Wukong 的可商业化内核已经有本地 CLI/TUI/agent 闭环：deterministic verification、risk scan、best-effort guard、report、`wukong_verify` 和 `/goal`。下一个重点（P0.5）是用 `/loop` 把这套工具编排成 AI Coding Loop 的控制层，并以 `/proof` 作为可截图、可分享的 Wow Moment、`/judge` 作为差异化记忆点。这之后，hosted reports、redaction/report history、团队规则、跨会话 loop（hosted/CI）和计费边界，把本地验证价值转成可收费的协作与审计能力。
+Wukong 的可商业化内核已经有本地 CLI/TUI/agent 闭环：deterministic verification、risk scan、best-effort guard、report、`wukong_verify` 和 `/goal`。下一个重点（P0.5）按 proof → judge → goal gate → loop 的顺序，用 `/loop` 把这套工具编排成 AI Coding Loop 的控制层：`/proof` 是可截图、可分享的 Wow Moment；`/judge` 先以 deterministic 判定落地，第二-agent 审查（`--agent`）落地后差异化叙事才对外成立。这之后，hosted reports、redaction/report history、团队规则、跨会话 loop（hosted/CI）和计费边界，把本地验证价值转成可收费的协作与审计能力。
 
 一句话：**AI 负责写代码，Wukong 负责判断能不能合并，并用 loop 持续驱动这件事直到成立。**
