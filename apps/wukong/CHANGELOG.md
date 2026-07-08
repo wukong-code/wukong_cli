@@ -1,5 +1,16 @@
 # @wukong.today/code
 
+## 0.0.8
+
+### Patch Changes
+
+- Align package version with public Wukong Code binary release v0.0.8.
+- Milestone 0.5 AI Coding Loop control plane: `/loop` for local interval pacing and `/schedule` for cloud cron jobs.
+- Verification layer merge proof and stop conditions for `verify-skill`.
+- Point CLI default OAuth host and API base URL to `wukong.today`.
+- Clear all lint warnings and fix latent bugs uncovered by lint.
+- Fix Vitest `#/cli/*` alias resolution so the CLI test suite runs green.
+
 ## 0.1.1
 
 ### Patch Changes
