@@ -53,6 +53,38 @@
           nodejs = nodejsFor pkgs;
         };
 
+      # The SEA inject step needs a Node.js binary that supports the
+      # `--build-sea` flag (Node.js >= 26.4.0). nixpkgs' nodejs_24 does not,
+      # so fetch the official upstream binary for the target platform.
+      nodeSeaBinaryFor =
+        pkgs:
+        let
+          platform = pkgs.stdenv.hostPlatform.system;
+          mapping = {
+            x86_64-linux = {
+              tag = "linux-x64";
+              hash = "sha256-8iHasw0OnVRDMvBvvuLGIYbJfYZNXKyEgtujTx44uNw=";
+            };
+            aarch64-linux = {
+              tag = "linux-arm64";
+              hash = "sha256-dz2exnJmg4Jw3cEFwlSK6Kr/KLyP5vNMVdEJQEPEFl4=";
+            };
+            x86_64-darwin = {
+              tag = "darwin-x64";
+              hash = "sha256-6zvdjew/8lWO4Q4oTafSo4Za8MvaIfBtOXsCZYN8ZB4=";
+            };
+            aarch64-darwin = {
+              tag = "darwin-arm64";
+              hash = "sha256-T0+8rPax/xqV3u26e9ey157+yqU6jssFMFRtyQY/77w=";
+            };
+          };
+          cfg = mapping.${platform} or (throw "Unsupported SEA platform: ${platform}");
+        in
+        pkgs.fetchzip {
+          url = "https://nodejs.org/download/release/v26.4.0/node-v26.4.0-${cfg.tag}.tar.gz";
+          hash = cfg.hash;
+        };
+
       # -------------------------------------------------------------------
       # Workspace members (kept in sync with pnpm-workspace.yaml).
       #
@@ -111,6 +143,7 @@
         let
           nodejs = nodejsFor pkgs;
           pnpm = pnpmFor pkgs;
+          nodeSeaBinary = nodeSeaBinaryFor pkgs;
           appPackageJson = builtins.fromJSON (builtins.readFile ./apps/wukong/package.json);
           nativeTarget =
             if pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isAarch64 then
@@ -179,6 +212,7 @@
             buildPhase = ''
               runHook preBuild
               export WUKONG_CODE_BUILD_TARGET=${nativeTarget}
+              export WUKONG_SEA_NODE_PATH=${nodeSeaBinary}/bin/node
               ${lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
                 # pkgs.darwin.sigtool's codesign supports `--sign -` (ad-hoc)
                 # but not the inspection mode (`-dv`) that 05-verify.mjs runs
