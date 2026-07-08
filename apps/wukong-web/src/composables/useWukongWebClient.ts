@@ -26,10 +26,6 @@ import { useTaskPoller } from './client/useTaskPoller';
 import { useModelProviderState } from './client/useModelProviderState';
 import { useSideChat } from './client/useSideChat';
 import { useWorkspaceState } from './client/useWorkspaceState';
-
-const appearance = useAppearance();
-const notification = useNotification();
-const sound = useSoundNotification();
 import type {
   AppEvent,
   AppApprovalRequest,
@@ -53,7 +49,6 @@ import type {
 } from '../api/types';
 import { createInitialState, reduceAppEvent, type CompactionStatus, type WukongClientState } from '../api/daemon/eventReducer';
 import { toAppEvent } from '../api/daemon/mappers';
-
 import { messagesToTurns } from './messagesToTurns';
 import { latestTodos } from './latestTodos';
 import { buildSwarmGroups, countSwarmMembers } from './swarmGroups';
@@ -78,6 +73,10 @@ import type {
   WorkspaceGroup,
   WorkspaceView,
 } from '../types';
+
+const appearance = useAppearance();
+const notification = useNotification();
+const sound = useSoundNotification();
 
 // ---------------------------------------------------------------------------
 // Internal reactive state (plain object wrapped in reactive())
@@ -231,7 +230,7 @@ function saveActiveWorkspaceToStorage(id: string): void {
 /** basename of an absolute path (last non-empty segment), defaulting to the path. */
 function basename(path: string): string {
   const parts = path.split('/').filter(Boolean);
-  return parts.length > 0 ? parts[parts.length - 1]! : path;
+  return parts.length > 0 ? parts.at(-1)! : path;
 }
 
 /** Shorten a $HOME-prefixed absolute path to `~/…` for dim display. */
@@ -541,7 +540,7 @@ async function refreshSessionStatus(sessionId: string): Promise<void> {
   }
   updateSession(sessionId, (s) => ({
     ...s,
-    model: st.model || s.model,
+    model: st.model ?? s.model,
     usage: {
       ...s.usage,
       contextTokens: st.contextTokens,
@@ -592,7 +591,7 @@ function saveBetaTocToStorage(v: boolean): void {
     // ignore
   }
 }
-const betaToc = ref<boolean>(loadBetaTocFromStorage());
+const betaToc = ref(loadBetaTocFromStorage());
 function setBetaToc(v: boolean): void {
   betaToc.value = v;
   saveBetaTocToStorage(v);
@@ -610,7 +609,7 @@ function loadStringFromStorage(key: string): string {
     return '';
   }
 }
-const onboarded = ref<boolean>(loadStringFromStorage(ONBOARDED_STORAGE_KEY) === '1');
+const onboarded = ref(loadStringFromStorage(ONBOARDED_STORAGE_KEY) === '1');
 function setOnboarded(done: boolean): void {
   onboarded.value = done;
   try {
@@ -777,7 +776,7 @@ function processEvent(appEvent: AppEvent, meta: { sessionId: string; seq: number
 }
 
 const enqueueEvent = createEventBatcher<PendingEvent>(
-  ({ appEvent, meta }) => processEvent(appEvent, meta),
+  ({ appEvent, meta }) =>{  processEvent(appEvent, meta); },
   ({ appEvent }) => isRenderEvent(appEvent),
 );
 
@@ -1095,12 +1094,12 @@ async function syncSessionFromSnapshot(sessionId: string): Promise<SyncSessionRe
     }
     void pullSessionWarnings(sessionId);
     return 'ok';
-  } catch (err) {
-    if (isSessionNotFoundError(err)) {
+  } catch (error) {
+    if (isSessionNotFoundError(error)) {
       await handleSessionNotFound(sessionId);
       return 'not-found';
     }
-    pushOperationFailure('getSessionSnapshot', err, {
+    pushOperationFailure('getSessionSnapshot', error, {
       title: i18n.global.t('warnings.sessionSnapshotTitle'),
       message: i18n.global.t('warnings.sessionSnapshotMessage'),
       sessionId,
@@ -1669,7 +1668,7 @@ const changes = computed<{ path: string; status: string }[]>(() => {
   if (!gs) return [];
   return Object.entries(gs.entries)
     .map(([path, status]) => ({ path, status }))
-    .sort((a, b) => a.path.localeCompare(b.path));
+    .toSorted((a, b) => a.path.localeCompare(b.path));
 });
 
 /** Aggregate working-tree line stats (vs HEAD) for the active session's header
@@ -1702,8 +1701,8 @@ const status = computed<ConversationStatus>(() => {
   // the provider prefix (e.g. "wukong/wukong-v1-128k" → "wukong-v1-128k").
   const matched = modelProvider.models.value.find((m) => m.id === rawModel || m.model === rawModel);
   const displayModel =
-    matched?.displayName ||
-    matched?.model ||
+    (matched?.displayName ??
+    matched?.model) ??
     (rawModel.includes('/') ? rawModel.split('/').pop()! : rawModel);
 
   return {
@@ -1828,7 +1827,7 @@ const mergedWorkspaces = computed<AppWorkspace[]>(() => {
  * sidebar stops following the daemon's recency-based order: once a workspace is
  * known, its position is fixed until the user drags it elsewhere.
  */
-const workspaceOrder = ref<string[]>(loadWorkspaceOrder());
+const workspaceOrder = ref(loadWorkspaceOrder());
 
 // Reconcile the persisted order with the set of currently-known workspaces:
 // drop ids that no longer exist, and prepend newly-seen ids (newest first,

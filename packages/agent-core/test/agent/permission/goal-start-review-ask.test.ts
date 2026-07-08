@@ -1,8 +1,7 @@
 import type { ToolCall } from '@wukong/kosong';
 import { describe, expect, it } from 'vitest';
 
-import type { PermissionPolicyContext } from '../../../src/agent/permission';
-import type { PermissionMode } from '../../../src/agent/permission';
+import type { PermissionMode, PermissionPolicyContext } from '../../../src/agent/permission';
 import { GoalStartReviewAskPermissionPolicy } from '../../../src/agent/permission/policies/goal-start-review-ask';
 import type { ToolInputDisplay } from '../../../src/tools/display';
 import { ToolAccesses } from '../../../src/loop';

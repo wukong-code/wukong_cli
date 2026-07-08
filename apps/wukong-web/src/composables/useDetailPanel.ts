@@ -209,7 +209,7 @@ export function useDetailPanel({
     detailTarget.value = 'diff';
     detailDiffMode.value = 'list';
     detailDiffPath.value = null;
-    void client.loadGitStatus(client.activeSessionId.value!);
+    void client.loadGitStatus(client.activeSessionId.value);
   }
 
   function closeDiffDetail(): void {
@@ -293,6 +293,10 @@ export function useDetailPanel({
         return toolDiffToolId.value ? { kind: 'toolDiff', toolId: toolDiffToolId.value } : null;
       case 'btw':
         return { kind: 'btw' };
+      case "diff":
+      case "file":
+      case null:
+        return null;
       default:
         return null;
     }

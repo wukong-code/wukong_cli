@@ -60,7 +60,7 @@ function expandV6(host: string): readonly string[] | null {
     const right = rightRaw.length > 0 ? rightRaw.split(':') : [];
     const missing = 8 - (left.length + right.length);
     if (missing < 0) return null;
-    return [...left, ...Array<string>(missing).fill('0'), ...right];
+    return [...left, ...Array.from({ length: missing }, () => '0'), ...right];
   }
   const parts = lower.split(':');
   return parts.length === 8 ? parts : null;

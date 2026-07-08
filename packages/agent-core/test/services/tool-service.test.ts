@@ -21,6 +21,7 @@ import type {
 } from '../../src';
 
 import {
+  type AgentCoreToolInfoLike,
   type ICoreProcessService,
   McpServerNotFoundError,
   McpService,
@@ -28,7 +29,6 @@ import {
   toProtocolMcpServer,
   toProtocolTool,
 } from '../../src/services';
-import type { AgentCoreToolInfoLike } from '../../src/services';
 
 interface FakeBridgeState {
   sessions: SessionSummary[];
@@ -176,7 +176,7 @@ describe('ToolService.list', () => {
     const state = freshState();
     state.sessions.push(fakeSession('s', 1));
     const bridge = makeFakeBridge(state);
-    (bridge.rpc as CoreRPC).getTools = async () => {
+    (bridge.rpc).getTools = async () => {
       throw new Error('session not loaded');
     };
     const svc = new ToolService(bridge);

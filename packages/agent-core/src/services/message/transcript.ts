@@ -264,6 +264,32 @@ export function reduceWireRecords(records: Iterable<AgentRecord>): {
         foldedLength = 0;
         resetOpenState();
         break;
+      case "config.update":
+      case "forked":
+      case "full_compaction.begin":
+      case "full_compaction.cancel":
+      case "full_compaction.complete":
+      case "goal.clear":
+      case "goal.create":
+      case "goal.update":
+      case "metadata":
+      case "micro_compaction.apply":
+      case "permission.record_approval_result":
+      case "permission.set_mode":
+      case "plan_mode.cancel":
+      case "plan_mode.enter":
+      case "plan_mode.exit":
+      case "swarm_mode.enter":
+      case "swarm_mode.exit":
+      case "tools.register_user_tool":
+      case "tools.set_active_tools":
+      case "tools.unregister_user_tool":
+      case "tools.update_store":
+      case "turn.cancel":
+      case "turn.prompt":
+      case "turn.steer":
+      case "usage.record":
+        break;
       default:
         break;
     }

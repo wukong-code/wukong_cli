@@ -96,7 +96,7 @@ describe('WukongHarness.auth', () => {
         const error = await harness.auth
           .resolveOAuthTokenProvider(WUKONG_CODE_PROVIDER_NAME)
           .getAccessToken()
-          .catch((caught: unknown) => caught);
+          .catch((error: unknown) => error);
 
         expect(error).toBeInstanceOf(WukongError);
         expect(error).toMatchObject({

@@ -274,6 +274,15 @@ export class SessionEventHandler {
       case 'cron.fired': this.handleCronFired(event); break;
       case 'mcp.server.status': this.renderMcpServerStatus(event.server); break;
       case 'tool.list.updated': break;
+      case "event.config.changed":
+      case "event.model_catalog.changed":
+      case "event.session.created":
+      case "event.session.status_changed":
+      case "event.workspace.created":
+      case "event.workspace.deleted":
+      case "event.workspace.updated":
+      case "prompt.submitted":
+        break;
       default: break;
     }
   }

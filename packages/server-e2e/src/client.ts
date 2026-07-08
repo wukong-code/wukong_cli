@@ -233,9 +233,9 @@ export class DaemonClient {
   }
   undoSession(
     sid: string,
-    body: UndoSessionRequest = { count: 1 },
+    body: UndoSessionRequest = undefined as unknown as UndoSessionRequest,
   ): Promise<UndoSessionResponse> {
-    return this.http.undoSession(sid, body);
+    return this.http.undoSession(sid, body ?? { count: 1 });
   }
   archiveSession(sid: string): Promise<{ archived: true }> {
     return this.http.archiveSession(sid);

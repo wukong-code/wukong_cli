@@ -49,7 +49,7 @@ import { validateBody, validateParams, validateQuery } from './validate';
 
 /** Convert OpenAPI `{param}` segments to Fastify `:param` segments. */
 function toFastifyPath(openApiPath: string): string {
-  return openApiPath.replace(/\{([^}]+)\}/g, ':$1');
+  return openApiPath.replaceAll(/\{([^}]+)\}/g, ':$1');
 }
 
 // ---------------------------------------------------------------------------
@@ -109,7 +109,7 @@ function buildUnifiedResponseSchema(
   // Error variants — sorted by code for deterministic output
   const errorEntries = Object.entries(errors)
     .map(([code, cfg]) => [Number(code), cfg] as const)
-    .sort((a, b) => a[0] - b[0]);
+    .toSorted((a, b) => a[0] - b[0]);
 
   // No errors → return the plain envelope schema (not wrapped in oneOf)
   if (errorEntries.length === 0) {
@@ -119,15 +119,13 @@ function buildUnifiedResponseSchema(
     );
   }
 
-  const variants: Record<string, unknown>[] = [];
-
-  // Success variant
-  variants.push(
+  const variants: Record<string, unknown>[] = [
+    // Success variant
     openApiDocumentJsonSchema(
       buildSuccessEnvelopeSchema(successDataSchema),
       'output',
     ),
-  );
+  ];
 
   for (const [code, cfg] of errorEntries) {
     variants.push(
@@ -282,7 +280,7 @@ export function defineRoute<
 
     if (options.rawResponse) {
       for (const [code, rawSchema] of Object.entries(options.rawResponse)) {
-        responses[String(code)] = rawSchema;
+        responses[code] = rawSchema;
       }
     }
 

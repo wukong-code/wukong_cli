@@ -125,12 +125,12 @@ export function buildRouteSchema(options: RouteSchemaOptions): Record<string, un
     const responses: Record<string, unknown> = {};
     if (options.response) {
       for (const [code, zodSchema] of Object.entries(options.response)) {
-        responses[String(code)] = envelopeJsonSchema(zodSchema);
+        responses[code] = envelopeJsonSchema(zodSchema);
       }
     }
     if (options.rawResponse) {
       for (const [code, rawSchema] of Object.entries(options.rawResponse)) {
-        responses[String(code)] = rawSchema;
+        responses[code] = rawSchema;
       }
     }
     schema['response'] = responses;

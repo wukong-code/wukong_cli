@@ -57,7 +57,7 @@ import type {
   ApprovalRequest as ProtocolApprovalRequest,
   ApprovalResponse as ProtocolApprovalResponse,
 } from '@wukong/protocol';
-import type {} from '@wukong/protocol'; // type-only marker — keep protocol dep referenced
+ // type-only marker — keep protocol dep referenced
 
 // Re-export ApprovalResponse for service-side consumers so they don't have to
 // also depend on agent-core directly.

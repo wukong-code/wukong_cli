@@ -60,7 +60,7 @@ const NAME_ALIASES: Record<string, string> = {
 };
 
 export function normalizeToolName(name: string): string {
-  const lower = (name ?? '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+  const lower = (name ?? '').trim().toLowerCase().replaceAll(/[\s-]+/g, '_');
   return NAME_ALIASES[lower] ?? lower;
 }
 
@@ -183,7 +183,7 @@ function num(v: unknown): number | undefined {
 function urlHost(url: string): string {
   try {
     const u = new URL(url);
-    const seg = u.pathname.split('/').filter(Boolean)[0];
+    const seg = u.pathname.split('/').find(Boolean);
     return seg ? `${u.host}/${seg}` : u.host;
   } catch {
     return url.replace(/^https?:\/\//, '');

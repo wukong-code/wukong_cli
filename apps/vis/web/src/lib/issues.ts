@@ -118,6 +118,29 @@ export function computeIssues(
         }
         break;
 
+      case "config.update":
+      case "context.append_message":
+      case "context.apply_compaction":
+      case "context.clear":
+      case "context.undo":
+      case "forked":
+      case "goal.clear":
+      case "goal.create":
+      case "goal.update":
+      case "metadata":
+      case "micro_compaction.apply":
+      case "permission.set_mode":
+      case "swarm_mode.enter":
+      case "swarm_mode.exit":
+      case "tools.register_user_tool":
+      case "tools.set_active_tools":
+      case "tools.unregister_user_tool":
+      case "tools.update_store":
+      case "turn.cancel":
+      case "turn.prompt":
+      case "turn.steer":
+      case "usage.record":
+        break;
       default:
         break;
     }

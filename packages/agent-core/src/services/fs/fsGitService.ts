@@ -244,6 +244,7 @@ async function runCommand(
       if (settled) return;
       settled = true;
       if (timer !== undefined) clearTimeout(timer);
+      // eslint-disable-next-line eslint-plugin-promise/no-multiple-resolved -- guarded by settled flag above
       resolve(result);
     };
     if (options.timeoutMs !== undefined) {

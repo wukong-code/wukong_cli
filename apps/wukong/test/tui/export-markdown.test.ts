@@ -1,6 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { ContentPart, ToolCall } from '@wukong/wukong-sdk';
-import type { ContextMessage, PromptOrigin } from '@wukong/wukong-sdk';
+import type { ContentPart, ContextMessage, PromptOrigin, ToolCall } from '@wukong/wukong-sdk';
 
 import {
   buildExportMarkdown,

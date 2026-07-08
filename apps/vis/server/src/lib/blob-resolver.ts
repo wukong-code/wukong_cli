@@ -47,7 +47,7 @@ function rehydrateRecord(
 ): void {
   const type = record['type'];
   if (type === 'turn.prompt' || type === 'turn.steer') {
-    rehydrateParts(record['input'] as unknown as ContentPart[], sessionId, agentId, baseUrl);
+    rehydrateParts(record['input'] as ContentPart[], sessionId, agentId, baseUrl);
     return;
   }
   if (type === 'context.append_message') {
@@ -85,6 +85,9 @@ function rehydrateParts(
         break;
       case 'video_url':
         part.videoUrl.url = resolveBlobRefUrl(part.videoUrl.url, sessionId, agentId, baseUrl);
+        break;
+      case "text":
+      case "think":
         break;
       default:
         break;

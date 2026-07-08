@@ -277,9 +277,9 @@ export function wukongEnvOAuthHost(env: ManagedWukongEnv = process.env): string 
 }
 
 // Base URLs that share the default `oauth/wukong` credential slot.
-const SHARED_DEFAULT_BASE_URLS: readonly string[] = [
+const SHARED_DEFAULT_BASE_URLS: ReadonlySet<string> = new Set([
   normalizeEndpoint(DEFAULT_WUKONG_CODE_BASE_URL),
-];
+]);
 
 export function resolveWukongOAuthKey(options: {
   readonly oauthHost?: string | undefined;
@@ -289,7 +289,7 @@ export function resolveWukongOAuthKey(options: {
   const baseUrl = defaultBaseUrl(options.baseUrl);
   const defaultOauthHost = normalizeEndpoint(DEFAULT_WUKONG_CODE_OAUTH_HOST);
 
-  if (oauthHost === defaultOauthHost && SHARED_DEFAULT_BASE_URLS.includes(baseUrl)) {
+  if (oauthHost === defaultOauthHost && SHARED_DEFAULT_BASE_URLS.has(baseUrl)) {
     return WUKONG_CODE_OAUTH_KEY;
   }
 

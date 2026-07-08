@@ -92,10 +92,10 @@ export class WsClient {
           },
           { reportDir: this.opts.reportDir },
         );
-        reject(err as Error);
+        reject(err);
       });
-      ws.on('message', (data) => this._onMessage(data));
-      ws.on('close', (code, reason) => this._onClose(code, String(reason ?? '')));
+      ws.on('message', (data) =>{  this._onMessage(data); });
+      ws.on('close', (code, reason) =>{  this._onClose(code, String(reason ?? '')); });
     });
   }
 
@@ -147,13 +147,13 @@ export class WsClient {
           if (waiter.timer) clearTimeout(waiter.timer);
           reject(e);
         },
+        timer: setTimeout(() => {
+          const idx = this._waiters.indexOf(waiter);
+          if (idx >= 0) this._waiters.splice(idx, 1);
+          reject(new Error(`waitForFrame timed out after ${timeoutMs}ms`));
+        }, timeoutMs),
       };
-      waiter.timer = setTimeout(() => {
-        const idx = this._waiters.indexOf(waiter);
-        if (idx >= 0) this._waiters.splice(idx, 1);
-        reject(new Error(`waitForFrame timed out after ${timeoutMs}ms`));
-      }, timeoutMs);
-      waiter.timer.unref?.();
+      waiter.timer?.unref?.();
       this._waiters.push(waiter);
     });
   }
@@ -187,15 +187,15 @@ export class WsClient {
     try {
       const raw = typeof data === 'string' ? data : String(data);
       frame = JSON.parse(raw) as AnyFrame;
-    } catch (err) {
-      this.opts.logger('warn', 'ws: dropped non-JSON frame', { err: String(err) });
+    } catch (error) {
+      this.opts.logger('warn', 'ws: dropped non-JSON frame', { err: String(error) });
       recordReportEvent(
         {
           kind: 'ws',
           direction: 'in',
           url: this.opts.url,
           message: 'dropped non-JSON frame',
-          error: errorForReport(err),
+          error: errorForReport(error),
         },
         { reportDir: this.opts.reportDir },
       );
@@ -215,8 +215,8 @@ export class WsClient {
     for (const sub of this._subscribers) {
       try {
         sub(frame);
-      } catch (err) {
-        this.opts.logger('warn', 'ws: subscriber threw', { err: String(err) });
+      } catch (error) {
+        this.opts.logger('warn', 'ws: subscriber threw', { err: String(error) });
       }
     }
 
@@ -227,8 +227,8 @@ export class WsClient {
       let matches = false;
       try {
         matches = w.match(frame);
-      } catch (err) {
-        this.opts.logger('warn', 'ws: waiter predicate threw', { err: String(err) });
+      } catch (error) {
+        this.opts.logger('warn', 'ws: waiter predicate threw', { err: String(error) });
       }
       if (matches) {
         this._waiters.splice(i, 1);

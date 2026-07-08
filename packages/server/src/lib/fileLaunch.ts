@@ -31,6 +31,16 @@ export function openFileCommandFor(
       return { command: 'open', args: [absolutePath] };
     case 'win32':
       return { command: 'cmd', args: ['/c', 'start', '""', absolutePath] };
+    case "aix":
+    case "android":
+    case "cygwin":
+    case "freebsd":
+    case "haiku":
+    case "linux":
+    case "netbsd":
+    case "openbsd":
+    case "sunos":
+      return { command: 'xdg-open', args: [absolutePath] };
     default:
       return { command: 'xdg-open', args: [absolutePath] };
   }
@@ -45,6 +55,16 @@ export function revealFileCommandFor(
       return { command: 'open', args: ['-R', absolutePath] };
     case 'win32':
       return { command: 'explorer.exe', args: [`/select,${absolutePath}`] };
+    case "aix":
+    case "android":
+    case "cygwin":
+    case "freebsd":
+    case "haiku":
+    case "linux":
+    case "netbsd":
+    case "openbsd":
+    case "sunos":
+      return { command: 'xdg-open', args: [path.dirname(absolutePath)] };
     default:
       return { command: 'xdg-open', args: [path.dirname(absolutePath)] };
   }
@@ -164,6 +184,19 @@ function openInFinder(
       return isDirectory
         ? { command: 'explorer.exe', args: [absolutePath] }
         : { command: 'explorer.exe', args: [`/select,${absolutePath}`] };
+    case "aix":
+    case "android":
+    case "cygwin":
+    case "freebsd":
+    case "haiku":
+    case "linux":
+    case "netbsd":
+    case "openbsd":
+    case "sunos":
+      return {
+        command: 'xdg-open',
+        args: [isDirectory ? absolutePath : path.dirname(absolutePath)],
+      };
     default:
       return {
         command: 'xdg-open',

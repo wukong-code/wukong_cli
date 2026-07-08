@@ -34,7 +34,7 @@ export async function handleVerify(deps: VerifyDeps, options: VerifyCliOptions):
       includeBuild: options.includeBuild,
       strict: options.strict,
       timeoutMs: options.timeoutSeconds === undefined ? undefined : options.timeoutSeconds * 1000,
-      writeReport: options.report === false ? false : true,
+      writeReport: options.report !== false,
       reportPath: typeof options.report === 'string' ? options.report : undefined,
     });
 

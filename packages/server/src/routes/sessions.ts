@@ -202,14 +202,14 @@ export function registerSessionsRoutes(
           let workspaceRoot: string;
           try {
             workspaceRoot = await registry.resolveRoot(workspaceId);
-          } catch (err) {
-            if (err instanceof WorkspaceNotFoundError) {
+          } catch (error) {
+            if (error instanceof WorkspaceNotFoundError) {
               reply.send(
-                errEnvelope(ErrorCode.WORKSPACE_NOT_FOUND, err.message, req.id),
+                errEnvelope(ErrorCode.WORKSPACE_NOT_FOUND, error.message, req.id),
               );
               return;
             }
-            throw err;
+            throw error;
           }
           if (callerCwd !== undefined && callerCwd !== workspaceRoot) {
             reply.send(
@@ -244,8 +244,8 @@ export function registerSessionsRoutes(
           }),
         );
         reply.send(okEnvelope(session, req.id));
-      } catch (err) {
-        sendMappedError(reply, req.id, err);
+      } catch (error) {
+        sendMappedError(reply, req.id, error);
       }
     },
   );
@@ -281,14 +281,14 @@ export function registerSessionsRoutes(
           let root: string;
           try {
             root = await registry.resolveRoot(raw.workspace_id);
-          } catch (err) {
-            if (err instanceof WorkspaceNotFoundError) {
+          } catch (error) {
+            if (error instanceof WorkspaceNotFoundError) {
               reply.send(
-                errEnvelope(ErrorCode.WORKSPACE_NOT_FOUND, err.message, req.id),
+                errEnvelope(ErrorCode.WORKSPACE_NOT_FOUND, error.message, req.id),
               );
               return;
             }
-            throw err;
+            throw error;
           }
           query = { ...baseQuery, workDir: root };
         } else {
@@ -296,8 +296,8 @@ export function registerSessionsRoutes(
         }
         const page = await ix.invokeFunction((a) => a.get(ISessionService).list(query));
         reply.send(okEnvelope(page, req.id));
-      } catch (err) {
-        sendMappedError(reply, req.id, err);
+      } catch (error) {
+        sendMappedError(reply, req.id, error);
       }
     },
   );
@@ -321,8 +321,8 @@ export function registerSessionsRoutes(
         const { session_id } = req.params;
         const session = await ix.invokeFunction((a) => a.get(ISessionService).get(session_id));
         reply.send(okEnvelope(session, req.id));
-      } catch (err) {
-        sendMappedError(reply, req.id, err);
+      } catch (error) {
+        sendMappedError(reply, req.id, error);
       }
     },
   );
@@ -346,8 +346,8 @@ export function registerSessionsRoutes(
         const { session_id } = req.params;
         const session = await ix.invokeFunction((a) => a.get(ISessionService).get(session_id));
         reply.send(okEnvelope(session, req.id));
-      } catch (err) {
-        sendMappedError(reply, req.id, err);
+      } catch (error) {
+        sendMappedError(reply, req.id, error);
       }
     },
   );
@@ -382,19 +382,19 @@ export function registerSessionsRoutes(
         // subscribed to this session, and covering inactive sessions whose rename
         // does not go through the live Session path), so session lists stay in sync.
         if (typeof body.title === 'string' && body.title.trim().length > 0) {
-          ix.invokeFunction((a) =>
+          ix.invokeFunction((a) =>{ 
             a.get(IEventService).publish({
               type: 'session.meta.updated',
               agentId: 'main',
               sessionId: session_id,
               title: session.title,
               patch: { title: session.title, isCustomTitle: true },
-            } as Event),
+            } as Event); },
           );
         }
         reply.send(okEnvelope(session, req.id));
-      } catch (err) {
-        sendMappedError(reply, req.id, err);
+      } catch (error) {
+        sendMappedError(reply, req.id, error);
       }
     },
   );
@@ -490,8 +490,8 @@ export function registerSessionsRoutes(
           a.get(ISessionService).undo(parsed.id, body),
         );
         reply.send(okEnvelope(result, req.id));
-      } catch (err) {
-        sendMappedError(reply, req.id, err);
+      } catch (error) {
+        sendMappedError(reply, req.id, error);
       }
     },
   );
@@ -586,8 +586,8 @@ export function registerSessionsRoutes(
           a.get(ISessionService).getStatus(session_id),
         );
         reply.send(okEnvelope(status, req.id));
-      } catch (err) {
-        sendMappedError(reply, req.id, err);
+      } catch (error) {
+        sendMappedError(reply, req.id, error);
       }
     },
   );
@@ -613,8 +613,8 @@ export function registerSessionsRoutes(
           a.get(ISessionService).getSessionWarnings(session_id),
         );
         reply.send(okEnvelope({ warnings }, req.id));
-      } catch (err) {
-        sendMappedError(reply, req.id, err);
+      } catch (error) {
+        sendMappedError(reply, req.id, error);
       }
     },
   );

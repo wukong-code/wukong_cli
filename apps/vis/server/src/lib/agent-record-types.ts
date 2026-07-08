@@ -2,6 +2,11 @@
 // Single source of truth: everything below comes from agent-core directly.
 // Do NOT add local interfaces that duplicate upstream shapes.
 
+// Local binding for the `AgentRecord` type used by the vis-only DTOs below
+// (e.g. `WireEntry.data`). The `export type { … }` re-export above forwards
+// the name to consumers but does NOT bring it into this module's scope.
+import type { AgentRecord } from '@wukong/agent-core';
+
 export type {
   AgentRecord,
   AgentRecordEvents,
@@ -19,11 +24,6 @@ export type {
 } from '@wukong/agent-core';
 export { AGENT_WIRE_PROTOCOL_VERSION } from '@wukong/agent-core';
 export type { Message, ContentPart, ToolCall, TokenUsage } from '@wukong/kosong';
-
-// Local binding for the `AgentRecord` type used by the vis-only DTOs below
-// (e.g. `WireEntry.data`). The `export type { … }` re-export above forwards
-// the name to consumers but does NOT bring it into this module's scope.
-import type { AgentRecord } from '@wukong/agent-core';
 
 // ── vis-only DTOs ──────────────────────────────────────────────────────────
 

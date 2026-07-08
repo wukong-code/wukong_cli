@@ -66,7 +66,7 @@ describe('createAuthHook (onRequest middleware)', () => {
       headers: { authorization: 'Bearer wrong-token' },
     });
     expect(res.statusCode).toBe(401);
-    expect((res.json() as Record<string, unknown>)['code']).toBe(40101);
+    expect((res.json())['code']).toBe(40101);
   });
 
   it('accepts GET /api/v1/sessions with the correct bearer token', async () => {
@@ -103,7 +103,7 @@ describe('createAuthHook (onRequest middleware)', () => {
   it('does NOT bypass GET /openapi.json (meta doc stays gated)', async () => {
     const res = await app.inject({ method: 'GET', url: '/openapi.json' });
     expect(res.statusCode).toBe(401);
-    expect((res.json() as Record<string, unknown>)['code']).toBe(40101);
+    expect((res.json())['code']).toBe(40101);
   });
 
   it('redacts the Authorization header view before the handler runs', async () => {
@@ -129,6 +129,17 @@ function rawGet(
   headers: Record<string, string>,
 ): Promise<{ status: number; body: unknown }> {
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const finish = (result: { status: number; body: unknown }) => {
+      if (settled) return;
+      settled = true;
+      resolve(result);
+    };
+    const fail = (error: unknown) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
     const req = httpRequest(
       { host: '127.0.0.1', port, path, method: 'GET', headers },
       (res) => {
@@ -139,17 +150,17 @@ function rawGet(
         });
         res.on('end', () => {
           try {
-            resolve({
+            finish({
               status: res.statusCode ?? 0,
               body: JSON.parse(data) as unknown,
             });
-          } catch (err) {
-            reject(err);
+          } catch (error) {
+            fail(error);
           }
         });
       },
     );
-    req.on('error', reject);
+    req.on('error', fail);
     req.end();
   });
 }

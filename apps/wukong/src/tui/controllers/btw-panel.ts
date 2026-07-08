@@ -124,6 +124,46 @@ export class BtwPanelController {
         }
         this.host.state.ui.requestRender();
         return true;
+      case "agent.status.updated":
+      case "background.task.started":
+      case "background.task.terminated":
+      case "compaction.blocked":
+      case "compaction.cancelled":
+      case "compaction.completed":
+      case "compaction.started":
+      case "cron.fired":
+      case "error":
+      case "event.config.changed":
+      case "event.model_catalog.changed":
+      case "event.session.created":
+      case "event.session.status_changed":
+      case "event.workspace.created":
+      case "event.workspace.deleted":
+      case "event.workspace.updated":
+      case "goal.updated":
+      case "mcp.server.status":
+      case "prompt.submitted":
+      case "session.meta.updated":
+      case "shell.output":
+      case "shell.started":
+      case "skill.activated":
+      case "subagent.completed":
+      case "subagent.failed":
+      case "subagent.spawned":
+      case "subagent.started":
+      case "subagent.suspended":
+      case "tool.call.delta":
+      case "tool.call.started":
+      case "tool.list.updated":
+      case "tool.progress":
+      case "tool.result":
+      case "turn.started":
+      case "turn.step.completed":
+      case "turn.step.interrupted":
+      case "turn.step.retrying":
+      case "turn.step.started":
+      case "warning":
+        return true;
       default:
         return true;
     }

@@ -562,7 +562,7 @@ export function createAgentProjector(): AgentProjector {
     try {
       return _project(rawType, payload, sessionId, meta);
     } catch (error) {
-      // Defensive: log but never crash the caller
+      // eslint-disable-next-line no-console -- Defensive: log but never crash the caller
       console.error('[agentProjector] Error projecting event:', rawType, error instanceof Error ? error.message : error);
       return [];
     }

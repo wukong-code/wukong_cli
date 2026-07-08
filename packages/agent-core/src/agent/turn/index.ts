@@ -46,7 +46,7 @@ interface ActiveTurn {
   readonly turnId: number;
   readonly controller: AbortController;
   readonly promise: Promise<TurnEndResult>;
-  readonly firstRequest: ControlledPromise<void>;
+  readonly firstRequest: ControlledPromise;
 }
 
 interface BufferedSteer {
@@ -825,6 +825,12 @@ export class TurnFlow {
         active.firstRequest.resolve();
         return;
       }
+      case "step.begin":
+      case "step.retrying":
+      case "tool.progress":
+      case "tool.result":
+      case "turn.interrupted":
+        return;
       default:
         return;
     }

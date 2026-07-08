@@ -72,7 +72,7 @@ interface ManagedTask {
   /** User/tool stop request. */
   readonly stop: ControlledPromise<StopRequest>;
   /** Resolved once manager has finalized the task. */
-  readonly terminal: ControlledPromise<void>;
+  readonly terminal: ControlledPromise;
   /** Human-readable reason for the terminal status, when available. */
   stopReason?: string | undefined;
   /** Suppress automatic terminal notifications/reminders for this task. */
@@ -490,7 +490,7 @@ export class BackgroundManager {
       return this.toInfo(entry);
     }
     const timeout = timeoutOutcome(timeoutMs, undefined);
-    await Promise.race([entry.terminal, timeout]).finally(() => timeout.clear());
+    await Promise.race([entry.terminal, timeout]).finally(() =>{  timeout.clear(); });
 
     if (TERMINAL_STATUSES.has(entry.status)) {
       await entry.persistWriteQueue;
@@ -812,7 +812,7 @@ export class BackgroundManager {
     const workerAfterAbort = await Promise.race([
       worker,
       graceTimeout,
-    ]).finally(() => graceTimeout.clear());
+    ]).finally(() =>{  graceTimeout.clear(); });
 
     if (
       outcome.kind === 'stop' &&

@@ -47,7 +47,9 @@ function setCoreKaos(core: WukongCore, kaos: Promise<Kaos>): void {
 }
 
 function rejectedKaos(error: Error): Promise<Kaos> {
+  // eslint-disable-next-line eslint-plugin-promise/no-promise-in-callback -- test helper intentionally creates a rejected promise
   const promise = Promise.reject(error) as Promise<Kaos>;
+  // eslint-disable-next-line eslint-plugin-promise/no-callback-in-promise, eslint-plugin-promise/no-promise-in-callback -- suppresses unhandled rejection in test helper
   promise.catch(() => undefined);
   return promise;
 }
@@ -65,7 +67,7 @@ function createLocalTomlFailingKaos(base: Kaos): Kaos {
           path: string,
           options?: { encoding?: BufferEncoding; errors?: 'strict' | 'replace' | 'ignore' },
         ) => {
-          if (String(path).endsWith('local.toml')) {
+          if (path.endsWith('local.toml')) {
             return Promise.reject(
               new Error(`acp: readTextFile failed for ${path}: unknown session (issue #988)`),
             );

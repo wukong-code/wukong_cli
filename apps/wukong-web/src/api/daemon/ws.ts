@@ -153,16 +153,17 @@ export class DaemonEventSocket {
    * Subscribe to events for a session at a `{seq, epoch}` cursor.
    * If connected, sends immediately; otherwise queues until after server_hello.
    */
-  subscribe(sessionId: string, cursor: SessionCursor = { seq: 0 }): void {
-    this.subscriptions.set(sessionId, { ...cursor });
+  subscribe(sessionId: string, cursor: SessionCursor = undefined as unknown as SessionCursor): void {
+    const resolvedCursor = cursor ?? { seq: 0 };
+    this.subscriptions.set(sessionId, { ...resolvedCursor });
 
     if (this.connected) {
-      this.sendSubscribe([sessionId], { [sessionId]: cursor });
+      this.sendSubscribe([sessionId], { [sessionId]: resolvedCursor });
     } else {
       // Remove any earlier pending entry for this session, then enqueue
       const idx = this.pendingSubscriptions.findIndex((p) => p.sessionId === sessionId);
       if (idx !== -1) this.pendingSubscriptions.splice(idx, 1);
-      this.pendingSubscriptions.push({ sessionId, cursor: { ...cursor } });
+      this.pendingSubscriptions.push({ sessionId, cursor: { ...resolvedCursor } });
     }
   }
 
@@ -458,7 +459,7 @@ export class DaemonEventSocket {
     const existing = this.subscriptions.get(sid);
     if (!existing) return; // not a session we manage
     if (seq <= existing.seq && existing.epoch !== undefined) return;
-    const epoch = typeof frame['epoch'] === 'string' ? (frame['epoch'] as string) : existing.epoch;
+    const epoch = typeof frame['epoch'] === 'string' ? (frame['epoch']) : existing.epoch;
     this.subscriptions.set(sid, { seq: Math.max(seq, existing.seq), epoch });
   }
 

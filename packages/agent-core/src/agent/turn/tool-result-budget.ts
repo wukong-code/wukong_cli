@@ -77,15 +77,17 @@ function renderPersistedToolResult(
     `output_size_bytes: ${String(Buffer.byteLength(text, 'utf8'))}`,
     `output_path: ${outputPath}`,
     'next_step: Use Read with output_path to page through the full output.',
+    '',
+    '[preview]',
+    text.slice(0, TOOL_RESULT_PREVIEW_CHARS),
   ];
-  lines.push('', '[preview]', text.slice(0, TOOL_RESULT_PREVIEW_CHARS));
   return lines.join('\n');
 }
 
 function safeToolResultFileStem(toolName: string, toolCallId: string): string {
   const label = `${toolName}-${toolCallId}`
-    .replace(/[^a-zA-Z0-9._-]+/g, '_')
-    .replace(/^_+|_+$/g, '')
+    .replaceAll(/[^a-zA-Z0-9._-]+/g, '_')
+    .replaceAll(/^_+|_+$/g, '')
     .slice(0, 80);
   return label || 'tool-result';
 }

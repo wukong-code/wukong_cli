@@ -494,6 +494,17 @@ function runPromptTurn(
         case 'turn.step.completed':
         case 'warning':
           return;
+        case "event.config.changed":
+        case "event.model_catalog.changed":
+        case "event.session.created":
+        case "event.session.status_changed":
+        case "event.workspace.created":
+        case "event.workspace.deleted":
+        case "event.workspace.updated":
+        case "prompt.submitted":
+        case "shell.output":
+        case "shell.started":
+          return;
       }
     });
 

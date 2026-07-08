@@ -234,12 +234,12 @@ export class HttpClient {
   }
   undoSession(
     sid: string,
-    body: UndoSessionRequest = { count: 1 },
+    body: UndoSessionRequest = undefined as unknown as UndoSessionRequest,
   ): Promise<UndoSessionResponse> {
     return this.request(
       'POST',
       `/sessions/${encodeURIComponent(sid)}:undo`,
-      body,
+      body ?? { count: 1 },
     );
   }
   archiveSession(sid: string): Promise<{ archived: true }> {

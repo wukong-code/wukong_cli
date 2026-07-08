@@ -13,6 +13,15 @@ export function resolveServiceManager(platform: NodeJS.Platform = process.platfo
       return createSystemdManager();
     case 'win32':
       return createSchtasksManager();
+    case 'aix':
+    case 'android':
+    case 'cygwin':
+    case 'freebsd':
+    case 'haiku':
+    case 'netbsd':
+    case 'openbsd':
+    case 'sunos':
+      return createUnsupportedManager(platform);
     default:
       return createUnsupportedManager(platform);
   }

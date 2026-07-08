@@ -23,6 +23,9 @@
     "unicorn/no-useless-undefined": "off",
     "unicorn/no-lonely-if": "off",
     "unicorn/no-array-callback-reference": "off",
+    "unicorn/prefer-math-trunc": "off",
+    "import/no-named-as-default-member": "off",
+    "import/no-named-as-default": "off",
     "typescript/prefer-promise-reject-errors": "off",
     "typescript/no-unsafe-function-type": "off",
     "typescript/no-unsafe-argument": "off",
@@ -85,6 +88,25 @@
   },
   "overrides": [
     {
+      "files": ["packages/server-e2e/**/*.ts"],
+      "rules": {
+        "eslint/no-console": "off",
+        "unicorn/prefer-top-level-await": "off"
+      }
+    },
+    {
+      "files": ["scripts/*.mjs", "scripts/*.ts"],
+      "rules": {
+        "eslint/no-console": "off"
+      }
+    },
+    {
+      "files": ["packages/acp-adapter/src/log-guard.ts"],
+      "rules": {
+        "eslint/no-console": "off"
+      }
+    },
+    {
       "files": ["**/examples/**/*.ts", "**/examples/**/*.tsx"],
       "rules": {
         "eslint/no-console": "off"
@@ -119,6 +141,11 @@
         "typescript/no-redundant-type-constituents": "off",
         "eslint/no-console": "off",
         "eslint/no-promise-executor-return": "off",
+        "eslint/no-new": "off",
+        "eslint/no-fallthrough": "off",
+        "eslint/no-useless-constructor": "off",
+        "import/first": "off",
+        "typescript/no-extraneous-class": "off",
         "typescript/no-unsafe-member-access": "off",
         "vitest/require-mock-type-parameters": "off",
         "eslint/no-shadow": "off",

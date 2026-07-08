@@ -133,6 +133,6 @@ export class FileTokenStorage implements TokenStorage {
     } catch {
       return [];
     }
-    return entries.filter((e) => e.endsWith('.json')).map((e) => e.slice(0, -'.json'.length)).sort();
+    return entries.filter((e) => e.endsWith('.json')).map((e) => e.slice(0, -'.json'.length)).toSorted();
   }
 }

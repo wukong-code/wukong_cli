@@ -225,7 +225,7 @@ async function openSubscriber(
         // ignore
       }
     });
-    sock.once('open', () => resolve(sock));
+    sock.once('open', () =>{  resolve(sock); });
     sock.once('error', reject);
   });
   // Wait for server_hello.
@@ -266,7 +266,7 @@ describe('POST /api/v1/sessions/{sid}/prompts — submit validation (W7.2 / Chai
       url: `/api/v1/sessions/${sid}/prompts`,
       payload: { content: [] },
     });
-    const env = envelopeOf<unknown>(res.json());
+    const env = envelopeOf(res.json());
     expect(env.code).toBe(40001);
     expect(env.data).toBeNull();
     expect(Array.isArray(env.details)).toBe(true);
@@ -285,7 +285,7 @@ describe('POST /api/v1/sessions/{sid}/prompts — submit validation (W7.2 / Chai
         plan_mode: false,
       },
     });
-    const env = envelopeOf<unknown>(res.json());
+    const env = envelopeOf(res.json());
     expect(env.code).toBe(40401);
   });
 
@@ -297,7 +297,7 @@ describe('POST /api/v1/sessions/{sid}/prompts — submit validation (W7.2 / Chai
       url: `/api/v1/sessions/${sid}/prompts`,
       payload: { content: [{ text: 'no type' }] },
     });
-    const env = envelopeOf<unknown>(res.json());
+    const env = envelopeOf(res.json());
     expect(env.code).toBe(40001);
   });
 
@@ -406,7 +406,7 @@ describe('POST /api/v1/sessions/{sid}/prompts — submit validation (W7.2 / Chai
         ],
       },
     });
-    const env = envelopeOf<unknown>(res.json());
+    const env = envelopeOf(res.json());
     expect(env.code).toBe(0);
     expect(submitted?.content).toEqual([
       { type: 'text', text: 'what is this?' },
@@ -454,7 +454,7 @@ describe('POST /api/v1/sessions/{sid}/prompts — submit validation (W7.2 / Chai
         ],
       },
     });
-    const env = envelopeOf<unknown>(res.json());
+    const env = envelopeOf(res.json());
     expect(env.code).toBe(40407);
     expect(submitted).toBe(false);
   });
@@ -510,7 +510,7 @@ describe('POST /api/v1/sessions/{sid}/prompts — submit validation (W7.2 / Chai
         ],
       },
     });
-    const env = envelopeOf<unknown>(res.json());
+    const env = envelopeOf(res.json());
     expect(env.code).toBe(40001);
     expect(submitted).toBe(false);
   });
@@ -620,7 +620,7 @@ describe('POST /api/v1/sessions/{sid}/prompts — submit validation (W7.2 / Chai
         ],
       },
     });
-    const env = envelopeOf<unknown>(res.json());
+    const env = envelopeOf(res.json());
     expect(env.code).toBe(0);
     expect(submitted?.content).toEqual([
       { type: 'text', text: 'what happens in this video?' },
@@ -686,7 +686,7 @@ describe('POST /api/v1/sessions/{sid}/prompts — submit validation (W7.2 / Chai
         ],
       },
     });
-    const env = envelopeOf<unknown>(res.json());
+    const env = envelopeOf(res.json());
     expect(env.code).toBe(40001);
     expect(submitted).toBe(false);
   });
@@ -995,7 +995,7 @@ describe('POST /api/v1/sessions/{sid}:abort — session-level cancel', () => {
       method: 'POST',
       url: '/api/v1/sessions/sess_missing:abort',
     });
-    const env = envelopeOf<unknown>(res.json());
+    const env = envelopeOf(res.json());
     expect(env.code).toBe(40401);
   });
 });

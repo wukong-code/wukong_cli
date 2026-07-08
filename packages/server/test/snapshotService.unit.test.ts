@@ -18,8 +18,7 @@
  * are exercised end-to-end without booting a Fastify daemon.
  */
 
-import { mkdir, readFile, rm, stat, writeFile } from 'node:fs/promises';
-import { mkdtemp } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, stat, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -135,7 +134,7 @@ async function makeFixture(): Promise<Fixture> {
   const prompts = new StubPrompts();
 
   const env = {
-    _serviceBrand: undefined as undefined,
+    _serviceBrand: undefined,
     homeDir,
     configPath: join(homeDir, 'config.toml'),
   };

@@ -33,6 +33,7 @@ function runSpawn(
     let stdout = '';
     let stderr = '';
     let timedOut = false;
+    let settled = false;
     const child = spawn(file, args, {
       cwd: options.cwd,
       shell: options.shell,
@@ -53,7 +54,10 @@ function runSpawn(
       stderr = appendLimited(stderr, chunk.toString('utf8'));
     });
     child.on('error', (error) => {
+      if (settled) return;
+      settled = true;
       if (timer !== undefined) clearTimeout(timer);
+      // eslint-disable-next-line eslint-plugin-promise/no-multiple-resolved -- guarded by settled flag above
       resolve({
         exitCode: 1,
         timedOut,
@@ -62,7 +66,10 @@ function runSpawn(
       });
     });
     child.on('close', (code) => {
+      if (settled) return;
+      settled = true;
       if (timer !== undefined) clearTimeout(timer);
+      // eslint-disable-next-line eslint-plugin-promise/no-multiple-resolved -- guarded by settled flag above
       resolve({ exitCode: code, timedOut, stdout, stderr });
     });
   });

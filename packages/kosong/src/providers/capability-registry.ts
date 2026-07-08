@@ -142,10 +142,6 @@ const DEEPSEEK_CHAT_CAPABILITY: ModelCapability = Object.freeze({
   max_context_tokens: 0,
 });
 
-// DeepSeek model name patterns for use outside the catalog (e.g. provider
-// parameter decisions). Exported so openai-legacy can skip reasoning_effort.
-const DEEPSEEK_MODEL_PATTERN = /deepseek/;
-
 function isDeepSeekV4Model(modelName: string): boolean {
   return modelName.includes('deepseek-v4');
 }
@@ -242,7 +238,7 @@ function capabilityFromCatalog(
  */
 export function isModelWithoutReasoningEffort(modelName: string): boolean {
   const lower = modelName.toLowerCase();
-  return DEEPSEEK_MODEL_PATTERN.test(lower);
+  return lower.includes('deepseek');
 }
 
 export function getOpenAILegacyModelCapability(modelName: string): ModelCapability {

@@ -25,7 +25,7 @@ export async function handleProof(deps: ProofDeps, options: ProofCliOptions): Pr
     const result = await deps.runProof({
       cwd: options.cwd ?? deps.cwd(),
       strict: options.strict,
-      writeReport: options.report === false ? false : true,
+      writeReport: options.report !== false,
       reportPath: typeof options.report === 'string' ? options.report : undefined,
     });
 

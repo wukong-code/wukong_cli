@@ -61,7 +61,7 @@ export async function getGuardStats(options: GuardOptions = {}): Promise<GuardSt
   const total = events.length;
   const blocked = events.filter((event) => event.action === 'blocked').length;
   const allowed = events.filter((event) => event.action === 'allowed').length;
-  const last = events[events.length - 1];
+  const last = events.at(-1);
   if (last === undefined) return { total, blocked, allowed };
   return { total, blocked, allowed, lastEventAt: last.timestamp };
 }
@@ -152,7 +152,7 @@ function spawnInherited(command: readonly string[], cwd: string): Promise<number
       return;
     }
     const child = spawn(file, args, { cwd, stdio: 'inherit' });
-    child.on('error', () => resolve(1));
-    child.on('close', (code) => resolve(code ?? 1));
+    child.on('error', () =>{  resolve(1); });
+    child.on('close', (code) =>{  resolve(code ?? 1); });
   });
 }

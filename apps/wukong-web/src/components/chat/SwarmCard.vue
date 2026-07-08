@@ -29,7 +29,7 @@ function bar(member: SwarmMember): string {
 }
 
 function latestProgress(member: SwarmMember): string | undefined {
-  return member.outputLines?.map((line) => line.trimEnd()).filter(Boolean).at(-1);
+  return member.outputLines?.map((line) => line.trimEnd()).findLast(Boolean);
 }
 </script>
 

@@ -49,7 +49,7 @@ function parseStatus(statusText: string): ChangedFile[] {
     const status = line.slice(0, 2).trim() || '?';
     const rawPath = line.slice(3).trim();
     const renamed = rawPath.split(' -> ');
-    const path = renamed[renamed.length - 1] ?? rawPath;
+    const path = renamed.at(-1) ?? rawPath;
     return [{ status, path }];
   });
 }

@@ -37,7 +37,7 @@ function basename(value: string): string {
   // Handle both POSIX and Windows separators, and strip Windows executable
   // extensions so `C:\bin\rm.exe` classifies the same as `rm`.
   const parts = value.split(/[\\/]/);
-  const name = parts[parts.length - 1] ?? value;
+  const name = parts.at(-1) ?? value;
   return name.replace(/\.(exe|cmd|bat)$/i, '');
 }
 

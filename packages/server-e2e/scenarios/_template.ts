@@ -21,7 +21,7 @@ const WUKONG_SERVER_URL = process.env['WUKONG_SERVER_URL'] ?? 'http://127.0.0.1:
 async function main() {
   const client = new DaemonClient({
     baseUrl: WUKONG_SERVER_URL,
-    logger: (level, msg, meta) => console.log(`[${level}] ${msg}`, meta ?? ''),
+    logger: (level, msg, meta) =>{  console.log(`[${level}] ${msg}`, meta ?? ''); },
   });
 
   let sid: string | undefined;
@@ -48,7 +48,7 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error('✗ scenario failed:', err);
+main().catch((error) => {
+  console.error('✗ scenario failed:', error);
   process.exit(1);
 });

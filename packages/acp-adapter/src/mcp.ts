@@ -25,7 +25,7 @@
  * @see node_modules/@agentclientprotocol/sdk/dist/schema/types.gen.d.ts (McpServer)
  */
 
-import type { McpServer, McpServerStdio } from '@agentclientprotocol/sdk';
+import type { McpServer } from '@agentclientprotocol/sdk';
 import type { McpServerConfig } from '@wukong/agent-core';
 import { log } from '@wukong/wukong-sdk';
 
@@ -52,6 +52,18 @@ export function acpMcpServersToConfigs(
   return out;
 }
 
+function dropUnsupportedMcpServer(server: McpServer): null {
+  // Defensive: 'acp' and any future unknown transports land here.
+  // The cast is the narrowest way to read `name`/`type` off the leftover variant
+  // without re-declaring the union.
+  const fallback = server as { name?: string; type?: string };
+  log.warn('acp: dropping unsupported MCP server transport', {
+    name: fallback.name,
+    type: fallback.type,
+  });
+  return null;
+}
+
 function acpMcpServerToConfig(
   server: McpServer,
 ): { name: string; config: McpServerConfig } | null {
@@ -60,7 +72,7 @@ function acpMcpServerToConfig(
   // in the discriminated union). Anything without an explicit `type`
   // is treated as stdio.
   if (!('type' in server) || typeof server.type !== 'string') {
-    const stdio = server as McpServerStdio;
+    const stdio = server;
     const config: McpServerConfig = {
       transport: 'stdio',
       command: stdio.command,
@@ -86,17 +98,11 @@ function acpMcpServerToConfig(
       };
       return { name: server.name, config };
     }
-    case 'acp':
+    case 'acp': {
+      return dropUnsupportedMcpServer(server);
+    }
     default: {
-      // Defensive: future ACP transports land here too. The cast is the
-      // narrowest way to read `name`/`type` off the leftover variant
-      // without re-declaring the union.
-      const fallback = server as { name?: string; type?: string };
-      log.warn('acp: dropping unsupported MCP server transport', {
-        name: fallback.name,
-        type: fallback.type,
-      });
-      return null;
+      return dropUnsupportedMcpServer(server);
     }
   }
 }

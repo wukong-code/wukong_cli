@@ -28,7 +28,7 @@ describe('inspectGit', () => {
     const inspection = await inspectGit(cwd);
 
     expect(inspection.isRepo).toBe(true);
-    const paths = inspection.changedFiles.map((file) => file.path).sort();
+    const paths = inspection.changedFiles.map((file) => file.path).toSorted();
     expect(paths).toEqual(['src/staged.ts', 'src/tracked.ts']);
     expect(inspection.diffText).toContain('export const a = 2;');
     expect(inspection.diffText).toContain('export const b = 1;');

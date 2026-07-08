@@ -16,7 +16,7 @@ describe('startVisServer', () => {
     stop = server.close;
     expect(server.port).toBeGreaterThan(0);
 
-    const page = await fetch(`${server.url}`);
+    const page = await fetch(server.url);
     expect(page.status).toBe(200);
     expect(page.headers.get('content-type')).toContain('text/html');
     expect(await page.text()).toContain('<title>vis</title>'); // fetch auto-inflates gzip
