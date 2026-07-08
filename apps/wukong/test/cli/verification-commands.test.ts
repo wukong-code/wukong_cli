@@ -6,6 +6,7 @@ import { handleJudge, type JudgeDeps } from '#/cli/sub/judge';
 import { handleProof, type ProofDeps } from '#/cli/sub/proof';
 import { handleScan, type ScanDeps } from '#/cli/sub/scan';
 import { handleVerify, type VerifyDeps } from '#/cli/sub/verify';
+import type { ScanOptions, VerificationOptions, ProofOptions } from '@wukong/verification';
 
 function writable(): { readonly chunks: string[]; readonly writer: { write(chunk: string): boolean } } {
   const chunks: string[] = [];
@@ -72,6 +73,63 @@ describe('handleVerify', () => {
     expect(stdout.chunks.join('')).toContain('Status: failed');
     expect(stderr.chunks).toEqual([]);
   });
+
+  it('passes options to runVerification', async () => {
+    const captured: VerificationOptions[] = [];
+    const deps: VerifyDeps = {
+      cwd: () => '/workspace',
+      stdout: writable().writer,
+      stderr: writable().writer,
+      runVerification: async (options) => {
+        captured.push(options);
+        return {
+          status: 'passed',
+          cwd: options.cwd ?? '/workspace',
+          generatedAt: '2026-07-02T00:00:00.000Z',
+          changedFiles: [],
+          gitStatus: '',
+          diffStat: '',
+          selectedCommands: [],
+          commandResults: [],
+          risks: [],
+        };
+      },
+    };
+
+    await handleVerify(deps, {
+      cwd: '/custom',
+      commands: ['pnpm lint', 'pnpm test'],
+      includeBuild: true,
+      report: '/tmp/evidence.md',
+      timeoutSeconds: 120,
+      strict: true,
+    });
+
+    expect(captured[0]).toMatchObject({
+      cwd: '/custom',
+      commands: ['pnpm lint', 'pnpm test'],
+      includeBuild: true,
+      writeReport: true,
+      reportPath: '/tmp/evidence.md',
+      timeoutMs: 120_000,
+      strict: true,
+    });
+  });
+
+  it('returns 2 and writes to stderr on runVerification failure', async () => {
+    const stderr = writable();
+    const deps: VerifyDeps = {
+      cwd: () => '/workspace',
+      stdout: writable().writer,
+      stderr: stderr.writer,
+      runVerification: async () => {
+        throw new Error('verify exploded');
+      },
+    };
+
+    await expect(handleVerify(deps, { report: false })).resolves.toBe(2);
+    expect(stderr.chunks.join('')).toContain('verify exploded');
+  });
 });
 
 describe('handleScan', () => {
@@ -94,6 +152,52 @@ describe('handleScan', () => {
 
     await expect(handleScan(deps, { json: true })).resolves.toBe(0);
     expect(JSON.parse(stdout.chunks.join(''))).toMatchObject({ status: 'passed' });
+  });
+
+  it('passes report options to runScan', async () => {
+    const stdout = writable();
+    const captured: ScanOptions[] = [];
+    const deps: ScanDeps = {
+      cwd: () => '/workspace',
+      stdout: stdout.writer,
+      stderr: writable().writer,
+      runScan: async (options) => {
+        captured.push(options);
+        return {
+          status: 'passed',
+          cwd: options.cwd ?? '/workspace',
+          generatedAt: '2026-07-02T00:00:00.000Z',
+          changedFiles: [],
+          gitStatus: '',
+          diffStat: '',
+          risks: [],
+          reportPath: options.reportPath,
+        };
+      },
+    };
+
+    await expect(handleScan(deps, { report: '/tmp/report.md' })).resolves.toBe(0);
+    expect(captured[0]).toMatchObject({
+      cwd: '/workspace',
+      writeReport: true,
+      reportPath: '/tmp/report.md',
+    });
+    expect(stdout.chunks.join('')).toContain('Report: /tmp/report.md');
+  });
+
+  it('returns 2 and writes to stderr on runScan failure', async () => {
+    const stderr = writable();
+    const deps: ScanDeps = {
+      cwd: () => '/workspace',
+      stdout: writable().writer,
+      stderr: stderr.writer,
+      runScan: async () => {
+        throw new Error('scan exploded');
+      },
+    };
+
+    await expect(handleScan(deps, {})).resolves.toBe(2);
+    expect(stderr.chunks.join('')).toContain('scan exploded');
   });
 });
 
@@ -149,6 +253,63 @@ describe('handleProof', () => {
     const parsed = JSON.parse(stdout.chunks.join(''));
     expect(parsed.status).toBe('blocked');
     expect(parsed.recommendation).toContain('High-risk');
+  });
+
+  it('passes no-report to runProof', async () => {
+    const captured: ProofOptions[] = [];
+    const deps: ProofDeps = {
+      cwd: () => '/workspace',
+      stdout: writable().writer,
+      stderr: writable().writer,
+      runProof: async (options) => {
+        captured.push(options);
+        return {
+          status: 'passed',
+          cwd: '/workspace',
+          generatedAt: '2026-07-02T00:00:00.000Z',
+          verification: {
+            status: 'passed',
+            cwd: '/workspace',
+            generatedAt: '2026-07-02T00:00:00.000Z',
+            changedFiles: [],
+            gitStatus: '',
+            diffStat: '',
+            selectedCommands: [],
+            commandResults: [],
+            risks: [],
+          },
+          scan: {
+            status: 'passed',
+            cwd: '/workspace',
+            generatedAt: '2026-07-02T00:00:00.000Z',
+            changedFiles: [],
+            gitStatus: '',
+            diffStat: '',
+            risks: [],
+          },
+          summary: 'All good.',
+          recommendation: 'Safe to merge.',
+        };
+      },
+    };
+
+    await handleProof(deps, { report: false });
+    expect(captured[0]).toMatchObject({ writeReport: false, reportPath: undefined });
+  });
+
+  it('returns 2 on runProof failure', async () => {
+    const stderr = writable();
+    const deps: ProofDeps = {
+      cwd: () => '/workspace',
+      stdout: writable().writer,
+      stderr: stderr.writer,
+      runProof: async () => {
+        throw new Error('proof exploded');
+      },
+    };
+
+    await expect(handleProof(deps, {})).resolves.toBe(2);
+    expect(stderr.chunks.join('')).toContain('proof exploded');
   });
 });
 
@@ -210,6 +371,65 @@ describe('handleJudge', () => {
     expect(parsed.verdict).toBe('block');
     expect(parsed.mode).toBe('deterministic');
     expect(parsed.reason).toContain('High-risk');
+  });
+
+  it('returns 0 on pass verdict', async () => {
+    const stdout = writable();
+    const deps: JudgeDeps = {
+      cwd: () => '/workspace',
+      stdout: stdout.writer,
+      stderr: writable().writer,
+      runJudge: async () => ({
+        verdict: 'pass',
+        reason: 'No risks found.',
+        mode: 'deterministic',
+        proof: {
+          status: 'passed',
+          cwd: '/workspace',
+          generatedAt: '2026-07-02T00:00:00.000Z',
+          verification: {
+            status: 'passed',
+            cwd: '/workspace',
+            generatedAt: '2026-07-02T00:00:00.000Z',
+            changedFiles: [],
+            gitStatus: '',
+            diffStat: '',
+            selectedCommands: [],
+            commandResults: [],
+            risks: [],
+          },
+          scan: {
+            status: 'passed',
+            cwd: '/workspace',
+            generatedAt: '2026-07-02T00:00:00.000Z',
+            changedFiles: [],
+            gitStatus: '',
+            diffStat: '',
+            risks: [],
+          },
+          summary: 'All good.',
+          recommendation: 'Safe to merge.',
+        },
+      }),
+    };
+
+    await expect(handleJudge(deps, {})).resolves.toBe(0);
+    expect(stdout.chunks.join('')).toContain('Verdict: pass');
+  });
+
+  it('returns 2 on runJudge failure', async () => {
+    const stderr = writable();
+    const deps: JudgeDeps = {
+      cwd: () => '/workspace',
+      stdout: writable().writer,
+      stderr: stderr.writer,
+      runJudge: async () => {
+        throw new Error('judge exploded');
+      },
+    };
+
+    await expect(handleJudge(deps, {})).resolves.toBe(2);
+    expect(stderr.chunks.join('')).toContain('judge exploded');
   });
 });
 

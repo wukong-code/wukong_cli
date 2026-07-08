@@ -68,14 +68,14 @@ interface RawLoopOptions {
 type ValidationResult = { readonly kind: 'ok' } | { readonly kind: 'error'; readonly message: string };
 type EveryResult = { readonly kind: 'ok'; readonly ms?: number } | { readonly kind: 'error'; readonly message: string };
 
-function parseEvery(raw: string | undefined): EveryResult {
+export function parseEvery(raw: string | undefined): EveryResult {
   if (raw === undefined) return { kind: 'ok', ms: undefined };
   const result = parseLoopDuration(raw);
   if (result.kind === 'error') return result;
   return { kind: 'ok', ms: result.ms };
 }
 
-function validateLoopOptions(options: LoopCliOptions): ValidationResult {
+export function validateLoopOptions(options: LoopCliOptions): ValidationResult {
   if (options.objective === undefined || options.objective.trim().length === 0) {
     return { kind: 'error', message: 'Loop objective is required.' };
   }
@@ -96,7 +96,7 @@ function validateLoopOptions(options: LoopCliOptions): ValidationResult {
   return { kind: 'ok' };
 }
 
-function formatDuration(ms: number): string {
+export function formatDuration(ms: number): string {
   if (ms % 86_400_000 === 0) return `${ms / 86_400_000}d`;
   if (ms % 3_600_000 === 0) return `${ms / 3_600_000}h`;
   if (ms % 60_000 === 0) return `${ms / 60_000}m`;
