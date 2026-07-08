@@ -364,3 +364,15 @@ describe('isRolloutBypassedByExperimentalEnv', () => {
     expect(isRolloutBypassedByExperimentalEnv({ WUKONG_CODE_EXPERIMENTAL_FLAG: 'off' })).toBe(false);
   });
 });
+
+describe('rollout edge cases', () => {
+  it('clamps negative delays up to zero', () => {
+    const rollout: readonly RolloutBatch[] = [{ percent: 100, delaySeconds: -60 }];
+    expect(rolloutDelayForBucket(rollout, 50)).toBe(0);
+  });
+
+  it('is eligible when the publish timestamp is unparseable (fail-open)', () => {
+    const manifest = makeManifest({ publishedAt: 'not-a-date', rollout: [{ percent: 100, delaySeconds: 86_400 }] });
+    expect(isRolloutEligible(manifest, 'device-a', secondsAfterPublish(-999_999))).toBe(true);
+  });
+});

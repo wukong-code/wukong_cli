@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { fetchLatestFromCdn, fetchLatestVersionFromCdn } from '#/cli/update/cdn';
+import {
+  fetchLatestFromCdn,
+  fetchLatestVersionFromCdn,
+  UpdateManifestSchema,
+} from '#/cli/update/cdn';
 import { WUKONG_CODE_CDN_LATEST_JSON_URL, WUKONG_CODE_CDN_LATEST_URL } from '#/constant/app';
 
 function mockFetchOk(body: string): typeof fetch {
@@ -229,5 +233,15 @@ describe('fetchLatestFromCdn', () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it('rejects a manifest whose rollout percent exceeds 100', () => {
+    expect(() =>
+      UpdateManifestSchema.parse({
+        version: '2.0.0',
+        publishedAt: '2026-06-12T00:00:00.000Z',
+        rollout: [{ percent: 150, delaySeconds: 0 }],
+      }),
+    ).toThrow();
   });
 });

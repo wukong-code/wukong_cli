@@ -127,6 +127,34 @@ describe('update cache', () => {
       manifest: null,
     });
   });
+
+  it('falls back to an empty cache when the top-level shape has extra fields', async () => {
+    mkdirSync(join(dir, 'updates'), { recursive: true });
+    writeFileSync(
+      getUpdateStateFile(),
+      JSON.stringify({
+        source: 'cdn',
+        checkedAt: '2026-04-23T08:00:00.000Z',
+        latest: '0.5.0',
+        manifest: null,
+        extra: true,
+      }),
+      'utf-8',
+    );
+
+    await expect(readUpdateCache()).resolves.toEqual(emptyUpdateCache());
+  });
+
+  it('rejects writes with a source other than cdn', async () => {
+    const cache = {
+      source: 'npm',
+      checkedAt: '2026-04-23T08:00:00.000Z',
+      latest: '0.5.0',
+      manifest: null,
+    };
+
+    await expect(writeUpdateCache(cache as unknown as Parameters<typeof writeUpdateCache>[0])).rejects.toThrow();
+  });
 });
 
 describe('update install state', () => {

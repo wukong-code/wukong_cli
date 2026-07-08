@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -46,5 +46,34 @@ describe('update install lock', () => {
 
     expect(lock).not.toBeNull();
     await lock?.release();
+  });
+
+  it('recovers a stale lock file after the 30-minute threshold', async () => {
+    const filePath = getUpdateInstallLockFile();
+    mkdirSync(dirname(filePath), { recursive: true });
+    const stale = new Date(Date.now() - 31 * 60 * 1_000);
+    writeFileSync(
+      filePath,
+      JSON.stringify({ version: '0.4.0', pid: 1, startedAt: stale.toISOString() }),
+      'utf-8',
+    );
+
+    const lock = await tryAcquireUpdateInstallLock({ version: '0.5.0', now: new Date() });
+
+    expect(lock).not.toBeNull();
+    await lock?.release();
+  });
+
+  it('propagates non-EEXIST filesystem errors', async () => {
+    const filePath = getUpdateInstallLockFile();
+    const parent = dirname(filePath);
+    mkdirSync(parent, { recursive: true });
+    chmodSync(parent, 0o555);
+
+    try {
+      await expect(tryAcquireUpdateInstallLock({ version: '0.5.0' })).rejects.toThrow();
+    } finally {
+      chmodSync(parent, 0o755);
+    }
   });
 });

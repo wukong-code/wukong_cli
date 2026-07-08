@@ -62,4 +62,16 @@ describe('refreshUpdateCache', () => {
 
     expect(writeCache).not.toHaveBeenCalled();
   });
+
+  it('propagates writeCache errors after a successful fetch', async () => {
+    await expect(
+      refreshUpdateCache({
+        fetchLatest: async () => ({ latest: '0.5.0', manifest: null }),
+        writeCache: async () => {
+          throw new Error('disk full');
+        },
+        now: () => new Date('2026-05-20T12:34:56.000Z'),
+      }),
+    ).rejects.toThrow(/disk full/);
+  });
 });
