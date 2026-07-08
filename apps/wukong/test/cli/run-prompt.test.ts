@@ -1,7 +1,8 @@
 import type { createWukongDeviceId as createWukongDeviceIdFn } from '@wukong/wukong-oauth';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { runPrompt } from '#/cli/run-prompt';
+import type { HeadlessGoalCreate } from '#/cli/goal-prompt';
 
 type CreateWukongDeviceId = typeof createWukongDeviceIdFn;
 
@@ -19,6 +20,8 @@ const mocks = vi.hoisted(() => {
     setPermission: vi.fn(),
     setApprovalHandler: vi.fn(),
     setQuestionHandler: vi.fn(),
+    createGoal: vi.fn(),
+    getGoal: vi.fn(async () => ({ goal: null })),
     getStatus: vi.fn(
       async (): Promise<{ readonly permission: string; readonly model?: string }> => ({
         permission: 'manual',
@@ -72,6 +75,22 @@ const mocks = vi.hoisted(() => {
     createWukongDeviceId: vi.fn<CreateWukongDeviceId>(() => 'device-1'),
     resolveWukongHome: vi.fn((homeDir?: string) => homeDir ?? '/tmp/wukong-test-home'),
     harnessCreatesDeviceIdOnConstruction: false,
+    createCliTelemetryBootstrap: vi.fn(() => ({
+      homeDir: '/tmp/wukong-test-home',
+      deviceId: 'device-1',
+      firstLaunch: false,
+    })),
+    initializeCliTelemetry: vi.fn(),
+    createWukongCodeHostIdentity: vi.fn((version: string) => ({
+      userAgentProduct: 'wukong-code',
+      version,
+    })),
+    parseHeadlessGoalCreate: vi.fn(() => undefined) as Mock<
+      (prompt: string) => HeadlessGoalCreate | undefined
+    >,
+    goalSummaryJson: vi.fn((snapshot: any) => snapshot),
+    formatGoalSummaryText: vi.fn((snapshot: any) => `Goal [${snapshot?.status ?? 'none'}]`),
+    goalExitCode: vi.fn(() => 0),
   };
 });
 
@@ -123,6 +142,38 @@ vi.mock('@wukong/wukong-telemetry', () => ({
   setTelemetryContext: mocks.setTelemetryContext,
   withTelemetryContext: mocks.withTelemetryContext,
 }));
+
+vi.mock('#/cli/telemetry', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('#/cli/telemetry')>();
+  mocks.createCliTelemetryBootstrap.mockImplementation(() => actual.createCliTelemetryBootstrap());
+  mocks.initializeCliTelemetry.mockImplementation((options) => {
+    actual.initializeCliTelemetry(options);
+  });
+  return {
+    ...actual,
+    createCliTelemetryBootstrap: mocks.createCliTelemetryBootstrap,
+    initializeCliTelemetry: mocks.initializeCliTelemetry,
+  };
+});
+
+vi.mock('#/cli/version', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('#/cli/version')>();
+  return {
+    ...actual,
+    createWukongCodeHostIdentity: mocks.createWukongCodeHostIdentity,
+  };
+});
+
+vi.mock('#/cli/goal-prompt', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('#/cli/goal-prompt')>();
+  return {
+    ...actual,
+    parseHeadlessGoalCreate: mocks.parseHeadlessGoalCreate,
+    goalSummaryJson: mocks.goalSummaryJson,
+    formatGoalSummaryText: mocks.formatGoalSummaryText,
+    goalExitCode: mocks.goalExitCode,
+  };
+});
 
 function opts(overrides: Partial<Parameters<typeof runPrompt>[0]> = {}) {
   return {
@@ -191,6 +242,16 @@ describe('runPrompt', () => {
       (homeDir?: string) => homeDir ?? '/tmp/wukong-test-home',
     );
     mocks.harnessCreatesDeviceIdOnConstruction = false;
+    mocks.parseHeadlessGoalCreate.mockReturnValue(undefined);
+    mocks.goalSummaryJson.mockImplementation((snapshot: any) => snapshot);
+    mocks.formatGoalSummaryText.mockImplementation(
+      (snapshot: any) => `Goal [${snapshot?.status ?? 'none'}]`,
+    );
+    mocks.goalExitCode.mockReturnValue(0);
+    mocks.createWukongCodeHostIdentity.mockImplementation((version: string) => ({
+      userAgentProduct: 'wukong-code',
+      version,
+    }));
   });
 
   it('creates a fresh auto-permission session and streams assistant output to stdout', async () => {
@@ -897,5 +958,147 @@ describe('runPrompt', () => {
 
     const handler = mocks.session.setQuestionHandler.mock.calls[0]![0] as () => unknown;
     expect(handler()).toBeNull();
+  });
+
+  describe('high-level paths', () => {
+    it('completes a successful prompt turn and writes text output', async () => {
+      const stdout = writer();
+      const stderr = writer();
+
+      await runPrompt(opts({ prompt: 'say hello' }), '1.2.3-test', { stdout, stderr });
+
+      expect(stdout.text()).toBe('• hello world\n\n');
+      expect(stderr.text()).toBe('To resume this session: wukong -r ses_prompt\n');
+      expect(mocks.shutdownTelemetry).toHaveBeenCalled();
+      expect(mocks.harnessClose).toHaveBeenCalled();
+    });
+
+    it('runs a headless /goal prompt and emits JSON output', async () => {
+      process.exitCode = undefined;
+      mocks.parseHeadlessGoalCreate.mockReturnValue({
+        objective: 'write tests',
+        replace: false,
+      });
+      mocks.goalSummaryJson.mockReturnValue({
+        type: 'goal.summary',
+        goalId: 'goal-123',
+        status: 'complete',
+      });
+      mocks.session.prompt.mockImplementationOnce(async () => {
+        for (const handler of mocks.eventHandlers) {
+          handler(mocks.mainEvent({ type: 'turn.started', turnId: 10, origin: { kind: 'user' } }));
+          handler(mocks.mainEvent({ type: 'assistant.delta', turnId: 10, delta: 'ok' }));
+          handler(
+            mocks.mainEvent({
+              type: 'goal.updated',
+              change: { kind: 'completion' },
+              snapshot: { status: 'complete', goalId: 'goal-123' },
+            }),
+          );
+          handler(mocks.mainEvent({ type: 'turn.ended', turnId: 10, reason: 'completed' }));
+        }
+      });
+      const stdout = writer();
+      const stderr = writer();
+
+      await runPrompt(
+        opts({ prompt: '/goal write tests', outputFormat: 'stream-json' }),
+        '1.2.3-test',
+        { stdout, stderr },
+      );
+
+      expect(mocks.session.createGoal).toHaveBeenCalledWith({
+        objective: 'write tests',
+        replace: false,
+      });
+      expect(mocks.goalSummaryJson).toHaveBeenCalledWith(
+        expect.objectContaining({ status: 'complete', goalId: 'goal-123' }),
+      );
+      expect(stdout.text()).toBe(
+        [
+          '{"role":"assistant","content":"ok"}',
+          '{"type":"goal.summary","goalId":"goal-123","status":"complete"}',
+          '{"role":"meta","type":"session.resume_hint","session_id":"ses_prompt","command":"wukong -r ses_prompt","content":"To resume this session: wukong -r ses_prompt"}',
+          '',
+        ].join('\n'),
+      );
+      expect(stderr.text()).toBe('');
+      expect(process.exitCode).toBeUndefined();
+    });
+
+    it('throws when no model is configured', async () => {
+      mocks.harnessGetConfig.mockResolvedValueOnce({ providers: {}, telemetry: true });
+
+      await expect(
+        runPrompt(opts(), '1.2.3-test', {
+          stdout: { write: vi.fn(() => true) },
+          stderr: { write: vi.fn(() => true) },
+        }),
+      ).rejects.toThrow(
+        'No model configured. Run `wukong` and use /login to sign in, then retry; or set default_model in config.toml.',
+      );
+
+      expect(mocks.harnessClose).toHaveBeenCalled();
+    });
+
+    it('refuses to resume a session created under a different working directory', async () => {
+      const cwd = vi.spyOn(process, 'cwd').mockReturnValue('/current/project');
+      mocks.harnessListSessions.mockResolvedValueOnce([
+        { id: 'ses_remote', workDir: '/other/project' },
+      ]);
+      const stderr = writer();
+
+      try {
+        await expect(
+          runPrompt(opts({ session: 'ses_remote' }), '1.2.3-test', {
+            stdout: { write: vi.fn(() => true) },
+            stderr,
+          }),
+        ).rejects.toThrow('Session "ses_remote" was created under a different directory.');
+        expect(stderr.text()).toContain(
+          'Session "ses_remote" was created under a different directory.',
+        );
+      } finally {
+        cwd.mockRestore();
+      }
+
+      expect(mocks.harnessResumeSession).not.toHaveBeenCalled();
+    });
+
+    it('cleans up and exits 130 on SIGINT', async () => {
+      let releasePrompt!: () => void;
+      mocks.session.prompt.mockImplementationOnce(async () => {
+        for (const handler of mocks.eventHandlers) {
+          handler(mocks.mainEvent({ type: 'turn.started', turnId: 11, origin: { kind: 'user' } }));
+        }
+        await new Promise<void>((resolve) => {
+          releasePrompt = resolve;
+        });
+      });
+      const processMock = fakeProcess();
+      const run = runPrompt(opts(), '1.2.3-test', {
+        stdout: { write: vi.fn(() => true) },
+        stderr: { write: vi.fn(() => true) },
+        process: processMock,
+      } as Parameters<typeof runPrompt>[2] & { process: ReturnType<typeof fakeProcess> });
+
+      await waitForAssertion(() => {
+        expect(processMock.listener('SIGINT')).toBeDefined();
+      });
+
+      await processMock.listener('SIGINT')?.();
+
+      expect(mocks.shutdownTelemetry).toHaveBeenCalled();
+      expect(mocks.harnessClose).toHaveBeenCalled();
+      expect(processMock.exit).toHaveBeenCalledWith(130);
+
+      for (const handler of mocks.eventHandlers) {
+        handler(mocks.mainEvent({ type: 'turn.ended', turnId: 11, reason: 'completed' }));
+      }
+      releasePrompt();
+      await run;
+
+      expect(mocks.harnessClose).toHaveBeenCalledTimes(1);
+    });
   });
 });

@@ -1,262 +1,133 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
-  GOAL_EXIT_CODES,
   formatGoalSummaryText,
   goalExitCode,
+  GOAL_EXIT_CODES,
   goalSummaryJson,
   parseHeadlessGoalCreate,
 } from '#/cli/goal-prompt';
-import { runPrompt } from '#/cli/run-prompt';
-
-function snapshot(overrides: Record<string, unknown> = {}) {
-  return {
-    goalId: 'g1',
-    objective: 'work',
-    status: 'complete',
-    turnsUsed: 2,
-    tokensUsed: 120,
-    wallClockMs: 0,
-    budget: {} as never,
-    ...overrides,
-  };
-}
 
 describe('goalExitCode', () => {
-  it('maps final statuses to distinct codes', () => {
+  it('maps complete to 0', () => {
     expect(goalExitCode('complete')).toBe(GOAL_EXIT_CODES.complete);
+  });
+
+  it('maps blocked to 3', () => {
     expect(goalExitCode('blocked')).toBe(GOAL_EXIT_CODES.blocked);
+  });
+
+  it('maps paused to 6', () => {
     expect(goalExitCode('paused')).toBe(GOAL_EXIT_CODES.paused);
-    expect(goalExitCode(undefined)).toBe(0);
-    // Folded-away statuses map to success (treated as complete/absent).
-    expect(goalExitCode('impossible')).toBe(0);
-    // The distinct codes are unique across the statuses.
-    expect(new Set(Object.values(GOAL_EXIT_CODES)).size).toBe(Object.values(GOAL_EXIT_CODES).length);
+  });
+
+  it('defaults unknown statuses to 0', () => {
+    expect(goalExitCode('running')).toBe(GOAL_EXIT_CODES.complete);
+  });
+
+  it('treats undefined as complete', () => {
+    expect(goalExitCode(undefined)).toBe(GOAL_EXIT_CODES.complete);
   });
 });
 
 describe('parseHeadlessGoalCreate', () => {
-  it('parses a create command into objective + replace', () => {
-    const result = parseHeadlessGoalCreate('/goal Ship feature X');
-    expect(result).toEqual({ objective: 'Ship feature X', replace: false });
+  it('returns undefined for non-goal prompts', () => {
+    expect(parseHeadlessGoalCreate('hello world')).toBeUndefined();
   });
 
-  it('returns undefined for non-goal prompts and non-create subcommands', () => {
-    expect(parseHeadlessGoalCreate('say hello')).toBeUndefined();
+  it('returns undefined for empty goal prompts', () => {
+    expect(parseHeadlessGoalCreate('/goal')).toBeUndefined();
+  });
+
+  it('parses a plain objective', () => {
+    expect(parseHeadlessGoalCreate('/goal write tests')).toEqual({
+      objective: 'write tests',
+      replace: false,
+    });
+  });
+
+  it('parses replace goals', () => {
+    expect(parseHeadlessGoalCreate('/goal replace fix the bug')).toEqual({
+      objective: 'fix the bug',
+      replace: true,
+    });
+  });
+
+  it('parses stop conditions', () => {
+    expect(parseHeadlessGoalCreate('/goal --until verify-pass ship it')).toEqual({
+      objective: 'ship it',
+      replace: false,
+    });
+  });
+
+  it('ignores status subcommand', () => {
     expect(parseHeadlessGoalCreate('/goal status')).toBeUndefined();
-    expect(parseHeadlessGoalCreate('/goal pause')).toBeUndefined();
   });
 });
 
-describe('goal summary', () => {
-  it('includes id, status, reason, and usage', () => {
-    const summary = goalSummaryJson(
-      snapshot({
-        status: 'blocked',
-        terminalReason: 'need creds',
-      }) as never,
-    );
-    expect(summary).toMatchObject({
+describe('goalSummaryJson', () => {
+  it('returns null fields for a missing goal', () => {
+    expect(goalSummaryJson(null)).toEqual({
       type: 'goal.summary',
-      goalId: 'g1',
+      goalId: null,
+      status: null,
+      reason: null,
+      turnsUsed: null,
+      tokensUsed: null,
+      wallClockMs: null,
+    });
+  });
+
+  it('maps a goal snapshot', () => {
+    const snapshot = {
+      goalId: 'goal-123',
       status: 'blocked',
-      reason: 'need creds',
-      turnsUsed: 2,
-      tokensUsed: 120,
+      terminalReason: 'budget exhausted',
+      turnsUsed: 5,
+      tokensUsed: 1200,
+      wallClockMs: 3000,
+    } as const;
+
+    expect(goalSummaryJson(snapshot as any)).toEqual({
+      type: 'goal.summary',
+      goalId: 'goal-123',
+      status: 'blocked',
+      reason: 'budget exhausted',
+      turnsUsed: 5,
+      tokensUsed: 1200,
+      wallClockMs: 3000,
     });
   });
-
-  it('renders a null goal', () => {
-    expect(goalSummaryJson(null).status).toBeNull();
-    expect(formatGoalSummaryText(null)).toContain('no goal');
-  });
 });
 
-// --- Integration: runPrompt headless goal path -----------------------------
-
-const mocks = vi.hoisted(() => {
-  const eventHandlers = new Set<(event: any) => void>();
-  const mainEvent = (event: Record<string, unknown>) => ({ sessionId: 'ses_goal', agentId: 'main', ...event });
-  const session = {
-    id: 'ses_goal',
-    setModel: vi.fn(),
-    setPermission: vi.fn(),
-    setApprovalHandler: vi.fn(),
-    setQuestionHandler: vi.fn(),
-    getStatus: vi.fn(async () => ({ permission: 'auto', model: 'k2' })),
-    createGoal: vi.fn(async () => snapshot({ status: 'active' })),
-    getGoal: vi.fn(async () => ({ goal: snapshot({ status: 'complete' }) })),
-    onEvent: vi.fn((handler: (event: any) => void) => {
-      eventHandlers.add(handler);
-      return () => eventHandlers.delete(handler);
-    }),
-    prompt: vi.fn(async () => {
-      for (const handler of eventHandlers) {
-        handler(mainEvent({ type: 'turn.started', turnId: 1, origin: { kind: 'user' } }));
-        handler(mainEvent({ type: 'assistant.delta', turnId: 1, delta: 'done' }));
-        handler(mainEvent({ type: 'turn.ended', turnId: 1, reason: 'completed' }));
-      }
-    }),
-  };
-  return {
-    session,
-    eventHandlers,
-    mainEvent,
-    experimentalFeatures: [{ id: 'micro_compaction', enabled: true }],
-    sessions: [] as Array<{ readonly id: string; readonly workDir: string }>,
-  };
-});
-
-vi.mock('@wukong/wukong-sdk', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('@wukong/wukong-sdk')>();
-  return {
-    ...actual,
-    createWukongHarness: () => ({
-      homeDir: '/tmp/wukong-goal-home',
-      auth: { getCachedAccessToken: vi.fn() },
-      ensureConfigFile: vi.fn(),
-      getConfig: vi.fn(async () => ({ providers: {}, defaultModel: 'k2', telemetry: true })),
-      getConfigDiagnostics: vi.fn(async () => ({ warnings: [] as readonly string[] })),
-      getExperimentalFeatures: vi.fn(async () => mocks.experimentalFeatures),
-      createSession: vi.fn(async () => mocks.session),
-      resumeSession: vi.fn(async () => mocks.session),
-      listSessions: vi.fn(async () => mocks.sessions),
-      close: vi.fn(),
-      track: vi.fn(),
-    }),
-  };
-});
-
-vi.mock('@wukong/wukong-telemetry', () => ({
-  initializeTelemetry: vi.fn(),
-  setCrashPhase: vi.fn(),
-  shutdownTelemetry: vi.fn(),
-  track: vi.fn(),
-  setTelemetryContext: vi.fn(),
-  withTelemetryContext: vi.fn(() => ({ track: vi.fn() })),
-}));
-
-function opts(overrides: Partial<Parameters<typeof runPrompt>[0]> = {}) {
-  return {
-    session: undefined,
-    continue: false,
-    yolo: false,
-    auto: false,
-    plan: false,
-    model: undefined,
-    outputFormat: undefined,
-    prompt: '/goal Ship feature X',
-    skillsDirs: [],
-    ...overrides,
-  } as Parameters<typeof runPrompt>[0];
-}
-
-function writer() {
-  let text = '';
-  return { write: (chunk: string) => ((text += chunk), true), text: () => text };
-}
-
-describe('runPrompt headless goal mode', () => {
-  let savedExitCode: typeof process.exitCode;
-
-  beforeEach(() => {
-    savedExitCode = process.exitCode;
-    mocks.experimentalFeatures = [{ id: 'micro_compaction', enabled: true }];
-    mocks.sessions = [];
-    mocks.session.createGoal.mockClear();
-    mocks.session.getStatus.mockResolvedValue({ permission: 'auto', model: 'k2' } as never);
-    mocks.session.getGoal.mockResolvedValue({ goal: snapshot({ status: 'complete' }) } as never);
+describe('formatGoalSummaryText', () => {
+  it('handles a missing goal', () => {
+    expect(formatGoalSummaryText(null)).toBe('Goal: no goal found.');
   });
 
-  afterEach(() => {
-    process.exitCode = savedExitCode;
-  });
+  it('renders status with counts', () => {
+    const snapshot = {
+      status: 'complete',
+      terminalReason: undefined,
+      turnsUsed: 3,
+      tokensUsed: 900,
+    } as const;
 
-  it('creates the goal, runs the turn, and emits a JSON summary on completion', async () => {
-    const stdout = writer();
-    const stderr = writer();
-    await runPrompt(opts({ outputFormat: 'stream-json' }), 'test', {
-      stdout,
-      stderr,
-      process: { once: () => {}, off: () => {}, exit: () => undefined as never },
-    });
-
-    expect(mocks.session.createGoal).toHaveBeenCalledWith(
-      expect.objectContaining({ objective: 'Ship feature X' }),
+    expect(formatGoalSummaryText(snapshot as any)).toBe(
+      'Goal [complete] (turns: 3, tokens: 900)',
     );
-    expect(stdout.text()).toContain('"type":"goal.summary"');
-    expect(stdout.text()).toContain('"status":"complete"');
   });
 
-  it('sets a distinct exit code for a non-complete final status', async () => {
-    mocks.session.getGoal.mockResolvedValue({ goal: snapshot({ status: 'blocked' }) } as never);
-    const stdout = writer();
-    const stderr = writer();
-    await runPrompt(opts(), 'test', {
-      stdout,
-      stderr,
-      process: { once: () => {}, off: () => {}, exit: () => undefined as never },
-    });
-    expect(process.exitCode).toBe(GOAL_EXIT_CODES.blocked);
-  });
+  it('includes the terminal reason when present', () => {
+    const snapshot = {
+      status: 'blocked',
+      terminalReason: 'max iterations reached',
+      turnsUsed: 10,
+      tokensUsed: 5000,
+    } as const;
 
-  it('uses the completion event snapshot when the goal has already been cleared', async () => {
-    const completed = snapshot({ status: 'complete', turnsUsed: 4, tokensUsed: 240 });
-    mocks.session.getGoal.mockResolvedValue({ goal: null } as never);
-    mocks.session.prompt.mockImplementationOnce(async () => {
-      for (const handler of mocks.eventHandlers) {
-        handler(
-          mocks.mainEvent({
-            type: 'goal.updated',
-            snapshot: completed,
-            change: { kind: 'completion', status: 'complete' },
-          }),
-        );
-        handler(mocks.mainEvent({ type: 'turn.started', turnId: 1, origin: { kind: 'user' } }));
-        handler(mocks.mainEvent({ type: 'turn.ended', turnId: 1, reason: 'completed' }));
-      }
-    });
-    const stdout = writer();
-    const stderr = writer();
-
-    await runPrompt(opts({ outputFormat: 'stream-json' }), 'test', {
-      stdout,
-      stderr,
-      process: { once: () => {}, off: () => {}, exit: () => undefined as never },
-    });
-
-    expect(stdout.text()).toContain('"status":"complete"');
-    expect(stdout.text()).toContain('"turnsUsed":4');
-    expect(stdout.text()).not.toContain('"goalId":null');
-  });
-
-  it('creates a headless goal without reading experimental features', async () => {
-    mocks.experimentalFeatures = [];
-    const stdout = writer();
-    const stderr = writer();
-    await runPrompt(opts(), 'test', {
-      stdout,
-      stderr,
-      process: { once: () => {}, off: () => {}, exit: () => undefined as never },
-    });
-    expect(mocks.session.createGoal).toHaveBeenCalled();
-    expect(mocks.session.prompt).toHaveBeenCalledWith('Ship feature X');
-  });
-
-  it('validates the resumed session model before creating a headless goal', async () => {
-    mocks.sessions = [{ id: 'ses_goal', workDir: process.cwd() }];
-    mocks.session.getStatus.mockResolvedValueOnce({ permission: 'auto', model: '' } as never);
-    const stdout = writer();
-    const stderr = writer();
-
-    await expect(
-      runPrompt(opts({ session: 'ses_goal' }), 'test', {
-        stdout,
-        stderr,
-        process: { once: () => {}, off: () => {}, exit: () => undefined as never },
-      }),
-    ).rejects.toThrow('No model configured');
-
-    expect(mocks.session.createGoal).not.toHaveBeenCalled();
+    expect(formatGoalSummaryText(snapshot as any)).toBe(
+      'Goal [blocked]: max iterations reached (turns: 10, tokens: 5000)',
+    );
   });
 });
