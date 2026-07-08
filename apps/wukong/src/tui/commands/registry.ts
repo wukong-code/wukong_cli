@@ -148,6 +148,27 @@ export const BUILTIN_SLASH_COMMANDS = [
     availability: 'idle-only',
   },
   {
+    name: 'proof',
+    aliases: [],
+    description: 'Generate a Merge Proof Report for the current workspace',
+    priority: 70,
+    availability: 'idle-only',
+  },
+  {
+    name: 'judge',
+    aliases: [],
+    description: 'Evaluate whether the workspace is safe to merge (deterministic)',
+    priority: 70,
+    availability: 'idle-only',
+  },
+  {
+    name: 'loop',
+    aliases: [],
+    description: 'Start a local iteration loop with a verification gate',
+    priority: 70,
+    availability: 'idle-only',
+  },
+  {
     name: 'guard',
     aliases: [],
     description: 'Show Wukong guard status',

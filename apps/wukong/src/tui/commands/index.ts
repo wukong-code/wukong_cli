@@ -24,7 +24,7 @@ export { handleSwarmCommand } from './swarm';
 export { handleFeedbackCommand, showMcpServers, showStatusReport, showUsage } from './info';
 export { handlePluginsCommand } from './plugins';
 export { handleReloadCommand, handleReloadTuiCommand } from './reload';
-export { handleGoalCommand, parseGoalCommand } from './goal';
+export { handleGoalCommand, handleLoopSlashCommand, parseGoalCommand, parseLoopCommand } from './goal';
 export { goalArgumentCompletions } from './registry';
 export { handleForkCommand, handleInitCommand, handleTitleCommand } from './session';
 export { handleUndoCommand } from './undo';
@@ -34,6 +34,8 @@ export {
   handleScanSlashCommand,
   handleGuardSlashCommand,
   handleReportSlashCommand,
+  handleProofSlashCommand,
+  handleJudgeSlashCommand,
 } from './verification';
 export {
   promptApiKey,

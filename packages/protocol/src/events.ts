@@ -154,6 +154,9 @@ export interface GoalSnapshot {
   readonly goalId: string;
   readonly objective: string;
   readonly completionCriterion?: string;
+  readonly stopCondition?: 'verify-pass' | 'scan-clean' | 'judge-pass';
+  readonly maxIterations?: number;
+  readonly iteration: number;
   readonly status: GoalStatus;
   readonly turnsUsed: number;
   readonly tokensUsed: number;
@@ -826,6 +829,9 @@ export const goalSnapshotSchema = z.object({
   goalId: z.string(),
   objective: z.string(),
   completionCriterion: z.string().optional(),
+  stopCondition: z.enum(['verify-pass', 'scan-clean', 'judge-pass']).optional(),
+  maxIterations: z.number().optional(),
+  iteration: z.number(),
   status: goalStatusSchema,
   turnsUsed: z.number(),
   tokensUsed: z.number(),

@@ -60,6 +60,8 @@ export type ParsedGoalCommand =
       readonly kind: 'create';
       readonly objective: string;
       readonly replace: boolean;
+      readonly stopCondition?: 'verify-pass' | 'scan-clean' | 'judge-pass';
+      readonly maxIterations?: number;
     }
   | { readonly kind: 'next-add'; readonly objective: string }
   | { readonly kind: 'next-manage' }
@@ -101,6 +103,11 @@ export function parseGoalCommand(rawArgs: string): ParsedGoalCommand {
     index += 1;
   }
 
+  const stopCondition = parseStopCondition(tokens, index);
+  if (stopCondition.consumed > 0) {
+    index += stopCondition.consumed;
+  }
+
   const objective = tokens.slice(index).join(' ').trim();
   if (objective.length === 0) {
     // A usage hint, not a failure — shown in the same calm style as the other
@@ -117,7 +124,19 @@ export function parseGoalCommand(rawArgs: string): ParsedGoalCommand {
       message: `Goal objective is too long (max ${MAX_GOAL_OBJECTIVE_LENGTH} characters). Reference long details by file path.`,
     };
   }
-  return { kind: 'create', objective, replace };
+  return { kind: 'create', objective, replace, stopCondition: stopCondition.condition };
+}
+
+function parseStopCondition(
+  tokens: readonly string[],
+  startIndex: number,
+): { readonly condition?: 'verify-pass' | 'scan-clean' | 'judge-pass'; readonly consumed: number } {
+  if (tokens[startIndex] !== '--until') return { consumed: 0 };
+  const value = tokens[startIndex + 1];
+  if (value !== 'verify-pass' && value !== 'scan-clean' && value !== 'judge-pass') {
+    return { consumed: 0 };
+  }
+  return { condition: value, consumed: 2 };
 }
 
 export async function handleGoalCommand(host: SlashCommandHost, args: string): Promise<void> {
@@ -398,6 +417,8 @@ async function startGoal(
     await host.requireSession().createGoal({
       objective: parsed.objective,
       replace: parsed.replace,
+      stopCondition: parsed.stopCondition,
+      maxIterations: parsed.maxIterations,
     });
   } catch (error) {
     if (isWukongError(error) && error.code === ErrorCodes.GOAL_ALREADY_EXISTS) {
@@ -495,4 +516,114 @@ function isStreaming(host: SlashCommandHost): boolean {
 
 function isBusy(host: SlashCommandHost): boolean {
   return isStreaming(host) || host.state.appState.isCompacting;
+}
+
+export type ParsedLoopCommand =
+  | { readonly kind: 'status' }
+  | { readonly kind: 'stop' }
+  | {
+      readonly kind: 'create';
+      readonly objective: string;
+      readonly stopCondition: 'verify-pass' | 'scan-clean' | 'judge-pass';
+      readonly maxIterations: number;
+    }
+  | { readonly kind: 'error'; readonly message: string; readonly severity?: 'error' | 'hint' };
+
+const DEFAULT_MAX_ITERATIONS = 10;
+
+export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
+  const args = rawArgs.trim();
+  if (args.length === 0 || args === 'status') return { kind: 'status' };
+  if (args === 'stop') return { kind: 'stop' };
+
+  const tokens = args.split(/\s+/);
+  let index = 0;
+  let maxIterations = DEFAULT_MAX_ITERATIONS;
+
+  const stopCondition = parseStopCondition(tokens, index);
+  if (stopCondition.condition !== undefined) {
+    index += stopCondition.consumed;
+  }
+
+  while (index < tokens.length) {
+    const token = tokens[index];
+    if (token === '--max-iterations') {
+      const value = Number(tokens[index + 1]);
+      if (Number.isFinite(value) && value > 0) {
+        maxIterations = Math.floor(value);
+        index += 2;
+        continue;
+      }
+      return { kind: 'error', message: '`--max-iterations` requires a positive integer.' };
+    }
+    if (token === '--every') {
+      // `--every` is accepted but not yet implemented as a paced throttle; it is
+      // treated as a no-op for this milestone.
+      if (tokens[index + 1] === undefined) {
+        return { kind: 'error', message: '`--every` requires a duration.' };
+      }
+      index += 2;
+      continue;
+    }
+    break;
+  }
+
+  if (stopCondition.condition === undefined) {
+    return {
+      kind: 'error',
+      message: 'Provide a stop condition, e.g. `/loop --until verify-pass fix tests`.',
+    };
+  }
+
+  const objective = tokens.slice(index).join(' ').trim();
+  if (objective.length === 0) {
+    return {
+      kind: 'error',
+      severity: 'hint',
+      message: 'Provide a loop objective, e.g. `/loop --until verify-pass fix tests`.',
+    };
+  }
+  if (objective.length > MAX_GOAL_OBJECTIVE_LENGTH) {
+    return {
+      kind: 'error',
+      message: `Loop objective is too long (max ${MAX_GOAL_OBJECTIVE_LENGTH} characters).`,
+    };
+  }
+  return { kind: 'create', objective, stopCondition: stopCondition.condition, maxIterations };
+}
+
+export async function handleLoopSlashCommand(host: SlashCommandHost, args: string): Promise<void> {
+  const parsed = parseLoopCommand(args);
+  switch (parsed.kind) {
+    case 'error':
+      if (parsed.severity === 'hint') host.showStatus(parsed.message);
+      else host.showError(parsed.message);
+      return;
+    case 'status':
+      await showGoalStatus(host);
+      return;
+    case 'stop':
+      await cancelGoal(host);
+      return;
+    case 'create': {
+      await createGoal(
+        host,
+        {
+          kind: 'create',
+          objective: parsed.objective,
+          replace: false,
+          stopCondition: parsed.stopCondition,
+          maxIterations: parsed.maxIterations,
+        },
+        args,
+        {
+          sendInput: () => {
+            // The loop objective is sent as a normal user input after goal creation.
+            host.sendNormalUserInput(parsed.objective);
+          },
+        },
+      );
+      return;
+    }
+  }
 }

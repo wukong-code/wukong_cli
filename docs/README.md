@@ -14,13 +14,13 @@
 | 层 | 命令 | 状态 |
 |---|---|---|
 | Turn-based | TUI 默认 | 已实现 |
-| Goal-based | `/goal` | 已实现（verification gate 待实现，归 M0.5） |
-| Time-based（本机迭代） | `/loop` | 待实现（核心；`--every` 节流复用 cron scheduler） |
+| Goal-based | `/goal` | 已实现（verification gate 已实现，归 M0.5） |
+| Time-based（本机迭代） | `/loop` | 已实现（核心 gate 与 max-iterations；`--every` 节流待完整落地） |
 | Time-based（本机巡检） | cron 工具（CronCreate 等） | 已实现（会话内 recurring/one-shot） |
 | Time-based（云端） | `/schedule` | 待实现（归 hosted） |
 | 工具层 | `/verify` `/scan` `/guard` | 已实现 |
-| 证据层 | `/proof` | 待实现（Wow Moment） |
-| 评估层 | `/judge` | 待实现（deterministic 先行，`--agent` 后置） |
+| 证据层 | `/proof` | 已实现（Wow Moment） |
+| 评估层 | `/judge` | 已实现（deterministic 先行，`--agent` 后置） |
 
 ## 当前已实现
 
@@ -49,6 +49,9 @@ wukong web
 wukong verify
 wukong scan
 wukong guard
+wukong proof
+wukong judge
+wukong loop
 wukong login
 wukong doctor
 wukong export
@@ -61,7 +64,7 @@ wukong upgrade
 
 ## 商业化文档
 
-这些文档记录当前 P0 实现和后续计划。`verify`、`scan`、`guard` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/report`、`/goal` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。下一个重点是 Milestone 0.5，按 `/proof` → `/judge` → `/goal` verification gate → `/loop`（本机迭代 loop）的顺序实施；`/schedule`（云端例程）归 hosted。sync/today、云端报告、计费和团队能力仍是后续工作：
+这些文档记录当前 P0 实现和后续计划。`verify`、`scan`、`guard` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。Milestone 0.5 的核心（`/proof` → `/judge` → `/goal` verification gate → `/loop`）已按顺序落地，其中 `/loop --every` 的 cron scheduler 节流尚未完整实现。`/schedule`（云端例程）归 hosted。sync/today、云端报告、计费和团队能力仍是后续工作：
 
 - [商业化与产品重构方案](business/COMMERCIAL_REFACTOR_PLAN.md)
   定义产品定位、商业模型、目标命令结构（含 loop/proof/judge/schedule）和路线图。
@@ -80,7 +83,7 @@ wukong upgrade
 
 任务级清单以 [../TODO.md](../TODO.md) 为准，本节只保留方向摘要：
 
-1. 按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序实现 Milestone 0.5（`/loop` 为本机迭代 loop，复用 agent-core cron scheduler 与 goal gate，不新写定时引擎）。
+1. Milestone 0.5 核心已按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序落地（`/loop` 为本机迭代 loop，复用 `/goal` 执行核，不新写定时引擎；`/loop --every` 的 cron scheduler 节流尚未完整实现）。
 2. 实现 report history / redaction metadata，避免未来云端报告上传源码 diff 或敏感片段。
 3. 统一发布渠道、package version、安装文档和收费边界。
 4. 实现 sync/today 时先定义本地数据模型和 redaction 边界。

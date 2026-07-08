@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest';
 
 import { createProgram } from '#/cli/commands';
 import { handleGuard, type GuardDeps } from '#/cli/sub/guard';
+import { handleJudge, type JudgeDeps } from '#/cli/sub/judge';
+import { handleProof, type ProofDeps } from '#/cli/sub/proof';
 import { handleScan, type ScanDeps } from '#/cli/sub/scan';
 import { handleVerify, type VerifyDeps } from '#/cli/sub/verify';
 
@@ -19,12 +21,15 @@ function writable(): { readonly chunks: string[]; readonly writer: { write(chunk
 }
 
 describe('verification command registration', () => {
-  it('registers verify, scan, and guard as top-level commands', () => {
+  it('registers verify, scan, proof, judge, loop, and guard as top-level commands', () => {
     const program = createProgram('0.0.0', () => {}, () => {});
     const names = program.commands.map((command) => command.name());
 
     expect(names).toContain('verify');
     expect(names).toContain('scan');
+    expect(names).toContain('proof');
+    expect(names).toContain('judge');
+    expect(names).toContain('loop');
     expect(names).toContain('guard');
   });
 });
@@ -89,6 +94,122 @@ describe('handleScan', () => {
 
     await expect(handleScan(deps, { json: true })).resolves.toBe(0);
     expect(JSON.parse(stdout.chunks.join(''))).toMatchObject({ status: 'passed' });
+  });
+});
+
+describe('handleProof', () => {
+  it('prints JSON proof result and returns blocked exit code on blocked status', async () => {
+    const stdout = writable();
+    const deps: ProofDeps = {
+      cwd: () => '/workspace',
+      stdout: stdout.writer,
+      stderr: writable().writer,
+      runProof: async () => ({
+        status: 'blocked',
+        cwd: '/workspace',
+        generatedAt: '2026-07-02T00:00:00.000Z',
+        verification: {
+          status: 'passed',
+          cwd: '/workspace',
+          generatedAt: '2026-07-02T00:00:00.000Z',
+          changedFiles: [{ path: 'src/a.ts', status: 'M' }],
+          gitStatus: ' M src/a.ts',
+          diffStat: '1 file changed',
+          selectedCommands: ['pnpm test'],
+          commandResults: [{
+            command: 'pnpm test',
+            status: 'passed',
+            exitCode: 0,
+            durationMs: 12,
+            stdout: '',
+            stderr: '',
+          }],
+          risks: [],
+        },
+        scan: {
+          status: 'failed',
+          cwd: '/workspace',
+          generatedAt: '2026-07-02T00:00:00.000Z',
+          changedFiles: [{ path: 'src/a.ts', status: 'M' }],
+          gitStatus: ' M src/a.ts',
+          diffStat: '1 file changed',
+          risks: [{
+            id: 'diff.placeholder_added',
+            severity: 'high',
+            message: 'Placeholder added.',
+            file: 'src/a.ts',
+          }],
+        },
+        summary: 'Merge proof blocked: verification passed, scan failed, 1 changed files.',
+        recommendation: 'High-risk changes detected; review before merging.',
+      }),
+    };
+
+    await expect(handleProof(deps, { json: true })).resolves.toBe(1);
+    const parsed = JSON.parse(stdout.chunks.join(''));
+    expect(parsed.status).toBe('blocked');
+    expect(parsed.recommendation).toContain('High-risk');
+  });
+});
+
+describe('handleJudge', () => {
+  it('prints JSON judge result and returns block exit code on block verdict', async () => {
+    const stdout = writable();
+    const deps: JudgeDeps = {
+      cwd: () => '/workspace',
+      stdout: stdout.writer,
+      stderr: writable().writer,
+      runJudge: async () => ({
+        verdict: 'block',
+        reason: 'High-risk changes detected.',
+        mode: 'deterministic',
+        proof: {
+          status: 'blocked',
+          cwd: '/workspace',
+          generatedAt: '2026-07-02T00:00:00.000Z',
+          verification: {
+            status: 'passed',
+            cwd: '/workspace',
+            generatedAt: '2026-07-02T00:00:00.000Z',
+            changedFiles: [{ path: 'src/a.ts', status: 'M' }],
+            gitStatus: ' M src/a.ts',
+            diffStat: '1 file changed',
+            selectedCommands: ['pnpm test'],
+            commandResults: [{
+              command: 'pnpm test',
+              status: 'passed',
+              exitCode: 0,
+              durationMs: 12,
+              stdout: '',
+              stderr: '',
+            }],
+            risks: [],
+          },
+          scan: {
+            status: 'failed',
+            cwd: '/workspace',
+            generatedAt: '2026-07-02T00:00:00.000Z',
+            changedFiles: [{ path: 'src/a.ts', status: 'M' }],
+            gitStatus: ' M src/a.ts',
+            diffStat: '1 file changed',
+            risks: [{
+              id: 'diff.placeholder_added',
+              severity: 'high',
+              message: 'Placeholder added.',
+              file: 'src/a.ts',
+            }],
+          },
+          summary: 'Merge proof blocked.',
+          recommendation: 'High-risk changes detected; review before merging.',
+        },
+      }),
+    };
+
+    await expect(handleJudge(deps, { json: true })).resolves.toBe(1);
+    const parsed = JSON.parse(stdout.chunks.join(''));
+    expect(parsed.verdict).toBe('block');
+    expect(parsed.mode).toBe('deterministic');
+    expect(parsed.reason).toContain('High-risk');
   });
 });
 

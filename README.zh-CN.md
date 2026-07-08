@@ -8,7 +8,7 @@
 
 Wukong Code 是本地优先的终端 AI coding agent，定位是 **AI Coding Loop 的控制层与验证层**。它不和 Cursor / Claude Code / Codex 拼写代码，而是补上它们留下的问题：*这段 AI 写的代码能不能合并？*
 
-当前 P0 本地闭环已实现：`wukong verify`、`wukong scan`、`wukong guard`、对应 TUI slash commands（`/verify`、`/scan`、`/guard`、`/report`、`/goal`），以及 `wukong_verify` 内置 agent tool。下一个重点（Milestone 0.5）是 `/loop`（本机 interval loop）、`/proof`（Merge Proof Report）、`/judge`（只审不写的 evaluator）——均待实现；`/schedule`（云端例程）随 hosted 推进。云同步、托管报告、计费、团队规则和深度 review 仍是后续工作。
+当前 P0 本地闭环已实现：`wukong verify`、`wukong scan`、`wukong guard`、对应 TUI slash commands（`/verify`、`/scan`、`/guard`、`/report`、`/goal`），以及 `wukong_verify` 内置 agent tool。Milestone 0.5 的 `/loop`（本机迭代 loop）、`/proof`（Merge Proof Report）、`/judge`（只审不写的 evaluator）和 `/goal --until` verification gate 已在 CLI 与 TUI 中实现。`/loop --every` 参数已被接受，但基于 cron scheduler 的轮间节流尚未完全落地。`/schedule`（云端例程）随 hosted 推进。云同步、托管报告、计费、团队规则和深度 review 仍是后续工作。
 
 ## 当前命令面
 
@@ -22,6 +22,9 @@ wukong web                     # 打开本地 web UI
 wukong verify                  # 运行确定性检查并生成证据报告
 wukong scan                    # 扫描 git 改动中的交付风险
 wukong guard                   # 查看或运行 best-effort 命令风险 guard
+wukong proof                   # 生成 Merge Proof Report（verify + scan）
+wukong judge                   # 只审不写的合并判定
+wukong loop                    # 启动带验证 gate 的本机迭代 loop
 wukong login                   # 通过 device-code flow 登录
 wukong doctor                  # 校验配置文件
 wukong export [sessionId]      # 导出 session ZIP
@@ -30,7 +33,7 @@ wukong migrate                 # 迁移 legacy wukong-cli 数据
 wukong upgrade                 # 升级 Wukong Code
 ```
 
-待实现命令：`wukong loop`（本机 interval）、`wukong proof`、`wukong judge`、`wukong ship`、`wukong review`、`wukong schedule`（云端例程）。
+待实现命令：`wukong ship`、`wukong review`、`wukong schedule`（云端例程）。
 
 完整参数以 `wukong --help` 为准。
 
@@ -80,7 +83,7 @@ pnpm build      # 构建所有包
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [技术实现方案](docs/tech/commercial-refactor-implementation.md)
 
-P0 本地 CLI 命令、TUI 验证命令和 `wukong_verify` agent tool 已经实现。下一个 milestone 会加入 `/loop`、`/proof`、`/judge`。剩余文档继续追踪云端报告、计费、团队规则和深度 review 等后续工作。
+P0 本地 CLI 命令、TUI 验证命令、`/proof`、`/judge`、`/goal --until` verification gate、`/loop` 和 `wukong_verify` agent tool 已经实现。剩余文档继续追踪 `/loop --every` cron scheduler 节流、云端报告、计费、团队规则和深度 review 等后续工作。
 
 ## 许可证
 

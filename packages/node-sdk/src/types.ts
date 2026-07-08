@@ -72,6 +72,8 @@ export type PermissionMode = 'yolo' | 'manual' | 'auto';
 export interface CreateGoalInput {
   readonly objective: string;
   readonly replace?: boolean;
+  readonly stopCondition?: 'verify-pass' | 'scan-clean' | 'judge-pass';
+  readonly maxIterations?: number;
 }
 
 export type TextPromptPart = Extract<ContentPart, { type: 'text' }>;

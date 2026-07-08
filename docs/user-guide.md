@@ -3,7 +3,7 @@
 > 适用范围: 当前 `wukong_cli` 新 Kimi-code base
 > 更新时间: 2026-07-07
 > 定位: AI 负责写代码，Wukong 负责判断能不能合并 —— AI Coding Loop 的控制层与验证层。
-> 原则: 本文只写当前可执行的能力。`verify`、`scan`、`guard`、TUI 验证 slash commands（`/verify`、`/scan`、`/guard`、`/report`、`/goal`）和 `wukong_verify` agent tool 已实现；`loop`、`proof`、`judge`、`sync`、`today`、hosted reports、计费和团队规则仍未完成。
+> 原则: 本文只写当前可执行的能力。`verify`、`scan`、`guard`、TUI 验证 slash commands（`/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop`）和 `wukong_verify` agent tool 已实现；`loop --every` 的 cron scheduler 节流、`sync`、`today`、hosted reports、计费和团队规则仍未完成。
 
 ## 从源码运行
 
@@ -87,6 +87,10 @@ pnpm -C apps/wukong run dev:cli-only -- guard --status
 /scan
 /guard status
 /report
+/proof
+/judge
+/goal [--until verify-pass|scan-clean|judge-pass] <objective>
+/loop --until verify-pass|scan-clean|judge-pass [<objective>]
 ```
 
 ## 当前 top-level commands
@@ -102,6 +106,9 @@ pnpm -C apps/wukong run dev:cli-only -- guard --status
 | `wukong verify` | 已实现 | 运行确定性检查并生成本地证据报告 |
 | `wukong scan` | 已实现 | 只读风险扫描 |
 | `wukong guard` | 已实现 | 本地 guard 状态、统计和命令风险阻断 |
+| `wukong proof` | 已实现 | 生成 Merge Proof Report（verify + scan 汇总） |
+| `wukong judge` | 已实现 | deterministic 合并判定（只审不写） |
+| `wukong loop` | 已实现 | 启动带 verification gate 的本机迭代 loop（`--every` 节流待完善） |
 | `wukong login` | 已实现 | 通过 device-code flow 登录 |
 | `wukong doctor` | 已实现 | 校验配置文件 |
 | `wukong export` | 已实现 | 导出 session ZIP |
@@ -118,8 +125,11 @@ pnpm -C apps/wukong run dev:cli-only -- guard --status
 | `wukong verify` | 本地验证当前改动并生成证据报告 | 已实现 |
 | `wukong scan` | 只读风险扫描 | 已实现 |
 | `wukong guard` | 高风险命令确认/拦截 | 已实现，P0 不自动改 shell profile |
+| `wukong proof` | Merge Proof Report（verify + scan 汇总） | 已实现 |
+| `wukong judge` | deterministic 只审不写判定 | 已实现 |
+| `wukong loop` | 本机迭代 loop，直到 verification gate 通过 | 已实现；`--every` 节流待完整落地 |
 | `wukong_verify` agent tool | 让 agent 在完成前调用验证 | 已实现，作为 builtin tool 接入 agent-core |
-| `/verify`、`/scan`、`/guard`、`/report` | TUI 内验证、扫描、guard 状态和查看报告 | 已实现 |
+| `/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop` | TUI 内验证、扫描、guard 状态、查看报告、goal/loop 驱动 | 已实现 |
 | `wukong sync` | 云同步 | 等待新 base API 与本地数据模型对齐 |
 | `wukong today` | 今日上下文 | 等待 verify/guard stats 落地后再实现 |
 
@@ -153,7 +163,7 @@ pnpm -C apps/wukong run dev:cli-only -- login --help
 
 - `wukong verify`、`wukong guard`、`wukong scan` 是当前已实现命令。
 - `wukong_verify` 是内置 agent tool，不是 top-level shell command。
-- `/verify`、`/scan`、`/guard status`、`/report` 是 TUI slash commands。
+- `/verify`、`/scan`、`/guard status`、`/report`、`/proof`、`/judge`、`/goal`、`/loop` 是 TUI slash commands。
 - `wukong login --provider google --dev-email ...` 不是当前登录命令参数。
 - `wukong sync --push`、`wukong sync --pull` 尚未在当前 CLI 中实现。
 - 文档站 `/en/guides/*`、`/zh/guides/*` 页面当前没有对应源文件，不应作为发布入口宣传。

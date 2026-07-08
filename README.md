@@ -8,7 +8,7 @@
 
 Wukong Code is a local-first terminal AI coding agent built as the **control and verification layer for AI Coding Loops**. It does not compete with Cursor / Claude Code / Codex on writing code; it answers the question they leave open: *can this AI-written code be merged?*
 
-The local P0 loop is implemented: `wukong verify`, `wukong scan`, `wukong guard`, matching TUI slash commands (`/verify`, `/scan`, `/guard`, `/report`, `/goal`), and the `wukong_verify` builtin agent tool. The next focus (Milestone 0.5) is `/loop` (local interval loop), `/proof` (Merge Proof Report), and `/judge` (evaluator-only review) — all planned; `/schedule` (cloud routine) follows with hosted. Cloud sync, hosted reports, billing, team rules, and deep review remain planned work.
+The local P0 loop is implemented: `wukong verify`, `wukong scan`, `wukong guard`, matching TUI slash commands (`/verify`, `/scan`, `/guard`, `/report`, `/goal`), and the `wukong_verify` builtin agent tool. Milestone 0.5 adds `/proof` (Merge Proof Report), `/judge` (evaluator-only review), `/goal --until` verification gates, and `/loop` (local iteration loop) — all now implemented in the CLI and TUI. `/loop --every` is accepted but its cron-scheduler throttle is not yet enforced. `/schedule` (cloud routine), cloud sync, hosted reports, billing, team rules, and deep review remain planned work.
 
 ## Current Command Surface
 
@@ -22,6 +22,9 @@ wukong web                     # open the local web UI
 wukong verify                  # run deterministic checks and write an evidence report
 wukong scan                    # scan git changes for delivery risks
 wukong guard                   # inspect or run the best-effort command risk guard
+wukong proof                   # generate a Merge Proof Report (verify + scan)
+wukong judge                   # evaluator-only merge decision
+wukong loop                    # start a local iteration loop with a verification gate
 wukong login                   # authenticate through the device-code flow
 wukong doctor                  # validate configuration files
 wukong export [sessionId]      # export a session ZIP
@@ -30,7 +33,7 @@ wukong migrate                 # migrate legacy wukong-cli data
 wukong upgrade                 # upgrade Wukong Code
 ```
 
-Planned commands (not yet implemented): `wukong loop` (local interval), `wukong proof`, `wukong judge`, `wukong ship`, `wukong review`, `wukong schedule` (cloud routine).
+Planned commands (not yet implemented): `wukong ship`, `wukong review`, `wukong schedule` (cloud routine).
 
 Run `wukong --help` for the complete option list.
 
@@ -80,7 +83,7 @@ The current product direction is to turn Wukong Code into the **proof layer for 
 - [Commercial refactor plan](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [Technical implementation plan](docs/tech/commercial-refactor-implementation.md)
 
-The P0 local CLI commands, TUI verification commands, and `wukong_verify` agent tool are implemented. The next milestone adds `/loop`, `/proof`, and `/judge`. The remaining docs track follow-up work such as cloud reports, billing, team rules, and deep review.
+The P0 local CLI commands, TUI verification commands, `/proof`, `/judge`, `/goal --until` verification gates, `/loop`, and `wukong_verify` agent tool are implemented. The remaining docs track follow-up work such as `/loop --every` cron-scheduler throttle, cloud reports, billing, team rules, and deep review.
 
 ## License
 

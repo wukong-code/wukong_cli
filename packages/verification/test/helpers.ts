@@ -6,8 +6,12 @@ import { promisify } from 'node:util';
 
 const execFileAsync = promisify(execFile);
 
+export async function makeTempDir(prefix: string): Promise<string> {
+  return mkdtemp(join(tmpdir(), prefix));
+}
+
 export async function makeTempRepo(prefix: string): Promise<string> {
-  const dir = await mkdtemp(join(tmpdir(), prefix));
+  const dir = await makeTempDir(prefix);
   await execFileAsync('git', ['init'], { cwd: dir });
   return dir;
 }
@@ -24,4 +28,16 @@ export async function writeRepoFile(root: string, relative: string, content: str
 
 export async function gitAdd(root: string, path = '.'): Promise<void> {
   await execFileAsync('git', ['add', path], { cwd: root });
+}
+
+export async function gitCommit(root: string, message = 'test commit'): Promise<void> {
+  await execFileAsync(
+    'git',
+    ['-c', 'user.name=Wukong Test', '-c', 'user.email=test@wukong.local', 'commit', '-m', message],
+    { cwd: root },
+  );
+}
+
+export async function gitMove(root: string, from: string, to: string): Promise<void> {
+  await execFileAsync('git', ['mv', from, to], { cwd: root });
 }

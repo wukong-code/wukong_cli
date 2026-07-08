@@ -87,6 +87,8 @@ export interface AgentRecordEvents {
     goalId: string;
     objective: string;
     completionCriterion?: string;
+    stopCondition?: 'verify-pass' | 'scan-clean' | 'judge-pass';
+    maxIterations?: number;
   };
   'goal.update': {
     status?: GoalStatus;
@@ -94,6 +96,7 @@ export interface AgentRecordEvents {
     turnsUsed?: number;
     wallClockMs?: number;
     budgetLimits?: GoalBudgetLimits;
+    iteration?: number;
     reason?: string;
     actor?: GoalActor;
   };

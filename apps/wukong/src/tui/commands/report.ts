@@ -5,6 +5,7 @@ import { UsagePanelComponent } from '../components/messages/usage-panel';
 import type { SlashCommandHost } from './dispatch';
 
 const REPORT_FILES = [
+  'wukong-proof-report.md',
   'wukong-verification-report.md',
   'wukong-scan-report.md',
 ] as const;

@@ -34,7 +34,7 @@ import {
   showPermissionPicker,
   showSettingsSelector,
 } from './config';
-import { handleGoalCommand } from './goal';
+import { handleGoalCommand, handleLoopSlashCommand } from './goal';
 import { handleFeedbackCommand, showMcpServers, showStatusReport, showUsage } from './info';
 import { handleAddDirCommand } from './add-dir';
 import { parseSlashInput } from './parse';
@@ -58,6 +58,8 @@ import {
   handleScanSlashCommand,
   handleGuardSlashCommand,
   handleReportSlashCommand,
+  handleProofSlashCommand,
+  handleJudgeSlashCommand,
 } from './verification';
 
 // ---------------------------------------------------------------------------
@@ -347,6 +349,15 @@ async function handleBuiltInSlashCommand(
       return;
     case 'scan':
       await handleScanSlashCommand(host);
+      return;
+    case 'proof':
+      await handleProofSlashCommand(host);
+      return;
+    case 'judge':
+      await handleJudgeSlashCommand(host);
+      return;
+    case 'loop':
+      await handleLoopSlashCommand(host, args);
       return;
     case 'guard':
       await handleGuardSlashCommand(host, args);

@@ -21,9 +21,14 @@ P0 测试必须证明：
 
 | 层级 | 文件 | 覆盖 |
 |---|---|---|
-| Core unit | `packages/verification/test/verify.test.ts` | explicit commands、package script detection、failed command、report writing |
-| Core unit | `packages/verification/test/scan.test.ts` | staged diff placeholder risk、source changed without tests |
-| Core unit | `packages/verification/test/policy.test.ts` | command risk classifier、guard status、blocked event stats |
+| Core unit | `packages/verification/test/verify.test.ts` | explicit commands、package script detection、failed command、no-commands high risk、timeout（timed_out）、strict 升级、default/自定义 report path |
+| Core unit | `packages/verification/test/scan.test.ts` | staged diff placeholder risk、staged+unstaged 混合扫描、secret 文件、clean pass、可选 report 写入 |
+| Core unit | `packages/verification/test/risks.test.ts` | 全部 added-line 规则（placeholder/mock/only/skip/debug）、file+line 定位、dedupe、secret path、coverage、not-git-repo、commands.none_detected 开关 |
+| Core unit | `packages/verification/test/git.test.ts` | 真实 git repo fixture：非 repo 目录、staged+unstaged 混合 diff、rename 解析 |
+| Core unit | `packages/verification/test/scripts.test.ts` | explicit 优先、脚本选择顺序、build 门控、pnpm/yarn/bun/npm lockfile 检测 |
+| Core unit | `packages/verification/test/report.test.ts` | verification/scan report 渲染、空态渲染、嵌套目录写入 |
+| Core unit | `packages/verification/test/status.test.ts` | statusFrom 全矩阵（含 strict）、highestSeverity |
+| Core unit | `packages/verification/test/policy.test.ts` | command risk classifier（含绝对路径、Windows 路径与 .exe/.cmd/.bat）、guard status、blocked/allowed 事件、`--yes` override、空命令、损坏 events 容错 |
 | App unit | `apps/wukong/test/cli/verification-commands.test.ts` | command registration、verify/scan/guard handler output and exit code |
 | App unit | `apps/wukong/test/tui/commands/verification.test.ts` | `/verify`、`/scan`、`/guard status`、`/report` handlers |
 | Agent unit | `packages/agent-core/test/tools/wukong-verify.test.ts` | `wukong_verify` schema、execution、failed verification guidance |
@@ -75,9 +80,10 @@ tsx --tsconfig apps/wukong/tsconfig.dev.json \
 
 ## 5. 后续测试 TODO
 
-1. 增加真实 git repo fixture，覆盖 staged + unstaged diff 混合场景。
-2. 增加 Windows shell command parsing 测试。
+1. ~~增加真实 git repo fixture，覆盖 staged + unstaged diff 混合场景。~~ 已完成（2026-07-08，`git.test.ts` + `scan.test.ts` 混合场景）。
+2. ~~增加 Windows shell command parsing 测试。~~ 已完成（2026-07-08，`policy.test.ts`；同时修复 `policy.ts` 的 basename 支持 `\` 分隔符与 `.exe/.cmd/.bat` 后缀）。
 3. 如果 P1 实现 shell hook 安装，必须增加 profile 幂等写入和 disable 安全测试。
+4. runner 层 stdout/stderr 截断（`MAX_CAPTURE_CHARS`）行为测试。
 
 ## 6. P0.5 测试 TODO（按实施顺序：`/proof` → `/judge` → goal gate → `/loop`）
 

@@ -1,10 +1,12 @@
 import {
+  runJudge,
+  runProof,
   runScan,
   runVerification,
   getGuardStats,
   getGuardStatus,
 } from '@wukong/verification';
-import type { ScanResult, VerificationResult } from '@wukong/verification';
+import type { JudgeResult, ProofResult, ScanResult, VerificationResult } from '@wukong/verification';
 
 import { UsagePanelComponent } from '../components/messages/usage-panel';
 import { formatErrorMessage } from '../utils/event-payload';
@@ -71,6 +73,95 @@ export async function handleGuardSlashCommand(host: SlashCommandHost, args: stri
   }
 
   host.showError('Usage: /guard [status]');
+}
+
+export async function handleProofSlashCommand(host: SlashCommandHost): Promise<void> {
+  const spinner = host.showProgressSpinner('Running Wukong merge proof...');
+  try {
+    const result = await runProof({
+      cwd: host.state.appState.workDir,
+      writeReport: true,
+    });
+    spinner.stop({ ok: result.status !== 'blocked', label: `Merge proof: ${result.status}` });
+    const panel = new UsagePanelComponent(
+      () => buildProofReportLines(result),
+      result.status === 'blocked' ? 'error' : 'success',
+      ' Merge Proof ',
+    );
+    host.state.transcriptContainer.addChild(panel);
+    host.state.ui.requestRender();
+  } catch (error) {
+    spinner.stop({ ok: false, label: 'Merge proof failed' });
+    host.showError(`Merge proof failed: ${formatErrorMessage(error)}`);
+  }
+}
+
+export async function handleJudgeSlashCommand(host: SlashCommandHost): Promise<void> {
+  const spinner = host.showProgressSpinner('Running Wukong judge...');
+  try {
+    const result = await runJudge({
+      cwd: host.state.appState.workDir,
+    });
+    spinner.stop({ ok: result.verdict !== 'block', label: `Judge: ${result.verdict}` });
+    const panel = new UsagePanelComponent(
+      () => buildJudgeReportLines(result),
+      result.verdict === 'block' ? 'error' : 'success',
+      ' Judge ',
+    );
+    host.state.transcriptContainer.addChild(panel);
+    host.state.ui.requestRender();
+  } catch (error) {
+    spinner.stop({ ok: false, label: 'Judge failed' });
+    host.showError(`Judge failed: ${formatErrorMessage(error)}`);
+  }
+}
+
+function buildJudgeReportLines(result: JudgeResult): string[] {
+  return [
+    `Verdict: ${result.verdict}`,
+    `Mode: ${result.mode}`,
+    `Proof status: ${result.proof.status}`,
+    `Changed files: ${String(result.proof.verification.changedFiles.length)}`,
+    '',
+    'Reason:',
+    `  ${result.reason}`,
+  ];
+}
+
+function buildProofReportLines(result: ProofResult): string[] {
+  const lines: string[] = [
+    `Status: ${result.status}`,
+    `Verification: ${result.verification.status}`,
+    `Scan: ${result.scan.status}`,
+    `Changed files: ${String(result.verification.changedFiles.length)}`,
+    '',
+    'Recommendation:',
+    `  ${result.recommendation}`,
+  ];
+
+  if (result.verification.commandResults.length > 0) {
+    lines.push('', 'Commands:');
+    for (const commandResult of result.verification.commandResults) {
+      lines.push(
+        `  ${commandResult.status.padEnd(7)} ${commandResult.command} (exit ${String(commandResult.exitCode ?? 'N/A')})`,
+      );
+    }
+  }
+
+  const allRisks = [...result.verification.risks, ...result.scan.risks];
+  if (allRisks.length > 0) {
+    lines.push('', 'Risks:');
+    for (const risk of allRisks) {
+      const location = risk.file === undefined ? '' : ` (${risk.file}${risk.line === undefined ? '' : `:${String(risk.line)}`})`;
+      lines.push(`  ${risk.severity.padEnd(7)} ${risk.message}${location}`);
+    }
+  }
+
+  if (result.reportPath !== undefined) {
+    lines.push('', `Report: ${result.reportPath}`);
+  }
+
+  return lines;
 }
 
 function buildVerificationReportLines(result: VerificationResult): string[] {

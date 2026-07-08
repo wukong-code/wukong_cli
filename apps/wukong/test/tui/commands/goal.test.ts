@@ -5,7 +5,9 @@ import {
   dispatchInput,
   goalArgumentCompletions,
   handleGoalCommand,
+  handleLoopSlashCommand,
   parseGoalCommand,
+  parseLoopCommand,
   setExperimentalFeatures,
 } from '#/tui/commands/index';
 import {
@@ -213,8 +215,86 @@ describe('parseGoalCommand', () => {
     });
   });
 
+  it('parses --until stop conditions', () => {
+    expect(parseGoalCommand('--until verify-pass fix tests')).toMatchObject({
+      kind: 'create',
+      objective: 'fix tests',
+      stopCondition: 'verify-pass',
+    });
+    expect(parseGoalCommand('--until scan-clean clean up risks')).toMatchObject({
+      kind: 'create',
+      objective: 'clean up risks',
+      stopCondition: 'scan-clean',
+    });
+    expect(parseGoalCommand('--until judge-pass make it mergeable')).toMatchObject({
+      kind: 'create',
+      objective: 'make it mergeable',
+      stopCondition: 'judge-pass',
+    });
+  });
+
+  it('ignores unknown --until values and keeps them in the objective', () => {
+    expect(parseGoalCommand('--until unknown fix tests')).toMatchObject({
+      kind: 'create',
+      objective: '--until unknown fix tests',
+    });
+  });
+
+  it('parses replace with --until', () => {
+    expect(parseGoalCommand('replace --until verify-pass fix tests')).toMatchObject({
+      kind: 'create',
+      objective: 'fix tests',
+      replace: true,
+      stopCondition: 'verify-pass',
+    });
+  });
+
   it('rejects objectives longer than 4000 characters', () => {
     expect(parseGoalCommand('x'.repeat(4001))).toMatchObject({ kind: 'error' });
+  });
+});
+
+describe('parseLoopCommand', () => {
+  it('requires --until', () => {
+    expect(parseLoopCommand('fix tests')).toMatchObject({ kind: 'error' });
+  });
+
+  it('parses --until verify-pass with default max iterations', () => {
+    expect(parseLoopCommand('--until verify-pass fix tests')).toEqual({
+      kind: 'create',
+      objective: 'fix tests',
+      stopCondition: 'verify-pass',
+      maxIterations: 10,
+    });
+  });
+
+  it('parses --until scan-clean with custom max iterations', () => {
+    expect(parseLoopCommand('--until scan-clean --max-iterations 5 clean risks')).toEqual({
+      kind: 'create',
+      objective: 'clean risks',
+      stopCondition: 'scan-clean',
+      maxIterations: 5,
+    });
+  });
+
+  it('parses --until judge-pass', () => {
+    expect(parseLoopCommand('--until judge-pass make mergeable')).toEqual({
+      kind: 'create',
+      objective: 'make mergeable',
+      stopCondition: 'judge-pass',
+      maxIterations: 10,
+    });
+  });
+
+  it('returns status and stop subcommands', () => {
+    expect(parseLoopCommand('status')).toEqual({ kind: 'status' });
+    expect(parseLoopCommand('stop')).toEqual({ kind: 'stop' });
+  });
+
+  it('rejects invalid --max-iterations', () => {
+    expect(parseLoopCommand('--until verify-pass --max-iterations abc fix')).toMatchObject({
+      kind: 'error',
+    });
   });
 });
 

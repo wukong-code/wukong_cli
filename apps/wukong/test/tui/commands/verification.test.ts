@@ -9,6 +9,8 @@ import type { SlashCommandHost } from '#/tui/commands/dispatch';
 const mocks = vi.hoisted(() => ({
   runVerification: vi.fn(),
   runScan: vi.fn(),
+  runProof: vi.fn(),
+  runJudge: vi.fn(),
   getGuardStatus: vi.fn(),
   getGuardStats: vi.fn(),
 }));
@@ -20,6 +22,8 @@ const {
   handleReportSlashCommand,
   handleScanSlashCommand,
   handleVerifySlashCommand,
+  handleProofSlashCommand,
+  handleJudgeSlashCommand,
 } = await import('#/tui/commands/verification');
 
 const tempDirs: string[] = [];
@@ -147,14 +151,110 @@ describe('verification slash commands', () => {
     expect(host.showStatus).toHaveBeenCalledWith('Guard enabled · 3 events · 2 blocked · 1 allowed');
   });
 
-  it('opens the latest verification or scan report', async () => {
-    const workDir = makeTempDir();
-    const host = makeHost(workDir);
-    writeFileSync(join(workDir, 'wukong-verification-report.md'), '# Report\n\nStatus: passed\n');
+  it('runs /proof and renders the merge proof panel', async () => {
+    const host = makeHost('/repo');
+    mocks.runProof.mockResolvedValue({
+      status: 'blocked',
+      cwd: '/repo',
+      generatedAt: '2026-07-03T00:00:00.000Z',
+      verification: {
+        status: 'passed',
+        cwd: '/repo',
+        generatedAt: '2026-07-03T00:00:00.000Z',
+        changedFiles: [{ path: 'src/app.ts', status: 'modified' }],
+        gitStatus: ' M src/app.ts',
+        diffStat: 'src/app.ts | 1 +',
+        selectedCommands: ['npm test'],
+        commandResults: [{
+          command: 'npm test',
+          status: 'passed',
+          exitCode: 0,
+          durationMs: 12,
+          stdout: '',
+          stderr: '',
+        }],
+        risks: [],
+      },
+      scan: {
+        status: 'failed',
+        cwd: '/repo',
+        generatedAt: '2026-07-03T00:00:00.000Z',
+        changedFiles: [{ path: 'src/app.ts', status: 'modified' }],
+        gitStatus: ' M src/app.ts',
+        diffStat: 'src/app.ts | 1 +',
+        risks: [{
+          id: 'diff.placeholder_added',
+          severity: 'high',
+          message: 'Placeholder text in changed code.',
+          file: 'src/app.ts',
+          line: 1,
+        }],
+      },
+      summary: 'Merge proof blocked: verification passed, scan failed, 1 changed files.',
+      recommendation: 'High-risk changes detected; review before merging.',
+      reportPath: '/repo/wukong-proof-report.md',
+    });
 
-    await handleReportSlashCommand(asSlashHost(host));
+    await handleProofSlashCommand(asSlashHost(host));
 
-    expect(host.showError).not.toHaveBeenCalled();
-    expect(latestPanelText(host)).toContain('Status: passed');
+    expect(mocks.runProof).toHaveBeenCalledWith({ cwd: '/repo', writeReport: true });
+    expect(latestPanelText(host)).toContain('Status: blocked');
+    expect(latestPanelText(host)).toContain('High-risk changes detected');
+    expect(latestPanelText(host)).toContain('Placeholder text in changed code.');
+  });
+
+  it('runs /judge and renders the judge panel', async () => {
+    const host = makeHost('/repo');
+    mocks.runJudge.mockResolvedValue({
+      verdict: 'block',
+      reason: 'High-risk changes detected.',
+      mode: 'deterministic',
+      proof: {
+        status: 'blocked',
+        cwd: '/repo',
+        generatedAt: '2026-07-03T00:00:00.000Z',
+        verification: {
+          status: 'passed',
+          cwd: '/repo',
+          generatedAt: '2026-07-03T00:00:00.000Z',
+          changedFiles: [{ path: 'src/app.ts', status: 'modified' }],
+          gitStatus: ' M src/app.ts',
+          diffStat: 'src/app.ts | 1 +',
+          selectedCommands: ['npm test'],
+          commandResults: [{
+            command: 'npm test',
+            status: 'passed',
+            exitCode: 0,
+            durationMs: 12,
+            stdout: '',
+            stderr: '',
+          }],
+          risks: [],
+        },
+        scan: {
+          status: 'failed',
+          cwd: '/repo',
+          generatedAt: '2026-07-03T00:00:00.000Z',
+          changedFiles: [{ path: 'src/app.ts', status: 'modified' }],
+          gitStatus: ' M src/app.ts',
+          diffStat: 'src/app.ts | 1 +',
+          risks: [{
+            id: 'diff.placeholder_added',
+            severity: 'high',
+            message: 'Placeholder text in changed code.',
+            file: 'src/app.ts',
+            line: 1,
+          }],
+        },
+        summary: 'Merge proof blocked.',
+        recommendation: 'High-risk changes detected; review before merging.',
+      },
+    });
+
+    await handleJudgeSlashCommand(asSlashHost(host));
+
+    expect(mocks.runJudge).toHaveBeenCalledWith({ cwd: '/repo' });
+    expect(latestPanelText(host)).toContain('Verdict: block');
+    expect(latestPanelText(host)).toContain('High-risk changes detected.');
   });
 });

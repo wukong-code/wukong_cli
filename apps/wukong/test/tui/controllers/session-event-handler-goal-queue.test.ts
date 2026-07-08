@@ -19,6 +19,7 @@ function fakeGoalSnapshot(objective: string, status: 'active' | 'blocked' | 'pau
     goalId: 'g1',
     objective,
     status,
+    iteration: 0,
     turnsUsed: 1,
     tokensUsed: 10,
     wallClockMs: 100,

@@ -169,6 +169,9 @@ export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRA
   lines.push(row('Running', value(formatGoalElapsed(goal.wallClockMs))));
   lines.push(row('Turns', value(`${goal.turnsUsed}`)));
   lines.push(row('Tokens', value(formatTokenCount(goal.tokensUsed))));
+  if (goal.stopCondition !== undefined) {
+    lines.push(row('Iteration', value(`${goal.iteration}${goal.maxIterations !== undefined ? `/${String(goal.maxIterations)}` : ''}`)));
+  }
   if (!isComplete) {
     const stop = formatStopRow(goal);
     lines.push(
@@ -184,6 +187,9 @@ export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRA
 function formatStopRow(goal: GoalSnapshot): string | null {
   const { budget } = goal;
   const parts: string[] = [];
+  if (goal.stopCondition !== undefined) {
+    parts.push(`when ${goal.stopCondition}`);
+  }
   if (budget.turnBudget !== null) {
     parts.push(`after ${budget.turnBudget} turns (${goal.turnsUsed}/${budget.turnBudget})`);
   }

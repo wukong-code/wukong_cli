@@ -94,6 +94,8 @@ export type GoalStatus =
    */
   | 'complete';
 
+export type GoalStopCondition = 'verify-pass' | 'scan-clean' | 'judge-pass';
+
 /** Who performed a goal action. `cleared` is a record action, not a status. */
 export type GoalActor = 'user' | 'model' | 'runtime' | 'system';
 
@@ -108,6 +110,9 @@ interface GoalState {
   goalId: string;
   objective: string;
   completionCriterion?: string;
+  stopCondition?: GoalStopCondition;
+  maxIterations?: number;
+  iteration: number;
   status: GoalStatus;
   turnsUsed: number;
   tokensUsed: number;
@@ -144,6 +149,9 @@ export interface GoalSnapshot {
   readonly goalId: string;
   readonly objective: string;
   readonly completionCriterion?: string;
+  readonly stopCondition?: GoalStopCondition;
+  readonly maxIterations?: number;
+  readonly iteration: number;
   readonly status: GoalStatus;
   readonly turnsUsed: number;
   readonly tokensUsed: number;
@@ -189,6 +197,8 @@ export interface GoalChange {
 export interface CreateGoalInput {
   readonly objective: string;
   readonly completionCriterion?: string;
+  readonly stopCondition?: GoalStopCondition;
+  readonly maxIterations?: number;
   readonly replace?: boolean;
 }
 
@@ -258,6 +268,9 @@ export class GoalMode {
       goalId: record.goalId,
       objective: record.objective,
       completionCriterion: record.completionCriterion,
+      stopCondition: record.stopCondition,
+      maxIterations: record.maxIterations,
+      iteration: 0,
       status: 'active',
       turnsUsed: 0,
       tokensUsed: 0,
@@ -284,6 +297,7 @@ export class GoalMode {
     }
     if (record.turnsUsed !== undefined) state.turnsUsed = record.turnsUsed;
     if (record.tokensUsed !== undefined) state.tokensUsed = record.tokensUsed;
+    if (record.iteration !== undefined) state.iteration = record.iteration;
     if (record.wallClockMs !== undefined) {
       state.wallClockMs = record.wallClockMs;
       state.wallClockResumedAt = undefined;
@@ -370,10 +384,15 @@ export class GoalMode {
     }
 
     const completionCriterion = normalizeCompletionCriterion(input.completionCriterion);
+    const stopCondition = normalizeStopCondition(input.stopCondition);
+    const maxIterations = normalizeMaxIterations(input.maxIterations);
     const state: GoalState = {
       goalId: randomUUID(),
       objective,
       completionCriterion,
+      stopCondition,
+      maxIterations,
+      iteration: 0,
       status: 'active',
       turnsUsed: 0,
       tokensUsed: 0,
@@ -388,6 +407,8 @@ export class GoalMode {
       goalId: state.goalId,
       objective: state.objective,
       completionCriterion: state.completionCriterion,
+      stopCondition: state.stopCondition,
+      maxIterations: state.maxIterations,
     });
     this.trackGoalCreated(actor, input.replace === true);
     return this.toSnapshot(state);
@@ -583,6 +604,15 @@ export class GoalMode {
     return this.toSnapshot(state);
   }
 
+  async incrementIteration(): Promise<GoalSnapshot | null> {
+    const state = this.state;
+    if (state === undefined || state.status !== 'active') return null;
+    state.iteration += 1;
+    this.persistState(state);
+    this.appendGoalUpdate({ iteration: state.iteration });
+    return this.toSnapshot(state);
+  }
+
   // --- Internals ---------------------------------------------------------
 
   private clearInternal(
@@ -698,6 +728,9 @@ export class GoalMode {
       goalId: state.goalId,
       objective: state.objective,
       completionCriterion: state.completionCriterion,
+      stopCondition: state.stopCondition,
+      maxIterations: state.maxIterations,
+      iteration: state.iteration,
       status: state.status,
       turnsUsed: state.turnsUsed,
       tokensUsed: state.tokensUsed,
@@ -758,7 +791,18 @@ function budgetTelemetryProperties(limits: GoalBudgetLimits): TelemetryPropertie
   };
 }
 
+function normalizeMaxIterations(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  return Math.floor(value);
+}
+
 function normalizeCompletionCriterion(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed?.length ? trimmed : undefined;
+}
+
+function normalizeStopCondition(value: string | undefined): GoalStopCondition | undefined {
+  if (value === 'verify-pass' || value === 'scan-clean' || value === 'judge-pass') return value;
+  return undefined;
 }

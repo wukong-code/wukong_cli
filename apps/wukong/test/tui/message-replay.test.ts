@@ -101,6 +101,7 @@ function goalSnapshot(overrides: Partial<GoalSnapshot> = {}): GoalSnapshot {
     objective: 'Ship feature X',
     completionCriterion: 'tests pass',
     status,
+    iteration: 0,
     turnsUsed: 0,
     tokensUsed: 0,
     wallClockMs: 0,

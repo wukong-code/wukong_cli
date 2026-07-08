@@ -34,8 +34,11 @@ export function classifyCommandRisk(command: readonly string[]): CommandRisk | u
 }
 
 function basename(value: string): string {
-  const parts = value.split('/');
-  return parts[parts.length - 1] ?? value;
+  // Handle both POSIX and Windows separators, and strip Windows executable
+  // extensions so `C:\bin\rm.exe` classifies the same as `rm`.
+  const parts = value.split(/[\\/]/);
+  const name = parts[parts.length - 1] ?? value;
+  return name.replace(/\.(exe|cmd|bat)$/i, '');
 }
 
 function risk(id: string, message: string, command: readonly string[]): CommandRisk {

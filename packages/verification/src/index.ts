@@ -7,3 +7,5 @@ export * from './policy';
 export * from './guard';
 export * from './verify';
 export * from './scan';
+export * from './proof';
+export * from './judge';

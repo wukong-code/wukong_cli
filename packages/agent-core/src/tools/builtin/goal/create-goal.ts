@@ -21,6 +21,16 @@ export const CreateGoalToolInputSchema = z
       .string()
       .optional()
       .describe('How to verify the goal is complete. Include when the user provides one.'),
+    stopCondition: z
+      .enum(['verify-pass', 'scan-clean', 'judge-pass'])
+      .optional()
+      .describe('A deterministic gate that must pass before the goal can be marked complete.'),
+    maxIterations: z
+      .number()
+      .int()
+      .positive()
+      .optional()
+      .describe('Maximum number of loop iterations before the goal is blocked.'),
     replace: z
       .boolean()
       .optional()
@@ -49,6 +59,8 @@ export class CreateGoalTool implements BuiltinTool<CreateGoalToolInput> {
           {
             objective: args.objective,
             completionCriterion: args.completionCriterion,
+            stopCondition: args.stopCondition,
+            maxIterations: args.maxIterations,
             replace: args.replace,
           },
           'model',
