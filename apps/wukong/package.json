@@ -1,6 +1,6 @@
 {
   "name": "@wukong.today/code",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Wukong Code — AI agent for code verification and delivery",
   "license": "UNLICENSED",
   "author": "Wukong Code Team",
@@ -34,6 +34,12 @@
     "README.md"
   ],
   "type": "module",
+  "imports": {
+    "#/*": [
+      "./src/*.ts",
+      "./src/*/index.ts"
+    ]
+  },
   "publishConfig": {
     "access": "public",
     "provenance": true

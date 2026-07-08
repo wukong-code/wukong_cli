@@ -1,6 +1,6 @@
 {
   "name": "@wukong/vis",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "private": true,
   "description": "Debug visualization tool for wukong sessions",
   "license": "MIT",

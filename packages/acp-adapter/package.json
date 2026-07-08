@@ -1,6 +1,6 @@
 {
   "name": "@wukong/acp-adapter",
-  "version": "0.3.1",
+  "version": "0.3.2",
   "private": true,
   "description": "Agent Client Protocol adapter for wukong",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@wukong/server",
-  "version": "0.2.2",
+  "version": "0.2.3",
   "private": true,
   "description": "Local REST + WebSocket server exposing wukong SDK over a stable wire protocol.",
   "license": "MIT",

@@ -1,6 +1,6 @@
 {
   "name": "@wukong/migration-legacy",
-  "version": "0.1.14",
+  "version": "0.1.15",
   "description": "Migrate wukong-cli (~/.wukong/) data into wukong (~/.wukong/).",
   "license": "UNLICENSED",
   "type": "module",
