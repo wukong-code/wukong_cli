@@ -4,9 +4,13 @@ import { pipeline } from 'node:stream/promises';
 import { resolve } from 'node:path';
 import { createHash } from 'node:crypto';
 import { Readable } from 'node:stream';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 
 import { run } from './exec.mjs';
 import { appRoot, targetTriple } from './paths.mjs';
+
+const execFileAsync = promisify(execFile);
 
 const OFFICIAL_NODE_VERSION = 'v26.4.0';
 const NODE_SEA_CACHE_DIR = resolve(appRoot, '.node-sea');
@@ -73,6 +77,29 @@ async function nodeBinaryHasSentinel(nodePath) {
   }
 }
 
+async function nodeVersion(nodePath) {
+  try {
+    const { stdout } = await execFileAsync(nodePath, ['--version'], { maxBuffer: 1024 });
+    return stdout.trim();
+  } catch {
+    return null;
+  }
+}
+
+function versionGte(version, minVersion) {
+  // Strip leading 'v' and compare numeric components.
+  const parse = (v) => v.replace(/^v/, '').split('.').map(Number);
+  const a = parse(version);
+  const b = parse(minVersion);
+  for (let i = 0; i < Math.max(a.length, b.length); i++) {
+    const av = a[i] ?? 0;
+    const bv = b[i] ?? 0;
+    if (av > bv) return true;
+    if (av < bv) return false;
+  }
+  return true;
+}
+
 async function findUsableSystemNode() {
   const candidates = [process.execPath];
   if (process.env.PATH) {
@@ -84,7 +111,9 @@ async function findUsableSystemNode() {
   }
 
   for (const nodePath of candidates) {
-    if (await nodeBinaryHasSentinel(nodePath)) {
+    if (!(await nodeBinaryHasSentinel(nodePath))) continue;
+    const version = await nodeVersion(nodePath);
+    if (version && versionGte(version, OFFICIAL_NODE_VERSION)) {
       return nodePath;
     }
   }
