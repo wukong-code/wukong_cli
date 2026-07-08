@@ -46,6 +46,30 @@
 - [x] README / 用户指南补充新命令（只写已实现的）
 - [ ] 官网 hero 切换 loop control plane / proof-layer 叙事（协同 `wukong_web/TODO.md` P0）
 
+## 📋 P1: `wukong today` / `/today`（Daily Proof Briefing）
+
+> 方案: [docs/design/today.md](docs/design/today.md) — 今日简报与今日 focus 合并为一条命令；依赖 stats schema，在 proof/loop 稳定后实施。
+
+### 前置：本地 stats 事件流
+
+- [ ] 定义 `~/.wukong/stats/events.jsonl` schema（verify / scan / proof / guard / goal / loop 事件）
+- [ ] 在现有命令出口写入事件（verify、scan、proof、guard、goal 完成、loop 轮次）
+- [ ] 按自然日聚合与 streak 计算（连续 N 天至少 1 次 clean verify）
+
+### 实现
+
+- [ ] `packages/verification` 或独立 `packages/stats`：`buildTodayBriefing()` + `TodayBriefing` 类型
+- [ ] `~/.wukong/today/focus.json` 读写；`wukong today "..."` 设 focus，`--clear-focus` 清除
+- [ ] `apps/wukong/src/cli/sub/today.ts` + TUI `/today`（无参=简报，参数=设 focus，`/today clear`）
+- [ ] 人类可读输出 + `--json`；Next 1–2 条由规则映射（如 BLOCKED proof → 建议 `wukong proof`）
+- [ ] 登录态可选：hosted report 今日计数 + `https://wukong.today/dashboard` 链接（失败不阻塞本地简报）
+- [ ] 测试：离线简报、设/清 focus、JSON schema、不触发 verify 执行
+
+### 不做
+
+- [ ] 不对齐 web legacy `/api/today`（xp/mood/quests）
+- [ ] 不把 today 做成任务管理器（执行归 `/goal`）
+
 ## 📋 下一批: Hosted Reports 前置（对应 ROADMAP Milestone 1）
 
 - [ ] `verify` / `scan` 增加登录态 report upload（opt-in + 清晰 redaction preview；上传失败不影响本地报告）
@@ -58,7 +82,7 @@
 - [ ] `/schedule` 云端例程 — 归 hosted（Milestone 3+）；本机定时巡检用已实现的 cron 工具
 - [ ] `/ship` 发布 gate — 依赖 proof 先稳定（P1）
 - [ ] `wukong review` / `test` / `retro` — P1，构建在 `@wukong/verification` 上
-- [ ] `wukong sync` / `today` / `journey` — 先定义本地数据模型与 redaction 边界（见 [test-login-sync.md](docs/test/test-login-sync.md)）
+- [ ] `wukong sync` / `journey` — sync 见 [test-login-sync.md](docs/test/test-login-sync.md)；journey 归 P2
 - [ ] guard shell hook 自动注入 / PATH shim / agent 祖先进程识别 — P1，需幂等与备份测试
 - [ ] `StopCondition.kind = 'skill'` 自定义验证 skill — 验证 skill 机制落地后接入（P0.5 末或 P1 初）
 
@@ -76,4 +100,4 @@
 
 ---
 
-**最后更新**: 2026-07-08
+**最后更新**: 2026-07-08（含 P1 `today` 规划）

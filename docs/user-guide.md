@@ -131,7 +131,7 @@ pnpm -C apps/wukong run dev:cli-only -- guard --status
 | `wukong_verify` agent tool | 让 agent 在完成前调用验证 | 已实现，作为 builtin tool 接入 agent-core |
 | `/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop` | TUI 内验证、扫描、guard 状态、查看报告、goal/loop 驱动 | 已实现 |
 | `wukong sync` | 云同步 | 等待新 base API 与本地数据模型对齐 |
-| `wukong today` | 今日上下文 | 等待 verify/guard stats 落地后再实现 |
+| `wukong today` / `/today` | Daily Proof Briefing：今日 verify/scan/proof/guard 统计 + focus（位置参数设置）；与 `wukong.today` 对齐 | 待实现（P1），见 [today 设计](design/today.md) |
 
 详见 [商业化重构技术实现方案](tech/commercial-refactor-implementation.md)。
 

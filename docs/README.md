@@ -74,6 +74,8 @@ wukong upgrade
   定义当前新 Kimi-code base 与 P0 verification/guard 架构。
 - [产品设计文档](design/design.md)
   定义未来验证型产品的交互、成长体系和命令设计。
+- [today 命令设计](design/today.md)
+  定义 `wukong today` / `/today`：Daily Proof Briefing（今日简报 + focus 合并）。
 - [登录与同步验收计划](test/test-login-sync.md)
   记录登录与同步能力进入实现阶段前应满足的验收条件。
 - [Verification CLI 自动化测试计划](test/verification-cli-test-plan.md)
@@ -86,5 +88,5 @@ wukong upgrade
 1. Milestone 0.5 已按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序完整落地（`/loop` 为本机迭代 loop，复用 `/goal` 执行核与 agent-core cron scheduler 实现 `--every` 轮间 pacing，不新写定时引擎）。
 2. 实现 report history / redaction metadata，避免未来云端报告上传源码 diff 或敏感片段。
 3. 统一发布渠道、package version、安装文档和收费边界。
-4. 实现 sync/today 时先定义本地数据模型和 redaction 边界。
+4. 实现 `wukong today`（P1）：先定 stats 事件 schema，再实现简报 + focus，见 [today 设计](design/today.md)；`sync` / `journey` 仍待本地数据模型与 redaction 边界。
 5. 在文档站重新发布前，补齐实际页面或保持当前单层文档结构，不再链接不存在的 `/en/guides/*`、`/zh/guides/*`。

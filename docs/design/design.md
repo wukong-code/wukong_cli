@@ -157,20 +157,22 @@ Continue? [y/N]
 | 七十二变 | 未来专家工作模式 |
 | 取经路 | 未来 verification stats 和复盘 |
 
-## 7. 成长体系
+## 7. 成长体系与 `today`
 
-成长体系依赖真实事件，不应先于 verify/guard 落地。
+成长体系依赖真实 verification 事件，不应先于 verify/guard 落地。`wukong today` / `/today` 是 P1 的**日维度入口**（简报 + focus 合并为一条命令），详见 [today 设计](today.md)。
 
-P1 之后可基于这些事件计算：
+P1 之后可基于这些事件计算并在 `today` 中展示：
 
-- verification count。
-- verification streak。
+- verification count（今日 / streak）。
 - guard confirmed/blocked events。
-- zero-risk ship。
-- report shared count。
-- team rule adoption。
+- proof pass/blocked 与 last proof 摘要。
+- goal / loop 进行中与完成数。
 
-不再使用 companion 时代指标，例如喂养次数、饥饿值、情绪日记。
+`today` focus 与 `/goal` 分工：focus 是今天的大方向；goal 是可执行任务 + 停止条件。
+
+P1 之后 `retro`（周）、P2 之后 `journey`（长期趋势）是 `today` 在时间维度上的延伸。
+
+不再使用 companion 时代指标，例如喂养次数、饥饿值、情绪日记、XP quests。
 
 ## 8. TUI 关系
 
@@ -193,7 +195,8 @@ P1 之后可基于这些事件计算：
 
 ## 10. 设计 TODO
 
-1. 在 agent tool 实现后补 structured result 样例。
-2. 在 stats 语义稳定后再设计 `today`、`journey`、badge。
-3. 在云端方案确定后再设计 Pro/Team dashboard。
+1. ~~在 agent tool 实现后补 structured result 样例。~~ 已完成。
+2. `today` 命令契约与验收已写入 [today.md](today.md)；实现前需先定 stats 事件 schema。
+3. 在云端方案确定后再设计 Pro/Team dashboard 与 focus sync。
 4. 如果未来实现 shell profile 自动安装，再补 zsh/bash enable/disable 体验。
+5. `journey` / badge 在 stats 与 `today` 稳定后再设计（P2）。

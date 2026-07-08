@@ -45,7 +45,7 @@ wukong review    # AI 辅助代码审查（P1）
 wukong test      # 项目测试入口（P1）
 wukong retro     # 迭代复盘（P1）
 wukong sync
-wukong today
+wukong today     # Daily Proof Briefing：今日简报 + focus（P1，见 docs/design/today.md）
 wukong journey
 ```
 
@@ -93,7 +93,7 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 | 分身术 | agent 能力分发 | `wukong_verify` tool / MCP bridge |
 | 筋斗云 | 持续驱动与远程能力 | `loop`（本机迭代）、cron 工具（本机巡检，已实现）、`schedule`（云端例程）、`sync`、cloud reports |
 | 七十二变 | 专家模式 | future prompt/tool profiles |
-| 取经路 | 成长与复盘 | stats、streak、retro，P1+ |
+| 取经路 | 成长与复盘 | `today`（日简报+focus）、`retro`（周）、`journey`（长期），P1+ |
 
 ## 3. 目标命令结构
 
@@ -123,10 +123,11 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 
 | 命令 | 状态 | 目标 |
 |---|---|---|
+| `wukong today` / `/today` | 待实现 | **Daily Proof Briefing**：今日 verify/scan/proof/guard 统计 + 工作区快照 + streak + 基于状态的 Next；位置参数设今日 focus，与 `wukong.today` 域名对齐。详见 [today 设计](../design/today.md) |
 | `wukong review` | 待实现 | AI 辅助代码审查，消耗 credits 或本地模型 |
 | `wukong test` | 待实现 | 项目测试入口和模板化测试策略 |
 | `wukong ship` | 待实现 | proof + 版本/changelog/dry-run 发布前 gate |
-| `wukong retro` | 待实现 | 生成迭代复盘和质量趋势 |
+| `wukong retro` | 待实现 | 生成迭代复盘和质量趋势（周维度，依赖 stats） |
 
 ### P2: 云端与团队
 
@@ -136,7 +137,8 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 | team rules | 待实现 | 团队共享验证规则和 guard policy |
 | audit log | 待实现 | 记录验证、拦截和发布证据 |
 | `/schedule` 云端例程 | 待实现 | 机器关了也跑的 time-based loop，归 hosted（Milestone 3+） |
-| sync/today/journey | 待实现 | 基于真实 stats 做上下文和成长体系 |
+| `sync` | 待实现 | 与 wukong.today 同步 config / report metadata（不上传源码 diff） |
+| `journey` | 待实现 | 长期 verification 趋势与 streak 可视化（月维度，P2） |
 
 ## 3.1 Loop Engineering 三层叙事（如实标注状态）
 
@@ -145,7 +147,7 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 | 层 | 含义 | Wukong 对应 | 状态 |
 |---|---|---|---|
 | 第一层：Agentic Coding Loop | agent 写代码 → 跑测试 → 修错 → 再跑 | `/loop`（本机）+ `/schedule`（云端）+ `/goal` + `/verify` + `/scan` + `/guard` | 工具层 + `/goal` 已实现，`/loop`/`/schedule` 待实现 |
-| 第二层：Developer Feedback Loop | 人看报告、决定接受、更新规则 | `/proof`、`/judge`、`/report`、`/sessions`、`/undo`、`/rules`(待实现) | 一半已实现 |
+| 第二层：Developer Feedback Loop | 人看报告、决定接受、更新规则 | `/proof`、`/judge`、`/report`、`/today`、`/sessions`、`/undo`、`/rules`(待实现) | 一半已实现；`/today` 待实现（P1） |
 | 第三层：External Feedback Loop | 用户 bug、CI 失败、issue、PR review 回到 loop | GitHub Issues、CI、Sentry、Linear、Slack 集成 | 未实现，归 hosted/CI |
 
 ## 3.2 Loop 代码质量保障原则
