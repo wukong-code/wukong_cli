@@ -277,6 +277,32 @@ describe('parseLoopCommand', () => {
     });
   });
 
+  it('parses --every duration as minIntervalMs', () => {
+    expect(parseLoopCommand('--until verify-pass --every 5m fix tests')).toEqual({
+      kind: 'create',
+      objective: 'fix tests',
+      stopCondition: 'verify-pass',
+      maxIterations: 10,
+      minIntervalMs: 300_000,
+    });
+    expect(parseLoopCommand('--until verify-pass --every 1h --max-iterations 3 fix tests')).toEqual({
+      kind: 'create',
+      objective: 'fix tests',
+      stopCondition: 'verify-pass',
+      maxIterations: 3,
+      minIntervalMs: 3_600_000,
+    });
+  });
+
+  it('rejects invalid --every values', () => {
+    expect(parseLoopCommand('--until verify-pass --every fix tests')).toMatchObject({
+      kind: 'error',
+    });
+    expect(parseLoopCommand('--until verify-pass --every 5x fix tests')).toMatchObject({
+      kind: 'error',
+    });
+  });
+
   it('parses --until judge-pass', () => {
     expect(parseLoopCommand('--until judge-pass make mergeable')).toEqual({
       kind: 'create',
@@ -783,6 +809,33 @@ describe('dispatchInput /goal integration', () => {
     });
     expect(host.sendNormalUserInput).toHaveBeenCalledWith('Ship feature X');
     expect(host.sendNormalUserInput).not.toHaveBeenCalledWith('/goal Ship feature X');
+  });
+});
+
+describe('handleLoopSlashCommand', () => {
+  it('creates a loop goal with stop condition, max iterations, and min interval', async () => {
+    const { host, session } = makeHost();
+
+    await handleLoopSlashCommand(host, '--until verify-pass --every 5m --max-iterations 3 fix tests');
+
+    expect(session.createGoal).toHaveBeenCalledWith(
+      expect.objectContaining({
+        objective: 'fix tests',
+        stopCondition: 'verify-pass',
+        maxIterations: 3,
+        minIntervalMs: 300_000,
+      }),
+    );
+    expect(host.sendNormalUserInput).toHaveBeenCalledWith('fix tests');
+  });
+
+  it('rejects an invalid --every duration', async () => {
+    const { host, session } = makeHost();
+
+    await handleLoopSlashCommand(host, '--until verify-pass --every 5x fix tests');
+
+    expect(session.createGoal).not.toHaveBeenCalled();
+    expect(host.showError).toHaveBeenCalled();
   });
 });
 

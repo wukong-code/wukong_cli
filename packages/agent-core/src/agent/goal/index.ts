@@ -112,6 +112,7 @@ interface GoalState {
   completionCriterion?: string;
   stopCondition?: GoalStopCondition;
   maxIterations?: number;
+  minIntervalMs?: number;
   iteration: number;
   status: GoalStatus;
   turnsUsed: number;
@@ -151,6 +152,7 @@ export interface GoalSnapshot {
   readonly completionCriterion?: string;
   readonly stopCondition?: GoalStopCondition;
   readonly maxIterations?: number;
+  readonly minIntervalMs?: number;
   readonly iteration: number;
   readonly status: GoalStatus;
   readonly turnsUsed: number;
@@ -199,6 +201,7 @@ export interface CreateGoalInput {
   readonly completionCriterion?: string;
   readonly stopCondition?: GoalStopCondition;
   readonly maxIterations?: number;
+  readonly minIntervalMs?: number;
   readonly replace?: boolean;
 }
 
@@ -270,6 +273,7 @@ export class GoalMode {
       completionCriterion: record.completionCriterion,
       stopCondition: record.stopCondition,
       maxIterations: record.maxIterations,
+      minIntervalMs: record.minIntervalMs,
       iteration: 0,
       status: 'active',
       turnsUsed: 0,
@@ -386,12 +390,14 @@ export class GoalMode {
     const completionCriterion = normalizeCompletionCriterion(input.completionCriterion);
     const stopCondition = normalizeStopCondition(input.stopCondition);
     const maxIterations = normalizeMaxIterations(input.maxIterations);
+    const minIntervalMs = normalizeMinIntervalMs(input.minIntervalMs);
     const state: GoalState = {
       goalId: randomUUID(),
       objective,
       completionCriterion,
       stopCondition,
       maxIterations,
+      minIntervalMs,
       iteration: 0,
       status: 'active',
       turnsUsed: 0,
@@ -409,6 +415,7 @@ export class GoalMode {
       completionCriterion: state.completionCriterion,
       stopCondition: state.stopCondition,
       maxIterations: state.maxIterations,
+      minIntervalMs: state.minIntervalMs,
     });
     this.trackGoalCreated(actor, input.replace === true);
     return this.toSnapshot(state);
@@ -730,6 +737,7 @@ export class GoalMode {
       completionCriterion: state.completionCriterion,
       stopCondition: state.stopCondition,
       maxIterations: state.maxIterations,
+      minIntervalMs: state.minIntervalMs,
       iteration: state.iteration,
       status: state.status,
       turnsUsed: state.turnsUsed,
@@ -795,6 +803,15 @@ function normalizeMaxIterations(value: number | undefined): number | undefined {
   if (value === undefined) return undefined;
   if (!Number.isFinite(value) || value <= 0) return undefined;
   return Math.floor(value);
+}
+
+function normalizeMinIntervalMs(value: number | undefined): number | undefined {
+  if (value === undefined) return undefined;
+  if (!Number.isFinite(value) || value <= 0) return undefined;
+  // The cron scheduler resolves to the next minute, so sub-minute intervals
+  // are rounded up at fire time anyway. Enforce a 1-minute floor here so the
+  // user-visible option matches the actual scheduler resolution.
+  return Math.max(60_000, Math.floor(value));
 }
 
 function normalizeCompletionCriterion(value: string | undefined): string | undefined {

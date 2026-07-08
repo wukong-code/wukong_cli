@@ -89,6 +89,7 @@ export interface AgentRecordEvents {
     completionCriterion?: string;
     stopCondition?: 'verify-pass' | 'scan-clean' | 'judge-pass';
     maxIterations?: number;
+    minIntervalMs?: number;
   };
   'goal.update': {
     status?: GoalStatus;

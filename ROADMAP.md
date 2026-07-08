@@ -33,7 +33,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 |---|---|---|---|---|
 | Turn-based | TUI 默认 agentic loop | 用户 prompt | agent 自判完成 | 已实现 |
 | Goal-based `/goal` | 单任务驱动 agent 多轮推进 | 实时手动 | agent 自评完成 or 回合/预算上限 or verification gate | 已实现（verification gate 已落地，归 M0.5） |
-| Time-based `/loop` | 本机迭代驱动 agent 直到验证通过 | 手动启动，轮次自动衔接（`--every` 可选节流） | 停止条件满足 or 迭代上限 or 取消 | 已实现（核心；`--every` 节流待完整落地） |
+| Time-based `/loop` | 本机迭代驱动 agent 直到验证通过 | 手动启动，轮次自动衔接（`--every` 复用 cron scheduler 节流） | 停止条件满足 or 迭代上限 or 取消 | 已实现 |
 | Cloud routine `/schedule` | 云端例程，机器关了也跑 | 计划 | 任务达标退出，例程持续 | 待实现（归 hosted） |
 | 工具层 `/verify` `/scan` `/guard` | deterministic proof | 手动/被 loop 调用 | 单次 | 已实现 |
 | 证据层 `/proof` | 把三件套串成 Merge Proof Report | 手动 | 单次 | 已实现 |
@@ -75,7 +75,6 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 | 模块 | 状态 | 为什么重要 |
 |---|---|---|
-| `/loop --every` cron scheduler 节流 | 未实现 | 让 `/loop` 支持等 CI 等外部反馈的轮间 pacing；参数已解析，当前为 no-op |
 | `/schedule` 云端例程 | 未实现 | 机器关了也跑的例程，归 hosted（Milestone 3+）；本机定时巡检先用已实现的 cron 工具 |
 | `/ship` 发布 gate | 未实现 | proof + 版本/changelog/dry-run，更靠后的发布前 gate |
 | Hosted report upload | 未实现 | 把本地 verify 变成可收费 Web 能力 |
@@ -127,7 +126,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 ## Milestone 0.5: Loop Control Plane + Merge Proof
 
-状态：核心已实现；`--every` cron scheduler 节流待完整落地。
+状态：已实现。
 
 目标：在 Loop Engineering 热度的窗口期内，用最低成本打出真正的产品核心——不是一个"更好的 coding agent"，而是一个 **AI Coding Loop 的控制层**。把已实现的工具层（verify/scan/guard/goal）用 `/loop` 编排起来，并以 `/proof` 作为可分享的 Wow Moment。
 
@@ -155,7 +154,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 - `/loop` TUI slash command + `wukong loop` CLI subcommand。
 - 核心语义 iterate-until-verified：驱动 agent 朝目标推进 → goal gate 评估 → 未过则注入失败反馈立即开始下一轮，直到停止条件满足、达到迭代上限或人取消。**关机即停。**
-- `--every` 是可选的轮间最小间隔（节流，用于等 CI 等外部反馈），由 agent-core cron scheduler 驱动，不新写 timer；当前版本已解析该参数，但完整节流逻辑待后续落地。
+- `--every` 是可选的轮间最小间隔（节流，用于等 CI 等外部反馈），由 agent-core cron scheduler 驱动，不新写 timer。
 - 定时巡检型任务不塞进 `/loop`：本机用 cron 工具，云端归 `/schedule`（hosted，Milestone 3+）。
 
 **E. 文案**
@@ -175,7 +174,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - 在含 placeholder/secret/失败测试的项目产出 BLOCKED 报告，并定位原因。
 - `wukong judge --assume-broken` 在不干净项目直接给 BLOCK。
 - 带停止条件的 `/goal`：agent 宣布完成但 verify 失败时，gate 拒绝完成并注入反馈继续，不由 agent 自评过关。
-- `wukong loop "<目标>" --until verify-pass` / `/loop` 持续驱动：agent 改代码 → gate 评估 → 未过则继续，直到停止条件满足、达到迭代上限或人取消；关机即停。`--every` 参数已接受，完整 cron-scheduler 节流待后续落地。
+- `wukong loop "<目标>" --until verify-pass` / `/loop` 持续驱动：agent 改代码 → gate 评估 → 未过则继续，直到停止条件满足、达到迭代上限或人取消；关机即停。`--every` 复用 cron scheduler 实现轮间 pacing。
 - `/loop` 达到迭代上限时明确返回 max-iterations 状态，不假装成功。
 - 报告可被人读懂并定位失败原因。
 - 官网 hero 切换为 loop control plane / proof-layer 文案后，不出现任何未实现能力的承诺（尤其不宣称 `/schedule` 云端例程、CI 集成、第二-agent 审查已可用）。

@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Agent } from '../../src/agent';
+import type { CronManager } from '../../src/agent/cron/manager';
 import { GoalMode } from '../../src/agent/goal';
 import { UpdateGoalTool } from '../../src/tools/builtin';
 import { executeTool } from './fixtures/execute-tool';
@@ -160,5 +161,52 @@ describe('UpdateGoalTool verification gate', () => {
     expect(result.stopTurn).toBe(true);
     expect(store.getGoal().goal?.status).toBe('blocked');
     expect(store.getGoal().goal?.terminalReason).toBe('max-iterations');
+  });
+
+  it('schedules a one-shot cron retry when gate fails and minIntervalMs is set', async () => {
+    const store = makeStore();
+    const reminders: Array<{ readonly content: string; readonly origin: unknown }> = [];
+    await store.createGoal({
+      objective: 'work',
+      stopCondition: 'verify-pass',
+      minIntervalMs: 300_000,
+    });
+    mocks.runVerification.mockResolvedValue({ status: 'failed' });
+
+    const addTask = vi.fn();
+    const agent = makeAgent(store, reminders);
+    (agent as unknown as { cron: CronManager | null }).cron = {
+      addTask,
+      clocks: { wallNow: () => 1_000_000_000 },
+    } as unknown as CronManager;
+
+    const result = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+
+    expect(result.stopTurn).toBe(true);
+    expect(addTask).toHaveBeenCalledOnce();
+    const init = addTask.mock.calls[0]![0] as { readonly cron: string; readonly prompt: string; readonly recurring: boolean };
+    expect(init.recurring).toBe(false);
+    expect(init.prompt).toContain('work');
+    expect(init.prompt).toContain('verify-pass');
+    expect(init.cron).toMatch(/^\d+ \d+ \d+ \d+ \*$/);
+  });
+
+  it('continues immediately when gate fails without minIntervalMs', async () => {
+    const store = makeStore();
+    const reminders: Array<{ readonly content: string; readonly origin: unknown }> = [];
+    await store.createGoal({ objective: 'work', stopCondition: 'verify-pass' });
+    mocks.runVerification.mockResolvedValue({ status: 'failed' });
+
+    const addTask = vi.fn();
+    const agent = makeAgent(store, reminders);
+    (agent as unknown as { cron: CronManager | null }).cron = {
+      addTask,
+      clocks: { wallNow: () => 1_000_000_000 },
+    } as unknown as CronManager;
+
+    const result = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+
+    expect(result.stopTurn).toBe(false);
+    expect(addTask).not.toHaveBeenCalled();
   });
 });

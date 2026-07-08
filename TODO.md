@@ -36,16 +36,15 @@
 
 - [x] `apps/wukong/src/cli/sub/loop.ts` + TUI `/loop`（含 `status/stop`；`pause/resume` 复用 `/goal`）
 - [x] 核心语义 iterate-until-verified: 默认紧循环，每轮注入带停止条件的 goal，gate 未过则反馈注入下一轮
-- [ ] `--every` 可选轮间节流，复用 agent-core cron scheduler（当前参数已解析但为 no-op，待后续完整落地）
+- [x] `--every` 可选轮间节流，复用 agent-core cron scheduler（支持 `<n>s/m/h/d`，最低 1 分钟）
 - [x] 失控防护: `--max-iterations`（默认 10）、单轮超时、`--dry-run`、人可随时 stop
 - [x] 达到迭代上限返回 `max-iterations` 状态，不假装成功
-- [x] 测试: 见测试计划 §6 第 4 步（含"停止判断不由 agent 自评"断言）
+- [x] 测试: 见测试计划 §6 第 4 步（含"停止判断不由 agent 自评"与"无第二套 timer"断言）
 
 ### 文案同步（P0.5 收尾）
 
 - [x] README / 用户指南补充新命令（只写已实现的）
 - [ ] 官网 hero 切换 loop control plane / proof-layer 叙事（协同 `wukong_web/TODO.md` P0）
-- [ ] `--every` 完整节流文档与实现（P0.5 后续或 P1 初）
 
 ## 📋 下一批: Hosted Reports 前置（对应 ROADMAP Milestone 1）
 

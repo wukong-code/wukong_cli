@@ -20,6 +20,7 @@ import type { Agent } from '#/agent';
 import { z } from 'zod';
 
 import type { GoalStopCondition } from '../../../agent/goal';
+import type { CronManager } from '../../../agent/cron/manager';
 import {
   GOAL_BLOCKED_REMINDER_NAME,
   GOAL_COMPLETION_REMINDER_NAME,
@@ -86,6 +87,13 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
                 `Goal verification gate failed: ${gate.reason} The goal remains active. Address the failures before marking complete.`,
                 { kind: 'system_trigger', name: 'goal_gate_failed' },
               );
+              const scheduled = current !== null && scheduleLoopRetry(this.agent, current, gate.reason);
+              if (scheduled) {
+                return {
+                  output: `Goal gate failed: ${gate.reason} A retry is scheduled after the configured interval.`,
+                  stopTurn: true,
+                };
+              }
               return {
                 output: `Goal gate failed: ${gate.reason} Continuing goal.`,
                 stopTurn: false,
@@ -149,4 +157,31 @@ async function runGoalGate(stopCondition: GoalStopCondition, cwd: string): Promi
         : { passed: true, reason: 'judge passed.' };
     }
   }
+}
+
+/**
+ * If the loop is configured with a minimum interval between iterations,
+ * schedule a one-shot cron task to re-inject the loop prompt after that
+ * interval. This reuses the existing agent-core cron scheduler instead of
+ * introducing a second timer.
+ *
+ * Returns true when a retry was scheduled; false when there is no interval,
+ * no cron manager (subagents/tests), or cron is disabled.
+ */
+function scheduleLoopRetry(agent: Agent, current: { readonly minIntervalMs?: number; readonly iteration: number; readonly maxIterations?: number; readonly objective: string; readonly stopCondition?: string }, reason: string): boolean {
+  const minIntervalMs = current.minIntervalMs;
+  if (minIntervalMs === undefined || minIntervalMs <= 0) return false;
+
+  const cron: CronManager | null = agent.cron;
+  if (cron === null) return false;
+  if (process.env['WUKONG_DISABLE_CRON'] === '1') return false;
+
+  const fireAt = cron.clocks.wallNow() + minIntervalMs;
+  const date = new Date(fireAt);
+  const cronExpr = `${date.getMinutes()} ${date.getHours()} ${date.getDate()} ${date.getMonth() + 1} *`;
+  const maxText = current.maxIterations !== undefined ? String(current.maxIterations) : 'unlimited';
+  const prompt = `Continue the loop toward: ${current.objective} (iteration ${String(current.iteration)}/${maxText}, stop when ${current.stopCondition ?? 'complete'}). The previous attempt did not pass the gate: ${reason}. Make the next attempt and only mark the goal complete when the gate passes.`;
+
+  cron.addTask({ cron: cronExpr, prompt, recurring: false });
+  return true;
 }

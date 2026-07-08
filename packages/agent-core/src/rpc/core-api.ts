@@ -352,6 +352,7 @@ export interface CreateGoalPayload {
   readonly replace?: boolean;
   readonly stopCondition?: 'verify-pass' | 'scan-clean' | 'judge-pass';
   readonly maxIterations?: number;
+  readonly minIntervalMs?: number;
 }
 
 export interface GetWukongConfigPayload {

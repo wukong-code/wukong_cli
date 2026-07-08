@@ -8,7 +8,7 @@
 
 Wukong Code 是本地优先的终端 AI coding agent，定位是 **AI Coding Loop 的控制层与验证层**。它不和 Cursor / Claude Code / Codex 拼写代码，而是补上它们留下的问题：*这段 AI 写的代码能不能合并？*
 
-当前 P0 本地闭环已实现：`wukong verify`、`wukong scan`、`wukong guard`、对应 TUI slash commands（`/verify`、`/scan`、`/guard`、`/report`、`/goal`），以及 `wukong_verify` 内置 agent tool。Milestone 0.5 的 `/loop`（本机迭代 loop）、`/proof`（Merge Proof Report）、`/judge`（只审不写的 evaluator）和 `/goal --until` verification gate 已在 CLI 与 TUI 中实现。`/loop --every` 参数已被接受，但基于 cron scheduler 的轮间节流尚未完全落地。`/schedule`（云端例程）随 hosted 推进。云同步、托管报告、计费、团队规则和深度 review 仍是后续工作。
+当前 P0 本地闭环已实现：`wukong verify`、`wukong scan`、`wukong guard`、对应 TUI slash commands（`/verify`、`/scan`、`/guard`、`/report`、`/goal`），以及 `wukong_verify` 内置 agent tool。Milestone 0.5 的 `/loop`（本机迭代 loop，含 `--every` cron scheduler  pacing）、`/proof`（Merge Proof Report）、`/judge`（只审不写的 evaluator）和 `/goal --until` verification gate 已在 CLI 与 TUI 中实现。`/schedule`（云端例程）随 hosted 推进。云同步、托管报告、计费、团队规则和深度 review 仍是后续工作。
 
 ## 当前命令面
 
@@ -83,7 +83,7 @@ pnpm build      # 构建所有包
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [技术实现方案](docs/tech/commercial-refactor-implementation.md)
 
-P0 本地 CLI 命令、TUI 验证命令、`/proof`、`/judge`、`/goal --until` verification gate、`/loop` 和 `wukong_verify` agent tool 已经实现。剩余文档继续追踪 `/loop --every` cron scheduler 节流、云端报告、计费、团队规则和深度 review 等后续工作。
+P0 本地 CLI 命令、TUI 验证命令、`/proof`、`/judge`、`/goal --until` verification gate、`/loop`（含 `--every` cron scheduler pacing）和 `wukong_verify` agent tool 已经实现。剩余文档继续追踪云端报告、计费、团队规则和深度 review 等后续工作。
 
 ## 许可证
 

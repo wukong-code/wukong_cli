@@ -1,5 +1,7 @@
 import { ErrorCodes, isWukongError, type PermissionMode } from '@wukong/wukong-sdk';
 
+import { parseLoopDuration } from '#/utils/duration';
+
 import {
   GoalStartPermissionPromptComponent,
   type GoalStartPermissionChoice,
@@ -62,6 +64,7 @@ export type ParsedGoalCommand =
       readonly replace: boolean;
       readonly stopCondition?: 'verify-pass' | 'scan-clean' | 'judge-pass';
       readonly maxIterations?: number;
+      readonly minIntervalMs?: number;
     }
   | { readonly kind: 'next-add'; readonly objective: string }
   | { readonly kind: 'next-manage' }
@@ -419,6 +422,7 @@ async function startGoal(
       replace: parsed.replace,
       stopCondition: parsed.stopCondition,
       maxIterations: parsed.maxIterations,
+      minIntervalMs: parsed.minIntervalMs,
     });
   } catch (error) {
     if (isWukongError(error) && error.code === ErrorCodes.GOAL_ALREADY_EXISTS) {
@@ -526,6 +530,7 @@ export type ParsedLoopCommand =
       readonly objective: string;
       readonly stopCondition: 'verify-pass' | 'scan-clean' | 'judge-pass';
       readonly maxIterations: number;
+      readonly minIntervalMs?: number;
     }
   | { readonly kind: 'error'; readonly message: string; readonly severity?: 'error' | 'hint' };
 
@@ -539,6 +544,7 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
   const tokens = args.split(/\s+/);
   let index = 0;
   let maxIterations = DEFAULT_MAX_ITERATIONS;
+  let minIntervalMs: number | undefined;
 
   const stopCondition = parseStopCondition(tokens, index);
   if (stopCondition.condition !== undefined) {
@@ -557,11 +563,15 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
       return { kind: 'error', message: '`--max-iterations` requires a positive integer.' };
     }
     if (token === '--every') {
-      // `--every` is accepted but not yet implemented as a paced throttle; it is
-      // treated as a no-op for this milestone.
-      if (tokens[index + 1] === undefined) {
+      const rawDuration = tokens[index + 1];
+      if (rawDuration === undefined) {
         return { kind: 'error', message: '`--every` requires a duration.' };
       }
+      const parsed = parseLoopDuration(rawDuration);
+      if (parsed.kind === 'error') {
+        return { kind: 'error', message: parsed.message };
+      }
+      minIntervalMs = parsed.ms;
       index += 2;
       continue;
     }
@@ -589,7 +599,7 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
       message: `Loop objective is too long (max ${MAX_GOAL_OBJECTIVE_LENGTH} characters).`,
     };
   }
-  return { kind: 'create', objective, stopCondition: stopCondition.condition, maxIterations };
+  return { kind: 'create', objective, stopCondition: stopCondition.condition, maxIterations, minIntervalMs };
 }
 
 export async function handleLoopSlashCommand(host: SlashCommandHost, args: string): Promise<void> {
@@ -614,6 +624,7 @@ export async function handleLoopSlashCommand(host: SlashCommandHost, args: strin
           replace: false,
           stopCondition: parsed.stopCondition,
           maxIterations: parsed.maxIterations,
+          minIntervalMs: parsed.minIntervalMs,
         },
         args,
         {

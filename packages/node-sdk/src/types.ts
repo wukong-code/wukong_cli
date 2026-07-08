@@ -74,6 +74,7 @@ export interface CreateGoalInput {
   readonly replace?: boolean;
   readonly stopCondition?: 'verify-pass' | 'scan-clean' | 'judge-pass';
   readonly maxIterations?: number;
+  readonly minIntervalMs?: number;
 }
 
 export type TextPromptPart = Extract<ContentPart, { type: 'text' }>;
