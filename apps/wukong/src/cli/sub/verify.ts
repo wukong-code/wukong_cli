@@ -1,10 +1,12 @@
 import {
   runVerification,
+  renderVerificationReport,
   type VerificationOptions,
   type VerificationResult,
 } from '@wukong/verification';
 import type { Command } from 'commander';
 
+import { uploadReport } from '#/cli/lib/report-upload';
 import { localDateString, recordStatEvent } from '#/utils/stats';
 import type { VerifyStatEvent } from '#/utils/stats';
 
@@ -20,6 +22,7 @@ export interface VerifyCliOptions {
   readonly timeoutSeconds?: number;
   readonly json?: boolean;
   readonly strict?: boolean;
+  readonly upload?: boolean;
 }
 
 export interface VerifyDeps {
@@ -44,6 +47,17 @@ export async function handleVerify(deps: VerifyDeps, options: VerifyCliOptions):
     deps.onResult?.(result);
 
     deps.stdout.write(options.json === true ? `${JSON.stringify(result, null, 2)}\n` : formatVerify(result));
+
+    if (options.upload === true) {
+      const markdown = result.report ?? renderVerificationReport(result);
+      const outcome = await uploadReport({ kind: 'verify', result, markdown });
+      if (outcome.ok) {
+        deps.stdout.write(`\nUploaded: ${outcome.shareUrl}\n`);
+      } else {
+        deps.stderr.write(`\nUpload skipped: ${outcome.reason}\n`);
+      }
+    }
+
     return result.status === 'failed' ? 1 : 0;
   } catch (error) {
     deps.stderr.write(`wukong verify failed: ${errorMessage(error)}\n`);
@@ -62,6 +76,7 @@ export function registerVerifyCommand(parent: Command, deps?: Partial<VerifyDeps
     .option('--timeout <seconds>', 'Per-command timeout in seconds.', parsePositiveInteger)
     .option('--json', 'Print the structured verification result as JSON.')
     .option('--strict', 'Treat any risk as a failed verification.')
+    .option('--upload', 'Upload the redacted report to wukong.today (requires login).')
     .action(async (raw: RawVerifyOptions) => {
       const resolved = resolveDeps(deps);
       const code = await handleVerify(
@@ -86,6 +101,7 @@ export function registerVerifyCommand(parent: Command, deps?: Partial<VerifyDeps
           timeoutSeconds: raw.timeout,
           json: raw.json === true,
           strict: raw.strict === true,
+          upload: raw.upload === true,
         },
       );
       if (code !== 0) process.exitCode = code;
@@ -99,6 +115,7 @@ interface RawVerifyOptions {
   readonly timeout?: number;
   readonly json?: boolean;
   readonly strict?: boolean;
+  readonly upload?: boolean;
 }
 
 function resolveDeps(deps: Partial<VerifyDeps> | undefined): VerifyDeps {

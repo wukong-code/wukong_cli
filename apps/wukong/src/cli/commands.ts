@@ -12,6 +12,7 @@ import { registerLoginCommand } from './sub/login';
 import { registerLoopCommand } from './sub/loop';
 import { registerProofCommand } from './sub/proof';
 import { registerProviderCommand } from './sub/provider';
+import { registerReportUploadCommand } from './sub/report-upload';
 import { registerScanCommand } from './sub/scan';
 import { registerServerCommand } from './sub/server';
 import { registerTodayCommand } from './sub/today';
@@ -104,6 +105,7 @@ export function createProgram(
   registerLoopCommand(program);
   registerGuardCommand(program);
   registerLoginCommand(program);
+  registerReportUploadCommand(program);
   registerDoctorCommand(program);
   registerTodayCommand(program);
   registerVisCommand(program);

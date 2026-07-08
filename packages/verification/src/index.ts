@@ -9,3 +9,5 @@ export * from './verify';
 export * from './scan';
 export * from './proof';
 export * from './judge';
+export * from './redaction';
+export * from './report';

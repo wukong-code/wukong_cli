@@ -1,6 +1,7 @@
 import { runProof, type ProofOptions, type ProofResult } from '@wukong/verification';
 import type { Command } from 'commander';
 
+import { uploadReport } from '#/cli/lib/report-upload';
 import { localDateString, recordStatEvent } from '#/utils/stats';
 import type { ProofStatEvent } from '#/utils/stats';
 
@@ -14,6 +15,7 @@ export interface ProofCliOptions {
   readonly report?: string | false;
   readonly json?: boolean;
   readonly strict?: boolean;
+  readonly upload?: boolean;
 }
 
 export interface ProofDeps {
@@ -33,7 +35,19 @@ export async function handleProof(deps: ProofDeps, options: ProofCliOptions): Pr
       reportPath: typeof options.report === 'string' ? options.report : undefined,
     });
 
-    deps.onResult?.(result);    deps.stdout.write(options.json === true ? `${JSON.stringify(result, null, 2)}\n` : formatProof(result));
+    deps.onResult?.(result);
+    deps.stdout.write(options.json === true ? `${JSON.stringify(result, null, 2)}\n` : formatProof(result));
+
+    if (options.upload === true) {
+      const markdown = result.report ?? '';
+      const outcome = await uploadReport({ kind: 'proof', result, markdown });
+      if (outcome.ok) {
+        deps.stdout.write(`\nUploaded: ${outcome.shareUrl}\n`);
+      } else {
+        deps.stderr.write(`\nUpload skipped: ${outcome.reason}\n`);
+      }
+    }
+
     return result.status === 'blocked' ? 1 : 0;
   } catch (error) {
     deps.stderr.write(`wukong proof failed: ${errorMessage(error)}\n`);
@@ -50,6 +64,7 @@ export function registerProofCommand(parent: Command, deps?: Partial<ProofDeps>)
     .option('--no-report', 'Do not write a markdown merge proof report.')
     .option('--json', 'Print the structured proof result as JSON.')
     .option('--strict', 'Treat any risk as a blocked proof.')
+    .option('--upload', 'Upload the redacted report to wukong.today (requires login).')
     .action(async (raw: RawProofOptions) => {
       const resolved = resolveDeps(deps);
       const code = await handleProof(
@@ -72,6 +87,7 @@ export function registerProofCommand(parent: Command, deps?: Partial<ProofDeps>)
           report: raw.report,
           json: raw.json === true,
           strict: raw.strict === true,
+          upload: raw.upload === true,
         },
       );
 
@@ -84,6 +100,7 @@ interface RawProofOptions {
   readonly report?: string | false;
   readonly json?: boolean;
   readonly strict?: boolean;
+  readonly upload?: boolean;
 }
 
 function collect(value: string, previous: string[]): string[] {

@@ -1,6 +1,7 @@
-import { runScan, type ScanOptions, type ScanResult } from '@wukong/verification';
+import { runScan, renderScanReport, type ScanOptions, type ScanResult } from '@wukong/verification';
 import type { Command } from 'commander';
 
+import { uploadReport } from '#/cli/lib/report-upload';
 import { localDateString, recordStatEvent } from '#/utils/stats';
 import type { ScanStatEvent } from '#/utils/stats';
 
@@ -12,6 +13,7 @@ export interface ScanCliOptions {
   readonly cwd?: string;
   readonly report?: string | boolean;
   readonly json?: boolean;
+  readonly upload?: boolean;
 }
 
 export interface ScanDeps {
@@ -31,6 +33,17 @@ export async function handleScan(deps: ScanDeps, options: ScanCliOptions): Promi
     });
     deps.onResult?.(result);
     deps.stdout.write(options.json === true ? `${JSON.stringify(result, null, 2)}\n` : formatScan(result));
+
+    if (options.upload === true) {
+      const markdown = result.report ?? renderScanReport(result);
+      const outcome = await uploadReport({ kind: 'scan', result, markdown });
+      if (outcome.ok) {
+        deps.stdout.write(`\nUploaded: ${outcome.shareUrl}\n`);
+      } else {
+        deps.stderr.write(`\nUpload skipped: ${outcome.reason}\n`);
+      }
+    }
+
     return result.status === 'failed' ? 1 : 0;
   } catch (error) {
     deps.stderr.write(`wukong scan failed: ${errorMessage(error)}\n`);
@@ -46,6 +59,7 @@ export function registerScanCommand(parent: Command, deps?: Partial<ScanDeps>): 
     .option('--secrets', 'Include secret-looking file risk checks. This is enabled by default in P0.')
     .option('--report [path]', 'Write a markdown scan report. Defaults to wukong-scan-report.md when no path is given.')
     .option('--json', 'Print the structured scan result as JSON.')
+    .option('--upload', 'Upload the redacted report to wukong.today (requires login).')
     .action(async (raw: RawScanOptions) => {
       const resolved = resolveDeps(deps);
       const code = await handleScan(
@@ -65,6 +79,7 @@ export function registerScanCommand(parent: Command, deps?: Partial<ScanDeps>): 
         {
           report: raw.report === true ? 'wukong-scan-report.md' : raw.report,
           json: raw.json === true,
+          upload: raw.upload === true,
         },
       );
       if (code !== 0) process.exitCode = code;
@@ -74,6 +89,7 @@ export function registerScanCommand(parent: Command, deps?: Partial<ScanDeps>): 
 interface RawScanOptions {
   readonly report?: string | boolean;
   readonly json?: boolean;
+  readonly upload?: boolean;
 }
 
 function resolveDeps(deps: Partial<ScanDeps> | undefined): ScanDeps {

@@ -1,5 +1,11 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi, beforeEach } from 'vitest';
 
+vi.mock('#/cli/lib/report-upload', () => ({
+  getCliAccessToken: vi.fn(),
+  uploadReport: vi.fn(),
+}));
+
+import { uploadReport } from '#/cli/lib/report-upload';
 import { createProgram } from '#/cli/commands';
 import { handleGuard, type GuardDeps } from '#/cli/sub/guard';
 import { handleJudge, type JudgeDeps } from '#/cli/sub/judge';
@@ -7,6 +13,8 @@ import { handleProof, type ProofDeps } from '#/cli/sub/proof';
 import { handleScan, type ScanDeps } from '#/cli/sub/scan';
 import { handleVerify, type VerifyDeps } from '#/cli/sub/verify';
 import type { ScanOptions, VerificationOptions, ProofOptions } from '@wukong/verification';
+
+const mockedUploadReport = vi.mocked(uploadReport);
 
 function writable(): { readonly chunks: string[]; readonly writer: { write(chunk: string): boolean } } {
   const chunks: string[] = [];
@@ -33,6 +41,7 @@ describe('verification command registration', () => {
     expect(names).toContain('loop');
     expect(names).toContain('today');
     expect(names).toContain('guard');
+    expect(names).toContain('report');
   });
 });
 
@@ -131,6 +140,62 @@ describe('handleVerify', () => {
     await expect(handleVerify(deps, { report: false })).resolves.toBe(2);
     expect(stderr.chunks.join('')).toContain('verify exploded');
   });
+
+  it('uploads the report when --upload is requested', async () => {
+    mockedUploadReport.mockResolvedValue({ ok: true, id: 'r-1', shareUrl: 'https://wukong.today/r/r-1' });
+    const stdout = writable();
+    const stderr = writable();
+    const deps: VerifyDeps = {
+      cwd: () => '/workspace',
+      stdout: stdout.writer,
+      stderr: stderr.writer,
+      runVerification: async () => ({
+        status: 'passed',
+        cwd: '/workspace',
+        generatedAt: '2026-07-02T00:00:00.000Z',
+        changedFiles: [],
+        gitStatus: '',
+        diffStat: '',
+        selectedCommands: [],
+        commandResults: [],
+        risks: [],
+        report: '# Verify Report',
+      }),
+    };
+
+    await expect(handleVerify(deps, { upload: true })).resolves.toBe(0);
+    expect(mockedUploadReport).toHaveBeenCalledWith({
+      kind: 'verify',
+      result: expect.objectContaining({ status: 'passed' }),
+      markdown: '# Verify Report',
+    });
+    expect(stdout.chunks.join('')).toContain('https://wukong.today/r/r-1');
+    expect(stderr.chunks).toEqual([]);
+  });
+
+  it('writes upload failures to stderr without changing the exit code', async () => {
+    mockedUploadReport.mockResolvedValue({ ok: false, reason: 'not logged in' });
+    const stderr = writable();
+    const deps: VerifyDeps = {
+      cwd: () => '/workspace',
+      stdout: writable().writer,
+      stderr: stderr.writer,
+      runVerification: async () => ({
+        status: 'passed',
+        cwd: '/workspace',
+        generatedAt: '2026-07-02T00:00:00.000Z',
+        changedFiles: [],
+        gitStatus: '',
+        diffStat: '',
+        selectedCommands: [],
+        commandResults: [],
+        risks: [],
+      }),
+    };
+
+    await expect(handleVerify(deps, { upload: true })).resolves.toBe(0);
+    expect(stderr.chunks.join('')).toContain('Upload skipped: not logged in');
+  });
 });
 
 describe('handleScan', () => {
@@ -199,6 +264,34 @@ describe('handleScan', () => {
 
     await expect(handleScan(deps, {})).resolves.toBe(2);
     expect(stderr.chunks.join('')).toContain('scan exploded');
+  });
+
+  it('uploads the report when --upload is requested', async () => {
+    mockedUploadReport.mockResolvedValue({ ok: true, id: 'r-2', shareUrl: 'https://wukong.today/r/r-2' });
+    const stdout = writable();
+    const deps: ScanDeps = {
+      cwd: () => '/workspace',
+      stdout: stdout.writer,
+      stderr: writable().writer,
+      runScan: async () => ({
+        status: 'passed',
+        cwd: '/workspace',
+        generatedAt: '2026-07-02T00:00:00.000Z',
+        changedFiles: [],
+        gitStatus: '',
+        diffStat: '',
+        risks: [],
+        report: '# Scan Report',
+      }),
+    };
+
+    await expect(handleScan(deps, { upload: true })).resolves.toBe(0);
+    expect(mockedUploadReport).toHaveBeenCalledWith({
+      kind: 'scan',
+      result: expect.objectContaining({ status: 'passed' }),
+      markdown: '# Scan Report',
+    });
+    expect(stdout.chunks.join('')).toContain('https://wukong.today/r/r-2');
   });
 });
 
@@ -311,6 +404,52 @@ describe('handleProof', () => {
 
     await expect(handleProof(deps, {})).resolves.toBe(2);
     expect(stderr.chunks.join('')).toContain('proof exploded');
+  });
+
+  it('uploads the report when --upload is requested', async () => {
+    mockedUploadReport.mockResolvedValue({ ok: true, id: 'r-3', shareUrl: 'https://wukong.today/r/r-3' });
+    const stdout = writable();
+    const deps: ProofDeps = {
+      cwd: () => '/workspace',
+      stdout: stdout.writer,
+      stderr: writable().writer,
+      runProof: async () => ({
+        status: 'passed',
+        cwd: '/workspace',
+        generatedAt: '2026-07-02T00:00:00.000Z',
+        verification: {
+          status: 'passed',
+          cwd: '/workspace',
+          generatedAt: '2026-07-02T00:00:00.000Z',
+          changedFiles: [],
+          gitStatus: '',
+          diffStat: '',
+          selectedCommands: [],
+          commandResults: [],
+          risks: [],
+        },
+        scan: {
+          status: 'passed',
+          cwd: '/workspace',
+          generatedAt: '2026-07-02T00:00:00.000Z',
+          changedFiles: [],
+          gitStatus: '',
+          diffStat: '',
+          risks: [],
+        },
+        summary: 'All good.',
+        recommendation: 'Safe to merge.',
+        report: '# Proof Report',
+      }),
+    };
+
+    await expect(handleProof(deps, { upload: true })).resolves.toBe(0);
+    expect(mockedUploadReport).toHaveBeenCalledWith({
+      kind: 'proof',
+      result: expect.objectContaining({ status: 'passed' }),
+      markdown: '# Proof Report',
+    });
+    expect(stdout.chunks.join('')).toContain('https://wukong.today/r/r-3');
   });
 });
 
