@@ -74,6 +74,7 @@
         ./packages/oauth
         ./packages/protocol
         ./packages/telemetry
+        ./packages/verification
         ./apps/wukong
         ./apps/wukong-web
         ./apps/vis
@@ -94,6 +95,7 @@
         "@wukong/wukong-oauth"
         "@wukong/protocol"
         "@wukong/wukong-telemetry"
+        "@wukong/verification"
         "@wukong.today/code"
         "@wukong/wukong-web"
         "@wukong/vis"

@@ -113,3 +113,5 @@ export interface GuardEvent {
   readonly action: 'blocked' | 'allowed';
   readonly message: string;
 }
+
+export type { ProofResult, ProofOptions } from './proof';
