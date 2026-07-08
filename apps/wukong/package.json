@@ -1,6 +1,6 @@
 {
   "name": "@wukong.today/code",
-  "version": "0.0.7",
+  "version": "0.1.0",
   "description": "Wukong Code — AI agent for code verification and delivery",
   "license": "UNLICENSED",
   "author": "Wukong Code Team",
@@ -25,6 +25,7 @@
   "bin": {
     "wukong": "dist/main.mjs"
   },
+  "main": "dist/main.mjs",
   "files": [
     "dist",
     "dist-web",
@@ -33,16 +34,6 @@
     "README.md"
   ],
   "type": "module",
-  "imports": {
-    "#/tui/theme": "./src/tui/theme/index.ts",
-    "#/cli/sub/server": "./src/cli/sub/server/index.ts",
-    "#/cli/sub/server/*": "./src/cli/sub/server/*.ts",
-    "#/*": [
-      "./src/*.ts",
-      "./src/*/index.ts",
-      "./src/*.d.ts"
-    ]
-  },
   "publishConfig": {
     "access": "public",
     "provenance": true
@@ -85,9 +76,9 @@
     "@wukong/acp-adapter": "workspace:^",
     "@wukong/migration-legacy": "workspace:^",
     "@wukong/server": "workspace:^",
+    "@wukong/verification": "workspace:^",
     "@wukong/vis-server": "workspace:^",
     "@wukong/vis-web": "workspace:*",
-    "@wukong/verification": "workspace:^",
     "@wukong/wukong-oauth": "workspace:^",
     "@wukong/wukong-sdk": "workspace:^",
     "@wukong/wukong-telemetry": "workspace:^",

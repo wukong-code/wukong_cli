@@ -16,8 +16,7 @@ describe('builtin skill: custom-theme', () => {
 
   it('pins the docs token reference and points users at WUKONG_CODE_HOME/themes and /theme', () => {
     const content = CUSTOM_THEME_SKILL.content;
-    expect(content).toContain('customization/themes.html');
-    expect(content).toContain('FetchURL');
+    expect(content).toContain('Source of truth: the embedded token reference');
     expect(content).toContain('<WUKONG_CODE_HOME>/themes');
     expect(content).toContain('/theme');
     // every documented token should be named so the model knows the full set

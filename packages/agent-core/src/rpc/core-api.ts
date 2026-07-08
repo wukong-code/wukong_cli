@@ -119,7 +119,7 @@ export interface ExportSessionPayload {
 export interface ExportSessionManifest {
   readonly sessionId: string;
   readonly exportedAt: string;
-  readonly wukongCodeVersion: string;
+  readonly wukongVersion: string;
   readonly wireProtocolVersion: string;
   readonly os: string;
   readonly nodejsVersion: string;

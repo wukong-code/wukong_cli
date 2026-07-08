@@ -22,14 +22,14 @@ const SAMPLE_BODY: CreateFeedbackUploadUrlBody = {
 
 describe('wukongFeedbackUploadUrl', () => {
   it('uses the feedback upload_url path', () => {
-    expect(wukongFeedbackUploadUrl()).toBe('https://wukong.today/api/v1/feedback/upload_url');
+    expect(wukongFeedbackUploadUrl()).toBe('https://api.wukong.today/coding/v1/feedback/upload_url');
   });
 });
 
 describe('wukongFeedbackUploadCompleteUrl', () => {
   it('uses the feedback upload_complete path', () => {
     expect(wukongFeedbackUploadCompleteUrl()).toBe(
-      'https://wukong.today/api/v1/feedback/upload_complete',
+      'https://api.wukong.today/coding/v1/feedback/upload_complete',
     );
   });
 });
@@ -65,7 +65,7 @@ describe('fetchCreateFeedbackUploadUrl', () => {
 
     const calls = fetchMock.mock.calls as unknown as [string, RequestInit?][];
     const [calledUrl, init] = calls[0]!;
-    expect(calledUrl).toBe('https://wukong.today/api/v1/feedback/upload_url');
+    expect(calledUrl).toBe('https://api.wukong.today/coding/v1/feedback/upload_url');
     expect(init?.method).toBe('POST');
 
     const headers = new Headers((init?.headers ?? {}) as Record<string, string>);
@@ -142,7 +142,7 @@ describe('fetchCompleteFeedbackUpload', () => {
     expect(result).toEqual({ kind: 'ok' });
     const calls = fetchMock.mock.calls as unknown as [string, RequestInit?][];
     const [calledUrl, init] = calls[0]!;
-    expect(calledUrl).toBe('https://wukong.today/api/v1/feedback/upload_complete');
+    expect(calledUrl).toBe('https://api.wukong.today/coding/v1/feedback/upload_complete');
     expect(JSON.parse(init?.body as string)).toEqual({
       upload_id: 28,
       parts: [

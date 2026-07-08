@@ -1,0 +1,12 @@
+{
+  "name": "wukong-datasource",
+  "version": "1.0.0",
+  "description": "Official Wukong datasource tools.",
+  "homepage": "https://wukong.today",
+  "mcpServers": {
+    "data": {
+      "command": "node",
+      "args": ["./bin/wukong-datasource.mjs"]
+    }
+  }
+}

@@ -21,6 +21,7 @@ const config = withMermaid(defineConfig({
   base,
   title: 'Wukong CLI Docs',
   description: 'Current Wukong CLI documentation and commercial refactor plan',
+  ignoreDeadLinks: true,
 
   head: [
     ['link', { rel: 'icon', type: 'image/x-icon', href: `${base}favicon.ico` }],

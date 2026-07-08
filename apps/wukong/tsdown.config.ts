@@ -3,6 +3,7 @@ import { resolve } from 'node:path';
 import { defineConfig } from 'tsdown';
 
 import { rawTextPlugin } from '../../build/raw-text-plugin.mjs';
+import { wukongInternalAliasPlugin } from '../../build/wukong-internal-alias-plugin.mjs';
 import { BUILT_IN_CATALOG_DEFINE, builtInCatalogDefine } from './scripts/built-in-catalog.mjs';
 
 const appRoot = import.meta.dirname;
@@ -23,7 +24,7 @@ export default defineConfig({
       'const __dirname = __cjsShimDirname(__filename);',
     ].join('\n'),
   },
-  plugins: [rawTextPlugin()],
+  plugins: [rawTextPlugin(), wukongInternalAliasPlugin()],
   alias: {
     '@': resolve(appRoot, 'src'),
   },

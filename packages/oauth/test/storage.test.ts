@@ -123,7 +123,7 @@ describe('FileTokenStorage', () => {
     await storage.save('wukong', sampleToken());
     await storage.save('other-provider', sampleToken());
     const names = await storage.list();
-    expect(names.toSorted()).toEqual(['wukong', 'other-provider']);
+    expect(names.toSorted()).toEqual(['other-provider', 'wukong']);
   });
 
   it('list() ignores non-JSON files in the credentials dir', async () => {

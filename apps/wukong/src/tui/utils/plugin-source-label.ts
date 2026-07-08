@@ -38,10 +38,10 @@ export function pluginTrustLabel(plugin: PluginSummary): PluginTrustLabel {
     if (url.protocol !== 'https:' || url.hostname !== 'wukong.today') {
       return 'third-party';
     }
-    if (url.pathname.startsWith('/wukong/plugins/official/')) {
+    if (url.pathname.startsWith('/plugins/official/')) {
       return 'official';
     }
-    if (url.pathname.startsWith('/wukong/plugins/curated/')) {
+    if (url.pathname.startsWith('/plugins/curated/')) {
       return 'curated';
     }
     return 'third-party';
@@ -63,7 +63,7 @@ export function isOfficialPluginSource(source: string): boolean {
     const url = new URL(trimmed);
     return (
       url.hostname === 'wukong.today' &&
-      url.pathname.startsWith('/wukong/plugins/official/')
+      url.pathname.startsWith('/plugins/official/')
     );
   } catch {
     return false;

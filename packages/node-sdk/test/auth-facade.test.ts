@@ -256,11 +256,11 @@ oauth = { storage = "file", key = "${oauthKey}", oauth_host = "https://auth.dev.
     expect(config.providers[WUKONG_CODE_PROVIDER_NAME]).toMatchObject({
       type: 'wukong',
       apiKey: '',
-      oauth: { storage: 'file', key: 'oauth/wukong' },
+      oauth: { storage: 'file', key: 'oauth.wukong' },
     });
     expect(config.services?.wukongSearch?.oauth).toEqual({
       storage: 'file',
-      key: 'oauth/wukong',
+      key: 'oauth.wukong',
     });
   });
 

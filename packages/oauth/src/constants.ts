@@ -1,6 +1,6 @@
 import type { OAuthFlowConfig } from './types';
 
-export const DEFAULT_WUKONG_CODE_OAUTH_HOST = 'https://wukong.today';
+export const DEFAULT_WUKONG_CODE_OAUTH_HOST = 'https://auth.wukong.today';
 
 export const WUKONG_CODE_FLOW_CONFIG: OAuthFlowConfig = {
   name: 'wukong',

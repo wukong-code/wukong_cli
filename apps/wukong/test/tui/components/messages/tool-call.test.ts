@@ -856,7 +856,7 @@ describe('ToolCallComponent', () => {
 
     const out = strip(component.render(100).join('\n'));
     const expectedReadPath =
-      process.platform === 'win32' ? 'apps\.wukong\\src\\main.ts' : 'apps/wukong/src/main.ts';
+      process.platform === 'win32' ? 'apps.wukong\\src\\main.ts' : 'apps/wukong/src/main.ts';
     expect(out).toContain(`Used Read (${expectedReadPath})`);
     expect(out).not.toContain('/tmp/proj-a/apps');
     expect(component.getReadSnapshot().filePath).toBe(expectedReadPath);

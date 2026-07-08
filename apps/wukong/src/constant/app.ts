@@ -1,6 +1,8 @@
 import { ErrorCodes } from '@wukong/wukong-sdk';
 
 export const PRODUCT_NAME = 'Wukong Code';
+// Short product name used in model-provider labels and the /status header.
+export const PRODUCT_NAME_SHORT = 'Wukong';
 export const CLI_COMMAND_NAME = 'wukong';
 export const PROCESS_NAME = 'wukong';
 

@@ -14,10 +14,10 @@ describe('builtin skill: update-config', () => {
     expect(UPDATE_CONFIG_SKILL.metadata.disableModelInvocation).not.toBe(true);
   });
 
-  it('pins the doc URL as the single source of truth and references TOML / FetchURL / /reload', () => {
+  it('pins the embedded docs reference and references TOML / local tools / /reload', () => {
     const content = UPDATE_CONFIG_SKILL.content;
-    expect(content).toContain('config-files.html');
-    expect(content).toContain('FetchURL');
+    expect(content).toContain('old hosted config docs are no longer the source of truth');
+    expect(content).toContain('wukong doctor');
     expect(content).toContain('/reload');
     expect(content.toLowerCase()).toContain('toml');
   });

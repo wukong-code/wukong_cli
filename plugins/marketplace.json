@@ -1,0 +1,20 @@
+{
+  "version": "1",
+  "plugins": [
+    {
+      "id": "wukong-datasource",
+      "tier": "official",
+      "displayName": "Wukong Datasource",
+      "description": "Official datasource tools for Wukong Code.",
+      "source": "./official/wukong-datasource"
+    },
+    {
+      "id": "superpowers",
+      "tier": "curated",
+      "displayName": "Superpowers",
+      "description": "Curated workflow skills.",
+      "homepage": "https://github.com/obra/superpowers",
+      "source": "https://github.com/obra/superpowers"
+    }
+  ]
+}

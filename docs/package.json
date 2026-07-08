@@ -1,0 +1,19 @@
+{
+  "name": "@wukong/docs",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Wukong documentation site.",
+  "license": "MIT",
+  "author": "Wukong Team",
+  "type": "module",
+  "scripts": {
+    "dev": "vitepress dev",
+    "build": "vitepress build",
+    "preview": "vitepress preview"
+  },
+  "devDependencies": {
+    "vitepress": "^1.6.4",
+    "vitepress-plugin-llms": "^0.0.8",
+    "vitepress-plugin-mermaid": "^2.0.17"
+  }
+}

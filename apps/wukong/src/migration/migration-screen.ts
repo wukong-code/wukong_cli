@@ -355,7 +355,7 @@ export class MigrationScreenComponent extends Container implements Focusable {
         // hiding the very info we want users to see.
         lines.push(
           chalk.hex(colors.warning)(
-            '  ⚠ config.toml could not be parsed — review config.migrated-from-wukong-cli.toml',
+            '  ⚠ config.toml could not be parsed — see config.migrated-from-wukong-cli.toml',
           ),
         );
         const sc = sum.config.siblingContents;

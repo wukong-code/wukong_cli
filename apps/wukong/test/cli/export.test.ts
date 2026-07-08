@@ -126,7 +126,7 @@ function makeResult(id: string, zipPath: string): ExportSessionResult {
   const manifest: ExportSessionManifest = {
     sessionId: id,
     exportedAt: '2026-04-18T12:00:00.000Z',
-    wukongCodeVersion: '1.27.0',
+    wukongVersion: '1.27.0',
     wireProtocolVersion: '1.0',
     os: 'test',
     nodejsVersion: '22.0.0',

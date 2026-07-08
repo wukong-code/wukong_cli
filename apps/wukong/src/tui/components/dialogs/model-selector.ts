@@ -8,7 +8,7 @@ import {
   type Focusable,
 } from '@earendil-works/pi-tui';
 
-import { DEFAULT_OAUTH_PROVIDER_NAME, PRODUCT_NAME } from '#/constant/app';
+import { DEFAULT_OAUTH_PROVIDER_NAME, PRODUCT_NAME_SHORT } from '#/constant/app';
 import { CURRENT_MARK, SELECT_POINTER } from '#/tui/constant/symbols';
 import { currentTheme } from '#/tui/theme';
 import { SearchableList } from '#/tui/utils/searchable-list';
@@ -38,7 +38,7 @@ export function modelDisplayName(alias: string, model: ModelAlias | undefined): 
 }
 
 export function providerDisplayName(provider: string): string {
-  if (provider === DEFAULT_OAUTH_PROVIDER_NAME) return PRODUCT_NAME;
+  if (provider === DEFAULT_OAUTH_PROVIDER_NAME) return PRODUCT_NAME_SHORT;
   if (provider.startsWith('managed:')) return provider.slice('managed:'.length);
   return provider;
 }

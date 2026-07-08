@@ -9,8 +9,8 @@ import { isRecord } from './utils';
 
 export const WUKONG_CODE_PLATFORM_ID = 'wukong';
 export const WUKONG_CODE_PROVIDER_NAME = 'managed:wukong';
-export const WUKONG_CODE_OAUTH_KEY = 'oauth/wukong';
-const WUKONG_CODE_SCOPED_OAUTH_KEY_PREFIX = 'oauth/wukong-env-';
+export const WUKONG_CODE_OAUTH_KEY = 'oauth.wukong';
+const WUKONG_CODE_SCOPED_OAUTH_KEY_PREFIX = 'oauth.wukong-env-';
 
 export type ManagedWukongProtocol = 'wukong' | 'anthropic';
 

@@ -46,6 +46,6 @@ describe('getNativeCacheBase precedence', () => {
       env: { LOCALAPPDATA: 'C:\\Users\\u\\AppData\\Local' },
       platform: 'win32',
     });
-    expect(got).toBe('C:\\Users\\u\\AppData\\Local\.wukong');
+    expect(got).toBe('C:\\Users\\u\\AppData\\Local\\wukong');
   });
 });

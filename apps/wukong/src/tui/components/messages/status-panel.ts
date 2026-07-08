@@ -7,7 +7,7 @@
 
 import type { ModelAlias, PermissionMode, SessionStatus } from '@wukong/wukong-sdk';
 
-import { PRODUCT_NAME } from '#/constant/app';
+import { PRODUCT_NAME_SHORT } from '#/constant/app';
 import { currentTheme } from '#/tui/theme';
 import {
   formatTokenCount,
@@ -111,7 +111,7 @@ export function buildStatusReportLines(options: StatusReportOptions): string[] {
   }
 
   const lines: string[] = [
-    `${accent(`>_ ${PRODUCT_NAME}`)} ${muted(`(v${options.version})`)}`,
+    `${accent(`>_ ${PRODUCT_NAME_SHORT}`)} ${muted(`(v${options.version})`)}`,
     '',
   ];
   addFieldRows(lines, rows, muted, value, errorStyle);

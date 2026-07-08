@@ -22,7 +22,7 @@ import { isRecord } from './utils';
 
 const MANAGED_PREFIX = 'managed:';
 const WUKONG_CODE_PLATFORM_ID = 'wukong';
-export const DEFAULT_WUKONG_CODE_BASE_URL = 'https://wukong.today/api/v1';
+export const DEFAULT_WUKONG_CODE_BASE_URL = 'https://api.wukong.today/coding/v1';
 
 export function isManagedWukong(providerKey?: string | null): boolean {
   if (!providerKey) return false;

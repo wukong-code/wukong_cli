@@ -105,7 +105,7 @@ async function rewriteWorkspaceSpecifiers() {
           `import { GoogleGenAI as GenAIClient } from '${providerClientSpecifier}';`,
         );
       const updated = providerClientText.replaceAll(
-        /(["'])(#\/[^"']+|@wukong-ai\/(?:agent-core|kaos|wukong-oauth|kosong)(?:\/[^"']+)?)\1/g,
+        /(["'])(#\/[^"']+|@wukong\/(?:agent-core|kaos|wukong-oauth|kosong)(?:\/[^"']+)?)\1/g,
         (_match, quote, specifier) => {
           const resolved = resolveSpecifier({
             currentFile: file,

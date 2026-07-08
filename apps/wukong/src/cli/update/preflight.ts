@@ -62,7 +62,7 @@ function bunCommand(platform: NodeJS.Platform): string {
 export function installCommandFor(
   source: InstallSource,
   version: string,
-  platform: NodeJS.Platform,
+  _platform: NodeJS.Platform,
 ): string {
   switch (source) {
     case 'npm-global':
@@ -82,7 +82,7 @@ export function installCommandFor(
   }
 }
 
-export function canAutoInstall(source: InstallSource, platform: NodeJS.Platform): boolean {
+export function canAutoInstall(source: InstallSource, _platform: NodeJS.Platform): boolean {
   switch (source) {
     case 'npm-global':
     case 'pnpm-global':

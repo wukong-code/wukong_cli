@@ -40,7 +40,7 @@ describe('resolveTargetDeps', () => {
     const deps = resolveTargetDeps('darwin-arm64');
     const names = deps.map((d) => d.resolvedName);
     expect(names).toContain('@mariozechner/clipboard');
-    expect(names).toContain('@mariozechner/clipboard-darwin-arm64');
+    expect(names).toContain('@mariozechner/clipboard-darwin-universal');
     expect(names).toContain('koffi');
   });
 

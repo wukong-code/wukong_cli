@@ -7,8 +7,8 @@ import type { ColorPalette, ResolvedTheme } from './colors';
 import { loadCustomThemeMerged } from './custom-theme-loader';
 import { detectTerminalTheme } from './detect';
 
-export { currentTheme, Theme } from './theme';
-export type { ColorToken } from './theme';
+export { currentTheme, Theme } from './theme-class';
+export type { ColorToken } from './theme-class';
 export { darkColors, lightColors, getBuiltInPalette } from './colors';
 export type { ColorPalette, ResolvedTheme } from './colors';
 export { detectTerminalTheme } from './detect';

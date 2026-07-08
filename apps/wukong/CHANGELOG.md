@@ -1,5 +1,11 @@
 # @wukong.today/code
 
+## 0.1.0
+
+### Minor Changes
+
+- Milestone 0.5 release: rebrand to Wukong, fix internal `#/` alias resolution for tests and builds, fix OAuth default host/constants and key format, add export manifest `wukongVersion`, and green the full test/lint/build pipeline.
+
 ## 0.0.7
 
 ### Patch Changes

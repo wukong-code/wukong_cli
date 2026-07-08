@@ -17,6 +17,7 @@ plugins/cdn/
 .worktrees/
 .wukong/local.toml
 .wukong-sandbox/
+*.tgz
 
 Dockerfile
 docker-compose.yml

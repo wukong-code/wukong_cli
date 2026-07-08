@@ -3,10 +3,10 @@ import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import type { Readable } from 'node:stream';
-import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
 
 const tsxCli = join(
-  dirname(fileURLToPath(import.meta.resolve('tsx/package.json'))),
+  dirname(createRequire(import.meta.url).resolve('tsx/package.json')),
   'dist',
   'cli.mjs',
 );

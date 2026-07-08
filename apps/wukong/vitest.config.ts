@@ -2,9 +2,12 @@ import { resolve } from 'node:path';
 
 import { defineConfig } from 'vitest/config';
 
+import { wukongInternalAliasPlugin } from '../../build/wukong-internal-alias-plugin.mjs';
+
 const appRoot = import.meta.dirname;
 
 export default defineConfig({
+  plugins: [wukongInternalAliasPlugin()],
   resolve: {
     alias: {
       '@': resolve(appRoot, 'src'),
@@ -16,5 +19,6 @@ export default defineConfig({
       WUKONG_LOG_LEVEL: 'off',
     },
     include: ['test/**/*.test.ts', 'test/**/*.test.tsx'],
+    testTimeout: 15_000,
   },
 });

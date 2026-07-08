@@ -3,7 +3,6 @@ import { resolve } from 'node:path';
 import { inspectGit } from './git';
 import { renderMergeProofReport, writeReport } from './report';
 import { runScan } from './scan';
-import { statusFrom } from './status';
 import type { ScanResult, VerificationResult } from './types';
 import { runVerification } from './verify';
 

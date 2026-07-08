@@ -3,7 +3,8 @@ import { mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync }
 import { mkdtemp } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
+import { pathToFileURL } from 'node:url';
+import { createRequire } from 'node:module';
 
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
@@ -851,10 +852,7 @@ async function runTelemetryCrashScript(body: string): Promise<number> {
   const dir = await tempHome();
   const scriptPath = join(dir, 'crash-worker.ts');
   const testDir = import.meta.dirname;
-  const tsxCli = join(
-    dirname(fileURLToPath(import.meta.resolve('tsx/package.json'))),
-    'dist/cli.mjs',
-  );
+  const tsxCli = join(dirname(createRequire(import.meta.url).resolve('tsx/package.json')), 'dist/cli.mjs');
   const crashModuleUrl = pathToFileURL(join(testDir, '../src/crash.ts')).href;
   const clientModuleUrl = pathToFileURL(join(testDir, '../src/client.ts')).href;
   writeFileSync(
