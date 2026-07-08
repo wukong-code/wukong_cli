@@ -9,6 +9,9 @@ import {
 } from '@wukong/verification';
 import type { Command } from 'commander';
 
+import { localDateString, recordStatEvent } from '#/utils/stats';
+import type { GuardStatEvent } from '#/utils/stats';
+
 interface WritableLike {
   write(chunk: string): boolean;
 }
@@ -29,6 +32,7 @@ export interface GuardDeps {
   readonly getGuardStats: () => Promise<GuardStats>;
   readonly setGuardEnabled: (enabled: boolean) => Promise<GuardStatus>;
   readonly runGuardedCommand: (command: readonly string[], options: { readonly allowHighRisk?: boolean }) => Promise<GuardRunResult>;
+  readonly onResult?: (result: GuardRunResult) => void;
 }
 
 export async function handleGuard(deps: GuardDeps, options: GuardCliOptions): Promise<number> {
@@ -47,6 +51,7 @@ export async function handleGuard(deps: GuardDeps, options: GuardCliOptions): Pr
     }
     if (options.command !== undefined && options.command.length > 0) {
       const result = await deps.runGuardedCommand(options.command, { allowHighRisk: options.yes === true });
+      deps.onResult?.(result);
       if (result.blocked) deps.stderr.write(`${result.message}\n`);
       else deps.stdout.write(`${result.message}\n`);
       return result.exitCode;
@@ -71,14 +76,30 @@ export function registerGuardCommand(parent: Command, deps?: Partial<GuardDeps>)
     .option('-y, --yes', 'Allow a high-risk command after classification.')
     .argument('[command...]', 'Command to classify and run after --.')
     .action(async (command: string[] | undefined, raw: RawGuardOptions) => {
-      const code = await handleGuard(resolveDeps(deps), {
-        enable: raw.enable === true,
-        disable: raw.disable === true,
-        status: raw.status === true,
-        stats: raw.stats === true,
-        yes: raw.yes === true,
-        command,
-      });
+      const resolved = resolveDeps(deps);
+      const code = await handleGuard(
+        {
+          ...resolved,
+          onResult: (result) => {
+            const event: GuardStatEvent = {
+              type: 'guard',
+              timestamp: new Date().toISOString(),
+              date: localDateString(),
+              cwd: process.cwd(),
+              blocked: result.blocked,
+            };
+            recordStatEvent(event);
+          },
+        },
+        {
+          enable: raw.enable === true,
+          disable: raw.disable === true,
+          status: raw.status === true,
+          stats: raw.stats === true,
+          yes: raw.yes === true,
+          command,
+        },
+      );
       if (code !== 0) process.exitCode = code;
     });
 }

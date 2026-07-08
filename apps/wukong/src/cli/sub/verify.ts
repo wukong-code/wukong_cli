@@ -5,6 +5,9 @@ import {
 } from '@wukong/verification';
 import type { Command } from 'commander';
 
+import { localDateString, recordStatEvent } from '#/utils/stats';
+import type { VerifyStatEvent } from '#/utils/stats';
+
 interface WritableLike {
   write(chunk: string): boolean;
 }
@@ -24,6 +27,7 @@ export interface VerifyDeps {
   readonly stdout: WritableLike;
   readonly stderr: WritableLike;
   readonly runVerification: (options: VerificationOptions) => Promise<VerificationResult>;
+  readonly onResult?: (result: VerificationResult) => void;
 }
 
 export async function handleVerify(deps: VerifyDeps, options: VerifyCliOptions): Promise<number> {
@@ -37,6 +41,7 @@ export async function handleVerify(deps: VerifyDeps, options: VerifyCliOptions):
       writeReport: options.report !== false,
       reportPath: typeof options.report === 'string' ? options.report : undefined,
     });
+    deps.onResult?.(result);
 
     deps.stdout.write(options.json === true ? `${JSON.stringify(result, null, 2)}\n` : formatVerify(result));
     return result.status === 'failed' ? 1 : 0;
@@ -58,14 +63,31 @@ export function registerVerifyCommand(parent: Command, deps?: Partial<VerifyDeps
     .option('--json', 'Print the structured verification result as JSON.')
     .option('--strict', 'Treat any risk as a failed verification.')
     .action(async (raw: RawVerifyOptions) => {
-      const code = await handleVerify(resolveDeps(deps), {
-        commands: raw.command,
-        includeBuild: raw.build === true,
-        report: raw.report,
-        timeoutSeconds: raw.timeout,
-        json: raw.json === true,
-        strict: raw.strict === true,
-      });
+      const resolved = resolveDeps(deps);
+      const code = await handleVerify(
+        {
+          ...resolved,
+          onResult: (result) => {
+            const cwd = resolved.cwd();
+            const event: VerifyStatEvent = {
+              type: 'verify',
+              timestamp: new Date().toISOString(),
+              date: localDateString(),
+              cwd,
+              status: result.status === 'failed' ? 'failed' : 'passed',
+            };
+            recordStatEvent(event);
+          },
+        },
+        {
+          commands: raw.command,
+          includeBuild: raw.build === true,
+          report: raw.report,
+          timeoutSeconds: raw.timeout,
+          json: raw.json === true,
+          strict: raw.strict === true,
+        },
+      );
       if (code !== 0) process.exitCode = code;
     });
 }

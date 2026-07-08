@@ -22,7 +22,7 @@ function writable(): { readonly chunks: string[]; readonly writer: { write(chunk
 }
 
 describe('verification command registration', () => {
-  it('registers verify, scan, proof, judge, loop, and guard as top-level commands', () => {
+  it('registers verify, scan, proof, judge, loop, today, and guard as top-level commands', () => {
     const program = createProgram('0.0.0', () => {}, () => {});
     const names = program.commands.map((command) => command.name());
 
@@ -31,6 +31,7 @@ describe('verification command registration', () => {
     expect(names).toContain('proof');
     expect(names).toContain('judge');
     expect(names).toContain('loop');
+    expect(names).toContain('today');
     expect(names).toContain('guard');
   });
 });

@@ -18,9 +18,13 @@ import {
   WUKONG_CODE_HOME_ENV,
   WUKONG_CODE_INPUT_HISTORY_DIR_NAME,
   WUKONG_CODE_LOG_DIR_NAME,
+  WUKONG_CODE_STATS_DIR_NAME,
+  WUKONG_CODE_STATS_EVENTS_FILE_NAME,
+  WUKONG_CODE_TODAY_DIR_NAME,
+  WUKONG_CODE_TODAY_FOCUS_FILE_NAME,
+  WUKONG_CODE_UPDATE_DIR_NAME,
   WUKONG_CODE_UPDATE_INSTALL_LOCK_FILE_NAME,
   WUKONG_CODE_UPDATE_INSTALL_STATE_FILE_NAME,
-  WUKONG_CODE_UPDATE_DIR_NAME,
   WUKONG_CODE_UPDATE_ROLLOUT_LOG_FILE_NAME,
   WUKONG_CODE_UPDATE_STATE_FILE_NAME,
 } from '#/constant/app';
@@ -95,8 +99,36 @@ export function getBannerStateFile(): string {
 }
 
 /**
+ * Return the stats directory: `<dataDir>/stats/`.
+ */
+export function getStatsDir(): string {
+  return join(getDataDir(), WUKONG_CODE_STATS_DIR_NAME);
+}
+
+/**
+ * Return the stats event log: `<dataDir>/stats/events.jsonl`.
+ */
+export function getStatsEventsFile(): string {
+  return join(getStatsDir(), WUKONG_CODE_STATS_EVENTS_FILE_NAME);
+}
+
+/**
+ * Return the today directory: `<dataDir>/today/`.
+ */
+export function getTodayDir(): string {
+  return join(getDataDir(), WUKONG_CODE_TODAY_DIR_NAME);
+}
+
+/**
+ * Return the today focus file: `<dataDir>/today/focus.json`.
+ */
+export function getTodayFocusFile(): string {
+  return join(getTodayDir(), WUKONG_CODE_TODAY_FOCUS_FILE_NAME);
+}
+
+/**
  * Return the user input history file for a given working directory.
- * Layout: `<share_dir>/user-history/<md5(cwd)>.jsonl`.
+ * Layout: `<dataDir>/user-history/<md5(cwd)>.jsonl`.
  */
 export function getInputHistoryFile(workDir: string): string {
   const hash = createHash('md5').update(workDir, 'utf-8').digest('hex');

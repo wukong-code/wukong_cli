@@ -1,9 +1,8 @@
-import {
-  runScan,
-  type ScanOptions,
-  type ScanResult,
-} from '@wukong/verification';
+import { runScan, type ScanOptions, type ScanResult } from '@wukong/verification';
 import type { Command } from 'commander';
+
+import { localDateString, recordStatEvent } from '#/utils/stats';
+import type { ScanStatEvent } from '#/utils/stats';
 
 interface WritableLike {
   write(chunk: string): boolean;
@@ -20,6 +19,7 @@ export interface ScanDeps {
   readonly stdout: WritableLike;
   readonly stderr: WritableLike;
   readonly runScan: (options: ScanOptions) => Promise<ScanResult>;
+  readonly onResult?: (result: ScanResult) => void;
 }
 
 export async function handleScan(deps: ScanDeps, options: ScanCliOptions): Promise<number> {
@@ -29,6 +29,7 @@ export async function handleScan(deps: ScanDeps, options: ScanCliOptions): Promi
       writeReport: options.report !== undefined && options.report !== false,
       reportPath: typeof options.report === 'string' ? options.report : undefined,
     });
+    deps.onResult?.(result);
     deps.stdout.write(options.json === true ? `${JSON.stringify(result, null, 2)}\n` : formatScan(result));
     return result.status === 'failed' ? 1 : 0;
   } catch (error) {
@@ -46,10 +47,26 @@ export function registerScanCommand(parent: Command, deps?: Partial<ScanDeps>): 
     .option('--report [path]', 'Write a markdown scan report. Defaults to wukong-scan-report.md when no path is given.')
     .option('--json', 'Print the structured scan result as JSON.')
     .action(async (raw: RawScanOptions) => {
-      const code = await handleScan(resolveDeps(deps), {
-        report: raw.report === true ? 'wukong-scan-report.md' : raw.report,
-        json: raw.json === true,
-      });
+      const resolved = resolveDeps(deps);
+      const code = await handleScan(
+        {
+          ...resolved,
+          onResult: (result) => {
+            const event: ScanStatEvent = {
+              type: 'scan',
+              timestamp: new Date().toISOString(),
+              date: localDateString(),
+              cwd: resolved.cwd(),
+              status: result.status === 'failed' ? 'failed' : 'passed',
+            };
+            recordStatEvent(event);
+          },
+        },
+        {
+          report: raw.report === true ? 'wukong-scan-report.md' : raw.report,
+          json: raw.json === true,
+        },
+      );
       if (code !== 0) process.exitCode = code;
     });
 }

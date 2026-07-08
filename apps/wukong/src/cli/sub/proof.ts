@@ -1,6 +1,9 @@
 import { runProof, type ProofOptions, type ProofResult } from '@wukong/verification';
 import type { Command } from 'commander';
 
+import { localDateString, recordStatEvent } from '#/utils/stats';
+import type { ProofStatEvent } from '#/utils/stats';
+
 interface WritableLike {
   write(chunk: string): boolean;
 }
@@ -18,6 +21,7 @@ export interface ProofDeps {
   readonly stdout: WritableLike;
   readonly stderr: WritableLike;
   readonly runProof: (options: ProofOptions) => Promise<ProofResult>;
+  readonly onResult?: (result: ProofResult) => void;
 }
 
 export async function handleProof(deps: ProofDeps, options: ProofCliOptions): Promise<number> {
@@ -29,7 +33,7 @@ export async function handleProof(deps: ProofDeps, options: ProofCliOptions): Pr
       reportPath: typeof options.report === 'string' ? options.report : undefined,
     });
 
-    deps.stdout.write(options.json === true ? `${JSON.stringify(result, null, 2)}\n` : formatProof(result));
+    deps.onResult?.(result);    deps.stdout.write(options.json === true ? `${JSON.stringify(result, null, 2)}\n` : formatProof(result));
     return result.status === 'blocked' ? 1 : 0;
   } catch (error) {
     deps.stderr.write(`wukong proof failed: ${errorMessage(error)}\n`);
@@ -47,12 +51,29 @@ export function registerProofCommand(parent: Command, deps?: Partial<ProofDeps>)
     .option('--json', 'Print the structured proof result as JSON.')
     .option('--strict', 'Treat any risk as a blocked proof.')
     .action(async (raw: RawProofOptions) => {
-    const code = await handleProof(resolveDeps(deps), {
-      commands: raw.command,
-      report: raw.report,
-      json: raw.json === true,
-      strict: raw.strict === true,
-    });
+      const resolved = resolveDeps(deps);
+      const code = await handleProof(
+        {
+          ...resolved,
+          onResult: (result) => {
+            const event: ProofStatEvent = {
+              type: 'proof',
+              timestamp: new Date().toISOString(),
+              date: localDateString(),
+              cwd: resolved.cwd(),
+              status: result.status === 'blocked' ? 'blocked' : 'pass',
+              summary: result.summary,
+            };
+            recordStatEvent(event);
+          },
+        },
+        {
+          commands: raw.command,
+          report: raw.report,
+          json: raw.json === true,
+          strict: raw.strict === true,
+        },
+      );
 
       if (code !== 0) process.exitCode = code;
     });

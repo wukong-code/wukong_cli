@@ -33,6 +33,10 @@ export const WUKONG_CODE_UPDATE_ROLLOUT_LOG_FILE_NAME = 'rollout.log';
 export const WUKONG_CODE_INPUT_HISTORY_DIR_NAME = 'user-history';
 export const WUKONG_CODE_BANNER_DIR_NAME = 'banner';
 export const WUKONG_CODE_BANNER_STATE_FILE_NAME = 'state.json';
+export const WUKONG_CODE_STATS_DIR_NAME = 'stats';
+export const WUKONG_CODE_STATS_EVENTS_FILE_NAME = 'events.jsonl';
+export const WUKONG_CODE_TODAY_DIR_NAME = 'today';
+export const WUKONG_CODE_TODAY_FOCUS_FILE_NAME = 'focus.json';
 
 // Managed Wukong auth provider key shared with OAuth/SDK config.
 export const DEFAULT_OAUTH_PROVIDER_NAME = 'managed:wukong';

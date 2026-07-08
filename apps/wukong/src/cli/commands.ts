@@ -14,6 +14,7 @@ import { registerProofCommand } from './sub/proof';
 import { registerProviderCommand } from './sub/provider';
 import { registerScanCommand } from './sub/scan';
 import { registerServerCommand } from './sub/server';
+import { registerTodayCommand } from './sub/today';
 import { registerVisCommand } from './sub/vis';
 import { registerVerifyCommand } from './sub/verify';
 
@@ -104,6 +105,7 @@ export function createProgram(
   registerGuardCommand(program);
   registerLoginCommand(program);
   registerDoctorCommand(program);
+  registerTodayCommand(program);
   registerVisCommand(program);
   registerMigrateCommand(program, onMigrate);
   program

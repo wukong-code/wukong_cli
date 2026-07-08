@@ -52,18 +52,18 @@
 
 ### 前置：本地 stats 事件流
 
-- [ ] 定义 `~/.wukong/stats/events.jsonl` schema（verify / scan / proof / guard / goal / loop 事件）
-- [ ] 在现有命令出口写入事件（verify、scan、proof、guard、goal 完成、loop 轮次）
-- [ ] 按自然日聚合与 streak 计算（连续 N 天至少 1 次 clean verify）
+- [x] 定义 `~/.wukong/stats/events.jsonl` schema（verify / scan / proof / guard / goal / loop 事件）
+- [x] 在现有命令出口写入事件（verify、scan、proof、guard、goal 完成、loop 轮次）
+- [x] 按自然日聚合与 streak 计算（连续 N 天至少 1 次 clean verify）
 
 ### 实现
 
-- [ ] `packages/verification` 或独立 `packages/stats`：`buildTodayBriefing()` + `TodayBriefing` 类型
-- [ ] `~/.wukong/today/focus.json` 读写；`wukong today "..."` 设 focus，`--clear-focus` 清除
-- [ ] `apps/wukong/src/cli/sub/today.ts` + TUI `/today`（无参=简报，参数=设 focus，`/today clear`）
-- [ ] 人类可读输出 + `--json`；Next 1–2 条由规则映射（如 BLOCKED proof → 建议 `wukong proof`）
+- [x] `packages/verification` 或独立 `packages/stats`：`buildTodayBriefing()` + `TodayBriefing` 类型
+- [x] `~/.wukong/today/focus.json` 读写；`wukong today "..."` 设 focus，`--clear-focus` 清除
+- [x] `apps/wukong/src/cli/sub/today.ts` + TUI `/today`（无参=简报，参数=设 focus，`/today clear`）
+- [x] 人类可读输出 + `--json`；Next 1–2 条由规则映射（如 BLOCKED proof → 建议 `wukong proof`）
 - [ ] 登录态可选：hosted report 今日计数 + `https://wukong.today/dashboard` 链接（失败不阻塞本地简报）
-- [ ] 测试：离线简报、设/清 focus、JSON schema、不触发 verify 执行
+- [x] 测试：离线简报、设/清 focus、JSON schema、不触发 verify 执行
 
 ### 不做
 

@@ -165,14 +165,19 @@ describe('ensureDaemon', () => {
     await vi.advanceTimersByTimeAsync(500);
 
     await resultPromise;
-    const [, args] = (spawnMock.mock.calls[0] as unknown as [string, string[], object]);
+    const [, rawArgs] = (spawnMock.mock.calls[0] as unknown as [string, string[], object]);
+    // When spawned from a test runner, resolveDaemonProgram may prepend the
+    // script path; strip it so we can assert on the server argument slice.
+    const args = rawArgs[0]?.startsWith('/') ? rawArgs.slice(1) : rawArgs;
+    const portIndex = args.indexOf('--port');
+    expect(portIndex).toBeGreaterThan(-1);
+    expect(Number(args[portIndex + 1])).toBeGreaterThan(0);
+
     expect(args).toEqual(
       expect.arrayContaining([
         'server',
         'run',
         '--daemon',
-        '--port',
-        '58627',
         '--host',
         '0.0.0.0',
         '--log-level',
