@@ -151,6 +151,16 @@ async function downloadOfficialNode(target = resolveTarget()) {
 }
 
 export async function ensureSeaNodeBinary() {
+  // Allow the caller / build environment to pin the Node.js binary used for
+  // SEA generation. This is used by the Nix build, which prefetches an
+  // official upstream Node binary because nixpkgs' nodejs_24 does not support
+  // the --build-sea flag and the Nix sandbox cannot download at build time.
+  const pinnedNode = process.env.WUKONG_SEA_NODE_PATH;
+  if (pinnedNode) {
+    console.log(`Using pinned Node.js binary for SEA build: ${pinnedNode}`);
+    return pinnedNode;
+  }
+
   const target = resolveTarget();
   const host = hostTarget();
 
