@@ -56,6 +56,7 @@ function makeHost(workDir = makeTempDir()): TestHost {
         recordScan: vi.fn(),
         recordProof: vi.fn(),
         recordGuard: vi.fn(),
+        recordGoal: vi.fn(),
         setGoal: vi.fn(),
         hydrate: vi.fn(async () => {}),
         getState: vi.fn(() => ({
@@ -123,10 +124,48 @@ describe('verification slash commands', () => {
     await handleVerifySlashCommand(asSlashHost(host), '');
 
     expect(mocks.runVerification).toHaveBeenCalledWith({ cwd: '/repo', writeReport: true });
+    expect(host.state.chromeState.recordVerify).toHaveBeenCalledWith('passed', undefined);
     expect(host.state.transcriptContainer.addChild).toHaveBeenCalledOnce();
     expect(latestPanelText(host)).toContain('Status: passed');
     expect(latestPanelText(host)).toContain('npm test');
     expect(host.state.ui.requestRender).toHaveBeenCalledOnce();
+  });
+
+  it('records warning verify results as passed for stats/chrome', async () => {
+    const host = makeHost('/repo');
+    mocks.runVerification.mockResolvedValue({
+      status: 'warning',
+      cwd: '/repo',
+      generatedAt: '2026-07-03T00:00:00.000Z',
+      changedFiles: [],
+      gitStatus: '',
+      diffStat: '',
+      selectedCommands: [{ name: 'test', command: 'npm test' }],
+      commandResults: [
+        {
+          command: 'npm test',
+          status: 'passed',
+          exitCode: 0,
+          durationMs: 12,
+          stdout: '',
+          stderr: '',
+        },
+      ],
+      risks: [
+        {
+          id: 'risk.placeholder',
+          severity: 'medium',
+          message: 'Placeholder text',
+          file: 'src/app.ts',
+          line: 1,
+        },
+      ],
+      reportPath: '/repo/wukong-verification-report.md',
+    });
+
+    await handleVerifySlashCommand(asSlashHost(host), '');
+
+    expect(host.state.chromeState.recordVerify).toHaveBeenCalledWith('passed', '1 risk');
   });
 
   it('runs /scan and renders risk output', async () => {
@@ -153,6 +192,7 @@ describe('verification slash commands', () => {
     await handleScanSlashCommand(asSlashHost(host));
 
     expect(mocks.runScan).toHaveBeenCalledWith({ cwd: '/repo', writeReport: true });
+    expect(host.state.chromeState.recordScan).toHaveBeenCalledWith('passed');
     expect(latestPanelText(host)).toContain('Status: warning');
     expect(latestPanelText(host)).toContain('Placeholder text in changed code.');
   });
@@ -214,6 +254,10 @@ describe('verification slash commands', () => {
     await handleProofSlashCommand(asSlashHost(host));
 
     expect(mocks.runProof).toHaveBeenCalledWith({ cwd: '/repo', writeReport: true });
+    expect(host.state.chromeState.recordProof).toHaveBeenCalledWith(
+      'blocked',
+      'High-risk changes detected; review before merging.',
+    );
     expect(latestPanelText(host)).toContain('Status: blocked');
     expect(latestPanelText(host)).toContain('High-risk changes detected');
     expect(latestPanelText(host)).toContain('Placeholder text in changed code.');
@@ -270,6 +314,7 @@ describe('verification slash commands', () => {
     await handleJudgeSlashCommand(asSlashHost(host));
 
     expect(mocks.runJudge).toHaveBeenCalledWith({ cwd: '/repo' });
+    expect(host.state.chromeState.recordProof).not.toHaveBeenCalled();
     expect(latestPanelText(host)).toContain('Verdict: block');
     expect(latestPanelText(host)).toContain('High-risk changes detected.');
   });

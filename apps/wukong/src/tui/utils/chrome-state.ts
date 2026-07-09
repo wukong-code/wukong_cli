@@ -71,7 +71,6 @@ export class ChromeStateAggregator {
   private readonly readStatsEventsFn: () => StatEvent[];
   private readonly recordStatEventFn: (event: StatEvent) => void;
   private readonly buildTodayBriefingFn: (options: { cwd: string }) => Promise<TodayBriefing>;
-  private goalObservedAtMs = Date.now();
 
   constructor(options: ChromeStateOptions) {
     this.cwd = options.cwd;
@@ -89,7 +88,12 @@ export class ChromeStateAggregator {
    * the caller can decide whether to await it.
    */
   async hydrate(): Promise<void> {
-    this.hydrateFromEvents(this.readStatsEventsFn());
+    try {
+      // readStatsEvents returns newest-first; keep only the latest verify/proof.
+      this.hydrateFromEvents(this.readStatsEventsFn());
+    } catch {
+      // Stats read failures are non-fatal; chrome starts empty.
+    }
     try {
       this.todayBriefing = await this.buildTodayBriefingFn({ cwd: this.cwd });
     } catch {
@@ -98,15 +102,21 @@ export class ChromeStateAggregator {
   }
 
   private hydrateFromEvents(events: StatEvent[]): void {
+    let foundVerify = false;
+    let foundProof = false;
     for (const event of events) {
-      this.applyEvent(event);
+      if (event.type === 'verify' && !foundVerify) {
+        this.applyEvent(event);
+        foundVerify = true;
+      } else if (event.type === 'proof' && !foundProof) {
+        this.applyEvent(event);
+        foundProof = true;
+      }
+      if (foundVerify && foundProof) break;
     }
   }
 
   setGoal(goal: GoalSnapshot | null): void {
-    if (goal?.status === 'active' && this.goal?.goalId !== goal.goalId) {
-      this.goalObservedAtMs = Date.now();
-    }
     this.goal = goal ?? null;
   }
 
@@ -209,15 +219,12 @@ export class ChromeStateAggregator {
       phase,
       iteration: goal.iteration,
       maxIterations: goal.maxIterations,
-      elapsedMs: this.goalElapsedMs(goal),
+      // GoalSnapshot.wallClockMs is already live for active goals (agent-core
+      // liveWallClockMs); do not add a second local elapsed delta.
+      elapsedMs: goal.wallClockMs,
       blockedReason: isBlocked ? this.lastVerify?.detail ?? goal.terminalReason ?? undefined : undefined,
       warning: isBlocked,
     };
-  }
-
-  private goalElapsedMs(goal: GoalSnapshot): number {
-    if (goal.status !== 'active') return goal.wallClockMs;
-    return goal.wallClockMs + Math.max(0, Date.now() - this.goalObservedAtMs);
   }
 
   private applyEvent(event: StatEvent): void {

@@ -587,7 +587,33 @@ export class SessionEventHandler {
         streamingUI.setTodoList(sanitized);
       }
     }
+    if (matchedCall !== undefined && matchedCall.name === 'UpdateGoal' && !event.isError) {
+      this.handleUpdateGoalGateResult(resultData.output);
+    }
     this.host.patchLivePane({ mode: 'waiting' });
+  }
+
+  /**
+   * Gate failures keep the goal active and surface as UpdateGoal tool output
+   * ("Goal gate failed: …"). Record chrome verify/scan state and a transcript
+   * audit line from that signal — not from lifecycle blocked events.
+   */
+  private handleUpdateGoalGateResult(output: string): void {
+    const failed = parseGoalGateFailure(output);
+    if (failed === null) return;
+
+    const goal = this.host.state.appState.goal;
+    const iteration = goal?.iteration ?? 0;
+    const stopCondition = goal?.stopCondition;
+
+    if (stopCondition === 'verify-pass' || failed.kind === 'verify') {
+      this.host.state.chromeState.recordVerify('failed', failed.reason);
+    } else if (stopCondition === 'scan-clean' || failed.kind === 'scan') {
+      this.host.state.chromeState.recordScan('failed');
+    }
+    // judge-pass failures update chrome via phase only; do not write proof stats.
+
+    this.appendGateTranscriptEntry(iteration, 'failed', stopCondition ?? failed.kind, failed.reason);
   }
 
   private handleStatusUpdate(event: AgentStatusUpdatedEvent): void {
@@ -655,11 +681,13 @@ export class SessionEventHandler {
 
     // Lifecycle change (pause / resume / blocked) -> a low-profile,
     // ctrl+o-expandable marker.
+    // Do NOT record verify/guard stats here: goal blocked (budget, credentials,
+    // model self-report) is not a verification gate failure. Gate failures keep
+    // the goal active and are handled via UpdateGoal tool results.
     if (change.kind === 'lifecycle' && change.status === 'blocked') {
       const reason = typeof change.reason === 'string' ? change.reason : undefined;
-      this.host.state.chromeState.recordGuard(true);
-      this.host.state.chromeState.recordVerify('failed', reason);
-      this.appendGateTranscriptEntry(event.snapshot?.iteration ?? 0, 'failed', reason);
+      this.host.state.chromeState.recordGoal('blocked');
+      this.appendBlockedTranscriptEntry(event.snapshot?.iteration ?? 0, reason);
       void this.notifyQueuedGoalWaitingOnBlocked();
       if (change.actor === 'model' || change.reason === undefined) {
         this.pendingModelBlockedFallback = this.currentTurnHasAssistantText
@@ -838,6 +866,7 @@ export class SessionEventHandler {
   private appendGateTranscriptEntry(
     iteration: number,
     status: 'passed' | 'failed',
+    gate: string,
     reason?: string,
   ): void {
     const icon = status === 'passed' ? '✓' : '✗';
@@ -847,7 +876,17 @@ export class SessionEventHandler {
       id: nextTranscriptId(),
       kind: 'status',
       renderMode: 'plain',
-      content: `${icon} iter ${iteration} gate: verify ${label}${reasonPart}`,
+      content: `${icon} iter ${iteration} gate: ${gate} ${label}${reasonPart}`,
+    });
+  }
+
+  private appendBlockedTranscriptEntry(iteration: number, reason?: string): void {
+    const reasonPart = reason !== undefined && reason.length > 0 ? ` — ${reason}` : '';
+    this.host.appendTranscriptEntry({
+      id: nextTranscriptId(),
+      kind: 'status',
+      renderMode: 'plain',
+      content: `⛔ iter ${iteration} goal blocked${reasonPart}`,
     });
   }
 
@@ -1118,4 +1157,27 @@ export class SessionEventHandler {
     state.footer.setBackgroundCounts({ bashTasks, agentTasks });
     state.ui.requestRender();
   }
+}
+
+function parseGoalGateFailure(
+  output: string,
+): { readonly kind: 'verify' | 'scan' | 'judge'; readonly reason: string } | null {
+  const match = /Goal gate failed:\s*(.+?)(?:\s+(?:Continuing goal|A retry is scheduled)\.?|$)/i.exec(
+    output,
+  );
+  if (match === null) return null;
+  const reason = (match[1] ?? '').trim().replace(/\.$/, '');
+  if (reason.length === 0) return null;
+
+  const lower = reason.toLowerCase();
+  let kind: 'verify' | 'scan' | 'judge' = 'verify';
+  if (lower.includes('risk scan') || lower.includes('scan')) {
+    kind = 'scan';
+  } else if (lower.includes('judge')) {
+    kind = 'judge';
+  } else if (lower.includes('verification') || lower.includes('verify')) {
+    kind = 'verify';
+  }
+
+  return { kind, reason };
 }

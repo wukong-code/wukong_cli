@@ -23,8 +23,9 @@ export async function handleVerifySlashCommand(host: SlashCommandHost, _args: st
       writeReport: true,
     });
     spinner.stop({ ok: result.status !== 'failed', label: `Verification: ${result.status}` });
+    // Match CLI stats: only hard failures count as failed; warning stays passed.
     host.state.chromeState.recordVerify(
-      result.status === 'passed' ? 'passed' : 'failed',
+      result.status === 'failed' ? 'failed' : 'passed',
       summarizeVerification(result),
     );
     const panel = new UsagePanelComponent(
@@ -48,7 +49,7 @@ export async function handleScanSlashCommand(host: SlashCommandHost): Promise<vo
       writeReport: true,
     });
     spinner.stop({ ok: result.status !== 'failed', label: `Risk scan: ${result.status}` });
-    host.state.chromeState.recordScan(result.status === 'passed' ? 'passed' : 'failed');
+    host.state.chromeState.recordScan(result.status === 'failed' ? 'failed' : 'passed');
     const panel = new UsagePanelComponent(
       () => buildScanReportLines(result),
       result.status === 'failed' ? 'error' : result.status === 'warning' ? 'warning' : 'success',
@@ -112,10 +113,7 @@ export async function handleJudgeSlashCommand(host: SlashCommandHost): Promise<v
       cwd: host.state.appState.workDir,
     });
     spinner.stop({ ok: result.verdict !== 'block', label: `Judge: ${result.verdict}` });
-    host.state.chromeState.recordProof(
-      result.verdict === 'block' ? 'blocked' : 'pass',
-      result.reason,
-    );
+    // Judge must not write proof stats — that would pollute today.proof / Proof track.
     const panel = new UsagePanelComponent(
       () => buildJudgeReportLines(result),
       result.verdict === 'block' ? 'error' : 'success',

@@ -90,6 +90,7 @@
 - [x] gate 结果每轮落 transcript 一条消息（`✓/✗ iter N gate: …`）
 - [x] `wukong-tui.ts`：`updateActivityPane` → `updateLoopPhase`；`activity-pane.ts` 退役
 - [x] 测试：chrome-state 单测、footer 三模式快照、心跳行文案、手动 `/goal` `/loop` `/proof` 联调
+- [x] review 修复（2026-07-09）：blocked≠verify FAIL；hydrate 取最新；wallClock 去双计；warning→passed；judge 不写 proof stats
 
 ### Phase 2 — Today 替换欢迎卡
 
@@ -132,4 +133,4 @@
 
 ---
 
-**最后更新**: 2026-07-09（含 TUI loop 布局计划）
+**最后更新**: 2026-07-09（TUI loop chrome review 修复）

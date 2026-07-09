@@ -65,6 +65,7 @@ function makeHost(options: { createGoalRejects?: boolean } = {}) {
         recordVerify: vi.fn(),
         recordScan: vi.fn(),
         recordProof: vi.fn(),
+        recordGoal: vi.fn(),
         setGoal: vi.fn(),
         hydrate: vi.fn(async () => {}),
         getState: vi.fn(() => ({
@@ -89,6 +90,9 @@ function makeHost(options: { createGoalRejects?: boolean } = {}) {
       flushThinkingToTranscript: vi.fn(),
       appendAssistantDelta: vi.fn(),
       scheduleFlush: vi.fn(),
+      completeToolResult: vi.fn(() => undefined),
+      setTodoList: vi.fn(),
+      getTurnContext: vi.fn(() => ({ turnId: '1', step: 0 })),
     },
     requireSession: vi.fn(() => session),
     setAppState: vi.fn(),
@@ -382,15 +386,57 @@ describe('SessionEventHandler goal queue promotion', () => {
         'The next queued goal will start only after this goal is complete.',
       );
     });
-    expect(host.state.chromeState.recordGuard).toHaveBeenCalledWith(true);
-    expect(host.state.chromeState.recordVerify).toHaveBeenCalledWith('failed', 'waiting for access');
+    expect(host.state.chromeState.recordGoal).toHaveBeenCalledWith('blocked');
+    expect(host.state.chromeState.recordVerify).not.toHaveBeenCalled();
+    expect(host.state.chromeState.recordGuard).not.toHaveBeenCalled();
     expect(host.appendTranscriptEntry).toHaveBeenCalledWith(
       expect.objectContaining({
         kind: 'status',
-        content: '✗ iter 0 gate: verify FAIL — waiting for access',
+        content: '⛔ iter 0 goal blocked — waiting for access',
       }),
     );
     expect(session.createGoal).not.toHaveBeenCalled();
+  });
+
+  it('records verify failure from UpdateGoal gate tool output, not lifecycle blocked', () => {
+    const { host } = makeHost();
+    host.setAppState({
+      goal: {
+        ...fakeGoalSnapshot('Ship gated goal', 'active'),
+        stopCondition: 'verify-pass',
+        iteration: 2,
+      },
+    });
+    host.streamingUI.completeToolResult.mockReturnValue({
+      id: 'tc1',
+      name: 'UpdateGoal',
+      args: { status: 'complete' },
+    });
+    const handler = new SessionEventHandler(host);
+
+    handler.handleEvent(
+      {
+        type: 'tool.result',
+        sessionId: 's1',
+        agentId: 'main',
+        turnId: 1,
+        toolCallId: 'tc1',
+        output: 'Goal gate failed: verification did not pass. Continuing goal.',
+      },
+      vi.fn(),
+    );
+
+    expect(host.state.chromeState.recordVerify).toHaveBeenCalledWith(
+      'failed',
+      'verification did not pass',
+    );
+    expect(host.state.chromeState.recordGuard).not.toHaveBeenCalled();
+    expect(host.appendTranscriptEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'status',
+        content: '✗ iter 2 gate: verify-pass FAIL — verification did not pass',
+      }),
+    );
   });
 
   it('does not render a duplicate marker for a model-reported blocked goal', () => {

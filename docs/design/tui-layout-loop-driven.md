@@ -1,7 +1,7 @@
 # TUI 布局改造计划（Loop 驱动）
 
-> 版本: v1.1（2026-07-09 review 修订：修正 stats 路径、补 editor 去盒耦合项、定义 proof 轨 IO 策略、footer 五轨合并为两轨）  
-> 状态: 计划文档（未开始实施）  
+> 版本: v1.2（2026-07-09 review 修复：blocked 不再伪造成 verify FAIL、hydrate 取最新事件、wallClock 去双计、warning/judge stats 映射修正）  
+> 状态: Phase 0–2 已落地；Phase 3 polish 可选  
 > 关联: [产品设计](design.md) · [today 设计](today.md) · [像素吉祥物](pixel-mascot.md) · [ROADMAP](../ROADMAP.md)
 
 ## 1. 背景与目标
