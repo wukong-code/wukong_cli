@@ -7,6 +7,10 @@ on:
   push:
     branches:
       - main
+  release:
+    types:
+      - published
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -89,6 +93,7 @@ jobs:
   nix-build:
     name: nix build .#wukong
     needs: check-workspace-sync
+    if: github.event_name == 'release' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
 
     steps:
