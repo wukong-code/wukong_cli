@@ -33,7 +33,7 @@ describe('WUKONG_BUILD_INFO', () => {
   });
 
   it('exposes all defined build globals', async () => {
-    globalThis.__WUKONG_CODE_VERSION__ = '0.0.9';
+    globalThis.__WUKONG_CODE_VERSION__ = '0.0.10';
     globalThis.__WUKONG_CODE_CHANNEL__ = 'stable';
     globalThis.__WUKONG_CODE_COMMIT__ = 'abc123';
     globalThis.__WUKONG_CODE_BUILD_TARGET__ = 'darwin-x64';
@@ -41,7 +41,7 @@ describe('WUKONG_BUILD_INFO', () => {
     const { WUKONG_BUILD_INFO } = await import('#/cli/build-info');
 
     expect(WUKONG_BUILD_INFO).toEqual({
-      version: '0.0.9',
+      version: '0.0.10',
       channel: 'stable',
       commit: 'abc123',
       buildTarget: 'darwin-x64',

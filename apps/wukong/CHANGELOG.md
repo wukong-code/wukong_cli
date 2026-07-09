@@ -1,5 +1,14 @@
 # @wukong.today/code
 
+## 0.0.10
+
+### Patch Changes
+
+- Align package version with public Wukong Code binary release v0.0.10.
+- Fix OAuth login to use `https://wukong.today` instead of the dead `auth.wukong.today` host, and accept legacy `oauth/` credential keys.
+- Silence expected `managed:wukong` login-required warnings during startup model refresh.
+- Point CLI `--help` documentation link to `https://docs.wukong.today`.
+
 ## 0.0.9
 
 ### Minor Changes
