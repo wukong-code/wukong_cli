@@ -66,6 +66,19 @@ This is the **Wukong CLI monorepo**: a TypeScript codebase for the local-first t
 - Rules that only affect a specific directory: update the nearest sub-directory `AGENTS.md`.
 - Keep instruction updates focused and supported by code facts.
 
+## Testing Workflow
+
+- Day-to-day: do **not** run the full suite. Prefer:
+  - `pnpm test:related -- <changed-source-file>` — tests related to specific files (pass source paths after `--`)
+  - `pnpm test:changed` — tests affected by current git changes (large dirty trees ≈ full suite)
+  - `pnpm test:watch -- path/to/file.test.ts` — watch a single file
+  - Scope to CLI when useful: add `-- --project cli`
+- Full suite (`pnpm test`) is for PR / merge / CI.
+- Coverage floors live in root `vitest.config.ts` and apply only when `CI=true` or `WUKONG_COVERAGE_GATE=1`. Local `pnpm test` / `pnpm test:coverage` do not fail on thresholds.
+  - CI gate job: `apps/wukong` only (`--project cli`)
+  - Reproduce locally: `pnpm test:coverage:cli:gate`
+- Temporary exploratory tests: prefix with `TEMP:` and delete before merge (`rg 'TEMP:|it\\.only|describe\\.only'`). Prefer fixing outdated assertions over deleting durable regression tests; delete only wrong locks / implementation-detail noise.
+
 ## Workflow Requirements
 
 - Prefer `rg` / `rg --files` when reading code.

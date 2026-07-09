@@ -44,6 +44,34 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm run test
 
+  # Coverage gate is scoped to apps/wukong (vitest project `cli`) so the full
+  # monorepo suite stays fast. Thresholds apply via CI=true in vitest.config.ts.
+  # Reproduce locally: `pnpm test:coverage:gate -- --project cli`
+  test-coverage:
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test:coverage:cli
+      - name: Upload coverage summary
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-summary-cli
+          path: |
+            coverage/coverage-summary.json
+            coverage/index.html
+          if-no-files-found: ignore
+
   test-install:
     runs-on: ubuntu-latest
 

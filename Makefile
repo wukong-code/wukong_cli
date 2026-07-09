@@ -1,4 +1,4 @@
-.PHONY: prepare build typecheck lint lint-fix lint-pkg sherif test test-watch test-coverage clean changeset version publish release dev vis
+.PHONY: prepare build typecheck lint lint-fix lint-pkg sherif test test-watch test-related test-changed test-coverage test-coverage-gate test-coverage-cli test-coverage-cli-gate clean changeset version publish release dev vis
 
 ## Setup
 
@@ -35,8 +35,23 @@ test:
 test-watch:
 	pnpm run test:watch
 
+test-related:
+	pnpm run test:related
+
+test-changed:
+	pnpm run test:changed
+
 test-coverage:
 	pnpm run test:coverage
+
+test-coverage-gate:
+	pnpm run test:coverage:gate
+
+test-coverage-cli:
+	pnpm run test:coverage:cli
+
+test-coverage-cli-gate:
+	pnpm run test:coverage:cli:gate
 
 ## Clean
 
