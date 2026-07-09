@@ -1,3 +1,5 @@
+import mascotData from './mascot-data.json' with { type: 'json' };
+
 export type WukongMascotFrameName = 'idle' | 'blink' | 'scan' | 'happy' | 'staff';
 
 export const WUKONG_MASCOT_FRAME_NAMES: readonly WukongMascotFrameName[] = [
@@ -8,139 +10,51 @@ export const WUKONG_MASCOT_FRAME_NAMES: readonly WukongMascotFrameName[] = [
   'staff',
 ];
 
-export const WUKONG_MASCOT_FRAMES: Record<WukongMascotFrameName, readonly string[]> = {
-  idle: [
-    '.........GGG.........',
-    '.......GGgggGG.......',
-    '......FFFFFFFFF......',
-    '....FFFFSSSSSFFFF....',
-    '...FFFSSSSSSSSSFFF...',
-    '..FFFSSSSSSSSSSSFFF..',
-    '.FFFSSSESSSSSESSSFFF.',
-    '.FFFSSSSSPSSPSSSSFFF.',
-    '..FFFSSSSSNSSSSSFFF..',
-    '..FFFSSMMMMMMMSSFFF..',
-    '...FFFSSMNNNMSSFFF...',
-    '....FFFSSSSSSSFFF....',
-    '......FFFSSSFFF......',
-    '.......FFSSSFF.......',
-    '.......FSSSSSF...K...',
-    '......FFSSSSSFF..K...',
-    '.......FF...FF..K....',
-    '......FF.....FFK.....',
-  ],
-  blink: [
-    '.........GGG.........',
-    '.......GGgggGG.......',
-    '......FFFFFFFFF......',
-    '....FFFFSSSSSFFFF....',
-    '...FFFSSSSSSSSSFFF...',
-    '..FFFSSSSSSSSSSSFFF..',
-    '.FFFSSSNSSSSSNSSSFFF.',
-    '.FFFSSSSSPSSPSSSSFFF.',
-    '..FFFSSSSSNSSSSSFFF..',
-    '..FFFSSMMMMMMMSSFFF..',
-    '...FFFSSMNNNMSSFFF...',
-    '....FFFSSSSSSSFFF....',
-    '......FFFSSSFFF......',
-    '.......FFSSSFF.......',
-    '.......FSSSSSF...K...',
-    '......FFSSSSSFF..K...',
-    '.......FF...FF..K....',
-    '......FF.....FFK.....',
-  ],
-  scan: [
-    '.........GGG.........',
-    '.......GGgggGG.......',
-    '......FFFFFFFFF......',
-    '....FFFFSSSSSFFFF....',
-    '...FFFSSSSSSSSSFFF...',
-    '..FFFSSSSSSSSSSSFFF..',
-    'CC.FSSSESSSSSESSSF.CC',
-    '.FFFSSSSSPSSPSSSSFFF.',
-    '..FFFSSSSSNSSSSSFFF..',
-    '..FFFSSMMMMMMMSSFFF..',
-    '...FFFSSMNNNMSSFFF...',
-    '....FFFSSSSSSSFFF....',
-    '......FFFSSSFFF......',
-    '.......FFSSSFF.......',
-    '.......FSSSSSF...K...',
-    '......FFSSSSSFF..K...',
-    '.......FF...FF..K....',
-    '......FF.....FFK.....',
-  ],
-  happy: [
-    '.........GGG.........',
-    '.......GGgggGG.......',
-    '......FFFFFFFFF......',
-    '....FFFFSSSSSFFFF....',
-    '...FFFSSSSSSSSSFFF...',
-    '..FFFSSSSSSSSSSSFFF..',
-    '.FFFSSSUSSUSUSSSSFFF.',
-    '.FFFSSSSSPSSPSSSSFFF.',
-    '..FFFSSSSSNSSSSSFFF..',
-    '..FFFSSMMMMMMMMMSSFF.',
-    '...FFFSSMNNNMSSFFF...',
-    '....FFFSSSSSSSFFF....',
-    '......FFFSSSFFF......',
-    '.......FFSSSFF.......',
-    '.......FSSSSSF...K...',
-    '......FFSSSSSFF..K...',
-    '.......FF...FF..K....',
-    '......FF.....FFK.....',
-  ],
-  staff: [
-    '.........GGG.........',
-    '.......GGgggGG.......',
-    '......FFFFFFFFF......',
-    '....FFFFSSSSSFFFF....',
-    '...FFFSSSSSSSSSFFF...',
-    '..FFFSSSSSSSSSSSFFF..',
-    '.FFFSSSESSSSSESSSFFF.',
-    '.FFFSSSSSPSSPSSSSFFF.',
-    '..FFFSSSSSNSSSSSFFF..',
-    '..FFFSSMMMMMMMSSFFF..',
-    '...FFFSSMNNNMSSFFF...',
-    '....FFFSSSSSSSFFF....',
-    '......FFFSSSFFF......',
-    '.......FFSSSFF.......',
-    '.......FSSSSSF..K....',
-    '......FFSSSSSFFK.....',
-    '.......FF...FKF......',
-    '......FF....KFF......',
-  ],
-};
+export const WUKONG_MASCOT_FRAMES = mascotData.frames as Record<
+  WukongMascotFrameName,
+  readonly string[]
+>;
 
-export const WUKONG_MASCOT_WIDTH = Math.max(...Object.values(WUKONG_MASCOT_FRAMES).flat().map((row) => row.length));
-export const WUKONG_MASCOT_HEIGHT = WUKONG_MASCOT_FRAMES.idle.length;
+export const WUKONG_MASCOT_PALETTE = mascotData.palette as Readonly<Record<string, string>>;
+export const WUKONG_MASCOT_WIDTH = mascotData.width;
+export const WUKONG_MASCOT_HEIGHT = mascotData.height;
+export const WUKONG_MASCOT_VERSION = mascotData.version;
 
 export const WUKONG_MASCOT_LEGEND: Record<string, string> = {
+  D: 'dark outline',
   F: 'fur',
+  H: 'fur highlight',
   S: 'face',
+  L: 'face highlight',
   G: 'gold circlet',
-  g: 'gold highlight',
+  g: 'circlet highlight',
   E: 'fire eye',
   U: 'happy eye',
+  N: 'feature line',
   P: 'cheek',
-  M: 'muzzle',
-  N: 'nose and mouth',
   K: 'staff',
+  R: 'staff cap',
   C: 'scan beam',
+  T: 'tail',
 };
 
 const DEFAULT_GLYPHS: Record<string, string> = {
   '.': ' ',
-  F: '█',
-  S: '▓',
+  D: '█',
+  F: '▓',
+  H: '▒',
+  S: '▒',
+  L: '░',
   G: '▀',
   g: '▄',
   E: '◆',
   U: '⌒',
-  P: '•',
-  M: '░',
   N: '▪',
-  K: '━',
+  P: '•',
+  K: '┃',
+  R: '◆',
   C: '═',
+  T: '▓',
 };
 
 export function renderWukongMascotGlyphRows(

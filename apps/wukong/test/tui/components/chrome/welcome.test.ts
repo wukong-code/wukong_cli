@@ -3,6 +3,8 @@ import chalk from 'chalk';
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
 import { WelcomeComponent } from '#/tui/components/chrome/welcome';
+import { WUKONG_MASCOT_PALETTE } from '#/constant/mascot';
+import { WUKONG_EMBLEM, renderWukongEmblem } from '#/tui/constant/welcome-art';
 import { setRainbowDance, type RainbowDanceController } from '#/tui/easter-eggs/dance';
 import { darkColors } from '#/tui/theme/colors';
 import type { AppState } from '#/tui/types';
@@ -63,6 +65,11 @@ function truecolorCodes(text: string): Set<string> {
   return codes;
 }
 
+function hexCode(hex: string): string {
+  const value = Number.parseInt(hex.slice(1), 16);
+  return `${(value >> 16) & 255},${(value >> 8) & 255},${value & 255}`;
+}
+
 /** The two header rows (logo + title) of the rendered welcome box. */
 function headerOf(lines: string[]): string {
   return [lines[2], lines[3]].join('\n');
@@ -91,11 +98,20 @@ describe('WelcomeComponent', () => {
     setRainbowDance(undefined);
   });
 
-  it('renders the banner in a single brand color by default', () => {
+  it('compresses the official 29 x 22 mascot into 29 x 11 half-block rows', () => {
+    expect(WUKONG_EMBLEM).toHaveLength(11);
+    expect(renderWukongEmblem()).toHaveLength(11);
+    expect(Math.max(...WUKONG_EMBLEM.map((row) => visibleWidth(row)))).toBeLessThanOrEqual(29);
+  });
+
+  it('renders the official mascot palette by default', () => {
     const codes = truecolorCodes(headerOf(new WelcomeComponent(appState).render(80)));
 
-    // No rainbow by default — just the avatar, brand primary, and dim tagline.
-    expect(codes.size).toBeLessThanOrEqual(3);
+    expect(codes).toContain(hexCode(WUKONG_MASCOT_PALETTE['g'] ?? ''));
+    expect(codes).toContain(hexCode(WUKONG_MASCOT_PALETTE['G'] ?? ''));
+    // The normal header uses the stable mascot palette plus title/tagline
+    // colors. It must not fan out into the `/dance` rainbow.
+    expect(codes.size).toBeLessThanOrEqual(4);
   });
 
   it('paints the banner in rainbow while colored', () => {

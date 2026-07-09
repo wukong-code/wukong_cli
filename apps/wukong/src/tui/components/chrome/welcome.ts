@@ -7,7 +7,7 @@ import type { Component } from '@earendil-works/pi-tui';
 import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import chalk from 'chalk';
 
-import { WUKONG_EMBLEM, WUKONG_EMBLEM_HEADBAND_ROW } from '#/tui/constant/welcome-art';
+import { WUKONG_EMBLEM, renderWukongEmblem } from '#/tui/constant/welcome-art';
 import { isRainbowDancing, renderDanceWelcomeHeader } from '#/tui/easter-eggs/dance';
 import { currentTheme } from '#/tui/theme';
 import type { AppState, UIMode } from '#/tui/types';
@@ -68,10 +68,13 @@ export class WelcomeComponent implements Component {
     const vis = visibleWidth(truncated);
     const rightPad = Math.max(0, innerWidth - vis);
 
-    const lines: string[] = ['', primary('╭' + '─'.repeat(safeWidth - 2) + '╮')];
-    lines.push(primary('│') + pad + truncated + ' '.repeat(rightPad) + primary('│'));
-    lines.push(primary('╰' + '─'.repeat(safeWidth - 2) + '╯'));
-    lines.push('');
+    const lines: string[] = [
+      '',
+      primary('╭' + '─'.repeat(safeWidth - 2) + '╮'),
+      primary('│') + pad + truncated + ' '.repeat(rightPad) + primary('│'),
+      primary('╰' + '─'.repeat(safeWidth - 2) + '╯'),
+      '',
+    ];
 
     return lines.map((line) => truncateToWidth(line, safeWidth, '…'));
   }
@@ -84,10 +87,13 @@ export class WelcomeComponent implements Component {
     const innerWidth = Math.max(1, safeWidth - 4);
     const pad = '  ';
 
-    // Mascot emblem (left) + side-by-side text (right).
+    // The official 29 x 22 web mascot is compressed into 29 x 11 terminal
+    // half-blocks. Stack the label below it in narrow terminals so the figure
+    // is never cropped just to preserve the old side-by-side layout.
     const artWidth = Math.max(...WUKONG_EMBLEM.map((row) => visibleWidth(row)));
     const gap = '  ';
-    const textWidth = Math.max(4, innerWidth - artWidth - gap.length);
+    const sideBySide = innerWidth >= artWidth + gap.length + 18;
+    const textWidth = Math.max(4, sideBySide ? innerWidth - artWidth - gap.length : innerWidth);
 
     const rightRow0 = truncateToWidth(
       chalk.bold.hex(currentTheme.palette.primary)('Wukong Code'),
@@ -102,32 +108,27 @@ export class WelcomeComponent implements Component {
       '…',
     );
     const textRows = [rightRow0, rightRow1];
-    const textStartRow = Math.floor((WUKONG_EMBLEM.length - textRows.length) / 2);
-
-    // Headband (金箍) glows gold; the rest of the face follows the theme brand
-    // colour so it stays legible in both light and dark palettes. Pad by
-    // visible width (not code-point length) so the `●` eyes — an ambiguous-width
-    // glyph — never shift the right-hand text column.
-    const emblem = (rowIndex: number, row: string): string => {
-      const token = rowIndex === WUKONG_EMBLEM_HEADBAND_ROW ? 'warning' : 'primary';
-      const padded = row + ' '.repeat(Math.max(0, artWidth - visibleWidth(row)));
-      return chalk.hex(currentTheme.palette[token])(padded);
-    };
-
-    let renderedHeaderLines = WUKONG_EMBLEM.map((row, i) => {
-      const left = emblem(i, row);
-      const textIndex = i - textStartRow;
-      const text =
-        textIndex >= 0 && textIndex < textRows.length ? textRows[textIndex] : undefined;
-      return text !== undefined ? left + gap + text : left;
-    });
+    const textStartRow = sideBySide
+      ? Math.floor((WUKONG_EMBLEM.length - textRows.length) / 2)
+      : WUKONG_EMBLEM.length;
+    const coloredEmblem = renderWukongEmblem('idle');
+    let renderedHeaderLines = sideBySide
+      ? coloredEmblem.map((row, i) => {
+          const left = row + ' '.repeat(Math.max(0, artWidth - visibleWidth(row)));
+          const textIndex = i - textStartRow;
+          const text =
+            textIndex >= 0 && textIndex < textRows.length ? textRows[textIndex] : undefined;
+          return text !== undefined ? left + gap + text : left;
+        })
+      : [...coloredEmblem, ...textRows];
     if (isRainbowDancing()) {
-      renderedHeaderLines = renderDanceWelcomeHeader(
+      const dancingEmblem = renderDanceWelcomeHeader(
         WUKONG_EMBLEM,
         artWidth,
-        textRows,
+        sideBySide ? textRows : [],
         textStartRow,
       );
+      renderedHeaderLines = sideBySide ? dancingEmblem : [...dancingEmblem, ...textRows];
     }
 
     const modelValue = isLoggedOut
