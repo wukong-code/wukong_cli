@@ -56,3 +56,31 @@ export class RetryableRefreshError extends OAuthError {
     this.name = 'RetryableRefreshError';
   }
 }
+
+/**
+ * True when a token/model refresh failed because the user is not logged in
+ * (or the stored token was revoked). Callers that refresh catalogs in the
+ * background should treat this as an expected skip, not a user-facing warning.
+ *
+ * Accepts both {@link OAuthUnauthorizedError} and duck-typed public errors
+ * (e.g. SDK `WukongError` with `code: 'auth.login_required'`).
+ */
+export function isOAuthLoginRequiredError(error: unknown): boolean {
+  if (error instanceof OAuthUnauthorizedError) return true;
+  if (
+    typeof error === 'object' &&
+    error !== null &&
+    (error as { readonly name?: unknown }).name === 'OAuthUnauthorizedError'
+  ) {
+    return true;
+  }
+  const code = (error as { readonly code?: unknown } | null)?.code;
+  if (code === 'auth.login_required') return true;
+  const message = error instanceof Error ? error.message : String(error);
+  return (
+    /requires login before it can be used/i.test(message) ||
+    /Run \/login to authenticate/i.test(message) ||
+    /re-login required/i.test(message) ||
+    /No token for "/i.test(message)
+  );
+}

@@ -1115,6 +1115,29 @@ describe('WukongTUI startup', () => {
     expect(showStatus).toHaveBeenCalledWith("New Models · +2 models.");
   });
 
+  it("does not warn when managed provider refresh is skipped for login-required", async () => {
+    const harness = makeHarness();
+    const driver = makeDriver(harness, makeStartupInput());
+    const showStatus = vi.spyOn(driver as any, "showStatus").mockImplementation(() => {});
+    const reason =
+      'OAuth provider "managed:wukong" requires login before it can be used.';
+    vi.spyOn((driver as any).authFlow, "refreshProviderModels").mockResolvedValue({
+      changed: [],
+      unchanged: [],
+      failed: [
+        { provider: "managed:wukong", reason },
+        { provider: "managed:wukong", reason },
+        { provider: "custom", reason: "timeout" },
+      ],
+    });
+
+    await (driver as any).refreshProviderModelsInBackground();
+
+    expect(showStatus.mock.calls).toEqual([
+      ["Skipped refreshing custom: timeout", "warning"],
+    ]);
+  });
+
   it("starts TUI without a session when fresh startup needs OAuth login", async () => {
     const harness = makeHarness(makeSession(), {
       createSession: vi.fn(async () => {

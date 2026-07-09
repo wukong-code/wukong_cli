@@ -4,6 +4,7 @@ import {
   removeCustomRegistryProvider,
   type CustomRegistrySource,
 } from './custom-registry';
+import { isOAuthLoginRequiredError } from './errors';
 import {
   applyManagedWukongConfig,
   fetchManagedWukongModels,
@@ -417,10 +418,16 @@ export async function refreshProviderModels(
         }
       }
     } catch (error) {
-      failed.push({
-        provider: WUKONG_CODE_PROVIDER_NAME,
-        reason: error instanceof Error ? error.message : String(error),
-      });
+      // Not logged in is expected for optional managed:wukong entries — skip
+      // quietly so startup /model refresh does not spam the TUI.
+      if (isOAuthLoginRequiredError(error)) {
+        unchanged.push(WUKONG_CODE_PROVIDER_NAME);
+      } else {
+        failed.push({
+          provider: WUKONG_CODE_PROVIDER_NAME,
+          reason: error instanceof Error ? error.message : String(error),
+        });
+      }
     }
   }
 

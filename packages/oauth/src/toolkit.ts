@@ -24,6 +24,7 @@ import {
   type FetchCreateFeedbackUploadUrlResult,
 } from './managed-feedback-upload';
 import {
+  normalizeOAuthCredentialKey,
   WUKONG_CODE_OAUTH_KEY,
   WUKONG_CODE_PROVIDER_NAME,
   provisionManagedWukongConfig,
@@ -439,10 +440,10 @@ export function resolveWukongTokenStorageName(input: {
   readonly providerName?: string | undefined;
   readonly oauthKey?: string | undefined;
 }): string {
-  const key = input.oauthKey ?? WUKONG_CODE_OAUTH_KEY;
+  const key = normalizeOAuthCredentialKey(input.oauthKey ?? WUKONG_CODE_OAUTH_KEY);
   if (key === 'wukong' || key === WUKONG_CODE_OAUTH_KEY) return 'wukong';
 
-  const prefix = 'oauth/';
+  const prefix = 'oauth.';
   if (key.startsWith(prefix) && key.slice(prefix.length).length > 0) {
     return key.slice(prefix.length);
   }

@@ -74,7 +74,7 @@ describe('refreshAllProviderModels', () => {
           oauth: {
             storage: 'file',
             key: configuredOauthKey,
-            oauthHost: 'https://auth.wukong.today',
+            oauthHost: 'https://wukong.today',
           },
         },
       },

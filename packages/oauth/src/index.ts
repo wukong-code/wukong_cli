@@ -1,6 +1,7 @@
 export {
   DeviceCodeExpiredError,
   DeviceCodeTimeoutError,
+  isOAuthLoginRequiredError,
   OAuthConnectionError,
   OAuthError,
   OAuthUnauthorizedError,
@@ -48,6 +49,7 @@ export {
   fetchManagedWukongModels,
   wukongEnvBaseUrl,
   wukongEnvOAuthHost,
+  normalizeOAuthCredentialKey,
   WUKONG_CODE_OAUTH_KEY,
   WUKONG_CODE_PLATFORM_ID,
   WUKONG_CODE_PROVIDER_NAME,

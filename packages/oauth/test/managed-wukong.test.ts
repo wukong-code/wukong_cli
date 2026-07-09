@@ -48,7 +48,13 @@ describe('provisionManagedWukongConfig', () => {
   it('keeps the legacy credential key for the default production environment', () => {
     expect(
       resolveWukongOAuthKey({
-        oauthHost: 'https://auth.wukong.today/',
+        oauthHost: 'https://wukong.today/',
+        baseUrl: 'https://wukong.today/api/v1/',
+      }),
+    ).toBe(WUKONG_CODE_OAUTH_KEY);
+    expect(
+      resolveWukongOAuthKey({
+        oauthHost: 'https://wukong.today/',
         baseUrl: 'https://api.wukong.today/coding/v1/',
       }),
     ).toBe(WUKONG_CODE_OAUTH_KEY);
@@ -75,8 +81,8 @@ describe('provisionManagedWukongConfig', () => {
     // existing production credentials keep resolving to `wukong.json`.
     expect(
       resolveWukongOAuthRef({
-        oauthHost: 'https://auth.wukong.today/',
-        baseUrl: 'https://api.wukong.today/coding/v1/',
+        oauthHost: 'https://wukong.today/',
+        baseUrl: 'https://wukong.today/api/v1/',
       }),
     ).toEqual({ storage: 'file', key: WUKONG_CODE_OAUTH_KEY, oauthHost: undefined });
 
@@ -86,10 +92,10 @@ describe('provisionManagedWukongConfig', () => {
     expect(defaultAuthCustomApiRef).toEqual({
       storage: 'file',
       key: resolveWukongOAuthKey({
-        oauthHost: 'https://auth.wukong.today',
+        oauthHost: 'https://wukong.today',
         baseUrl: 'https://api.example.test/coding/v1',
       }),
-      oauthHost: 'https://auth.wukong.today',
+      oauthHost: 'https://wukong.today',
     });
 
     // A non-default environment yields a scoped key AND the normalized host,
@@ -183,9 +189,27 @@ describe('provisionManagedWukongConfig', () => {
       }),
     ).toEqual({
       baseUrl: configuredBaseUrl,
-      oauthHost: undefined,
+      oauthHost: configuredOAuthRef.oauthHost,
       oauthRef: configuredOAuthRef,
     });
+  });
+
+  it('honors persisted oauth_host even when the on-disk key uses the legacy oauth/ prefix', () => {
+    const configuredBaseUrl = 'https://wukong.today/api/v1';
+    const auth = resolveWukongLoginAuth({
+      configuredBaseUrl,
+      configuredOAuthRef: {
+        storage: 'file',
+        key: 'oauth/wukong-env-41299461a7143061',
+        oauthHost: 'https://wukong.today',
+      },
+      env: {},
+    });
+
+    // Login must keep the persisted host (not fall back to a dead auth.* subdomain).
+    // The scoped key collapses to the default credential slot for this environment.
+    expect(auth.oauthHost).toBe('https://wukong.today');
+    expect(auth.oauthRef?.key).toBe(WUKONG_CODE_OAUTH_KEY);
   });
 
   it('writes the managed provider, models, services, and default model through an adapter', async () => {
@@ -231,7 +255,7 @@ describe('provisionManagedWukongConfig', () => {
     expect(result.models[0]?.supportsToolUse).toBe(true);
     expect(result.models[1]?.supportsToolUse).toBe(false);
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.wukong.today/coding/v1/models',
+      'https://wukong.today/api/v1/models',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer oauth-access-token',
@@ -253,7 +277,7 @@ describe('provisionManagedWukongConfig', () => {
     expect(config.models?.['wukong/stale']).toBeUndefined();
     expect(config.providers[WUKONG_CODE_PROVIDER_NAME]).toMatchObject({
       type: 'wukong',
-      baseUrl: 'https://api.wukong.today/coding/v1',
+      baseUrl: 'https://wukong.today/api/v1',
       apiKey: '',
       oauth: { storage: 'file', key: WUKONG_CODE_OAUTH_KEY },
     });
@@ -266,7 +290,7 @@ describe('provisionManagedWukongConfig', () => {
     });
     expect(config.models?.['wukong/wukong-k2.5']?.capabilities).toBeUndefined();
     expect(config.services?.wukongSearch).toMatchObject({
-      baseUrl: 'https://api.wukong.today/coding/v1/search',
+      baseUrl: 'https://wukong.today/api/v1/search',
       apiKey: '',
       oauth: { storage: 'file', key: WUKONG_CODE_OAUTH_KEY },
     });
@@ -338,7 +362,7 @@ describe('provisionManagedWukongConfig', () => {
       oauth: {
         storage: 'file',
         key: oauthKey,
-        oauthHost: 'https://auth.wukong.today',
+        oauthHost: 'https://wukong.today',
       },
     });
   });

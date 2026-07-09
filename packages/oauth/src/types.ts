@@ -2,7 +2,7 @@
  * OAuth type definitions for managed providers.
  *
  * Only Device Code Flow (RFC 8628) is supported, against
- * `https://auth.wukong.today`.
+ * `https://wukong.today`.
  *
  * Wire format (on disk / server) uses snake_case to match the server
  * contract; in-process types use camelCase per TS convention.

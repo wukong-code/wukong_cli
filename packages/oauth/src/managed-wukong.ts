@@ -11,6 +11,19 @@ export const WUKONG_CODE_PLATFORM_ID = 'wukong';
 export const WUKONG_CODE_PROVIDER_NAME = 'managed:wukong';
 export const WUKONG_CODE_OAUTH_KEY = 'oauth.wukong';
 const WUKONG_CODE_SCOPED_OAUTH_KEY_PREFIX = 'oauth.wukong-env-';
+/** Legacy on-disk form written by older config serializers (`oauth/…`). */
+const WUKONG_CODE_LEGACY_OAUTH_KEY_PREFIX = 'oauth/';
+
+/**
+ * Normalize credential keys so `oauth/wukong-env-…` (legacy config form) and
+ * `oauth.wukong-env-…` (canonical form) compare equal.
+ */
+export function normalizeOAuthCredentialKey(key: string): string {
+  if (key.startsWith(WUKONG_CODE_LEGACY_OAUTH_KEY_PREFIX)) {
+    return `oauth.${key.slice(WUKONG_CODE_LEGACY_OAUTH_KEY_PREFIX.length)}`;
+  }
+  return key;
+}
 
 export type ManagedWukongProtocol = 'wukong' | 'anthropic';
 
@@ -247,10 +260,11 @@ function managedOAuthRef(options: {
   readonly oauthHost?: string | undefined;
   readonly storage?: 'file' | 'keyring' | undefined;
 }): ManagedWukongOAuthRef {
-  const oauthHost = persistedOAuthHost(options);
+  const key = normalizeOAuthCredentialKey(options.key);
+  const oauthHost = persistedOAuthHost({ key, oauthHost: options.oauthHost });
   return {
     storage: options.storage ?? 'file',
-    key: options.key,
+    key,
     oauthHost,
   };
 }
@@ -276,9 +290,11 @@ export function wukongEnvOAuthHost(env: ManagedWukongEnv = process.env): string 
   return env.WUKONG_CODE_OAUTH_HOST ?? env.WUKONG_OAUTH_HOST;
 }
 
-// Base URLs that share the default `oauth/wukong` credential slot.
+// Base URLs that share the default `oauth.wukong` credential slot.
 const SHARED_DEFAULT_BASE_URLS: ReadonlySet<string> = new Set([
   normalizeEndpoint(DEFAULT_WUKONG_CODE_BASE_URL),
+  // Historical defaults kept so older installs keep the same credential file.
+  normalizeEndpoint('https://api.wukong.today/coding/v1'),
 ]);
 
 export function resolveWukongOAuthKey(options: {
@@ -338,7 +354,9 @@ export function resolveWukongRuntimeAuth(options: {
   const configured = configuredOAuthRef(options.configuredOAuthRef);
   if (configured === undefined) return { baseUrl, oauthRef: expected };
   if (hasEnvOverride) return { baseUrl, oauthRef: expected };
-  if (configured.key !== expected.key) return { baseUrl, oauthRef: expected };
+  if (normalizeOAuthCredentialKey(configured.key) !== expected.key) {
+    return { baseUrl, oauthRef: expected };
+  }
   return { baseUrl, oauthRef: configured };
 }
 
@@ -368,13 +386,20 @@ export function resolveWukongLoginAuth(options: {
 
   const configured = configuredOAuthRef(options.configuredOAuthRef);
   if (configured === undefined) return { baseUrl, oauthHost };
+  // Always honor a persisted oauth_host. Key-slot mismatches (legacy
+  // `oauth/…` vs `oauth.…`, or an older scoped key for what is now the
+  // default environment) must not fall back to the compile-time default
+  // host — that is how logins were incorrectly sent to auth.wukong.today.
+  const effectiveHost = oauthHost ?? configured.oauthHost;
   const expectedKey = resolveWukongOAuthKey({
-    oauthHost: configured.oauthHost,
+    oauthHost: configured.oauthHost ?? effectiveHost,
     baseUrl,
   });
-  return configured.key === expectedKey
-    ? { baseUrl, oauthHost, oauthRef: configured }
-    : { baseUrl, oauthHost };
+  const oauthRef =
+    normalizeOAuthCredentialKey(configured.key) === expectedKey
+      ? configured
+      : resolveWukongOAuthRef({ oauthHost: configured.oauthHost ?? effectiveHost, baseUrl });
+  return { baseUrl, oauthHost: effectiveHost, oauthRef };
 }
 
 function toModelInfo(item: unknown): ManagedWukongModelInfo | undefined {

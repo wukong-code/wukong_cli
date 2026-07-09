@@ -8,7 +8,10 @@ import {
   getCapabilities,
   Spacer,
 } from '@earendil-works/pi-tui';
-import type { DeviceAuthorization } from '@wukong/wukong-oauth';
+import {
+  isOAuthLoginRequiredError as isOAuthLoginRequiredRefreshError,
+  type DeviceAuthorization,
+} from '@wukong/wukong-oauth';
 import type {
   ApprovalRequest,
   ApprovalResponse,
@@ -568,7 +571,13 @@ export class WukongTUI {
         if (c.added <= 0) continue;
         this.showStatus(`${c.providerName} · +${String(c.added)} model${c.added > 1 ? 's' : ''}.`);
       }
+      const seenFailures = new Set<string>();
       for (const f of result.failed) {
+        // Login-required is expected when managed:wukong is configured but unused.
+        if (isProviderRefreshLoginRequired(f.reason)) continue;
+        const key = `${f.provider}\0${f.reason}`;
+        if (seenFailures.has(key)) continue;
+        seenFailures.add(key);
         this.showStatus(`Skipped refreshing ${f.provider}: ${f.reason}`, 'warning');
       }
     } catch {
@@ -2687,4 +2696,8 @@ export class WukongTUI {
     this.patchLivePane({ pendingQuestion: null });
     this.restoreEditor();
   }
+}
+
+function isProviderRefreshLoginRequired(reason: string): boolean {
+  return isOAuthLoginRequiredRefreshError(new Error(reason));
 }

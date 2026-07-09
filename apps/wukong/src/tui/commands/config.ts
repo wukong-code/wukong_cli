@@ -1,3 +1,4 @@
+import { isOAuthLoginRequiredError } from '@wukong/wukong-oauth';
 import type {
   ExperimentalFeatureState,
   FlagId,
@@ -239,10 +240,16 @@ async function refreshModelsForPicker(host: SlashCommandHost): Promise<void> {
       MODEL_PICKER_REFRESH_TIMEOUT_MS,
     );
     if (result === undefined) return;
+    const seenFailures = new Set<string>();
     for (const f of result.failed) {
+      if (isOAuthLoginRequiredError(new Error(f.reason))) continue;
+      const key = `${f.provider}\0${f.reason}`;
+      if (seenFailures.has(key)) continue;
+      seenFailures.add(key);
       host.showStatus(`Skipped refreshing ${f.provider}: ${f.reason}`, 'warning');
     }
   } catch (error) {
+    if (isOAuthLoginRequiredError(error)) return;
     host.showStatus(`Skipped refreshing models: ${formatErrorMessage(error)}`, 'warning');
   }
 }

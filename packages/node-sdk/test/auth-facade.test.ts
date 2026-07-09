@@ -236,7 +236,7 @@ oauth = { storage = "file", key = "${oauthKey}", oauth_host = "https://auth.dev.
       defaultThinking: true,
     });
     expect(fetchMock).toHaveBeenCalledWith(
-      'https://api.wukong.today/coding/v1/models',
+      'https://wukong.today/api/v1/models',
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: 'Bearer oauth-access-token',
@@ -394,7 +394,7 @@ oauth = { storage = "file", key = "oauth/wukong" }
     const config = await harness.getConfig({ reload: true });
     expect(config.providers[WUKONG_CODE_PROVIDER_NAME]).toMatchObject({
       baseUrl,
-      oauth: { storage: 'file', key: oauthKey, oauthHost: 'https://auth.wukong.today' },
+      oauth: { storage: 'file', key: oauthKey, oauthHost: 'https://wukong.today' },
     });
   });
 
@@ -420,7 +420,7 @@ oauth = { storage = "file", key = "oauth/wukong" }
 type = "wukong"
 base_url = "${configuredBaseUrl}"
 api_key = ""
-oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https://auth.wukong.today" }
+oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https://wukong.today" }
 `,
     );
     vi.stubEnv('WUKONG_CODE_BASE_URL', envBaseUrl);
@@ -759,7 +759,7 @@ oauth = { storage = "file", key = "${oauthKey}", oauth_host = "https://auth.dev.
 type = "wukong"
 base_url = "${configuredBaseUrl}"
 api_key = ""
-oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https://auth.wukong.today" }
+oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https://wukong.today" }
 `,
     );
     vi.stubEnv('WUKONG_CODE_BASE_URL', envBaseUrl);
@@ -792,7 +792,7 @@ oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https:/
         .resolveOAuthTokenProvider(WUKONG_CODE_PROVIDER_NAME, {
           storage: 'file',
           key: configuredOauthKey,
-          oauthHost: 'https://auth.wukong.today',
+          oauthHost: 'https://wukong.today',
         })
         .getAccessToken(),
     ).resolves.toBe('env-access-token');
@@ -842,7 +842,7 @@ oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https:/
 
     const calls = fetchMock.mock.calls as unknown as [string, RequestInit?][];
     const [url, init] = calls[0]!;
-    expect(url).toBe('https://api.wukong.today/coding/v1/feedback');
+    expect(url).toBe('https://wukong.today/api/v1/feedback');
     expect(init?.method).toBe('POST');
 
     const headers = new Headers((init?.headers ?? {}) as Record<string, string>);
@@ -905,7 +905,7 @@ oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https:/
 
     const calls = fetchMock.mock.calls as unknown as [string, RequestInit?][];
     const [url, init] = calls[0]!;
-    expect(url).toBe('https://api.wukong.today/coding/v1/feedback/upload_url');
+    expect(url).toBe('https://wukong.today/api/v1/feedback/upload_url');
     expect(init?.method).toBe('POST');
     expect(JSON.parse(init?.body as string)).toEqual({
       feedback_id: 3,
