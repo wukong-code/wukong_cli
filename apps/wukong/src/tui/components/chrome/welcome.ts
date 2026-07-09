@@ -7,6 +7,7 @@ import type { Component } from '@earendil-works/pi-tui';
 import { truncateToWidth, visibleWidth } from '@earendil-works/pi-tui';
 import chalk from 'chalk';
 
+import { WUKONG_EMBLEM, WUKONG_EMBLEM_HEADBAND_ROW } from '#/tui/constant/welcome-art';
 import { isRainbowDancing, renderDanceWelcomeHeader } from '#/tui/easter-eggs/dance';
 import type { AppState } from '#/tui/types';
 import { currentTheme } from '#/tui/theme';
@@ -42,13 +43,11 @@ export class WelcomeComponent implements Component {
     const innerWidth = Math.max(1, safeWidth - 4);
     const pad = '  ';
 
-    // Logo + side-by-side text.
-    const logo = ['  ▪ ▪  ', '       '] as const;
-    const logoWidth = Math.max(...logo.map((row) => visibleWidth(row)));
+    // Mascot emblem (left) + side-by-side text (right).
+    const artWidth = Math.max(...WUKONG_EMBLEM.map((row) => visibleWidth(row)));
     const gap = '  ';
-    const textWidth = Math.max(4, innerWidth - logoWidth - gap.length);
+    const textWidth = Math.max(4, innerWidth - artWidth - gap.length);
 
-    const avatar = (s: string): string => chalk.hex('#050505').bgHex(currentTheme.palette.primary)(s);
     const rightRow0 = truncateToWidth(
       chalk.bold.hex(currentTheme.palette.primary)('Wukong Code'),
       textWidth,
@@ -61,13 +60,33 @@ export class WelcomeComponent implements Component {
       textWidth,
       '…',
     );
+    const textRows = [rightRow0, rightRow1];
+    const textStartRow = Math.floor((WUKONG_EMBLEM.length - textRows.length) / 2);
 
-    let renderedHeaderLines = [
-      avatar(logo[0].padEnd(logoWidth)) + gap + rightRow0,
-      avatar(logo[1].padEnd(logoWidth)) + gap + rightRow1,
-    ];
+    // Headband (金箍) glows gold; the rest of the face follows the theme brand
+    // colour so it stays legible in both light and dark palettes. Pad by
+    // visible width (not code-point length) so the `●` eyes — an ambiguous-width
+    // glyph — never shift the right-hand text column.
+    const emblem = (rowIndex: number, row: string): string => {
+      const token = rowIndex === WUKONG_EMBLEM_HEADBAND_ROW ? 'warning' : 'primary';
+      const padded = row + ' '.repeat(Math.max(0, artWidth - visibleWidth(row)));
+      return chalk.hex(currentTheme.palette[token])(padded);
+    };
+
+    let renderedHeaderLines = WUKONG_EMBLEM.map((row, i) => {
+      const left = emblem(i, row);
+      const textIndex = i - textStartRow;
+      const text =
+        textIndex >= 0 && textIndex < textRows.length ? textRows[textIndex] : undefined;
+      return text !== undefined ? left + gap + text : left;
+    });
     if (isRainbowDancing()) {
-      renderedHeaderLines = renderDanceWelcomeHeader(logo, textWidth, rightRow1);
+      renderedHeaderLines = renderDanceWelcomeHeader(
+        WUKONG_EMBLEM,
+        artWidth,
+        textRows,
+        textStartRow,
+      );
     }
 
     const modelValue = isLoggedOut

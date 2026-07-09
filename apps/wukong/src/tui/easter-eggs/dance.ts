@@ -110,24 +110,33 @@ export function isRainbowDancing(): boolean {
 }
 
 export function renderDanceWelcomeHeader(
-  logo: readonly [string, string],
-  textWidth: number,
-  rightRow1: string,
+  art: readonly string[],
+  artWidth: number,
+  textRows: readonly (string | undefined)[],
+  textStartRow = 0,
 ): string[] {
   const phase = currentDanceView?.phase ?? 0;
   const palette = getDanceRainbowPalette();
-  const logoWidth = Math.max(...logo.map((row) => visibleWidth(row)));
   const gap = '  ';
-  const rightRow0 = truncateToWidth(
+  const titleWidth = Math.max(0, ...textRows.map((row) => (row === undefined ? 0 : visibleWidth(row))));
+  const rainbowTitle = truncateToWidth(
     rainbowText('Welcome to Wukong!', palette, phase + 2, true),
-    textWidth,
+    titleWidth,
     '…',
   );
 
-  return [
-    rainbowText(logo[0].padEnd(logoWidth), palette, phase) + gap + rightRow0,
-    rainbowText(logo[1].padEnd(logoWidth), palette, phase + 3) + gap + rightRow1,
-  ];
+  return art.map((row, i) => {
+    const padded = row + ' '.repeat(Math.max(0, artWidth - visibleWidth(row)));
+    const left = rainbowText(padded, palette, phase + i);
+    const textIndex = i - textStartRow;
+    const text =
+      textIndex === 0
+        ? rainbowTitle
+        : textIndex > 0 && textIndex < textRows.length
+          ? textRows[textIndex]
+          : undefined;
+    return text !== undefined && text.length > 0 ? left + gap + text : left;
+  });
 }
 
 export function renderDanceFooterModel(modelLabel: string): string {
