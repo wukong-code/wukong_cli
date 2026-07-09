@@ -1,5 +1,21 @@
 # @wukong.today/code
 
+## 0.0.9
+
+### Minor Changes
+
+- Add `wukong today` Daily Proof Briefing with local stats, streak, and focus. Run `wukong today` or `/today`.
+- Add M1 hosted reports upload for redacted verify/scan/proof evidence. Pass `--upload` or run `wukong report upload <path>`.
+- Ship loop-driven TUI chrome: borderless editor, heartbeat phase line, and verify/proof conclusion tracks.
+
+### Patch Changes
+
+- Align package version with public Wukong Code binary release v0.0.9.
+- Fix chrome-state so goal blocked no longer records fake verify failures; hydrate keeps newest events; warning/judge stats match CLI semantics.
+- Align welcome emblem with the web app Wukong mascot.
+- Fix Nix/SEA Node 26.4.0 build and verification package workspace wiring.
+- Add related/changed test scripts and a CI coverage gate for the CLI project.
+
 ## 0.0.8
 
 ### Patch Changes
