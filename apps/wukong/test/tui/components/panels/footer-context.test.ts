@@ -4,6 +4,7 @@ import chalk from 'chalk';
 import { FooterComponent, formatFooterGitBadge, buildWeightedTips } from '#/tui/components/chrome/footer';
 import { darkColors } from '#/tui/theme/colors';
 import type { AppState } from '#/tui/types';
+import { ChromeStateAggregator } from '#/tui/utils/chrome-state';
 
 const ANSI_SGR = /\u001B\[[0-9;]*m/g;
 function strip(text: string): string {
@@ -43,9 +44,13 @@ function baseState(overrides: Partial<AppState> = {}): AppState {
   } as AppState;
 }
 
+function makeChromeState(): ChromeStateAggregator {
+  return new ChromeStateAggregator({ cwd: '/tmp' });
+}
+
 describe('FooterComponent — context NaN resilience', () => {
   it('NaN usage → renders 0.0% (never literal "NaN%")', () => {
-    const fc = new FooterComponent(baseState({ contextUsage: Number.NaN }));
+    const fc = new FooterComponent(baseState({ contextUsage: Number.NaN }), makeChromeState());
     const out = strip(fc.render(120).join(''));
     expect(out).not.toMatch(/NaN/);
     expect(out).toMatch(/context: 0\.0%/);
@@ -54,6 +59,7 @@ describe('FooterComponent — context NaN resilience', () => {
   it('undefined-ish (coerced) usage → renders 0.0%', () => {
     const fc = new FooterComponent(
       baseState({ contextUsage: undefined as unknown as number }),
+      makeChromeState(),
     );
     const out = strip(fc.render(120).join(''));
     expect(out).not.toMatch(/NaN/);
@@ -61,13 +67,13 @@ describe('FooterComponent — context NaN resilience', () => {
   });
 
   it('clamps ratios above 1.0 → renders 100.0%', () => {
-    const fc = new FooterComponent(baseState({ contextUsage: 1.5 }));
+    const fc = new FooterComponent(baseState({ contextUsage: 1.5 }), makeChromeState());
     const out = strip(fc.render(120).join(''));
     expect(out).toMatch(/context: 100\.0%/);
   });
 
   it('ratio 0.427 → renders 42.7%', () => {
-    const fc = new FooterComponent(baseState({ contextUsage: 0.427 }));
+    const fc = new FooterComponent(baseState({ contextUsage: 0.427 }), makeChromeState());
     const out = strip(fc.render(200).join(''));
     expect(out).toMatch(/context: 42\.7%/);
   });
@@ -75,6 +81,7 @@ describe('FooterComponent — context NaN resilience', () => {
   it('tokens provided but max=0 → falls back to percent-only, no division-by-zero artefact', () => {
     const fc = new FooterComponent(
       baseState({ contextUsage: 0, contextTokens: 500, maxContextTokens: 0 }),
+      makeChromeState(),
     );
     const out = strip(fc.render(200).join(''));
     expect(out).not.toMatch(/Infinity|NaN/);
@@ -84,7 +91,10 @@ describe('FooterComponent — context NaN resilience', () => {
   });
 
   it('setState updates visible model and context values', () => {
-    const footer = new FooterComponent(baseState({ model: 'k2', contextUsage: 0 }));
+    const footer = new FooterComponent(
+      baseState({ model: 'k2', contextUsage: 0 }),
+      makeChromeState(),
+    );
 
     footer.setState(baseState({ model: 'wukong-k2-5', contextUsage: 0.5 }));
 
@@ -95,21 +105,23 @@ describe('FooterComponent — context NaN resilience', () => {
   });
 
   it('shows "thinking" label when thinking is enabled, hides it when disabled', () => {
-    const on = new FooterComponent(baseState({ model: 'k2', thinking: true }));
-    const off = new FooterComponent(baseState({ model: 'k2', thinking: false }));
+    const on = new FooterComponent(baseState({ model: 'k2', thinking: true }), makeChromeState());
+    const off = new FooterComponent(baseState({ model: 'k2', thinking: false }), makeChromeState());
 
-    expect(strip(on.render(120)[0]!)).toContain('thinking');
-    expect(strip(off.render(120)[0]!)).not.toContain('thinking');
+    expect(strip(on.render(120).join('\n'))).toContain('thinking');
+    expect(strip(off.render(120).join('\n'))).not.toContain('thinking');
   });
 
-  it('renders transient hints on the context line', () => {
-    const footer = new FooterComponent(baseState());
+  it('renders transient hints on the mode line', () => {
+    const footer = new FooterComponent(baseState(), makeChromeState());
 
     footer.setTransientHint('Press Ctrl-C again to exit');
 
-    const [, line2] = footer.render(120);
-    expect(strip(line2 ?? '')).toContain('Press Ctrl-C again to exit');
-    expect(strip(line2 ?? '')).toContain('context: 0.0%');
+    const hintLine = footer
+      .render(120)
+      .find((line) => strip(line).includes('Press Ctrl-C again to exit'));
+    expect(hintLine).toBeDefined();
+    expect(strip(hintLine!)).not.toContain('context: 0.0%');
   });
 
   it('highlights the pull request badge separately from git status text', () => {

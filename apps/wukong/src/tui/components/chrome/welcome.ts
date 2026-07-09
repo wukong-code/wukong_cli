@@ -9,29 +9,39 @@ import chalk from 'chalk';
 
 import { WUKONG_EMBLEM, WUKONG_EMBLEM_HEADBAND_ROW } from '#/tui/constant/welcome-art';
 import { isRainbowDancing, renderDanceWelcomeHeader } from '#/tui/easter-eggs/dance';
-import type { AppState } from '#/tui/types';
 import { currentTheme } from '#/tui/theme';
+import type { AppState, UIMode } from '#/tui/types';
+import { formatTodayCompact } from '#/tui/utils/today-format';
+import type { TodayBriefing } from '#/utils/stats';
 
 export class WelcomeComponent implements Component {
   private state: AppState;
+  private todayBriefing: TodayBriefing | null;
+  private uiMode: UIMode;
 
-  constructor(state: AppState) {
+  constructor(state: AppState, todayBriefing?: TodayBriefing | null, uiMode?: UIMode) {
     this.state = state;
+    this.todayBriefing = todayBriefing ?? null;
+    this.uiMode = uiMode ?? 'idle';
+  }
+
+  setState(todayBriefing: TodayBriefing | null, uiMode: UIMode): void {
+    this.todayBriefing = todayBriefing;
+    this.uiMode = uiMode;
   }
 
   invalidate(): void {}
 
   render(width: number): string[] {
     const safeWidth = Math.max(0, width);
-    const primary = (s: string): string => chalk.hex(currentTheme.palette.primary)(s);
-    const isLoggedOut = !this.state.model;
-    const activeModel = this.state.availableModels[this.state.model];
 
     if (safeWidth < 24) {
       const title = chalk.bold.hex(currentTheme.palette.primary)('Wukong Code');
+      const isLoggedOut = !this.state.model;
       const prompt = isLoggedOut
         ? chalk.hex(currentTheme.palette.warning)('Run /login or /provider to get started.')
         : chalk.hex(currentTheme.palette.textDim)('Send /help for help information.');
+      const activeModel = this.state.availableModels[this.state.model];
       const model = isLoggedOut
         ? chalk.hex(currentTheme.palette.warning)('not set, run /login or /provider')
         : (activeModel?.displayName ?? activeModel?.model ?? this.state.model);
@@ -39,6 +49,37 @@ export class WelcomeComponent implements Component {
         truncateToWidth(line, safeWidth, '…'),
       );
     }
+
+    if (this.uiMode === 'idle' && this.todayBriefing !== null) {
+      return this.renderTodayBlock(safeWidth);
+    }
+
+    return this.renderWelcomeCard(safeWidth);
+  }
+
+  private renderTodayBlock(safeWidth: number): string[] {
+    const primary = (s: string): string => chalk.hex(currentTheme.palette.primary)(s);
+    const text = formatTodayCompact({ briefing: this.todayBriefing! });
+    const innerWidth = Math.max(1, safeWidth - 4);
+    const pad = '  ';
+
+    const content = `${chalk.bold.hex(currentTheme.palette.primary)('Today')} · ${text}`;
+    const truncated = truncateToWidth(content, innerWidth, '…');
+    const vis = visibleWidth(truncated);
+    const rightPad = Math.max(0, innerWidth - vis);
+
+    const lines: string[] = ['', primary('╭' + '─'.repeat(safeWidth - 2) + '╮')];
+    lines.push(primary('│') + pad + truncated + ' '.repeat(rightPad) + primary('│'));
+    lines.push(primary('╰' + '─'.repeat(safeWidth - 2) + '╯'));
+    lines.push('');
+
+    return lines.map((line) => truncateToWidth(line, safeWidth, '…'));
+  }
+
+  private renderWelcomeCard(safeWidth: number): string[] {
+    const primary = (s: string): string => chalk.hex(currentTheme.palette.primary)(s);
+    const isLoggedOut = !this.state.model;
+    const activeModel = this.state.availableModels[this.state.model];
 
     const innerWidth = Math.max(1, safeWidth - 4);
     const pad = '  ';

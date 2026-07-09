@@ -5,8 +5,9 @@ import { FooterComponent } from '#/tui/components/chrome/footer';
 import { setRainbowDance, type RainbowDanceController } from '#/tui/easter-eggs/dance';
 import { currentTheme, darkColors, lightColors } from '#/tui/theme';
 import type { AppState } from '#/tui/types';
+import { ChromeStateAggregator } from '#/tui/utils/chrome-state';
 
-const TRUECOLOR_PATTERN = /\[38;2;(\d+);(\d+);(\d+)m/g;
+const TRUECOLOR_PATTERN = /\u001B\[38;2;(\d+);(\d+);(\d+)m/g;
 
 function truecolorCodes(text: string): Set<string> {
   const codes = new Set<string>();
@@ -14,6 +15,10 @@ function truecolorCodes(text: string): Set<string> {
     codes.add(`${match[1]},${match[2]},${match[3]}`);
   }
   return codes;
+}
+
+function makeChromeState(): ChromeStateAggregator {
+  return new ChromeStateAggregator({ cwd: '/tmp/project' });
 }
 
 // Dark dance colors the footer never uses outside of /dance.
@@ -73,7 +78,7 @@ describe('FooterComponent', () => {
 
   it('paints the model name in rainbow while colored', () => {
     setDanceView(true, 0);
-    const footer = new FooterComponent(appState);
+    const footer = new FooterComponent(appState, makeChromeState());
 
     const codes = truecolorCodes(footer.render(120).join('\n'));
 
@@ -84,7 +89,7 @@ describe('FooterComponent', () => {
   });
 
   it('renders the model name in its normal color when not dancing', () => {
-    const footer = new FooterComponent(appState);
+    const footer = new FooterComponent(appState, makeChromeState());
 
     const codes = truecolorCodes(footer.render(120).join('\n'));
 
@@ -93,7 +98,7 @@ describe('FooterComponent', () => {
   });
 
   it('repaints from the active palette on the next render (no setColors needed)', () => {
-    const footer = new FooterComponent(appState);
+    const footer = new FooterComponent(appState, makeChromeState());
     const before = footer.render(120).join('\n');
 
     currentTheme.setPalette(lightColors);

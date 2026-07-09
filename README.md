@@ -85,6 +85,16 @@ The current product direction is to turn Wukong Code into the **proof layer for 
 
 The P0 local CLI commands, TUI verification commands, `/proof`, `/judge`, `/goal --until` verification gates, `/loop` (including `--every` cron-scheduler pacing), and `wukong_verify` agent tool are implemented. The remaining docs track follow-up work such as cloud reports, billing, team rules, and deep review.
 
+## Acknowledgments
+
+Wukong Code builds on and learns from excellent open-source and industry projects:
+
+- **[Kimi Code](https://github.com/MoonshotAI/kimi-code)** — Moonshot AI’s terminal AI coding agent. Wukong Code’s CLI/TUI, agent runtime, provider/ACP/server stack, and session model are built on the Kimi Code base. Thank you to the Kimi Code team for the foundation and MIT-licensed reference implementation.
+- **[Pi](https://github.com/earendil-works/pi)** — Mario Zechner’s AI agent toolkit. Wukong Code’s interactive TUI is powered by [`@earendil-works/pi-tui`](https://github.com/earendil-works/pi/tree/main/packages/tui) (differential rendering, editor, components, terminal I/O). Thank you to the Pi project for the MIT-licensed terminal UI foundation.
+- **[Claude Code](https://github.com/anthropics/claude-code)** — Anthropic’s terminal AI coding agent. Wukong Code references Claude Code for TUI chrome layout (input/status chrome), loop engineering patterns, and interoperability (e.g. `/import-from-cc-codex` for instructions, Skills, and MCP settings).
+
+Wukong Code is a separate product focused on **AI Coding Loop control and deterministic verification**; it is not affiliated with Moonshot AI, Anthropic, or the Pi project authors beyond these acknowledged dependencies.
+
 ## License
 
 This is proprietary internal software. See [LICENSE](LICENSE).

@@ -11,6 +11,9 @@ import type {
 import type { NotificationsConfig, UpgradePreferences } from './config';
 import type { PendingApproval, PendingQuestion } from './reverse-rpc/types';
 import type { ColorToken, ThemeName } from './theme';
+import type { VerifySummary, ProofSummary } from './utils/chrome-state';
+
+export type UIMode = 'idle' | 'active' | 'blocked';
 
 export type BannerDisplay = 'always' | 'once' | 'cooldown';
 
@@ -51,6 +54,12 @@ export interface AppState {
   sessionTitle: string | null;
   /** Current goal snapshot for the footer badge; null/undefined when no active goal. */
   goal?: GoalSnapshot | null;
+  /** Derived UI mode for loop-driven chrome layout. */
+  uiMode?: UIMode;
+  /** Last verify result used by the footer conclusion track. */
+  lastVerifySummary?: VerifySummary | null;
+  /** Last proof result used by the footer conclusion track. */
+  lastProofSummary?: ProofSummary | null;
   mcpServersSummary: string | null;
   /** Optional banner shown below the welcome panel; null means no banner to render. */
   banner?: BannerState | null;

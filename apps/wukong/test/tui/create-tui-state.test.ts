@@ -82,6 +82,6 @@ describe('createTUIState', () => {
     expect(state.externalEditorRunning).toBe(false);
     expect(state.loadingSessions).toBe(false);
     expect(state.sessionsScope).toBe('cwd');
-    expect(state.activitySpinner).toBeNull();
+    expect(state.chromeState).toBeDefined();
   });
 });

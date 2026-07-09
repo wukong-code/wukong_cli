@@ -155,7 +155,7 @@ export class SubAgentEventHandler {
       progress.dispose();
     }
     this.agentSwarmProgress.clear();
-    this.host.updateActivityPane();
+    this.host.updateLoopPhase();
   }
 
   hasAgentSwarmProgress(toolCallId: string): boolean {
@@ -220,7 +220,7 @@ export class SubAgentEventHandler {
       progress.markToolCallEnded();
       progress.applyResult(resultData.output);
     }
-    this.host.updateActivityPane();
+    this.host.updateLoopPhase();
     this.requestRender();
   }
 
@@ -538,7 +538,7 @@ export class SubAgentEventHandler {
     this.agentSwarmProgress.set(toolCallId, progress);
     this.host.streamingUI.finalizeLiveTextBuffers('tool');
     this.host.state.transcriptContainer.addChild(progress);
-    this.host.updateActivityPane();
+    this.host.updateLoopPhase();
     this.requestRender();
     return progress;
   }
@@ -555,7 +555,7 @@ export class SubAgentEventHandler {
       children.splice(index, 1);
       this.host.state.transcriptContainer.invalidate();
     }
-    this.host.updateActivityPane();
+    this.host.updateLoopPhase();
   }
 
   private agentSwarmGridHeight(): number | undefined {

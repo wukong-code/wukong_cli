@@ -29,7 +29,7 @@ export interface StreamingUIHost {
   setAppState(patch: Partial<AppState>): void;
   patchLivePane(patch: Partial<LivePaneState>): void;
   resetLivePane(): void;
-  updateActivityPane(): void;
+  updateLoopPhase(): void;
   updateQueueDisplay(): void;
   requireSession(): Session;
   deferUserMessages: boolean;
@@ -515,7 +515,7 @@ export class StreamingUIController {
       this.onStreamingTextEnd();
     }
     this._assistantDraft = '';
-    this.host.updateActivityPane();
+    this.host.updateLoopPhase();
     this.host.state.ui.requestRender();
   }
 

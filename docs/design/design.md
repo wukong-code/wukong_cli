@@ -31,7 +31,7 @@
 
 | 区域 | 已有能力 |
 |---|---|
-| TUI | 交互式 agent 会话、slash commands、审批、任务上下文 |
+| TUI | 交互式 agent 会话、slash commands、审批、任务上下文；布局改造计划见 [tui-layout-loop-driven.md](tui-layout-loop-driven.md) |
 | CLI | prompt mode、provider、login、doctor、server/web、ACP、export、vis、migrate |
 | 配置 | `~/.wukong`、`config.toml`、provider 配置、credentials |
 

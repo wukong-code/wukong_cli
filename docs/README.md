@@ -76,6 +76,8 @@ wukong upgrade
   定义未来验证型产品的交互、成长体系和命令设计。
 - [today 命令设计](design/today.md)
   定义 `wukong today` / `/today`：Daily Proof Briefing（今日简报 + focus 合并）。
+- [TUI 布局改造计划（Loop 驱动）](design/tui-layout-loop-driven.md)
+  定义 TUI 对齐 Claude Code 底部 chrome、loop/proof 常驻轨、today 欢迎区与分阶段实施顺序。
 - [登录与同步验收计划](test/test-login-sync.md)
   记录登录与同步能力进入实现阶段前应满足的验收条件。
 - [Verification CLI 自动化测试计划](test/verification-cli-test-plan.md)

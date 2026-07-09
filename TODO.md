@@ -70,6 +70,38 @@
 - [ ] 不对齐 web legacy `/api/today`（xp/mood/quests）
 - [ ] 不把 today 做成任务管理器（执行归 `/goal`）
 
+## 📋 TUI 布局（Loop 驱动）
+
+> 方案: [docs/design/tui-layout-loop-driven.md](docs/design/tui-layout-loop-driven.md) — 底部 chrome 对齐 Claude Code + loop/proof 常驻轨；分 Phase 0→3。
+
+### Phase 0 — 底部 Chrome（Claude Code 骨架）
+
+- [x] `custom-editor.ts`：去 `╭╮╰╯` 边框盒，`❯` prompt + 上下 `─` 分隔线
+- [x] 重定义 `paddingX` / `injectPromptSymbol`；bash `! shell mode` 徽标迁至上分隔线 label
+- [x] 决策并落实审批/问答/selector 面板样式（建议保留自身边框以示模态）
+- [x] `footer.ts`：status 行 2 格缩进；mode 独立最后一行
+- [x] 回归：plan/bash 高亮、审批/问答全屏、slash autocomplete
+
+### Phase 1 — 心跳行 + 结论轨（chrome ≤ 7 行硬约束）
+
+- [x] 新建 `loop-phase.ts` 心跳行（`↻ iter/max · phase · 耗时`；blocked `⛔`；`--every` 节流显示）
+- [x] 新建 `utils/chrome-state.ts`：goal + verify/proof/gate 聚合；进程内缓存 + 事件驱动刷新（禁止每帧读 stats）
+- [x] `footer.ts`：结论轨合并（active：Goal 行 + Verify/Proof 行；idle：Today 摘要行）；`uiMode` idle|active|blocked
+- [x] gate 结果每轮落 transcript 一条消息（`✓/✗ iter N gate: …`）
+- [x] `wukong-tui.ts`：`updateActivityPane` → `updateLoopPhase`；`activity-pane.ts` 退役
+- [x] 测试：chrome-state 单测、footer 三模式快照、心跳行文案、手动 `/goal` `/loop` `/proof` 联调
+
+### Phase 2 — Today 替换欢迎卡
+
+- [x] idle：today compact 简报；active/blocked：收起大欢迎卡
+- [x] `/today` 与启动简报共用渲染器
+- [x] MINI_ART 保留为 compact 单行（见 `welcome-art.ts`）
+
+### Phase 3 — Polish（可选）
+
+- [ ] `welcomeStyle` 配置：auto | compact | dashboard
+- [ ] 像素 mascot 帧按 loop phase 切换（`mascot.ts`）
+
 ## 📋 下一批: Hosted Reports 前置（对应 ROADMAP Milestone 1）
 
 - [ ] `verify` / `scan` 增加登录态 report upload（opt-in + 清晰 redaction preview；上传失败不影响本地报告）
@@ -100,4 +132,4 @@
 
 ---
 
-**最后更新**: 2026-07-08（含 P1 `today` 规划）
+**最后更新**: 2026-07-09（含 TUI loop 布局计划）

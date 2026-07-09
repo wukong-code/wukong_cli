@@ -100,7 +100,7 @@ export interface SessionEventHost {
   showError(msg: string): void;
   showStatus(msg: string, color?: ColorToken): void;
   showNotice(title: string, detail?: string): void;
-  updateActivityPane(): void;
+  updateLoopPhase(): void;
   track(event: string, props?: Record<string, unknown>): void;
   mountEditorReplacement(panel: Component & Focusable): void;
   restoreEditor(): void;
@@ -656,6 +656,10 @@ export class SessionEventHandler {
     // Lifecycle change (pause / resume / blocked) -> a low-profile,
     // ctrl+o-expandable marker.
     if (change.kind === 'lifecycle' && change.status === 'blocked') {
+      const reason = typeof change.reason === 'string' ? change.reason : undefined;
+      this.host.state.chromeState.recordGuard(true);
+      this.host.state.chromeState.recordVerify('failed', reason);
+      this.appendGateTranscriptEntry(event.snapshot?.iteration ?? 0, 'failed', reason);
       void this.notifyQueuedGoalWaitingOnBlocked();
       if (change.actor === 'model' || change.reason === undefined) {
         this.pendingModelBlockedFallback = this.currentTurnHasAssistantText
@@ -829,6 +833,22 @@ export class SessionEventHandler {
       'Goal blocked.',
       'The next queued goal will start only after this goal is complete.',
     );
+  }
+
+  private appendGateTranscriptEntry(
+    iteration: number,
+    status: 'passed' | 'failed',
+    reason?: string,
+  ): void {
+    const icon = status === 'passed' ? '✓' : '✗';
+    const label = status === 'passed' ? 'PASS' : 'FAIL';
+    const reasonPart = reason !== undefined && reason.length > 0 ? ` — ${reason}` : '';
+    this.host.appendTranscriptEntry({
+      id: nextTranscriptId(),
+      kind: 'status',
+      renderMode: 'plain',
+      content: `${icon} iter ${iteration} gate: verify ${label}${reasonPart}`,
+    });
   }
 
   private handleSessionMetaChanged(event: SessionMetaUpdatedEvent): void {

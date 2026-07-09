@@ -2152,16 +2152,14 @@ command = "vim"
 
     const transcript = stripSgr(renderTranscript(driver));
     const panel = stripSgr(renderBtwPanel(driver));
-    const editorTopBorder = stripSgr(driver.state.editor.render(80)[0] ?? '');
+    const editorFirstLine = stripSgr(driver.state.editor.render(80)[0] ?? '');
     expect(panel).toContain('BTW ─ Esc close');
     expect(panel).not.toContain('ctrl+o expand');
-    expect(editorTopBorder.startsWith('├')).toBe(true);
-    expect(editorTopBorder.endsWith('┤')).toBe(true);
+    expect(editorFirstLine.startsWith('❯')).toBe(true);
 
     driver.state.editor.handleInput('/');
-    const highlightedEditorTopBorder = stripSgr(driver.state.editor.render(80)[0] ?? '');
-    expect(highlightedEditorTopBorder.startsWith('╭')).toBe(true);
-    expect(highlightedEditorTopBorder.endsWith('╮')).toBe(true);
+    const highlightedEditorFirstLine = stripSgr(driver.state.editor.render(80)[0] ?? '');
+    expect(highlightedEditorFirstLine.startsWith('❯')).toBe(true);
     expect(panel).not.toContain('BTW done');
     expect(panel).not.toContain('BTW running');
     expect(panel).not.toContain('BTW failed');
@@ -2226,8 +2224,9 @@ command = "vim"
     const transcript = stripSgr(renderTranscript(driver));
     const panel = stripSgr(renderBtwPanel(driver));
     const rootChildren = driver.state.ui.children;
+    // Layout order: ... → btwPanelContainer → loopPhase → editorUpperSeparator → editorContainer → ...
     expect(rootChildren.indexOf(driver.state.btwPanelContainer)).toBe(
-      rootChildren.indexOf(driver.state.editorContainer) - 1,
+      rootChildren.indexOf(driver.state.editorContainer) - 3,
     );
     expect(transcript).toContain('main answer after btw');
     expect(transcript).not.toContain('side answer');
@@ -2401,9 +2400,10 @@ command = "vim"
     expect(session.cancel).toHaveBeenCalledOnce();
     expect(driver.state.btwPanelContainer.children).toHaveLength(0);
     expect(requestRender.mock.calls.at(-1)).toEqual([true]);
-    const editorTopBorder = stripSgr(driver.state.editor.render(80)[0] ?? '');
-    expect(editorTopBorder.startsWith('╭')).toBe(true);
-    expect(editorTopBorder.endsWith('╮')).toBe(true);
+    const editorFirstLine = stripSgr(driver.state.editor.render(80)[0] ?? '');
+    expect(editorFirstLine.startsWith('❯ ')).toBe(true);
+    expect(editorFirstLine).not.toContain('╭');
+    expect(editorFirstLine).not.toContain('╮');
     expect(driver.state.editor.focused).toBe(true);
   });
 
@@ -3212,7 +3212,7 @@ command = "vim"
       .slice(transcriptIndex + 1)
       .reduce((sum, child) => sum + child.render(terminalColumns).length, 0);
     const nonGridRows = 20 - (agentSwarmGridHeightForTerminalRows(20) ?? 0);
-    setTerminalRows(driver, rowsAfterTranscript + nonGridRows + 2);
+    setTerminalRows(driver, rowsAfterTranscript + nonGridRows + 4);
 
     driver.sessionEventHandler.handleEvent(
       {

@@ -46,9 +46,10 @@ import * as slashCommands from './commands/dispatch';
 import { BannerComponent } from './components/chrome/banner';
 import { DeviceCodeBoxComponent } from './components/chrome/device-code-box';
 import { GutterContainer } from './components/chrome/gutter-container';
-import { MoonLoader, type SpinnerStyle } from './components/chrome/moon-loader';
+import { MoonLoader } from './components/chrome/moon-loader';
+import { SeparatorLineComponent } from './components/chrome/separator-line';
 import { WelcomeComponent } from './components/chrome/welcome';
-import { pickRandomWorkingTip } from './components/chrome/working-tips';
+import type { LoopPhaseState } from './components/chrome/loop-phase';
 import {
   ApprovalPanelComponent,
   type ApprovalPanelResponse,
@@ -83,7 +84,6 @@ import { ThinkingComponent } from './components/messages/thinking';
 import { StepSummaryComponent } from './components/messages/step-summary';
 import { ToolCallComponent } from './components/messages/tool-call';
 import { UserMessageComponent } from './components/messages/user-message';
-import { ActivityPaneComponent, type ActivityPaneMode } from './components/panes/activity-pane';
 import { QueuePaneComponent } from './components/panes/queue-pane';
 import type { TuiConfig } from './config';
 import {
@@ -171,15 +171,6 @@ export interface WukongTUIStartupInput {
   readonly migrateOnly?: boolean;
 }
 
-type EffectiveActivityPaneMode = ActivityPaneMode | 'idle' | 'session';
-type LoadingTipKind = 'moon' | 'composing';
-
-function loadingTipKind(mode: EffectiveActivityPaneMode): LoadingTipKind | undefined {
-  if (mode === 'waiting' || mode === 'tool') return 'moon';
-  if (mode === 'composing') return 'composing';
-  return undefined;
-}
-
 function sameStringArrays(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
@@ -260,9 +251,6 @@ export class WukongTUI {
   private readonly migrationPlan: MigrationPlan | null;
   private readonly migrateOnly: boolean;
   private startupNotice: string | undefined;
-  private lastActivityMode: string | undefined;
-  private currentLoadingTip: { kind: LoadingTipKind; tip: string | undefined } | undefined =
-    undefined;
   private lastHistoryContent: string | undefined;
   // Live `!` shell output entries, keyed by commandId so concurrent commands
   // each update their own card and stale events are dropped. Mutated in place
@@ -523,6 +511,9 @@ export class WukongTUI {
 
   private async initMainTui(): Promise<boolean> {
     const shouldReplayHistory = await this.init();
+
+    // Hydrate chrome-state from stats once at startup before mounting chrome.
+    await this.state.chromeState.hydrate();
 
     // Mount only after init() succeeds; see mountFooter().
     this.mountFooter();
@@ -829,7 +820,10 @@ export class WukongTUI {
     ui.addChild(this.state.todoPanelContainer);
     ui.addChild(this.state.queueContainer);
     ui.addChild(this.state.btwPanelContainer);
+    ui.addChild(this.state.loopPhase);
+    ui.addChild(this.state.editorUpperSeparator);
     ui.addChild(this.state.editorContainer);
+    ui.addChild(this.state.editorLowerSeparator);
     // Footer is mounted later (mountFooter), not here.
   }
 
@@ -854,6 +848,8 @@ export class WukongTUI {
 
   handleInputModeChange(mode: 'prompt' | 'bash'): void {
     this.setAppState({ inputMode: mode });
+    const bashLabel = mode === 'bash' ? ` ${currentTheme.boldFg('shellMode', '! shell mode')} ` : undefined;
+    this.state.editorUpperSeparator.setLabel(bashLabel);
     this.updateEditorBorderHighlight();
   }
 
@@ -1288,15 +1284,26 @@ export class WukongTUI {
   }
 
   setAppState(patch: Partial<AppState>): void {
-    if (!hasPatchChanges(this.state.appState, patch)) return;
+    if ('goal' in patch) {
+      this.state.chromeState.setGoal(patch.goal ?? null);
+    }
+    const chrome = this.state.chromeState.getState();
+    const derived: Partial<AppState> = {
+      uiMode: chrome.uiMode,
+      lastVerifySummary: chrome.lastVerify,
+      lastProofSummary: chrome.lastProof,
+    };
+    const merged = { ...patch, ...derived };
+    if (!hasPatchChanges(this.state.appState, merged)) return;
     const additionalDirsChanged =
-      'additionalDirs' in patch &&
-      !sameStringArrays(this.state.appState.additionalDirs, patch.additionalDirs ?? []);
-    const busyChanged = 'streamingPhase' in patch || 'isCompacting' in patch;
-    Object.assign(this.state.appState, patch);
-    if ('planMode' in patch) this.updateEditorBorderHighlight();
+      'additionalDirs' in merged &&
+      !sameStringArrays(this.state.appState.additionalDirs, merged.additionalDirs ?? []);
+    const busyChanged = 'streamingPhase' in merged || 'isCompacting' in merged;
+    Object.assign(this.state.appState, merged);
+    if ('planMode' in merged) this.updateEditorBorderHighlight();
     this.state.footer.setState(this.state.appState);
-    this.updateActivityPane();
+    this.renderWelcome();
+    this.updateLoopPhase();
     if (busyChanged) {
       this.updateQueueDisplay();
       this.sessionEventHandler.retryQueuedGoalPromotion();
@@ -1308,13 +1315,13 @@ export class WukongTUI {
   patchLivePane(patch: Partial<LivePaneState>): void {
     if (!hasPatchChanges(this.state.livePane, patch)) return;
     Object.assign(this.state.livePane, patch);
-    this.updateActivityPane();
+    this.updateLoopPhase();
     this.state.ui.requestRender();
   }
 
   resetLivePane(): void {
     this.state.livePane = { ...INITIAL_LIVE_PANE };
-    this.updateActivityPane();
+    this.updateLoopPhase();
     this.state.ui.requestRender();
   }
 
@@ -1365,6 +1372,7 @@ export class WukongTUI {
 
   async syncRuntimeState(session: Session = this.requireSession()): Promise<void> {
     const [status, goalResult] = await Promise.all([session.getStatus(), session.getGoal()]);
+    this.state.chromeState.setGoal(goalResult.goal ?? null);
     this.setAppState({
       sessionId: session.id,
       model: status.model ?? '',
@@ -1782,12 +1790,17 @@ export class WukongTUI {
   }
 
   private renderWelcome(): void {
-    if (
-      this.state.transcriptContainer.children.some((child) => child instanceof WelcomeComponent)
-    ) {
+    const chrome = this.state.chromeState.getState();
+    const todayBriefing = chrome.todayBriefing;
+    const uiMode = chrome.uiMode;
+    const existing = this.state.transcriptContainer.children.find(
+      (child): child is WelcomeComponent => child instanceof WelcomeComponent,
+    );
+    if (existing !== undefined) {
+      existing.setState(todayBriefing, uiMode);
       return;
     }
-    const welcome = new WelcomeComponent(this.state.appState);
+    const welcome = new WelcomeComponent(this.state.appState, todayBriefing, uiMode);
     this.state.transcriptContainer.addChild(welcome);
   }
 
@@ -2078,122 +2091,83 @@ export class WukongTUI {
   // Panes / Presentation State
   // =========================================================================
 
-  updateActivityPane(): void {
-    const effectiveMode = this.resolveActivityPaneMode();
-    const tipKind = loadingTipKind(effectiveMode);
-    // Pick a fresh loading tip when the loading kind changes. The same kind
-    // covers waiting/tool (both moon spinners) and any intermediate thinking
-    // phase, so a continuous burst of tool calls does not flip tips. Clear the
-    // cache only when there is no loading UI at all.
-    if (effectiveMode === 'idle' || effectiveMode === 'session' || effectiveMode === 'hidden') {
-      this.currentLoadingTip = undefined;
-    } else if (
-      tipKind !== undefined &&
-      (this.currentLoadingTip === undefined || this.currentLoadingTip.kind !== tipKind)
-    ) {
-      const previousTip = this.currentLoadingTip?.tip;
-      this.currentLoadingTip = {
-        kind: tipKind,
-        tip: pickRandomWorkingTip(previousTip)?.text,
-      };
-    }
-    this.syncTerminalProgress(this.shouldShowTerminalProgress(effectiveMode));
-    const placeSpinnerInAgentSwarm = this.shouldPlaceActivitySpinnerInAgentSwarm(effectiveMode);
-    const activityModeKey = `${effectiveMode}:${placeSpinnerInAgentSwarm ? 'swarm' : 'pane'}`;
+  updateLoopPhase(): void {
+    const state = this.resolveLoopPhaseState();
+    this.state.loopPhase.setState(state);
 
-    if (
-      activityModeKey === this.lastActivityMode &&
-      (effectiveMode === 'waiting' || effectiveMode === 'thinking' || effectiveMode === 'tool')
-    ) {
-      if (placeSpinnerInAgentSwarm) {
-        this.syncAgentSwarmActivitySpinner(this.state.activitySpinner?.instance);
-      }
-      return;
-    }
+    const active =
+      !state.hidden &&
+      (state.phase === 'waiting' ||
+        state.phase === 'thinking' ||
+        state.phase === 'composing' ||
+        state.phase === 'shell');
+    this.syncTerminalProgress(active);
 
-    this.lastActivityMode = activityModeKey;
-    this.state.activityContainer.clear();
+    // Agent swarm spinner is no longer driven by a standalone activity pane;
+    // keep the sync call so subagent rendering stays consistent.
+    this.syncAgentSwarmActivitySpinner(undefined);
 
-    switch (effectiveMode) {
-      case 'hidden':
-        this.stopActivitySpinner();
-        this.syncAgentSwarmActivitySpinner(undefined);
-        this.state.ui.requestRender();
-        return;
-      case 'waiting': {
-        const spinner = this.ensureActivitySpinner('moon');
-        this.syncAgentSwarmActivitySpinner(placeSpinnerInAgentSwarm ? spinner : undefined);
-        if (placeSpinnerInAgentSwarm) break;
-        this.state.activityContainer.addChild(
-          new ActivityPaneComponent({
-            mode: 'waiting',
-            spinner,
-            tip: this.currentLoadingTip?.tip,
-          }),
-        );
-        break;
-      }
-      case 'thinking': {
-        this.stopActivitySpinner();
-        this.syncAgentSwarmActivitySpinner(undefined);
-        break;
-      }
-      case 'composing': {
-        const spinner = this.ensureActivitySpinner('braille', 'working...', (s) =>
-          currentTheme.fg('primary', s),
-        );
-        this.syncAgentSwarmActivitySpinner(undefined);
-        this.state.activityContainer.addChild(
-          new ActivityPaneComponent({
-            mode: 'composing',
-            spinner,
-            tip: this.currentLoadingTip?.tip,
-          }),
-        );
-        break;
-      }
-      case 'tool': {
-        const spinner = this.ensureActivitySpinner('moon');
-        this.syncAgentSwarmActivitySpinner(placeSpinnerInAgentSwarm ? spinner : undefined);
-        if (placeSpinnerInAgentSwarm) break;
-        this.state.activityContainer.addChild(
-          new ActivityPaneComponent({
-            mode: 'tool',
-            spinner,
-            tip: this.currentLoadingTip?.tip,
-          }),
-        );
-        break;
-      }
-      case 'idle':
-      case 'session': {
-        this.stopActivitySpinner();
-        this.syncAgentSwarmActivitySpinner(undefined);
-        break;
-      }
-    }
     this.state.ui.requestRender();
   }
 
-  private resolveActivityPaneMode(): EffectiveActivityPaneMode {
-    if (this.state.activeDialog === 'session-picker') return 'hidden';
-    if (this.state.livePane.pendingApproval !== null) return 'hidden';
-    if (this.state.appState.isCompacting) return 'hidden';
-    if (this.state.livePane.pendingQuestion !== null) return 'hidden';
-
-    const streamingPhase = this.state.appState.streamingPhase;
-
-    // A running `!` shell command shows the moon spinner (same as `waiting`)
-    // until it finishes, signalling that input is busy / queued.
-    if (streamingPhase === 'shell') return 'waiting';
-
-    if (this.state.livePane.mode === 'idle') {
-      if (streamingPhase === 'thinking' || streamingPhase === 'composing') {
-        return streamingPhase;
-      }
+  private resolveLoopPhaseState(): LoopPhaseState {
+    if (this.state.activeDialog === 'session-picker') {
+      return { phase: 'waiting', iteration: 0, elapsedMs: 0, hidden: true };
+    }
+    if (this.state.livePane.pendingApproval !== null) {
+      return { phase: 'waiting', iteration: 0, elapsedMs: 0, hidden: true };
+    }
+    if (this.state.appState.isCompacting) {
+      return { phase: 'waiting', iteration: 0, elapsedMs: 0, hidden: true };
+    }
+    if (this.state.livePane.pendingQuestion !== null) {
+      return { phase: 'waiting', iteration: 0, elapsedMs: 0, hidden: true };
     }
 
-    return this.state.livePane.mode;
+    const chrome = this.state.chromeState.getState();
+    if (chrome.uiMode === 'active' || chrome.uiMode === 'blocked') {
+      return chrome.loopPhase ?? { phase: 'waiting', iteration: 0, elapsedMs: 0, hidden: false };
+    }
+
+    const streamingPhase = this.state.appState.streamingPhase;
+    if (streamingPhase === 'shell') {
+      return {
+        phase: 'shell',
+        iteration: 0,
+        elapsedMs: this.streamingElapsedMs(),
+        hidden: false,
+      };
+    }
+    if (streamingPhase === 'thinking') {
+      return {
+        phase: 'thinking',
+        iteration: 0,
+        elapsedMs: this.streamingElapsedMs(),
+        hidden: false,
+      };
+    }
+    if (streamingPhase === 'composing') {
+      return {
+        phase: 'composing',
+        iteration: 0,
+        elapsedMs: this.streamingElapsedMs(),
+        hidden: false,
+      };
+    }
+    if (this.state.livePane.mode !== 'idle') {
+      return {
+        phase: 'waiting',
+        iteration: 0,
+        elapsedMs: this.streamingElapsedMs(),
+        hidden: false,
+      };
+    }
+
+    return { phase: 'waiting', iteration: 0, elapsedMs: 0, hidden: true };
+  }
+
+  private streamingElapsedMs(): number {
+    return Math.max(0, Date.now() - this.state.appState.streamingStartTime);
   }
 
   updateQueueDisplay(): void {
@@ -2354,10 +2328,12 @@ export class WukongTUI {
     const trimmed = (text ?? this.state.editor.getText()).trimStart();
     const isBash = this.state.appState.inputMode === 'bash';
     const highlighted = this.state.appState.planMode || isBash || trimmed.startsWith('/');
-    this.state.editor.borderHighlighted = highlighted;
     // Shell mode gets its own hue; plan-mode and slash context stay primary.
     const borderToken = isBash ? 'shellMode' : highlighted ? 'primary' : 'border';
-    this.state.editor.borderColor = (s: string) => currentTheme.fg(borderToken, s);
+    const paint = (s: string) => currentTheme.fg(borderToken, s);
+    this.state.editor.borderColor = paint;
+    this.state.editorUpperSeparator.setPaint(paint);
+    this.state.editorLowerSeparator.setPaint(paint);
     this.state.ui.requestRender();
   }
 
@@ -2398,25 +2374,6 @@ export class WukongTUI {
     this.state.ui.requestRender(true);
   }
 
-  private shouldShowTerminalProgress(effectiveMode: EffectiveActivityPaneMode): boolean {
-    if (this.state.appState.isCompacting) return true;
-    return (
-      effectiveMode === 'waiting' ||
-      effectiveMode === 'thinking' ||
-      effectiveMode === 'composing' ||
-      effectiveMode === 'tool'
-    );
-  }
-
-  private shouldPlaceActivitySpinnerInAgentSwarm(
-    effectiveMode: EffectiveActivityPaneMode,
-  ): boolean {
-    return (
-      this.sessionEventHandler.hasActiveAgentSwarmToolCall() &&
-      (effectiveMode === 'waiting' || effectiveMode === 'tool')
-    );
-  }
-
   private syncAgentSwarmActivitySpinner(spinner: MoonLoader | undefined): void {
     this.sessionEventHandler.syncAgentSwarmActivitySpinner(spinner);
   }
@@ -2426,35 +2383,6 @@ export class WukongTUI {
     if (this.state.terminalState.progressActive === active) return;
     this.state.terminal.setProgress(active);
     this.state.terminalState.progressActive = active;
-  }
-
-  private ensureActivitySpinner(
-    style: SpinnerStyle,
-    label = '',
-    colorFn?: (s: string) => string,
-  ): MoonLoader {
-    if (this.state.activitySpinner?.style !== style) {
-      this.stopActivitySpinner();
-    }
-
-    if (this.state.activitySpinner === null) {
-      const instance = new MoonLoader(this.state.ui, style, colorFn, label);
-      this.state.activitySpinner = { instance, style };
-      return instance;
-    }
-
-    this.state.activitySpinner.instance.setLabel(label);
-    if (colorFn !== undefined) {
-      this.state.activitySpinner.instance.setColorFn(colorFn);
-    }
-    return this.state.activitySpinner.instance;
-  }
-
-  private stopActivitySpinner(): void {
-    if (this.state.activitySpinner !== null) {
-      this.state.activitySpinner.instance.stop();
-      this.state.activitySpinner = null;
-    }
   }
 
   // =========================================================================

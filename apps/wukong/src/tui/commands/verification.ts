@@ -23,6 +23,10 @@ export async function handleVerifySlashCommand(host: SlashCommandHost, _args: st
       writeReport: true,
     });
     spinner.stop({ ok: result.status !== 'failed', label: `Verification: ${result.status}` });
+    host.state.chromeState.recordVerify(
+      result.status === 'passed' ? 'passed' : 'failed',
+      summarizeVerification(result),
+    );
     const panel = new UsagePanelComponent(
       () => buildVerificationReportLines(result),
       result.status === 'failed' ? 'error' : result.status === 'warning' ? 'warning' : 'success',
@@ -44,6 +48,7 @@ export async function handleScanSlashCommand(host: SlashCommandHost): Promise<vo
       writeReport: true,
     });
     spinner.stop({ ok: result.status !== 'failed', label: `Risk scan: ${result.status}` });
+    host.state.chromeState.recordScan(result.status === 'passed' ? 'passed' : 'failed');
     const panel = new UsagePanelComponent(
       () => buildScanReportLines(result),
       result.status === 'failed' ? 'error' : result.status === 'warning' ? 'warning' : 'success',
@@ -83,6 +88,10 @@ export async function handleProofSlashCommand(host: SlashCommandHost): Promise<v
       writeReport: true,
     });
     spinner.stop({ ok: result.status !== 'blocked', label: `Merge proof: ${result.status}` });
+    host.state.chromeState.recordProof(
+      result.status === 'blocked' ? 'blocked' : 'pass',
+      result.recommendation,
+    );
     const panel = new UsagePanelComponent(
       () => buildProofReportLines(result),
       result.status === 'blocked' ? 'error' : 'success',
@@ -103,6 +112,10 @@ export async function handleJudgeSlashCommand(host: SlashCommandHost): Promise<v
       cwd: host.state.appState.workDir,
     });
     spinner.stop({ ok: result.verdict !== 'block', label: `Judge: ${result.verdict}` });
+    host.state.chromeState.recordProof(
+      result.verdict === 'block' ? 'blocked' : 'pass',
+      result.reason,
+    );
     const panel = new UsagePanelComponent(
       () => buildJudgeReportLines(result),
       result.verdict === 'block' ? 'error' : 'success',
@@ -192,6 +205,18 @@ function buildVerificationReportLines(result: VerificationResult): string[] {
   }
 
   return lines;
+}
+
+function summarizeVerification(result: VerificationResult): string | undefined {
+  const failedCommands = result.commandResults.filter((c) => c.status !== 'passed');
+  if (failedCommands.length > 0) {
+    return `${String(failedCommands.length)} command${failedCommands.length === 1 ? '' : 's'} failed`;
+  }
+  if (result.risks.length > 0) {
+    const high = result.risks.filter((r) => r.severity === 'high').length;
+    return high > 0 ? `${String(high)} high risk${high === 1 ? '' : 's'}` : `${String(result.risks.length)} risk${result.risks.length === 1 ? '' : 's'}`;
+  }
+  return undefined;
 }
 
 function buildScanReportLines(result: ScanResult): string[] {

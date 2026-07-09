@@ -1,5 +1,7 @@
 import type { Command } from 'commander';
 
+import { formatTodayFull } from '#/tui/utils/today-format';
+
 import {
   buildTodayBriefing,
   clearTodayFocus,
@@ -47,7 +49,7 @@ export async function handleToday(deps: TodayDeps, options: TodayCliOptions): Pr
     }
 
     const briefing = await deps.buildBriefing({ cwd, date: deps.localDate() });
-    deps.stdout.write(options.json === true ? `${JSON.stringify(briefing, null, 2)}\n` : formatToday(briefing));
+    deps.stdout.write(options.json === true ? `${JSON.stringify(briefing, null, 2)}\n` : formatTodayFull(briefing));
     return 0;
   } catch (error) {
     deps.stderr.write(`wukong today failed: ${errorMessage(error)}\n`);
@@ -91,32 +93,6 @@ function resolveDeps(deps: Partial<TodayDeps> | undefined): TodayDeps {
     writeFocus: deps?.writeFocus ?? writeTodayFocus,
     clearFocus: deps?.clearFocus ?? clearTodayFocus,
   };
-}
-
-function formatToday(briefing: TodayBriefing): string {
-  const lines = [
-    `Wukong Today — ${briefing.date}`,
-    '',
-    `Focus: ${briefing.focus ?? '(not set) — wukong today "<your goal>"'}`,
-    '',
-    `Workspace: ${briefing.workspace.cwd} (${String(briefing.workspace.changedFiles)} changed)`,
-    `Today: verify ${String(briefing.today.verify.runs)} (${String(briefing.today.verify.passed)}✓ ${String(briefing.today.verify.failed)}✗) · scan ${String(briefing.today.scan.runs)} · proof ${String(briefing.today.proof.runs)} ${briefing.today.proof.lastStatus ?? ''}`.trimEnd(),
-    `Streak: ${String(briefing.streak)} day${briefing.streak === 1 ? '' : 's'} with at least 1 clean verify`,
-  ];
-
-  if (briefing.lastProof !== undefined) {
-    lines.push(`Last proof: ${briefing.lastProof.status.toUpperCase()} — ${briefing.lastProof.summary}`);
-  }
-
-  if (briefing.next.length > 0) {
-    lines.push('', 'Next');
-    for (const suggestion of briefing.next) {
-      lines.push(`  → ${suggestion}`);
-    }
-  }
-
-  lines.push('');
-  return lines.join('\n');
 }
 
 function errorMessage(error: unknown): string {

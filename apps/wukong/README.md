@@ -50,3 +50,7 @@ The internal workspace name remains `@wukong/wukong` for historical reasons; do 
 - Root docs: [../../docs/README.md](../../docs/README.md)
 - Commercial plan: [../../docs/business/COMMERCIAL_REFACTOR_PLAN.md](../../docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - Technical implementation plan: [../../docs/tech/commercial-refactor-implementation.md](../../docs/tech/commercial-refactor-implementation.md)
+
+## Acknowledgments
+
+Wukong Code builds on **[Kimi Code](https://github.com/MoonshotAI/kimi-code)** (CLI/TUI/agent base), **[Pi](https://github.com/earendil-works/pi)** (`@earendil-works/pi-tui` for the interactive TUI), and references **[Claude Code](https://github.com/anthropics/claude-code)** (TUI chrome and loop patterns). See the [root README](../../README.md#acknowledgments) for details.

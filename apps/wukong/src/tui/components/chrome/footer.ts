@@ -14,7 +14,9 @@ import { ALL_TIPS, type ToolbarTip } from '#/tui/constant/tips';
 import { isRainbowDancing, renderDanceFooterModel } from '#/tui/easter-eggs/dance';
 import { currentTheme } from '#/tui/theme';
 import type { ColorPalette } from '#/tui/theme/colors';
-import type { AppState } from '#/tui/types';
+import type { AppState, UIMode } from '#/tui/types';
+import type { ChromeStateAggregator } from '#/tui/utils/chrome-state';
+import { formatTodayCompact } from '#/tui/utils/today-format';
 import {
   createGitStatusCache,
   formatGitBadgeBase,
@@ -130,6 +132,93 @@ function formatBadgeElapsed(ms: number): string {
   return `${hours}h${minutes % 60}m`;
 }
 
+function formatLoopTrack(goal: NonNullable<AppState['goal']>, uiMode: UIMode): string {
+  const parts: string[] = [];
+  if (uiMode === 'blocked') {
+    parts.push(`Goal ● blocked`);
+  } else {
+    parts.push(`Goal: ${goal.objective}`);
+  }
+  if (goal.stopCondition) {
+    parts.push(`until ${goal.stopCondition}`);
+  }
+  if (goal.maxIterations !== undefined) {
+    parts.push(`${goal.iteration}/${goal.maxIterations}`);
+  } else {
+    parts.push(`${goal.iteration}`);
+  }
+  return parts.join(' · ');
+}
+
+function formatVerifyStatus(summary: import('#/tui/utils/chrome-state').VerifySummary | null): string {
+  if (summary === null) return 'Verify —';
+  const icon = summary.status === 'passed' ? '✓' : '✗';
+  const detail = summary.detail ? ` ${summary.detail}` : '';
+  return `Verify ${icon}${detail}`;
+}
+
+function formatProofStatus(summary: import('#/tui/utils/chrome-state').ProofSummary | null): string {
+  if (summary === null) return 'Proof —';
+  const status = summary.status.toUpperCase();
+  const detail = summary.summary ? ` · ${summary.summary}` : '';
+  return `Proof ${status}${detail}`;
+}
+
+function formatNextSuggestion(chromeState: ChromeStateAggregator): string | null {
+  const state = chromeState.getState();
+  if (state.uiMode !== 'blocked') return null;
+  if (state.lastProof?.status === 'blocked') {
+    return 'Next: wukong proof';
+  }
+  if (state.lastVerify?.status === 'failed') {
+    return 'Next: inspect failures or steer';
+  }
+  if (state.todayBriefing?.next[0] !== undefined) {
+    return `Next: ${state.todayBriefing.next[0]}`;
+  }
+  return 'Next: /goal resume or /loop stop';
+}
+
+function buildConclusionLines(
+  chromeState: ChromeStateAggregator,
+  appState: AppState,
+  colors: ColorPalette,
+): { lines: string[]; useWarning: boolean } {
+  const state = chromeState.getState();
+  const { uiMode, goal, lastVerify, lastProof, todayBriefing } = state;
+
+  if (uiMode === 'idle') {
+    if (todayBriefing !== null) {
+      return {
+        lines: [formatTodayCompact({ briefing: todayBriefing })],
+        useWarning: false,
+      };
+    }
+    return { lines: [], useWarning: false };
+  }
+
+  const primary = chalk.hex(colors.primary);
+  const warning = chalk.hex(colors.warning);
+  const useWarning = uiMode === 'blocked';
+
+  const track1 = goal !== null ? formatLoopTrack(goal, uiMode) : '';
+  const next = formatNextSuggestion(chromeState);
+  const line1Parts: string[] = [];
+  if (track1) line1Parts.push(primary(track1));
+  if (next) line1Parts.push(useWarning ? warning(next) : primary(next));
+
+  const line2Parts: string[] = [];
+  const verifyText = formatVerifyStatus(lastVerify);
+  const proofText = formatProofStatus(lastProof);
+  line2Parts.push(useWarning ? warning(verifyText) : primary(verifyText));
+  line2Parts.push(useWarning ? warning(proofText) : primary(proofText));
+
+  return {
+    lines: [line1Parts.join(' · '), line2Parts.join(' · ')],
+    useWarning,
+  };
+}
+
 function modelDisplayName(state: AppState): string {
   const model = state.availableModels[state.model];
   return model?.displayName ?? model?.model ?? state.model;
@@ -182,6 +271,7 @@ export function formatFooterGitBadge(status: GitStatus, colors: ColorPalette): s
 
 export class FooterComponent implements Component {
   private state: AppState;
+  private readonly chromeState: ChromeStateAggregator;
   private readonly onRefresh: () => void;
   private gitCache: GitStatusCache;
   private gitCacheWorkDir: string;
@@ -199,8 +289,13 @@ export class FooterComponent implements Component {
   private backgroundBashTaskCount = 0;
   private backgroundAgentCount = 0;
 
-  constructor(state: AppState, onRefresh: () => void = () => {}) {
+  constructor(
+    state: AppState,
+    chromeState: ChromeStateAggregator,
+    onRefresh: () => void = () => {},
+  ) {
     this.state = state;
+    this.chromeState = chromeState;
     this.onRefresh = onRefresh;
     this.gitCacheWorkDir = state.workDir;
     this.gitCache = createGitStatusCache(state.workDir, { onChange: this.onRefresh });
@@ -248,17 +343,37 @@ export class FooterComponent implements Component {
     const colors = currentTheme.palette;
     const state = this.state;
 
-    // ── Line 1: mode badges + model + [N task(s) running] + [N agent(s) running] + cwd + git + hints ──
-    const left: string[] = [];
-    const modes: string[] = [];
-    if (state.permissionMode === 'auto') modes.push(chalk.hex(colors.warning).bold('auto'));
-    if (state.permissionMode === 'yolo') modes.push(chalk.hex(colors.warning).bold('yolo'));
-    if (state.planMode) modes.push(chalk.hex(colors.primary).bold('plan'));
-    if (state.swarmMode) modes.push(chalk.hex(colors.accent).bold('swarm'));
-    if (modes.length > 0) left.push(modes.join(' '));
+    const { lines: conclusionLines, useWarning } = buildConclusionLines(
+      this.chromeState,
+      state,
+      colors,
+    );
 
-    const goalBadge = formatGoalBadge(state.goal, colors, this.goalWallClockMs(state.goal));
-    if (goalBadge !== null) left.push(goalBadge);
+    // Idle mode: append rotating tips to the today line when space allows.
+    const chromeState = this.chromeState.getState();
+    let idleTip: string | null = null;
+    if (chromeState.uiMode === 'idle' && conclusionLines[0] !== undefined) {
+      const { primary, pair } = tipsForIndex(currentTipIndex());
+      const remaining = Math.max(0, width - visibleWidth(conclusionLines[0]) - 2);
+      if (pair && visibleWidth(pair) <= remaining) {
+        idleTip = pair;
+      } else if (primary && visibleWidth(primary) <= remaining) {
+        idleTip = primary;
+      }
+    }
+
+    const renderedConclusion: string[] = [];
+    for (let i = 0; i < conclusionLines.length; i++) {
+      let raw = conclusionLines[i]!;
+      if (i === 0 && idleTip !== null) {
+        const pad = width - visibleWidth(raw) - visibleWidth(idleTip);
+        raw = raw + ' '.repeat(Math.max(0, pad)) + chalk.hex(colors.textMuted)(idleTip);
+      }
+      renderedConclusion.push(truncateToWidth(raw, width, useWarning ? '…' : '…'));
+    }
+
+    // ── Env track (indented 2 spaces): model · cwd · git · context ──
+    const envParts: string[] = [];
 
     const model = modelDisplayName(state);
     if (model) {
@@ -268,7 +383,7 @@ export class FooterComponent implements Component {
       if (isRainbowDancing()) {
         renderedModelLabel = renderDanceFooterModel(modelLabel);
       }
-      left.push(renderedModelLabel);
+      envParts.push(renderedModelLabel);
     }
 
     // Background-task badges sit immediately before cwd. `bash-*` tasks
@@ -276,75 +391,60 @@ export class FooterComponent implements Component {
     // separate badges so the user can distinguish them at a glance.
     if (this.backgroundBashTaskCount > 0) {
       const noun = this.backgroundBashTaskCount === 1 ? 'task' : 'tasks';
-      left.push(
+      envParts.push(
         chalk.hex(colors.primary)(`[${String(this.backgroundBashTaskCount)} ${noun} running]`),
       );
     }
     if (this.backgroundAgentCount > 0) {
       const noun = this.backgroundAgentCount === 1 ? 'agent' : 'agents';
-      left.push(
+      envParts.push(
         chalk.hex(colors.primary)(`[${String(this.backgroundAgentCount)} ${noun} running]`),
       );
     }
 
     const cwd = shortenCwd(state.workDir);
-    if (cwd) left.push(chalk.hex(colors.textDim)(cwd));
+    if (cwd) envParts.push(chalk.hex(colors.textDim)(cwd));
 
     const git = this.gitCache.getStatus();
     if (git !== null) {
-      left.push(formatFooterGitBadge(git, colors));
+      envParts.push(formatFooterGitBadge(git, colors));
     }
 
-    const leftLine = left.join('  ');
-    const leftWidth = visibleWidth(leftLine);
-
-    // Rotating hint tips, fill remaining space on line 1.
-    const { primary, pair } = tipsForIndex(currentTipIndex());
-    const gap = 2;
-    const remaining = Math.max(0, width - leftWidth - gap);
-    let tipText = '';
-    if (pair && visibleWidth(pair) <= remaining) {
-      tipText = pair;
-    } else if (primary && visibleWidth(primary) <= remaining) {
-      tipText = primary;
-    }
-
-    let line1: string;
-    if (tipText) {
-      const pad = width - leftWidth - visibleWidth(tipText);
-      line1 = leftLine + ' '.repeat(Math.max(0, pad)) + chalk.hex(colors.textMuted)(tipText);
-    } else if (leftWidth <= width) {
-      line1 = leftLine;
-    } else {
-      line1 = truncateToWidth(leftLine, width, '…');
-    }
-
-    // ── Line 2: transient hint (bottom-left) + context (right) ──
     const contextText = formatContextStatus(
       state.contextUsage,
       state.contextTokens,
       state.maxContextTokens,
     );
-    const contextWidth = visibleWidth(contextText);
-    let line2: string;
+    envParts.push(chalk.hex(colors.text)(contextText));
+
+    const envCore = envParts.join('  ');
+    const envLine = envCore.length > 0 ? `  ${envCore}` : '';
+
+    // ── Mode line (only when a non-default mode is active) ──
+    const modes: string[] = [];
+    if (state.permissionMode === 'auto') modes.push(chalk.hex(colors.warning).bold('auto'));
+    if (state.permissionMode === 'yolo') modes.push(chalk.hex(colors.warning).bold('yolo'));
+    if (state.planMode) modes.push(chalk.hex(colors.primary).bold('plan'));
+    if (state.swarmMode) modes.push(chalk.hex(colors.accent).bold('swarm'));
+
+    // Transient hint replaces the mode line when present (e.g. "Press Ctrl+C again to exit").
+    let modeLine = '';
     if (this.transientHint) {
-      const maxHintWidth = Math.max(0, width - contextWidth - 1);
-      const shownHint =
-        visibleWidth(this.transientHint) <= maxHintWidth
-          ? this.transientHint
-          : truncateToWidth(this.transientHint, maxHintWidth, '…');
-      const hintWidth = visibleWidth(shownHint);
-      const pad = Math.max(0, width - hintWidth - contextWidth);
-      line2 =
-        chalk.hex(colors.warning).bold(shownHint) +
-        ' '.repeat(pad) +
-        chalk.hex(colors.text)(contextText);
-    } else {
-      const leftPad = Math.max(0, width - contextWidth);
-      line2 = ' '.repeat(leftPad) + chalk.hex(colors.text)(contextText);
+      modeLine = chalk.hex(colors.warning).bold(
+        truncateToWidth(this.transientHint, Math.max(0, width - 2), '…'),
+      );
+    } else if (modes.length > 0) {
+      modeLine = `  ${modes.join(' ')}`;
     }
 
-    return [truncateToWidth(line1, width), truncateToWidth(line2, width)];
+    const lines: string[] = [];
+    for (const conclusion of renderedConclusion) {
+      if (conclusion.length > 0) lines.push(conclusion);
+    }
+    if (envLine.length > 0) lines.push(truncateToWidth(envLine, width));
+    if (modeLine.length > 0) lines.push(truncateToWidth(modeLine, width));
+
+    return lines.length > 0 ? lines : [''.padEnd(width, ' ')];
   }
 
   private syncGoalClock(goal: AppState['goal']): void {

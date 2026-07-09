@@ -60,6 +60,22 @@ function makeHost(options: { createGoalRejects?: boolean } = {}) {
       todoPanel: { getTodos: vi.fn(() => []) },
       transcriptContainer: { addChild: vi.fn() },
       ui: { requestRender: vi.fn() },
+      chromeState: {
+        recordGuard: vi.fn(),
+        recordVerify: vi.fn(),
+        recordScan: vi.fn(),
+        recordProof: vi.fn(),
+        setGoal: vi.fn(),
+        hydrate: vi.fn(async () => {}),
+        getState: vi.fn(() => ({
+          uiMode: 'idle',
+          loopPhase: null,
+          goal: null,
+          lastVerify: null,
+          lastProof: null,
+          todayBriefing: null,
+        })),
+      },
     },
     session,
     aborted: false,
@@ -366,6 +382,14 @@ describe('SessionEventHandler goal queue promotion', () => {
         'The next queued goal will start only after this goal is complete.',
       );
     });
+    expect(host.state.chromeState.recordGuard).toHaveBeenCalledWith(true);
+    expect(host.state.chromeState.recordVerify).toHaveBeenCalledWith('failed', 'waiting for access');
+    expect(host.appendTranscriptEntry).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: 'status',
+        content: '✗ iter 0 gate: verify FAIL — waiting for access',
+      }),
+    );
     expect(session.createGoal).not.toHaveBeenCalled();
   });
 

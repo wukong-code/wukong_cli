@@ -58,7 +58,6 @@ export class BtwPanelController {
     this.active = undefined;
     this.panelsByAgentId.clear();
     this.host.state.btwPanelContainer.clear();
-    this.host.state.editor.connectedAbove = false;
   }
 
   closeOrCancel(): boolean {
@@ -173,7 +172,6 @@ export class BtwPanelController {
     this.host.state.btwPanelContainer.clear();
     this.host.state.btwPanelContainer.addChild(new Spacer(1));
     this.host.state.btwPanelContainer.addChild(panel);
-    this.host.state.editor.connectedAbove = true;
     this.host.state.ui.setFocus(this.host.state.editor);
     this.host.state.ui.requestRender();
   }
@@ -182,7 +180,6 @@ export class BtwPanelController {
     if (!this.host.state.btwPanelContainer.children.includes(panel)) return;
     this.unregister(panel);
     this.host.state.btwPanelContainer.clear();
-    this.host.state.editor.connectedAbove = false;
     this.host.state.ui.setFocus(this.host.state.editor);
     this.host.state.ui.requestRender(true);
   }

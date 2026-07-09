@@ -6,6 +6,7 @@ import { WelcomeComponent } from '#/tui/components/chrome/welcome';
 import { setRainbowDance, type RainbowDanceController } from '#/tui/easter-eggs/dance';
 import { darkColors } from '#/tui/theme/colors';
 import type { AppState } from '#/tui/types';
+import type { TodayBriefing } from '#/utils/stats';
 
 const TRUECOLOR_PATTERN = /\u001B\[38;2;(\d+);(\d+);(\d+)m/g;
 
@@ -36,6 +37,23 @@ const appState: AppState = {
   availableProviders: {},
   mcpServersSummary: null,
 };
+
+function fakeBriefing(): TodayBriefing {
+  return {
+    date: '2026-07-09',
+    focus: 'Ship it',
+    workspace: { cwd: '/tmp/project', changedFiles: 2 },
+    today: {
+      verify: { runs: 3, passed: 2, failed: 1 },
+      scan: { runs: 1, blocked: 0 },
+      proof: { runs: 0 },
+      guard: { blocked: 0, allowed: 0 },
+      goals: { completed: 0, inProgress: 1 },
+    },
+    streak: 1,
+    next: [],
+  };
+}
 
 function truecolorCodes(text: string): Set<string> {
   const codes = new Set<string>();
@@ -101,5 +119,34 @@ describe('WelcomeComponent', () => {
         expect(visibleWidth(line)).toBeLessThanOrEqual(width);
       }
     }
+  });
+
+  it('renders a compact today block when idle and a briefing is present', () => {
+    const lines = new WelcomeComponent(appState, fakeBriefing(), 'idle').render(80);
+    const output = lines.join('\n');
+
+    expect(output).toContain('Today');
+    expect(output).toContain('verify 3 (2✓ 1✗)');
+    expect(output).toContain('Focus: Ship it');
+    expect(output).not.toContain('Wukong Code');
+  });
+
+  it('falls back to the welcome card when a goal is active', () => {
+    const lines = new WelcomeComponent(appState, fakeBriefing(), 'active').render(80);
+    const output = lines.join('\n');
+
+    expect(output).toContain('Wukong Code');
+    expect(output).not.toContain('verify 3 (2✓ 1✗)');
+  });
+
+  it('updates the rendered block via setState', () => {
+    const component = new WelcomeComponent(appState, fakeBriefing(), 'active');
+    const activeOutput = component.render(80).join('\n');
+    expect(activeOutput).toContain('Wukong Code');
+
+    component.setState(fakeBriefing(), 'idle');
+    const idleOutput = component.render(80).join('\n');
+    expect(idleOutput).toContain('verify 3 (2✓ 1✗)');
+    expect(idleOutput).not.toContain('Wukong Code');
   });
 });

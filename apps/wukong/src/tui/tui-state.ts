@@ -6,7 +6,8 @@ import {
 
 import { FooterComponent } from './components/chrome/footer';
 import { GutterContainer } from './components/chrome/gutter-container';
-import type { MoonLoader, SpinnerStyle } from './components/chrome/moon-loader';
+import { LoopPhaseComponent } from './components/chrome/loop-phase';
+import { SeparatorLineComponent } from './components/chrome/separator-line';
 import { TodoPanelComponent } from './components/chrome/todo-panel';
 import type { SessionRow } from './components/dialogs/session-picker';
 import { CustomEditor } from './components/editor/custom-editor';
@@ -14,6 +15,7 @@ import { CHROME_GUTTER } from './constant/rendering';
 import type { TasksBrowserState } from './controllers/tasks-browser';
 import { currentTheme, type Theme } from './theme';
 import { createTerminalState, type TerminalState } from './utils/terminal-state';
+import { ChromeStateAggregator } from './utils/chrome-state';
 import {
   INITIAL_LIVE_PANE,
   type AppState,
@@ -34,6 +36,9 @@ export interface TUIState {
   queueContainer: Container;
   btwPanelContainer: Container;
   editorContainer: Container;
+  editorUpperSeparator: SeparatorLineComponent;
+  editorLowerSeparator: SeparatorLineComponent;
+  loopPhase: LoopPhaseComponent;
   footer: FooterComponent;
   editor: CustomEditor;
   theme: Theme;
@@ -42,7 +47,6 @@ export interface TUIState {
   livePane: LivePaneState;
   transcriptEntries: TranscriptEntry[];
   terminalState: TerminalState;
-  activitySpinner: { instance: MoonLoader; style: SpinnerStyle } | null;
   toolOutputExpanded: boolean;
   sessions: SessionRow[];
   loadingSessions: boolean;
@@ -52,6 +56,7 @@ export interface TUIState {
   externalEditorRunning: boolean;
   queuedMessages: QueuedMessage[];
   swarmModeEntry: 'manual' | 'task' | undefined;
+  chromeState: ChromeStateAggregator;
 }
 
 export function createTUIState(options: WukongTUIOptions): TUIState {
@@ -69,7 +74,15 @@ export function createTUIState(options: WukongTUIOptions): TUIState {
   const btwPanelContainer = new GutterContainer(CHROME_GUTTER, CHROME_GUTTER);
   const editorContainer = new GutterContainer(CHROME_GUTTER, CHROME_GUTTER);
   const editor = new CustomEditor(ui);
-  const footer = new FooterComponent({ ...initialAppState }, () => {
+  const editorUpperSeparator = new SeparatorLineComponent();
+  const editorLowerSeparator = new SeparatorLineComponent();
+  const loopPhase = new LoopPhaseComponent({
+    phase: 'waiting',
+    iteration: 0,
+    elapsedMs: 0,
+  });
+  const chromeState = new ChromeStateAggregator({ cwd: initialAppState.workDir });
+  const footer = new FooterComponent({ ...initialAppState }, chromeState, () => {
     ui.requestRender();
   });
 
@@ -83,6 +96,9 @@ export function createTUIState(options: WukongTUIOptions): TUIState {
     queueContainer,
     btwPanelContainer,
     editorContainer,
+    editorUpperSeparator,
+    editorLowerSeparator,
+    loopPhase,
     editor,
     footer,
     theme,
@@ -91,7 +107,6 @@ export function createTUIState(options: WukongTUIOptions): TUIState {
     livePane: { ...INITIAL_LIVE_PANE },
     transcriptEntries: [],
     terminalState: createTerminalState(),
-    activitySpinner: null,
     toolOutputExpanded: false,
     sessions: [],
     loadingSessions: false,
@@ -101,5 +116,6 @@ export function createTUIState(options: WukongTUIOptions): TUIState {
     externalEditorRunning: false,
     queuedMessages: [],
     swarmModeEntry: undefined,
+    chromeState,
   };
 }
