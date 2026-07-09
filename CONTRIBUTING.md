@@ -64,8 +64,7 @@ All commits and PR titles must follow [Conventional Commits](https://www.convent
 | perf     | Performance improvement                     | perf(session): batch event flushes        |
 | style    | Formatting only (no logic)                  | style: apply oxlint --fix                 |
 
-PR titles are enforced by the `pr-title-checker` workflow — a non-conforming
-title will block merge.
+Prefer the same conventional-commit style for PR titles.
 
 ## Changesets
 

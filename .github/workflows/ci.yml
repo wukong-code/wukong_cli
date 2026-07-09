@@ -68,6 +68,7 @@ jobs:
             coverage/coverage-summary.json
             coverage/index.html
           if-no-files-found: ignore
+          retention-days: 1
 
   test-install:
     runs-on: ubuntu-latest
