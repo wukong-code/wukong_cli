@@ -63,7 +63,7 @@
           mapping = {
             x86_64-linux = {
               tag = "linux-x64";
-              hash = "sha256-8iHasw0OnVRDMvBvvuLGIYbJfYZNXKyEgtujTx44uNw=";
+              hash = "sha256-SpOLXgJcfdKNZMw5p4HDFOCeyk2GhB6gpMw44YMnVeE=";
             };
             aarch64-linux = {
               tag = "linux-arm64";
