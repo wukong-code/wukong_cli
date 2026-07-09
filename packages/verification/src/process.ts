@@ -34,17 +34,42 @@ function runSpawn(
     let stderr = '';
     let timedOut = false;
     let settled = false;
+    let killTimer: NodeJS.Timeout | undefined;
     const child = spawn(file, args, {
       cwd: options.cwd,
       shell: options.shell,
       stdio: ['ignore', 'pipe', 'pipe'],
+      // Give the child its own process group so a timeout can kill the whole
+      // subtree (e.g. shell + spawned Node process) without killing the parent.
+      detached: process.platform !== 'win32',
     });
+
+    function killSubtree(signal: NodeJS.Signals) {
+      try {
+        if (process.platform === 'win32' || child.pid === undefined) {
+          child.kill(signal);
+        } else {
+          process.kill(-child.pid, signal);
+        }
+      } catch {
+        // Process may have already exited.
+      }
+    }
+
+    function clearTimers() {
+      if (timer !== undefined) clearTimeout(timer);
+      if (killTimer !== undefined) clearTimeout(killTimer);
+    }
 
     const timer = options.timeoutMs === undefined
       ? undefined
       : setTimeout(() => {
           timedOut = true;
-          child.kill('SIGTERM');
+          // SIGTERM the whole subtree first, then hard-kill if it refuses.
+          killSubtree('SIGTERM');
+          killTimer = setTimeout(() => {
+            killSubtree('SIGKILL');
+          }, 1500);
         }, options.timeoutMs);
 
     child.stdout?.on('data', (chunk: Buffer) => {
@@ -56,7 +81,7 @@ function runSpawn(
     child.on('error', (error) => {
       if (settled) return;
       settled = true;
-      if (timer !== undefined) clearTimeout(timer);
+      clearTimers();
       // eslint-disable-next-line eslint-plugin-promise/no-multiple-resolved -- guarded by settled flag above
       resolve({
         exitCode: 1,
@@ -68,7 +93,7 @@ function runSpawn(
     child.on('close', (code) => {
       if (settled) return;
       settled = true;
-      if (timer !== undefined) clearTimeout(timer);
+      clearTimers();
       // eslint-disable-next-line eslint-plugin-promise/no-multiple-resolved -- guarded by settled flag above
       resolve({ exitCode: code, timedOut, stdout, stderr });
     });

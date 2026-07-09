@@ -53,38 +53,6 @@
           nodejs = nodejsFor pkgs;
         };
 
-      # The SEA inject step needs a Node.js binary that supports the
-      # `--build-sea` flag (Node.js >= 26.4.0). nixpkgs' nodejs_24 does not,
-      # so fetch the official upstream binary for the target platform.
-      nodeSeaBinaryFor =
-        pkgs:
-        let
-          platform = pkgs.stdenv.hostPlatform.system;
-          mapping = {
-            x86_64-linux = {
-              tag = "linux-x64";
-              hash = "sha256-SpOLXgJcfdKNZMw5p4HDFOCeyk2GhB6gpMw44YMnVeE=";
-            };
-            aarch64-linux = {
-              tag = "linux-arm64";
-              hash = "sha256-dz2exnJmg4Jw3cEFwlSK6Kr/KLyP5vNMVdEJQEPEFl4=";
-            };
-            x86_64-darwin = {
-              tag = "darwin-x64";
-              hash = "sha256-6zvdjew/8lWO4Q4oTafSo4Za8MvaIfBtOXsCZYN8ZB4=";
-            };
-            aarch64-darwin = {
-              tag = "darwin-arm64";
-              hash = "sha256-T0+8rPax/xqV3u26e9ey157+yqU6jssFMFRtyQY/77w=";
-            };
-          };
-          cfg = mapping.${platform} or (throw "Unsupported SEA platform: ${platform}");
-        in
-        pkgs.fetchzip {
-          url = "https://nodejs.org/download/release/v26.4.0/node-v26.4.0-${cfg.tag}.tar.gz";
-          hash = cfg.hash;
-        };
-
       # -------------------------------------------------------------------
       # Workspace members (kept in sync with pnpm-workspace.yaml).
       #
@@ -143,19 +111,7 @@
         let
           nodejs = nodejsFor pkgs;
           pnpm = pnpmFor pkgs;
-          nodeSeaBinary = nodeSeaBinaryFor pkgs;
           appPackageJson = builtins.fromJSON (builtins.readFile ./apps/wukong/package.json);
-          nativeTarget =
-            if pkgs.stdenv.hostPlatform.isLinux && pkgs.stdenv.hostPlatform.isAarch64 then
-              "linux-arm64"
-            else if pkgs.stdenv.hostPlatform.isLinux then
-              "linux-x64"
-            else if pkgs.stdenv.hostPlatform.isDarwin && pkgs.stdenv.hostPlatform.isAarch64 then
-              "darwin-arm64"
-            else if pkgs.stdenv.hostPlatform.isDarwin then
-              "darwin-x64"
-            else
-              throw "Unsupported Wukong native target for ${pkgs.stdenv.hostPlatform.system}";
 
           wukong = pkgs.stdenv.mkDerivation (finalAttrs: {
             pname = "wukong";
@@ -193,59 +149,25 @@
               pnpm
               (pkgs.pnpmConfigHook.override { inherit pnpm; })
               pkgs.makeWrapper
-            ]
-            # The SEA inject step (postject) invalidates the macOS code
-            # signature on the copied Node executable; build.mjs then re-applies
-            # an ad-hoc signature via `codesign`. The Nix darwin sandbox does
-            # not expose /usr/bin/codesign, so we supply nixpkgs' ad-hoc-only
-            # replacement instead.
-            ++ lib.optionals pkgs.stdenv.hostPlatform.isDarwin [
-              pkgs.darwin.sigtool
             ];
-
-            # The SEA binary is produced by `postject`-injecting a blob into a
-            # plain Node executable. Stripping rewrites section tables and can
-            # invalidate the injected blob's offsets, so leave the binary
-            # untouched after the build.
-            dontStrip = true;
 
             buildPhase = ''
               runHook preBuild
-              export WUKONG_CODE_BUILD_TARGET=${nativeTarget}
-              export WUKONG_SEA_NODE_PATH=${nodeSeaBinary}/bin/node
-              ${lib.optionalString pkgs.stdenv.hostPlatform.isDarwin ''
-                # pkgs.darwin.sigtool's codesign supports `--sign -` (ad-hoc)
-                # but not the inspection mode (`-dv`) that 05-verify.mjs runs
-                # afterwards. Disable the verify step for the Nix build; the
-                # release CI keeps it via the unmodified script.
-                substituteInPlace apps/wukong/scripts/native/build.mjs \
-                  --replace-fail \
-                    "await runVerifyStep({ requireGatekeeper: false });" \
-                    "// runVerifyStep skipped in nix sandbox (sigtool lacks -dv)"
-              ''}
-              # The SEA blob step (scripts/native/02-sea-blob.mjs) embeds the
-              # Wukong web assets from apps/wukong/dist-web and fails if that
-              # directory is missing. Build the web app and stage its assets
-              # before producing the native executable.
-              pnpm --filter=@wukong/wukong-web run build
-              node apps/wukong/scripts/build-vis-asset.mjs
-              node apps/wukong/scripts/copy-web-assets.mjs
-              pnpm --filter=@wukong.today/code run build:native:sea
+              pnpm --filter=@wukong.today/code run build
               runHook postBuild
             '';
 
             installPhase = ''
               runHook preInstall
 
-              install -Dm755 \
-                "apps/wukong/dist-native/bin/${nativeTarget}/wukong" \
-                "$out/bin/wukong"
+              mkdir -p $out/lib/wukong
+              cp -r apps/wukong/dist apps/wukong/dist-web $out/lib/wukong/
+
+              makeWrapper ${nodejs}/bin/node $out/bin/wukong \
+                --add-flags $out/lib/wukong/dist/main.mjs \
+                --prefix PATH : ${lib.makeBinPath [ pkgs.ripgrep pkgs.fd ]}
 
               runHook postInstall
-            '';
-
-            postInstall = ''
-              wrapProgram $out/bin/wukong --prefix PATH : ${lib.makeBinPath [ pkgs.ripgrep pkgs.fd ]}
             '';
 
             meta = {

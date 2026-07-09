@@ -108,6 +108,8 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
+      - name: Generate vis web asset
+        run: node apps/wukong/scripts/build-vis-asset.mjs
       - name: Typecheck
         run: |
           pnpm dlx --package @typescript/native-preview@beta tsgo --version
