@@ -25,7 +25,7 @@ export type ReportableResult =
 export interface ReportUploadSuccess {
   readonly ok: true;
   readonly id: string;
-  readonly shareUrl: string;
+  readonly shareUrl?: string;
 }
 
 export interface ReportUploadFailure {
@@ -122,16 +122,16 @@ export async function uploadReport(input: ReportableResult): Promise<ReportUploa
 
     const body = (await response.json()) as {
       success?: boolean;
-      data?: { id?: string; shareUrl?: string };
+      data?: { id?: string; shareUrl?: string | null };
     };
     const id = body.data?.id;
     const shareUrl = body.data?.shareUrl;
 
-    if (!id || !shareUrl) {
+    if (!id) {
       return { ok: false, reason: 'upload returned an invalid response' };
     }
 
-    return { ok: true, id, shareUrl };
+    return shareUrl ? { ok: true, id, shareUrl } : { ok: true, id };
   } catch (error) {
     const reason = error instanceof Error ? error.message : String(error);
     return { ok: false, reason: `network error: ${reason}` };

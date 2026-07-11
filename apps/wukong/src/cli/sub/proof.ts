@@ -42,7 +42,7 @@ export async function handleProof(deps: ProofDeps, options: ProofCliOptions): Pr
       const markdown = result.report ?? '';
       const outcome = await uploadReport({ kind: 'proof', result, markdown });
       if (outcome.ok) {
-        deps.stdout.write(`\nUploaded: ${outcome.shareUrl}\n`);
+        deps.stdout.write(`\n${outcome.shareUrl ? `Uploaded: ${outcome.shareUrl}` : `Uploaded privately: ${outcome.id}`}\n`);
       } else {
         deps.stderr.write(`\nUpload skipped: ${outcome.reason}\n`);
       }

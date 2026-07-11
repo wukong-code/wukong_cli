@@ -14,11 +14,9 @@ export interface FormatTodayCompactOptions {
 
 export function formatTodayCompact(options: FormatTodayCompactOptions): string {
   const { briefing, includeFocus = true } = options;
-  const parts: string[] = [];
-
-  parts.push(
+  const parts: string[] = [
     `Today: verify ${String(briefing.today.verify.runs)} (${String(briefing.today.verify.passed)}✓ ${String(briefing.today.verify.failed)}✗) · scan ${String(briefing.today.scan.runs)} · proof ${String(briefing.today.proof.runs)} ${briefing.today.proof.lastStatus ?? ''}`.trimEnd(),
-  );
+  ];
 
   if (includeFocus && briefing.focus) {
     parts.push(`Focus: ${briefing.focus}`);

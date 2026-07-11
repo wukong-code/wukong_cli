@@ -50,7 +50,6 @@ import { BannerComponent } from './components/chrome/banner';
 import { DeviceCodeBoxComponent } from './components/chrome/device-code-box';
 import { GutterContainer } from './components/chrome/gutter-container';
 import { MoonLoader } from './components/chrome/moon-loader';
-import { SeparatorLineComponent } from './components/chrome/separator-line';
 import { WelcomeComponent } from './components/chrome/welcome';
 import type { LoopPhaseState } from './components/chrome/loop-phase';
 import {

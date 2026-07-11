@@ -36,6 +36,16 @@ interface TestHost {
     readonly appState: { readonly workDir: string };
     readonly transcriptContainer: { readonly addChild: ReturnType<typeof vi.fn> };
     readonly ui: { readonly requestRender: ReturnType<typeof vi.fn> };
+    readonly chromeState: {
+      readonly recordVerify: ReturnType<typeof vi.fn>;
+      readonly recordScan: ReturnType<typeof vi.fn>;
+      readonly recordProof: ReturnType<typeof vi.fn>;
+      readonly recordGuard: ReturnType<typeof vi.fn>;
+      readonly recordGoal: ReturnType<typeof vi.fn>;
+      readonly setGoal: ReturnType<typeof vi.fn>;
+      readonly hydrate: ReturnType<typeof vi.fn>;
+      readonly getState: ReturnType<typeof vi.fn>;
+    };
   };
 }
 

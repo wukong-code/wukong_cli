@@ -242,7 +242,9 @@ export class ChromeStateAggregator {
           timestamp: new Date(event.timestamp).getTime(),
         };
         break;
-      default:
+      case 'goal':
+      case 'guard':
+      case 'scan':
         break;
     }
   }

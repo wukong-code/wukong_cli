@@ -89,49 +89,6 @@ function tipsForIndex(index: number): { primary: string; pair: string | null } {
   return { primary: current.text, pair: current.text + TIP_SEPARATOR + next.text };
 }
 
-/**
- * Footer goal badge, e.g. `[goal ● active · 4m · 7 turns]`. Only shown for a
- * live (active/paused) goal; terminal/no goal -> no badge. Turn count is a raw
- * count unless an explicit turn budget is set, in which case it shows used/limit.
- */
-function formatGoalBadge(
-  goal: AppState['goal'],
-  colors: ColorPalette,
-  wallClockMs?: number,
-): string | null {
-  if (goal === null || goal === undefined) return null;
-  // Show the badge for every persisted, resumable status. `complete` clears the
-  // goal, so it never reaches here; only the unset case returns null.
-  if (goal.status !== 'active' && goal.status !== 'paused' && goal.status !== 'blocked') {
-    return null;
-  }
-  const dotColor =
-    goal.status === 'active'
-      ? colors.primary
-      : goal.status === 'blocked'
-        ? colors.warning
-        : colors.textMuted;
-  const turns =
-    goal.budget.turnBudget !== null
-      ? `${goal.turnsUsed}/${goal.budget.turnBudget} turns`
-      : `${goal.turnsUsed} ${goal.turnsUsed === 1 ? 'turn' : 'turns'}`;
-  const label = `${goal.status} · ${formatBadgeElapsed(wallClockMs ?? goal.wallClockMs)} · ${turns}`;
-  return (
-    chalk.hex(colors.textMuted)('[goal ') +
-    chalk.hex(dotColor)('●') +
-    chalk.hex(colors.textMuted)(` ${label}]`)
-  );
-}
-
-function formatBadgeElapsed(ms: number): string {
-  const totalSeconds = Math.round(ms / 1000);
-  if (totalSeconds < 60) return `${totalSeconds}s`;
-  const minutes = Math.floor(totalSeconds / 60);
-  if (minutes < 60) return `${minutes}m`;
-  const hours = Math.floor(minutes / 60);
-  return `${hours}h${minutes % 60}m`;
-}
-
 function formatLoopTrack(goal: NonNullable<AppState['goal']>, uiMode: UIMode): string {
   const parts: string[] = [];
   if (uiMode === 'blocked') {

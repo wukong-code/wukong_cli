@@ -1,7 +1,7 @@
 # Wukong Code 商业化与产品重构方案
 
 > 版本: v1.3
-> 日期: 2026-07-07
+> 日期: 2026-07-11
 > 当前范围: `wukong_cli` 新 Kimi-code base
 > 技术落地: [商业化重构技术实现方案](../tech/commercial-refactor-implementation.md)
 
@@ -31,21 +31,18 @@ wukong upgrade
 
 其中 `acp`、`server`、`migrate` 当前为 hidden 命令，不出现在 `wukong --help` 默认输出中；对外命令面以 `wukong --help` 为准。
 
-已实现的 TUI slash commands 包括 `/verify`、`/scan`、`/guard`、`/report`、`/goal`（含队列）。agent-core 另已实现会话内 cron 调度工具（CronCreate/CronList/CronDelete，支持 recurring/one-shot、持久化与 resume 恢复），是 `/loop` 时间触发的复用基础。
+已实现的 TUI slash commands 包括 `/verify`、`/scan`、`/guard`、`/report`、`/goal`（含 verification gate 和队列）、`/proof`、`/judge`、`/loop`、`/today`。agent-core 另已实现会话内 cron 调度工具（CronCreate/CronList/CronDelete，支持 recurring/one-shot、持久化与 resume 恢复），是 `/loop` 时间触发的复用基础。Hosted Report 的登录上传、配额、历史和分享预览也已实现。
 
-当前 top-level CLI 尚未实现：
+当前 top-level CLI 尚未完整实现：
 
 ```text
-wukong loop      # 本机迭代 loop（Milestone 0.5 核心，关机即停）
+wukong loop      # 只有参数校验和 --dry-run；实际执行目前使用 TUI /loop
 wukong schedule  # 云端例程（归 hosted，Milestone 3+）
-wukong proof     # Merge Proof Report（Wow Moment）
-wukong judge     # evaluator-only 审查
 wukong ship      # 发布 gate（更靠后）
 wukong review    # AI 辅助代码审查（P1）
 wukong test      # 项目测试入口（P1）
 wukong retro     # 迭代复盘（P1）
 wukong sync
-wukong today     # Daily Proof Briefing：今日简报 + focus（P1，见 docs/design/today.md）
 wukong journey
 ```
 
@@ -66,12 +63,12 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 | Loop 类型 | 触发 | 停止 | Wukong 命令 | 状态 |
 |---|---|---|---|---|
 | Turn-based | 用户 prompt | agent 自判完成 | TUI 默认 agentic loop | 已实现 |
-| Goal-based | 实时手动 | agent 自评 + 回合/预算上限（verification gate 归 P0.5） | `/goal` | 已实现（gate 待实现） |
-| Time-based（本机） | 手动启动，轮次自动衔接（`--every` 可选节流） | 停止条件满足 or 迭代上限 or 取消 | `/loop` | 待实现（核心） |
+| Goal-based | 实时手动 | verification gate + 回合/预算上限 | `/goal` | 已实现 |
+| Time-based（本机） | 手动启动，轮次自动衔接（`--every` 可选节流） | 停止条件满足 or 迭代上限 or 取消 | TUI `/loop` | 已实现；top-level driver 待实现 |
 | Time-based（云端） | 计划 | 任务达标退出，例程持续 | `/schedule` | 待实现（归 hosted） |
 | 工具层 | 手动/被 loop 调用 | 单次 | `/verify` `/scan` `/guard` | 已实现 |
-| 证据层 | 手动 | 单次 | `/proof` | 待实现（Wow Moment） |
-| 评估层 | 手动/被 loop 调用 | 单次 | `/judge` | 待实现 |
+| 证据层 | 手动 | 单次 | `/proof` | 已实现 |
+| 评估层 | 手动/被 loop 调用 | 单次 | `/judge` | deterministic 模式已实现 |
 
 `/loop` 的核心语义是**迭代直到验证通过**（关机即停）：轮次自动衔接，`--every` 只是可选的轮间节流；时间触发复用 agent-core 已有 cron scheduler，不新写定时引擎。定时巡检型任务本机由 cron 工具承载，云端归 `/schedule`（hosted，Milestone 3+）。停止判断不由写代码的 agent 自评——注意当前 `/goal` 的完成判定仍是 agent 自评，P0.5 必须先给 `/goal` 出口落地 deterministic verification gate，`/loop` 复用该 gate，评估用 verify/scan、独立 evaluator（`/judge`）或自定义验证 skill。
 
@@ -146,7 +143,7 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 
 | 层 | 含义 | Wukong 对应 | 状态 |
 |---|---|---|---|
-| 第一层：Agentic Coding Loop | agent 写代码 → 跑测试 → 修错 → 再跑 | `/loop`（本机）+ `/schedule`（云端）+ `/goal` + `/verify` + `/scan` + `/guard` | 工具层 + `/goal` 已实现，`/loop`/`/schedule` 待实现 |
+| 第一层：Agentic Coding Loop | agent 写代码 → 跑测试 → 修错 → 再跑 | `/loop`（本机）+ `/schedule`（云端）+ `/goal` + `/verify` + `/scan` + `/guard` | TUI `/loop` 与工具层已实现；top-level driver 和 `/schedule` 待实现 |
 | 第二层：Developer Feedback Loop | 人看报告、决定接受、更新规则 | `/proof`、`/judge`、`/report`、`/today`、`/sessions`、`/undo`、`/rules`(待实现) | 一半已实现；`/today` 待实现（P1） |
 | 第三层：External Feedback Loop | 用户 bug、CI 失败、issue、PR review 回到 loop | GitHub Issues、CI、Sentry、Linear、Slack 集成 | 未实现，归 hosted/CI |
 

@@ -13,7 +13,7 @@ export interface LoopCliOptions {
 export function registerLoopCommand(parent: Command): void {
   parent
     .command('loop')
-    .description('Start a local iteration loop with a verification gate.')
+    .description('Validate a local loop plan. Interactive execution currently uses /loop in the TUI.')
     .argument('<objective>', 'The objective to iterate toward.')
     .requiredOption('--until <condition>', 'Stop condition: verify-pass, scan-clean, or judge-pass.')
     .option('--max-iterations <n>', 'Maximum iterations before giving up.', '10')
@@ -52,7 +52,7 @@ export function registerLoopCommand(parent: Command): void {
       }
 
       process.stdout.write(
-        'The `wukong loop` non-interactive driver is not yet implemented. Use `/loop` in the TUI instead.\n',
+        'Interactive loop execution is currently available through `/loop` in the Wukong TUI. The non-interactive `wukong loop` driver is not yet available.\n',
       );
       process.exit(1);
     });

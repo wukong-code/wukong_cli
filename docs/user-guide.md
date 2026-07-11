@@ -3,7 +3,7 @@
 > 适用范围: 当前 `wukong_cli` 新 Kimi-code base
 > 更新时间: 2026-07-07
 > 定位: AI 负责写代码，Wukong 负责判断能不能合并 —— AI Coding Loop 的控制层与验证层。
-> 原则: 本文只写当前可执行的能力。`verify`、`scan`、`guard`、TUI 验证 slash commands（`/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop`）和 `wukong_verify` agent tool 已实现；`sync`、`today`、hosted reports、计费和团队规则仍未完成。
+> 原则: 本文只写当前可执行的能力。`verify`、`scan`、`guard`、`proof`、`judge`、`today`、Hosted Report 上传预览、TUI slash commands（`/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop`、`/today`）和 `wukong_verify` agent tool 已实现；top-level `wukong loop` 执行器、完整订阅管理、团队规则和 PR gate 仍未完成。
 
 ## 从源码运行
 
@@ -108,7 +108,7 @@ pnpm -C apps/wukong run dev:cli-only -- guard --status
 | `wukong guard` | 已实现 | 本地 guard 状态、统计和命令风险阻断 |
 | `wukong proof` | 已实现 | 生成 Merge Proof Report（verify + scan 汇总） |
 | `wukong judge` | 已实现 | deterministic 合并判定（只审不写） |
-| `wukong loop` | 已实现 | 启动带 verification gate 的本机迭代 loop（`--every` 复用 cron scheduler） |
+| `wukong loop` | 部分实现 | `--dry-run` 可校验计划；实际迭代执行目前使用 TUI `/loop` |
 | `wukong login` | 已实现 | 通过 device-code flow 登录 |
 | `wukong doctor` | 已实现 | 校验配置文件 |
 | `wukong export` | 已实现 | 导出 session ZIP |
@@ -127,7 +127,7 @@ pnpm -C apps/wukong run dev:cli-only -- guard --status
 | `wukong guard` | 高风险命令确认/拦截 | 已实现，P0 不自动改 shell profile |
 | `wukong proof` | Merge Proof Report（verify + scan 汇总） | 已实现 |
 | `wukong judge` | deterministic 只审不写判定 | 已实现 |
-| `wukong loop` | 本机迭代 loop，直到 verification gate 通过 | 已实现；`--every` 复用 cron scheduler |
+| `wukong loop` | 本机迭代 loop，直到 verification gate 通过 | top-level 仅支持参数校验/`--dry-run`；TUI `/loop` 已实现 |
 | `wukong_verify` agent tool | 让 agent 在完成前调用验证 | 已实现，作为 builtin tool 接入 agent-core |
 | `/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop` | TUI 内验证、扫描、guard 状态、查看报告、goal/loop 驱动 | 已实现 |
 | `wukong sync` | 云同步 | 等待新 base API 与本地数据模型对齐 |

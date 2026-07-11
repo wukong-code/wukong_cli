@@ -56,7 +56,11 @@ function phaseIcon(phase: LoopPhase): string {
     case 'thinking':
     case 'composing':
       return '◐';
-    default:
+    case 'writing':
+    case 'verifying':
+    case 'judging':
+    case 'proofing':
+    case 'shell':
       return '↻';
   }
 }
@@ -102,8 +106,6 @@ export class LoopPhaseComponent implements Component {
   render(width: number): string[] {
     const state = this.state;
     if (state.hidden) return [];
-
-    const palette = currentTheme.palette;
 
     const parts: string[] = [];
 

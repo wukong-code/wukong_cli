@@ -75,7 +75,7 @@ export async function handleReportUpload(
 
   const outcome = await deps.upload(payload);
   if (outcome.ok) {
-    deps.stdout.write(`Uploaded: ${outcome.shareUrl}\n`);
+    deps.stdout.write(`${outcome.shareUrl ? `Uploaded: ${outcome.shareUrl}` : `Uploaded privately: ${outcome.id}`}\n`);
     return 0;
   }
   deps.stderr.write(`Upload failed: ${outcome.reason ?? 'unknown error'}\n`);
