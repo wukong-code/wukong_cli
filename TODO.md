@@ -10,8 +10,9 @@
 - [x] Proof 完成后提示私有 history 与显式公开分享命令；`--public` 必须与 `--upload` 同用（2026-07-13）
 - [x] `wukong today` 登录态显示 hosted report 用量和 Dashboard 链接；网络失败不阻塞本地简报（2026-07-13）
 - [x] TUI 公告协议、版本/时间/频控过滤、安全链接白名单和非阻塞拉取（2026-07-13）
-- [ ] 生产验收：公告端点 200，0.0.10→0.0.11 更新提示，真实账号 proof upload/private history/public share/dashboard 全链路
-- [ ] 发布 `0.0.11` 并同步 `wukong-code` CHANGELOG、文档和安装 manifest
+- [x] 生产验收：公告端点 200 且 5 分钟缓存；0.0.10→0.0.11 更新 manifest（2026-07-13）
+- [ ] 已登录真实账号验收：proof upload/private history/public share/dashboard 全链路（当前开发机无 CLI 登录态，不制造测试用户）
+- [x] 发布 `0.0.11` 六平台资产并同步 `wukong-code` CHANGELOG、文档和安装 manifest（2026-07-13）
 
 ## ✅ Milestone 0.5 — Loop 控制层 + Merge Proof
 
