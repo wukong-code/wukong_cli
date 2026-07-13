@@ -9,6 +9,8 @@ import {
 import { WUKONG_CODE_ANNOUNCEMENTS_URL } from '#/constant/app';
 import type { BannerState } from '#/tui/types';
 
+const LIVE_ANNOUNCEMENTS_URL = process.env.WUKONG_CODE_LIVE_ANNOUNCEMENTS_URL;
+
 describe('selectBannerState', () => {
   const now = new Date('2026-06-15T12:00:00+08:00');
 
@@ -449,6 +451,34 @@ describe('selectBannerState', () => {
         shown: {
           'hosted-proof-sharing-0.0.11': { lastShownAt: activeAt.toISOString() },
         },
+      },
+    })).toBeNull();
+  });
+
+  it.skipIf(!LIVE_ANNOUNCEMENTS_URL)('matches the hosted proof announcement from the live endpoint', async () => {
+    const response = await fetch(LIVE_ANNOUNCEMENTS_URL!);
+    expect(response.ok).toBe(true);
+    const json: unknown = await response.json();
+    const activeAt = new Date('2026-07-13T08:00:00Z');
+    const emptyState = { version: 1 as const, shown: {} };
+    const select = (clientVersion: string, state = emptyState) => selectDisplayableBanner({
+      json,
+      clientVersion,
+      now: activeAt,
+      random: () => 0,
+      state,
+    });
+
+    expect(select('0.0.11')).toMatchObject({
+      key: 'hosted-proof-sharing-0.0.11',
+      display: 'once',
+    });
+    expect(select('0.0.10')).toBeNull();
+    expect(select('0.0.12')).toBeNull();
+    expect(select('0.0.11', {
+      version: 1,
+      shown: {
+        'hosted-proof-sharing-0.0.11': { lastShownAt: activeAt.toISOString() },
       },
     })).toBeNull();
   });
