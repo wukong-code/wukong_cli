@@ -1613,9 +1613,11 @@ describe('WukongTUI startup', () => {
   it('renders the banner below the welcome message after it loads', async () => {
     const banner = {
       key: 'new-banner',
+      level: 'info' as const,
       tag: 'New',
       mainText: 'Banner main',
       subText: null,
+      action: null,
       display: 'always' as const,
     };
     const loadSpy = vi.spyOn(BannerProvider.prototype, 'load').mockResolvedValue(banner);
@@ -1658,9 +1660,11 @@ describe('WukongTUI startup', () => {
     try {
       const banner = {
         key: 'once-banner',
+        level: 'info' as const,
         tag: null,
         mainText: 'Banner main',
         subText: null,
+        action: null,
         display: 'once' as const,
       };
       const loadSpy = vi.spyOn(BannerProvider.prototype, 'load').mockResolvedValue(banner);
@@ -1715,9 +1719,11 @@ describe('WukongTUI startup', () => {
     try {
       const banner = {
         key: 'always-banner',
+        level: 'info' as const,
         tag: null,
         mainText: 'Banner main',
         subText: null,
+        action: null,
         display: 'always' as const,
       };
       const loadSpy = vi.spyOn(BannerProvider.prototype, 'load').mockResolvedValue(banner);

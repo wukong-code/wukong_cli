@@ -8,7 +8,7 @@
 
 Wukong Code is a local-first terminal AI coding agent built as the **control and verification layer for AI Coding Loops**. It does not compete with Cursor / Claude Code / Codex on writing code; it answers the question they leave open: *can this AI-written code be merged?*
 
-The local P0 loop is implemented: `wukong verify`, `wukong scan`, `wukong guard`, matching TUI slash commands (`/verify`, `/scan`, `/guard`, `/report`, `/goal`), and the `wukong_verify` builtin agent tool. Milestone 0.5 adds `/proof` (Merge Proof Report), `/judge` (evaluator-only review), `/goal --until` verification gates, and the interactive TUI `/loop`. The non-interactive `wukong loop` driver remains planned; `--dry-run` only validates its arguments. `/schedule` (cloud routine), cloud sync, billing, team rules, and deep review remain planned work. Hosted report upload is available as an early paid preview.
+The local P0 loop and Hosted Reports MVP are implemented: `verify`, `scan`, and `proof` can upload redacted reports, the Dashboard shows real report history, and public sharing requires explicit `--upload --public`. The non-interactive `wukong loop` driver, complete billing lifecycle, GitHub PR Evidence, team rules, and deep review remain planned work.
 
 ## Current Command Surface
 
@@ -74,6 +74,7 @@ pnpm build      # build all packages
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the internal contribution guide.
+Update checks, automatic installation, TUI announcements, and rollout status are documented in the [CLI updates and announcements contract](docs/operations/updates-and-announcements.md).
 
 ## Commercial Refactor
 

@@ -37,6 +37,7 @@ const config = withMermaid(defineConfig({
       { text: 'User Guide', link: '/user-guide' },
       { text: 'Commercial Plan', link: '/business/COMMERCIAL_REFACTOR_PLAN' },
       { text: 'Architecture', link: '/tech/architecture' },
+      { text: 'Updates & Announcements', link: '/operations/updates-and-announcements' },
       { text: 'Technical Plan', link: '/tech/commercial-refactor-implementation' },
       { text: 'Design', link: '/design/design' },
       { text: 'Test Plan', link: '/test/verification-cli-test-plan' },
@@ -47,6 +48,7 @@ const config = withMermaid(defineConfig({
         items: [
           { text: 'Documentation Index', link: '/' },
           { text: 'User Guide', link: '/user-guide' },
+          { text: 'CLI 更新与公告', link: '/operations/updates-and-announcements' },
         ],
       },
       {

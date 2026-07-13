@@ -147,22 +147,30 @@ describe('WelcomeComponent', () => {
     expect(output).not.toContain('Wukong Code');
   });
 
-  it('falls back to the welcome card when a goal is active', () => {
+  it('hides the welcome block when a goal is active', () => {
     const lines = new WelcomeComponent(appState, fakeBriefing(), 'active').render(80);
-    const output = lines.join('\n');
-
-    expect(output).toContain('Wukong Code');
-    expect(output).not.toContain('verify 3 (2✓ 1✗)');
+    expect(lines).toEqual([]);
   });
 
   it('updates the rendered block via setState', () => {
     const component = new WelcomeComponent(appState, fakeBriefing(), 'active');
-    const activeOutput = component.render(80).join('\n');
-    expect(activeOutput).toContain('Wukong Code');
+    expect(component.render(80)).toEqual([]);
 
     component.setState(fakeBriefing(), 'idle');
     const idleOutput = component.render(80).join('\n');
     expect(idleOutput).toContain('verify 3 (2✓ 1✗)');
     expect(idleOutput).not.toContain('Wukong Code');
+  });
+
+  it('shows a compact setup block instead of the full mascot for logged-out users', () => {
+    const loggedOut = { ...appState, model: '' };
+    const lines = new WelcomeComponent(loggedOut, fakeBriefing(), 'idle').render(80);
+    const output = lines.join('\n');
+
+    expect(lines.length).toBeLessThanOrEqual(6);
+    expect(output).toContain('Setup required');
+    expect(output).toContain('/login sign in');
+    expect(output).toContain('/provider use your API key');
+    expect(output).not.toContain('Today');
   });
 });

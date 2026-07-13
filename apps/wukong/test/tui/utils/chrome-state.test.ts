@@ -142,5 +142,14 @@ describe('ChromeStateAggregator', () => {
     expect(agg.getState().uiMode).toBe('blocked');
     expect(agg.getState().loopPhase?.phase).toBe('blocked');
     expect(agg.getState().loopPhase?.blockedReason).toBe('budget');
+    expect(agg.getState().loopPhase?.objective).toBe('Ship it');
+    expect(agg.getState().loopPhase?.nextAction).toBe('/goal resume or /loop stop');
+  });
+
+  it('makes paused goals visually distinct from waiting work', () => {
+    const agg = new ChromeStateAggregator({ cwd: '/repo' });
+    agg.setGoal(goal({ status: 'paused' }));
+    expect(agg.getState().uiMode).toBe('active');
+    expect(agg.getState().loopPhase?.phase).toBe('paused');
   });
 });

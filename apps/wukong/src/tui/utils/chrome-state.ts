@@ -207,6 +207,8 @@ export class ChromeStateAggregator {
     let phase: LoopPhaseState['phase'] = 'waiting';
     if (isBlocked) {
       phase = 'blocked';
+    } else if (goal.status === 'paused') {
+      phase = 'paused';
     } else if (goal.stopCondition === 'verify-pass') {
       phase = this.lastVerify?.status === 'failed' ? 'writing' : 'verifying';
     } else if (goal.stopCondition === 'scan-clean') {
@@ -223,8 +225,16 @@ export class ChromeStateAggregator {
       // liveWallClockMs); do not add a second local elapsed delta.
       elapsedMs: goal.wallClockMs,
       blockedReason: isBlocked ? this.lastVerify?.detail ?? goal.terminalReason ?? undefined : undefined,
+      objective: goal.objective,
+      nextAction: isBlocked ? this.blockedNextAction() : undefined,
       warning: isBlocked,
     };
+  }
+
+  private blockedNextAction(): string {
+    if (this.lastProof?.status === 'blocked') return 'review proof blockers';
+    if (this.lastVerify?.status === 'failed') return 'inspect failures or steer';
+    return '/goal resume or /loop stop';
   }
 
   private applyEvent(event: StatEvent): void {

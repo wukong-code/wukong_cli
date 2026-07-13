@@ -5,7 +5,7 @@ vi.mock('#/cli/lib/report-upload', () => ({
   uploadReport: vi.fn(),
 }));
 
-import { uploadReport } from '#/cli/lib/report-upload';
+import { getCliAccessToken, uploadReport } from '#/cli/lib/report-upload';
 import { createProgram } from '#/cli/commands';
 import { handleGuard, type GuardDeps } from '#/cli/sub/guard';
 import { handleJudge, type JudgeDeps } from '#/cli/sub/judge';
@@ -15,6 +15,13 @@ import { handleVerify, type VerifyDeps } from '#/cli/sub/verify';
 import type { ScanOptions, VerificationOptions, ProofOptions } from '@wukong/verification';
 
 const mockedUploadReport = vi.mocked(uploadReport);
+const mockedGetCliAccessToken = vi.mocked(getCliAccessToken);
+
+beforeEach(() => {
+  mockedUploadReport.mockReset();
+  mockedGetCliAccessToken.mockReset();
+  mockedGetCliAccessToken.mockResolvedValue(null);
+});
 
 function writable(): { readonly chunks: string[]; readonly writer: { write(chunk: string): boolean } } {
   const chunks: string[] = [];
@@ -163,12 +170,15 @@ describe('handleVerify', () => {
       }),
     };
 
-    await expect(handleVerify(deps, { upload: true })).resolves.toBe(0);
-    expect(mockedUploadReport).toHaveBeenCalledWith({
-      kind: 'verify',
-      result: expect.objectContaining({ status: 'passed' }),
-      markdown: '# Verify Report',
-    });
+    await expect(handleVerify(deps, { upload: true, public: true })).resolves.toBe(0);
+    expect(mockedUploadReport).toHaveBeenCalledWith(
+      {
+        kind: 'verify',
+        result: expect.objectContaining({ status: 'passed' }),
+        markdown: '# Verify Report',
+      },
+      { visibility: 'public' },
+    );
     expect(stdout.chunks.join('')).toContain('https://wukong.today/r/r-1');
     expect(stderr.chunks).toEqual([]);
   });
@@ -195,6 +205,21 @@ describe('handleVerify', () => {
 
     await expect(handleVerify(deps, { upload: true })).resolves.toBe(0);
     expect(stderr.chunks.join('')).toContain('Upload skipped: not logged in');
+  });
+
+  it('rejects --public without --upload before running verification', async () => {
+    const stderr = writable();
+    const runVerification = vi.fn();
+    const deps: VerifyDeps = {
+      cwd: () => '/workspace',
+      stdout: writable().writer,
+      stderr: stderr.writer,
+      runVerification,
+    };
+
+    await expect(handleVerify(deps, { public: true })).resolves.toBe(2);
+    expect(runVerification).not.toHaveBeenCalled();
+    expect(stderr.chunks.join('')).toContain('--public requires --upload');
   });
 });
 
@@ -286,11 +311,14 @@ describe('handleScan', () => {
     };
 
     await expect(handleScan(deps, { upload: true })).resolves.toBe(0);
-    expect(mockedUploadReport).toHaveBeenCalledWith({
-      kind: 'scan',
-      result: expect.objectContaining({ status: 'passed' }),
-      markdown: '# Scan Report',
-    });
+    expect(mockedUploadReport).toHaveBeenCalledWith(
+      {
+        kind: 'scan',
+        result: expect.objectContaining({ status: 'passed' }),
+        markdown: '# Scan Report',
+      },
+      { visibility: 'private' },
+    );
     expect(stdout.chunks.join('')).toContain('https://wukong.today/r/r-2');
   });
 });
@@ -391,6 +419,34 @@ describe('handleProof', () => {
     expect(captured[0]).toMatchObject({ writeReport: false, reportPath: undefined });
   });
 
+  it('shows the hosted-report next step after a human-readable proof', async () => {
+    const stdout = writable();
+    const deps: ProofDeps = {
+      cwd: () => '/workspace',
+      stdout: stdout.writer,
+      stderr: writable().writer,
+      getAccessToken: async () => 'token',
+      runProof: async () => ({
+        status: 'passed',
+        cwd: '/workspace',
+        generatedAt: '2026-07-02T00:00:00.000Z',
+        verification: {
+          status: 'passed', cwd: '/workspace', generatedAt: '2026-07-02T00:00:00.000Z',
+          changedFiles: [], gitStatus: '', diffStat: '', selectedCommands: [], commandResults: [], risks: [],
+        },
+        scan: {
+          status: 'passed', cwd: '/workspace', generatedAt: '2026-07-02T00:00:00.000Z',
+          changedFiles: [], gitStatus: '', diffStat: '', risks: [],
+        },
+        summary: 'All good.',
+        recommendation: 'Safe to merge.',
+      }),
+    };
+
+    await expect(handleProof(deps, {})).resolves.toBe(0);
+    expect(stdout.chunks.join('')).toContain('wukong proof --upload --public');
+  });
+
   it('returns 2 on runProof failure', async () => {
     const stderr = writable();
     const deps: ProofDeps = {
@@ -444,11 +500,14 @@ describe('handleProof', () => {
     };
 
     await expect(handleProof(deps, { upload: true })).resolves.toBe(0);
-    expect(mockedUploadReport).toHaveBeenCalledWith({
-      kind: 'proof',
-      result: expect.objectContaining({ status: 'passed' }),
-      markdown: '# Proof Report',
-    });
+    expect(mockedUploadReport).toHaveBeenCalledWith(
+      {
+        kind: 'proof',
+        result: expect.objectContaining({ status: 'passed' }),
+        markdown: '# Proof Report',
+      },
+      { visibility: 'private' },
+    );
     expect(stdout.chunks.join('')).toContain('https://wukong.today/r/r-3');
   });
 });

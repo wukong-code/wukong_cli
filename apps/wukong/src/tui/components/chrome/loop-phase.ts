@@ -14,6 +14,7 @@ export type LoopPhase =
   | 'judging'
   | 'proofing'
   | 'waiting'
+  | 'paused'
   | 'composing'
   | 'thinking'
   | 'shell'
@@ -29,6 +30,10 @@ export interface LoopPhaseState {
   readonly elapsedMs: number;
   /** Reason shown when phase is 'blocked'. */
   readonly blockedReason?: string;
+  /** Goal objective shown after the high-signal phase fields. */
+  readonly objective?: string;
+  /** Recommended recovery action shown for a blocked goal. */
+  readonly nextAction?: string;
   /** Seconds until the next retry when a cron loop is throttled. */
   readonly cronRetryInSec?: number;
   /** Cron interval string, e.g. "1m". */
@@ -52,6 +57,8 @@ function phaseIcon(phase: LoopPhase): string {
   switch (phase) {
     case 'blocked':
       return '⛔';
+    case 'paused':
+      return 'Ⅱ';
     case 'waiting':
     case 'thinking':
     case 'composing':
@@ -68,25 +75,25 @@ function phaseIcon(phase: LoopPhase): string {
 function phaseLabel(phase: LoopPhase): string {
   switch (phase) {
     case 'writing':
-      return 'writing';
+      return 'WRITE';
     case 'verifying':
-      return 'verifying';
+      return 'VERIFY';
     case 'judging':
-      return 'judging';
+      return 'JUDGE';
     case 'proofing':
-      return 'proofing';
+      return 'PROOF';
     case 'waiting':
-      return 'waiting';
+      return 'WAIT';
+    case 'paused':
+      return 'PAUSED';
     case 'composing':
-      return 'composing';
+      return 'COMPOSE';
     case 'thinking':
-      return 'thinking';
+      return 'THINK';
     case 'shell':
-      return 'shell';
+      return 'SHELL';
     case 'blocked':
-      return 'gate failed';
-    default:
-      return phase;
+      return 'BLOCKED';
   }
 }
 
@@ -107,7 +114,8 @@ export class LoopPhaseComponent implements Component {
     const state = this.state;
     if (state.hidden) return [];
 
-    const parts: string[] = [];
+    const primaryParts: string[] = [];
+    const secondaryParts: string[] = [];
 
     // Iteration budget: "3/10"
     if (state.iteration > 0) {
@@ -115,25 +123,37 @@ export class LoopPhaseComponent implements Component {
         state.maxIterations !== undefined
           ? `${state.iteration}/${state.maxIterations}`
           : String(state.iteration);
-      parts.push(`${phaseIcon(state.phase)} ${iterBudget}`);
+      primaryParts.push(`${phaseIcon(state.phase)} ${iterBudget}`);
     } else {
-      parts.push(phaseIcon(state.phase));
+      primaryParts.push(phaseIcon(state.phase));
     }
 
-    if (state.phase === 'blocked' && state.blockedReason) {
-      parts.push(`· ${phaseLabel(state.phase)} · ${state.blockedReason}`);
+    if (state.phase === 'blocked') {
+      primaryParts.push(phaseLabel(state.phase));
+      if (state.nextAction) secondaryParts.push(`Next: ${state.nextAction}`);
+      if (state.blockedReason) secondaryParts.push(state.blockedReason);
     } else if (state.cronRetryInSec !== undefined && state.cronRetryInSec > 0) {
       const intervalSuffix = state.cronInterval ? ` (--every ${state.cronInterval})` : '';
-      parts.push(`· retry in ${state.cronRetryInSec}s${intervalSuffix}`);
+      primaryParts.push(`RETRY ${state.cronRetryInSec}s${intervalSuffix}`);
     } else {
-      parts.push(`· ${phaseLabel(state.phase)}`);
+      primaryParts.push(phaseLabel(state.phase));
     }
 
-    parts.push(`· ${formatElapsed(state.elapsedMs)}`);
+    primaryParts.push(formatElapsed(state.elapsedMs));
+    if (state.phase !== 'blocked' && state.objective) secondaryParts.push(state.objective);
 
-    const text = parts.join(' ');
-    const colored = currentTheme.fg(state.warning ? 'warning' : 'primary', text);
-    return [truncateToWidth(colored, width, '…')];
+    const primary = currentTheme.boldFg(
+      state.warning ? 'warning' : 'primary',
+      primaryParts.join('  '),
+    );
+    const secondary =
+      secondaryParts.length > 0
+        ? currentTheme.fg(
+            state.warning ? 'warning' : 'textDim',
+            `  ·  ${secondaryParts.join('  ·  ')}`,
+          )
+        : '';
+    return [truncateToWidth(`${primary}${secondary}`, width, '…')];
   }
 }
 

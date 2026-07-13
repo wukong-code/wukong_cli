@@ -14,6 +14,7 @@ interface WritableLike {
 export interface ReportUploadCliOptions {
   readonly path?: string;
   readonly type?: 'verify' | 'scan' | 'proof';
+  readonly public?: boolean;
 }
 
 export interface ReportUploadDeps {
@@ -71,6 +72,7 @@ export async function handleReportUpload(
     medium_risks: 0,
     low_risks: 0,
     report_markdown: markdown,
+    visibility: options.public === true ? 'public' : 'private',
   };
 
   const outcome = await deps.upload(payload);
@@ -89,7 +91,8 @@ export function registerReportUploadCommand(parent: Command): void {
     .command('upload <path>')
     .description('Upload a local report markdown file to wukong.today.')
     .option('--type <type>', "Report type: 'verify', 'scan', or 'proof'.")
-    .action(async (path: string, raw: { type?: 'verify' | 'scan' | 'proof' }) => {
+    .option('--public', 'Create a public share link.')
+    .action(async (path: string, raw: { type?: 'verify' | 'scan' | 'proof'; public?: boolean }) => {
       const code = await handleReportUpload(
         {
           stdout: process.stdout,
@@ -126,7 +129,7 @@ export function registerReportUploadCommand(parent: Command): void {
             return { ok: true, id: body.data?.id, shareUrl: body.data?.shareUrl };
           },
         },
-        { path, type: raw.type },
+        { path, type: raw.type, public: raw.public === true },
       );
       if (code !== 0) process.exitCode = code;
     });

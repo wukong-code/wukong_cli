@@ -1,6 +1,7 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import { FooterComponent } from '#/tui/components/chrome/footer';
+import { LoopPhaseComponent } from '#/tui/components/chrome/loop-phase';
 import type { GoalSnapshot } from '@wukong/wukong-sdk';
 import type { AppState } from '#/tui/types';
 import { ChromeStateAggregator } from '#/tui/utils/chrome-state';
@@ -59,78 +60,69 @@ function makeChromeState(goal?: GoalSnapshot | null): ChromeStateAggregator {
   return agg;
 }
 
-describe('FooterComponent — goal track', () => {
-  afterEach(() => {
-    vi.useRealTimers();
-  });
+function renderPhase(chromeState: ChromeStateAggregator, width = 160): string {
+  const phase = chromeState.getState().loopPhase;
+  if (phase === null) return '';
+  return strip(new LoopPhaseComponent(phase).render(width).join('\n'));
+}
 
-  it('omits the goal track when there is no goal', () => {
+describe('FooterComponent — goal and evidence tracks', () => {
+  it('omits the evidence track when there is no goal', () => {
     const footer = new FooterComponent(baseState({ goal: null }), makeChromeState(null));
     const out = strip(footer.render(160).join('\n'));
-    expect(out).not.toContain('Goal:');
-    expect(out).not.toContain('Goal ● blocked');
+    expect(out).not.toContain('Gate ');
   });
 
-  it('shows the objective and iteration for an active goal', () => {
-    const footer = new FooterComponent(baseState({ goal: goal() }), makeChromeState(goal()));
+  it('moves the active objective and iteration to the phase rail', () => {
+    const chromeState = makeChromeState(goal());
+    const footer = new FooterComponent(baseState({ goal: goal() }), chromeState);
     const out = strip(footer.render(160).join('\n'));
-    expect(out).toContain('Goal: Ship it');
-    expect(out).toMatch(/Goal: Ship it · 7\b/);
+    const phase = renderPhase(chromeState);
+    expect(footer.render(160)).toHaveLength(2);
+    expect(out).toContain('Gate self');
+    expect(out).not.toContain('Ship it');
+    expect(phase).toContain('◐ 7  WAIT  4m');
+    expect(phase).toContain('Ship it');
   });
 
-  it('requests a repaint while an active goal timer is visible', () => {
-    vi.useFakeTimers();
-    const onRefresh = vi.fn();
+  it('shows used/limit iterations in the phase rail when a budget is set', () => {
+    const chromeState = makeChromeState(goal({ maxIterations: 20 }));
+    expect(renderPhase(chromeState)).toContain('7/20');
+  });
 
-    new FooterComponent(
-      baseState({ goal: goal({ wallClockMs: 0 }) }),
-      makeChromeState(goal({ wallClockMs: 0 })),
-      onRefresh,
+  it('makes paused state explicit in the phase rail', () => {
+    const chromeState = makeChromeState(goal({ status: 'paused' }));
+    expect(renderPhase(chromeState)).toContain('Ⅱ 7  PAUSED');
+  });
+
+  it('shows a blocked state with an actionable recovery hint', () => {
+    const chromeState = makeChromeState(
+      goal({ status: 'blocked', terminalReason: 'budget reached' }),
     );
-
-    vi.advanceTimersByTime(1_000);
-    expect(onRefresh).toHaveBeenCalledTimes(1);
+    const phase = renderPhase(chromeState);
+    expect(phase).toContain('⛔ 7  BLOCKED');
+    expect(phase).toContain('budget reached');
+    expect(phase).toContain('Next: /goal resume or /loop stop');
+    expect(renderPhase(chromeState, 72)).toContain('Next: /goal resume or /loop stop');
   });
 
-  it('shows used/limit iterations only when an iteration budget is set', () => {
-    const footer = new FooterComponent(
-      baseState({ goal: goal({ maxIterations: 20 }) }),
-      makeChromeState(goal({ maxIterations: 20 })),
-    );
-    expect(strip(footer.render(160).join('\n'))).toContain('7/20');
-  });
-
-  it('shows a paused goal track', () => {
-    const footer = new FooterComponent(
-      baseState({ goal: goal({ status: 'paused' }) }),
-      makeChromeState(goal({ status: 'paused' })),
-    );
-    expect(strip(footer.render(160).join('\n'))).toContain('Goal: Ship it');
-  });
-
-  it('shows a blocked goal track', () => {
-    const footer = new FooterComponent(
-      baseState({ goal: goal({ status: 'blocked' }) }),
-      makeChromeState(goal({ status: 'blocked' })),
-    );
-    const out = strip(footer.render(160).join('\n'));
-    expect(out).toContain('Goal ● blocked');
-  });
-
-  it('hides the goal track for a completed goal', () => {
+  it('hides goal chrome for a completed goal', () => {
     const footer = new FooterComponent(
       baseState({ goal: goal({ status: 'complete' }) }),
       makeChromeState(goal({ status: 'complete' })),
     );
-    expect(strip(footer.render(160).join('\n'))).not.toContain('Goal:');
+    expect(strip(footer.render(160).join('\n'))).not.toContain('Gate ');
+    expect(renderPhase(makeChromeState(goal({ status: 'complete' })))).toBe('');
   });
 
-  it('renders a single iteration without plural', () => {
-    const footer = new FooterComponent(
-      baseState({ goal: goal({ iteration: 1 }) }),
-      makeChromeState(goal({ iteration: 1 })),
-    );
-    const out = strip(footer.render(160).join('\n'));
-    expect(out).toMatch(/Goal: Ship it · 1\b/);
+  it('renders a single iteration without extra copy', () => {
+    const chromeState = makeChromeState(goal({ iteration: 1 }));
+    expect(renderPhase(chromeState)).toContain('◐ 1  WAIT');
+  });
+
+  it('shows the configured deterministic gate in the evidence rail', () => {
+    const gatedGoal = goal({ stopCondition: 'verify-pass' });
+    const footer = new FooterComponent(baseState({ goal: gatedGoal }), makeChromeState(gatedGoal));
+    expect(strip(footer.render(160).join('\n'))).toContain('Gate verify-pass');
   });
 });

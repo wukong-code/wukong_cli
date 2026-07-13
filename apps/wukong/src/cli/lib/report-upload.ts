@@ -35,6 +35,10 @@ export interface ReportUploadFailure {
 
 export type ReportUploadOutcome = ReportUploadSuccess | ReportUploadFailure;
 
+export interface ReportUploadOptions {
+  readonly visibility?: 'public' | 'private';
+}
+
 const MAX_UPLOAD_BYTES = 512 * 1024;
 
 function getApiBaseUrl(): string {
@@ -71,7 +75,10 @@ function buildPayload(input: ReportableResult): ReportUploadPayload {
   }
 }
 
-export async function uploadReport(input: ReportableResult): Promise<ReportUploadOutcome> {
+export async function uploadReport(
+  input: ReportableResult,
+  options: ReportUploadOptions = {},
+): Promise<ReportUploadOutcome> {
   const token = await getCliAccessToken();
   if (token === null) {
     return { ok: false, reason: 'not logged in; run `wukong login` first' };
@@ -79,7 +86,7 @@ export async function uploadReport(input: ReportableResult): Promise<ReportUploa
 
   let payload: ReportUploadPayload;
   try {
-    payload = buildPayload(input);
+    payload = { ...buildPayload(input), visibility: options.visibility ?? 'private' };
   } catch (error) {
     const reason =
       error instanceof Error

@@ -34,6 +34,7 @@ export class WelcomeComponent implements Component {
 
   render(width: number): string[] {
     const safeWidth = Math.max(0, width);
+    if (this.uiMode !== 'idle') return [];
 
     if (safeWidth < 24) {
       const title = chalk.bold.hex(currentTheme.palette.primary)('Wukong Code');
@@ -50,11 +51,35 @@ export class WelcomeComponent implements Component {
       );
     }
 
-    if (this.uiMode === 'idle' && this.todayBriefing !== null) {
+    if (!this.state.model) {
+      return this.renderSetupBlock(safeWidth);
+    }
+
+    if (this.todayBriefing !== null) {
       return this.renderTodayBlock(safeWidth);
     }
 
     return this.renderWelcomeCard(safeWidth);
+  }
+
+  private renderSetupBlock(safeWidth: number): string[] {
+    const primary = (s: string): string => chalk.hex(currentTheme.palette.primary)(s);
+    const innerWidth = Math.max(1, safeWidth - 4);
+    const pad = '  ';
+    const contentLines = [
+      `${chalk.bold.hex(currentTheme.palette.primary)('Wukong Code')}  ${chalk.hex(currentTheme.palette.warning)('Setup required')}`,
+      chalk.hex(currentTheme.palette.textDim)('/login sign in  ·  /provider use your API key'),
+    ];
+    const lines = ['', primary('╭' + '─'.repeat(safeWidth - 2) + '╮')];
+
+    for (const content of contentLines) {
+      const truncated = truncateToWidth(content, innerWidth, '…');
+      const rightPad = Math.max(0, innerWidth - visibleWidth(truncated));
+      lines.push(primary('│') + pad + truncated + ' '.repeat(rightPad) + primary('│'));
+    }
+
+    lines.push(primary('╰' + '─'.repeat(safeWidth - 2) + '╯'), '');
+    return lines.map((line) => truncateToWidth(line, safeWidth, '…'));
   }
 
   private renderTodayBlock(safeWidth: number): string[] {

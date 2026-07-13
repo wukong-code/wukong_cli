@@ -2224,10 +2224,12 @@ command = "vim"
     const transcript = stripSgr(renderTranscript(driver));
     const panel = stripSgr(renderBtwPanel(driver));
     const rootChildren = driver.state.ui.children;
-    // Layout order: ... → btwPanelContainer → loopPhase → editorUpperSeparator → editorContainer → ...
+    // Layout order: ... → btwPanelContainer → loopPhaseContainer → editorUpperSeparator → editorContainer → ...
     expect(rootChildren.indexOf(driver.state.btwPanelContainer)).toBe(
       rootChildren.indexOf(driver.state.editorContainer) - 3,
     );
+    expect(rootChildren).toContain(driver.state.loopPhaseContainer);
+    expect(rootChildren).not.toContain(driver.state.loopPhase);
     expect(transcript).toContain('main answer after btw');
     expect(transcript).not.toContain('side answer');
     expect(panel).toContain('BTW');

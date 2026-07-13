@@ -9,9 +9,11 @@ import type { BannerState } from '#/tui/types';
 function makeBannerState(overrides: Partial<BannerState> = {}): BannerState {
   return {
     key: 'component-banner',
+    level: 'info',
     tag: null,
     mainText: '',
     subText: null,
+    action: null,
     display: 'always',
     ...overrides,
   };
@@ -172,6 +174,18 @@ describe('BannerComponent', () => {
       currentTheme.boldFg('textStrong', 'This is the main banner message for testing purposes.'),
     );
     expect(lines[1]).toContain(currentTheme.fg('textDim', 'This is a short subtext line.'));
+  });
+
+  it('uses severity colors and renders an action URL', () => {
+    const lines = new BannerComponent(makeBannerState({
+      level: 'warning',
+      tag: '升级提醒',
+      mainText: '新版本已经发布',
+      action: { label: '查看更新', url: 'https://wukong.today/changelog' },
+    })).render(80);
+    expect(lines[0]).toContain(currentTheme.boldFg('warning', '✦ 升级提醒'));
+    expect(lines[1]).toContain('查看更新: https://wukong.today/changelog');
+    expect(lines[2]).toBe('');
   });
 
   it('does not stack the dim modifier on top of the textDim color', () => {

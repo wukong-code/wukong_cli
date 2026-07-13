@@ -1,6 +1,6 @@
 # Wukong Code Roadmap
 
-> 最后更新: 2026-07-07
+> 最后更新: 2026-07-13
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 
 这份 ROADMAP 是当前商业化方向的执行层文档。更细的商业模型和技术方案仍以这些文档为准：
@@ -45,7 +45,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - 停止判断不由写代码的 agent 自评。注意：当前 `/goal` 的完成判定仍是 agent 自评 + 回合/预算上限，M0.5 必须先给 `/goal` 出口加 deterministic verification gate（agent 宣布完成 → 强制 verify/scan/judge → 未过打回），`/loop` 复用该 gate。
 - `/proof` 是第一个 Wow Moment：AI 写完后一键生成合并证据。
 - `/judge` 只审不写：M0.5 默认是 deterministic 对抗性判定（复用 proof 引擎，BLOCK 倾向）；fresh-context 第二 agent 审查（`--agent`）落地前，不对外宣传"第二 agent reviewer"。
-- 托管报告、PR gates、team rules、audit log 是真正能收费的团队能力，但仍未实现。
+- 托管报告闭环已经实现；PR gates、team rules、audit log 是下一阶段真正能扩大团队付费意愿的能力。
 
 免费版负责让开发者愿意安装、使用、截图和分享；付费版负责解决团队真实痛点：报告历史、PR 证据、共享策略、权限、计费和审计。
 
@@ -77,10 +77,10 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 |---|---|---|
 | `/schedule` 云端例程 | 未实现 | 机器关了也跑的例程，归 hosted（Milestone 3+）；本机定时巡检先用已实现的 cron 工具 |
 | `/ship` 发布 gate | 未实现 | proof + 版本/changelog/dry-run，更靠后的发布前 gate |
-| Hosted report upload | 未实现 | 把本地 verify 变成可收费 Web 能力 |
-| Report history | 未实现 | Pro Preview 的核心留存能力 |
-| Shareable report page | 未实现 | 核心传播和 reviewer 协作物料 |
-| Entitlement enforcement | 未完成 | 付费层级必须由服务端真实控制 |
+| Hosted report upload | 已实现 | `verify` / `scan` / `proof` 和本地 Markdown 都可 opt-in 上传；失败不影响本地报告 |
+| Report history | 已实现 | Dashboard 使用真实 report API，不再展示 demo 数据 |
+| Shareable report page | 已实现 | 私有为默认；显式 `--upload --public` 才返回公开分享链接 |
+| Hosted report entitlement | 已实现 | 服务端按 Free / Founder / Pro 校验月度 quota，并在 CLI Today/Dashboard 展示 |
 | Stripe portal + 完整 webhook 状态 | 未完成 | 用户需要管理订阅、取消和失败付款 |
 | GitHub PR comment / gate | 未实现 | 把个人工具变成团队工作流 |
 | Team rules | 未实现 | 团队愿意付费的核心原因之一 |
@@ -101,6 +101,16 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 9. `/loop`（本机迭代，关机即停）和定时巡检拆开：迭代收敛归 `/loop`，本机巡检用已实现的 cron 工具，云端例程归 `/schedule`（hosted，Milestone 3+）。
 10. loop 的停止判断不由写代码的 agent 自评：用 deterministic verification 或独立 evaluator，也可挂载自定义验证 skill（借鉴 Claude Code 的 verify-skill 模式）。前提是先落地 `/goal` verification gate。
 11. 不重复造轮子：`/loop` 的时间触发复用 agent-core cron scheduler，执行核复用 `/goal`，proof/judge 复用 verification 引擎。
+
+## 版本发布序列
+
+| 版本 | 目标 | 发布门槛 |
+|---|---|---|
+| `0.0.11` | 把当前产品做成可理解、可发现、可运维的 Hosted Evidence 闭环 | TUI 文案与对齐完成；Dashboard 证据优先布局上线；公告端点 200；`proof → private history / public share → dashboard` 真实链路通过；文档与实现一致 |
+| `0.0.12` | 关闭付费生命周期缺口 | Stripe customer portal、取消/付款失败状态、grace 规则、Billing UI 与 entitlement 状态一致；至少能观察 install→proof→upload 转化 |
+| `0.1.0` | 从个人报告工具进入真实 PR 工作流 | GitHub PR comment 与 status check 可用；visibility/redaction E2E 通过；至少 1 个 Team Pilot 在真实 repo 连续使用；0.0.11/0.0.12 无阻断级回归 |
+
+`0.1.0` 的条件式目标是 **2026 年 8 月上旬，最早 8 月 3 日当周**。日期不是发布承诺；上表的 PR Evidence 和真实试点门槛未满足时不升 `0.1.0`。
 
 ## Milestone 0: Public Install And Local Proof
 
@@ -181,6 +191,8 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 ## Milestone 1: Hosted Reports MVP
 
+状态：代码闭环已完成；`0.0.11` 负责生产部署与真实账号验收。
+
 目标：把本地 verification report 变成第一个真实付费 Web 工作流。
 
 交付项：
@@ -202,6 +214,8 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - redaction 测试覆盖 secret-like string、env 文件、token、private key 和超大 diff。
 
 ## Milestone 2: Pro Preview Billing
+
+状态：部分实现。Hosted report quota 已由服务端控制；customer portal、付款失败/grace 状态和完整 Billing UI 仍未完成。
 
 目标：让 Pro Preview 至少包含一个真实付费能力，而不是 early access 文案。
 
@@ -312,8 +326,8 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - 首页继续聚焦 local AI coding + verification evidence。
 - `/download` 保持短、准、可安装。
 - `/pricing` 必须绑定真实 entitlement。
-- hosted report demo 必须等真实 sample report 出现后再上线。
-- Dashboard placeholder 改成真实 report history。
+- 使用真实上传 report 作为 docs / pricing 演示素材，不制作 placeholder。
+- Dashboard 继续围绕真实 report history、quota 和下一步动作优化。
 - changelog 保持和公开 release 同步。
 
 不要做：
@@ -327,9 +341,9 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 近期工作：
 
 - 按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序实现 Milestone 0.5（`/loop` 为本机迭代 loop，复用 cron scheduler 与 goal gate）。
-- 给 `verify` 和 `scan` 增加登录态 report upload。
-- 上传前提供 opt-in 和清晰 redaction preview。
-- JSON output 增加 Web report API 需要的字段。
+- 保持 `verify` / `scan` / `proof` 登录态上传为 opt-in，默认私有；公开分享必须显式 `--public`。
+- 在 Proof 结果后提示 hosted history / public share，在 Today 中显示登录用户的 hosted quota 与 Dashboard 链接。
+- 公告与更新通道分离：公告 JSON 由 Web 静态文件维护，失败不阻塞 CLI。
 - 本地 report 保持 offline 可用。
 - 登录命令保持简单：OAuth first，不展示重复 platform choices。
 - 终端 UI 保持紧凑、产品导向。
@@ -381,4 +395,3 @@ Team Pilot 可以开始试点的最低条件：
 - 不把 mascot 工作变成主路线图。
 - 不在实现前宣传 enterprise security。
 - 不在 report upload 闭环成立前做泛 SaaS dashboard。
-

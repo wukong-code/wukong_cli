@@ -172,6 +172,12 @@ function buildProofReportLines(result: ProofResult): string[] {
     lines.push('', `Report: ${result.reportPath}`);
   }
 
+  lines.push(
+    '',
+    'Hosted history: wukong proof --upload',
+    'Public share:  wukong proof --upload --public',
+  );
+
   return lines;
 }
 

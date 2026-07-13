@@ -8,7 +8,7 @@
 
 Wukong Code 是本地优先的终端 AI coding agent，定位是 **AI Coding Loop 的控制层与验证层**。它不和 Cursor / Claude Code / Codex 拼写代码，而是补上它们留下的问题：*这段 AI 写的代码能不能合并？*
 
-当前 P0 本地闭环已实现：`wukong verify`、`wukong scan`、`wukong guard`、对应 TUI slash commands（`/verify`、`/scan`、`/guard`、`/report`、`/goal`），以及 `wukong_verify` 内置 agent tool。Milestone 0.5 的 `/loop`（本机迭代 loop，含 `--every` cron scheduler  pacing）、`/proof`（Merge Proof Report）、`/judge`（只审不写的 evaluator）和 `/goal --until` verification gate 已在 CLI 与 TUI 中实现。`/schedule`（云端例程）随 hosted 推进。云同步、托管报告、计费、团队规则和深度 review 仍是后续工作。
+当前 P0 本地闭环和 Hosted Reports MVP 已实现：`verify`、`scan`、`proof` 可上传脱敏报告，Dashboard 展示真实 history，公开分享需要显式 `--upload --public`。完整订阅生命周期、GitHub PR Evidence、团队规则和 deep review 仍是后续工作。
 
 ## 当前命令面
 
@@ -74,6 +74,7 @@ pnpm build      # 构建所有包
 ```
 
 完整内部贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
+更新检查、后台自动安装、TUI 公告和当前上线状态见 [CLI 更新与公告契约](docs/operations/updates-and-announcements.md)。
 
 ## 商业化重构
 

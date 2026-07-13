@@ -14,6 +14,7 @@ export interface ScanCliOptions {
   readonly report?: string | boolean;
   readonly json?: boolean;
   readonly upload?: boolean;
+  readonly public?: boolean;
 }
 
 export interface ScanDeps {
@@ -25,6 +26,11 @@ export interface ScanDeps {
 }
 
 export async function handleScan(deps: ScanDeps, options: ScanCliOptions): Promise<number> {
+  if (options.public === true && options.upload !== true) {
+    deps.stderr.write('wukong scan: --public requires --upload.\n');
+    return 2;
+  }
+
   try {
     const result = await deps.runScan({
       cwd: options.cwd ?? deps.cwd(),
@@ -36,7 +42,10 @@ export async function handleScan(deps: ScanDeps, options: ScanCliOptions): Promi
 
     if (options.upload === true) {
       const markdown = result.report ?? renderScanReport(result);
-      const outcome = await uploadReport({ kind: 'scan', result, markdown });
+      const outcome = await uploadReport(
+        { kind: 'scan', result, markdown },
+        { visibility: options.public === true ? 'public' : 'private' },
+      );
       if (outcome.ok) {
         deps.stdout.write(`\n${outcome.shareUrl ? `Uploaded: ${outcome.shareUrl}` : `Uploaded privately: ${outcome.id}`}\n`);
       } else {
@@ -60,6 +69,7 @@ export function registerScanCommand(parent: Command, deps?: Partial<ScanDeps>): 
     .option('--report [path]', 'Write a markdown scan report. Defaults to wukong-scan-report.md when no path is given.')
     .option('--json', 'Print the structured scan result as JSON.')
     .option('--upload', 'Upload the redacted report to wukong.today (requires login).')
+    .option('--public', 'Create a public share link when used with --upload.')
     .action(async (raw: RawScanOptions) => {
       const resolved = resolveDeps(deps);
       const code = await handleScan(
@@ -80,6 +90,7 @@ export function registerScanCommand(parent: Command, deps?: Partial<ScanDeps>): 
           report: raw.report === true ? 'wukong-scan-report.md' : raw.report,
           json: raw.json === true,
           upload: raw.upload === true,
+          public: raw.public === true,
         },
       );
       if (code !== 0) process.exitCode = code;
@@ -90,6 +101,7 @@ interface RawScanOptions {
   readonly report?: string | boolean;
   readonly json?: boolean;
   readonly upload?: boolean;
+  readonly public?: boolean;
 }
 
 function resolveDeps(deps: Partial<ScanDeps> | undefined): ScanDeps {

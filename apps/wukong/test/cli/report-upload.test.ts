@@ -86,6 +86,7 @@ describe('handleReportUpload', () => {
       expect.objectContaining({
         type: 'verify',
         report_markdown: '# Report',
+        visibility: 'private',
       }),
     );
     expect(stdout.chunks.join('')).toContain('https://wukong.today/r/r-1');
@@ -114,6 +115,15 @@ describe('handleReportUpload', () => {
     await handleReportUpload(deps, { path: '/tmp/scan.md', type: 'verify' });
 
     expect(upload).toHaveBeenCalledWith(expect.objectContaining({ type: 'verify' }));
+  });
+
+  it('uploads publicly only when explicitly requested', async () => {
+    const upload = vi.fn().mockResolvedValue({ ok: true, id: 'r-public', shareUrl: 'https://wukong.today/r/r-public' });
+    const deps = createDeps({ upload });
+
+    await handleReportUpload(deps, { path: '/tmp/proof.md', public: true });
+
+    expect(upload).toHaveBeenCalledWith(expect.objectContaining({ visibility: 'public' }));
   });
 
   it('returns 1 and prints the reason when the upload fails', async () => {

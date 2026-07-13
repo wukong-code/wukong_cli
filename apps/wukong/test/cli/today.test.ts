@@ -47,6 +47,7 @@ function makeDeps(overrides: Partial<TodayDeps> = {}): TodayDeps & { readonly st
     readFocus: vi.fn().mockReturnValue(null),
     writeFocus: vi.fn(),
     clearFocus: vi.fn(),
+    loadHostedUsage: vi.fn().mockResolvedValue(null),
     stdoutWriter,
     stderrWriter,
     ...overrides,
@@ -86,7 +87,34 @@ describe('handleToday', () => {
 
     const text = deps.stdoutWriter.chunks.join('');
     const parsed = JSON.parse(text);
-    expect(parsed).toMatchObject({ date: '2026-07-08', focus: null });
+    expect(parsed).toMatchObject({ date: '2026-07-08', focus: null, hosted: null });
+  });
+
+  it('shows hosted report usage and the dashboard link', async () => {
+    const deps = makeDeps({
+      loadHostedUsage: vi.fn().mockResolvedValue({
+        tier: 'founder',
+        used: 7,
+        limit: 100,
+        dashboardUrl: 'https://wukong.today/dashboard',
+      }),
+    });
+
+    await handleToday(deps, {});
+
+    const output = deps.stdoutWriter.chunks.join('');
+    expect(output).toContain('Hosted reports: 7 / 100 (founder)');
+    expect(output).toContain('Dashboard: https://wukong.today/dashboard');
+  });
+
+  it('keeps the local briefing usable when hosted usage fails', async () => {
+    const deps = makeDeps({
+      loadHostedUsage: vi.fn().mockRejectedValue(new Error('offline')),
+    });
+
+    await expect(handleToday(deps, {})).resolves.toBe(0);
+    expect(deps.stdoutWriter.chunks.join('')).toContain('Wukong Today');
+    expect(deps.stderrWriter.chunks).toEqual([]);
   });
 
   it('uses a custom workspace directory', async () => {

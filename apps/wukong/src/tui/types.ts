@@ -16,12 +16,20 @@ import type { VerifySummary, ProofSummary } from './utils/chrome-state';
 export type UIMode = 'idle' | 'active' | 'blocked';
 
 export type BannerDisplay = 'always' | 'once' | 'cooldown';
+export type BannerLevel = 'info' | 'warning' | 'critical';
+
+export interface BannerAction {
+  label: string;
+  url: string;
+}
 
 export interface BannerState {
   key: string;
+  level: BannerLevel;
   tag: string | null;
   mainText: string;
   subText: string | null;
+  action: BannerAction | null;
   display: BannerDisplay;
   ttlHours?: number;
 }

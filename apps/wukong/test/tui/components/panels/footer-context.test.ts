@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import chalk from 'chalk';
+import type { GoalSnapshot } from '@wukong/wukong-sdk';
 
 import { FooterComponent, formatFooterGitBadge, buildWeightedTips } from '#/tui/components/chrome/footer';
+import { GutterContainer } from '#/tui/components/chrome/gutter-container';
 import { darkColors } from '#/tui/theme/colors';
 import type { AppState } from '#/tui/types';
 import { ChromeStateAggregator } from '#/tui/utils/chrome-state';
@@ -112,7 +114,7 @@ describe('FooterComponent — context NaN resilience', () => {
     expect(strip(off.render(120).join('\n'))).not.toContain('thinking');
   });
 
-  it('renders transient hints on the mode line', () => {
+  it('renders transient hints as the highest-priority footer line', () => {
     const footer = new FooterComponent(baseState(), makeChromeState());
 
     footer.setTransientHint('Press Ctrl-C again to exit');
@@ -122,6 +124,48 @@ describe('FooterComponent — context NaN resilience', () => {
       .find((line) => strip(line).includes('Press Ctrl-C again to exit'));
     expect(hintLine).toBeDefined();
     expect(strip(hintLine!)).not.toContain('context: 0.0%');
+  });
+
+  it('merges non-default modes into the environment line', () => {
+    const footer = new FooterComponent(
+      baseState({ permissionMode: 'yolo', planMode: true, swarmMode: true }),
+      makeChromeState(),
+    );
+
+    const lines = footer.render(160).map(strip);
+    expect(lines).toHaveLength(1);
+    expect(lines[0]).toContain('[yolo]');
+    expect(lines[0]).toContain('[plan]');
+    expect(lines[0]).toContain('[swarm]');
+    expect(lines[0]).toContain('context: 0.0%');
+  });
+
+  it('uses one shared left edge for every footer row', () => {
+    const chromeState = makeChromeState();
+    chromeState.setGoal({
+      goalId: 'g1',
+      objective: 'Align the TUI',
+      status: 'active',
+      iteration: 1,
+      turnsUsed: 1,
+      tokensUsed: 0,
+      wallClockMs: 0,
+      budget: {
+        turnBudget: null,
+        tokenBudget: null,
+        wallClockBudgetMs: null,
+      },
+    } as GoalSnapshot);
+    const footer = new FooterComponent(baseState(), chromeState);
+    const rawLines = footer.render(160).map(strip);
+
+    expect(rawLines).toHaveLength(2);
+    expect(rawLines.every((line) => !line.startsWith(' '))).toBe(true);
+
+    const aligned = new GutterContainer(1, 1);
+    aligned.addChild(footer);
+    const wrappedLines = aligned.render(160).map(strip);
+    expect(wrappedLines.every((line) => line.startsWith(' ') && !line.startsWith('  '))).toBe(true);
   });
 
   it('highlights the pull request badge separately from git status text', () => {

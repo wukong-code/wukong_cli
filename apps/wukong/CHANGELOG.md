@@ -1,5 +1,15 @@
 # @wukong.today/code
 
+## 0.0.11
+
+### Patch Changes
+
+- Add non-blocking TUI announcements with version targeting and safe action links.
+
+- Add explicit public hosted-report sharing and show hosted usage in `wukong today`. Pass `--upload --public` to create a share link.
+
+- Align the TUI welcome, loop status, proof actions, and footer across terminal widths.
+
 ## 0.0.10
 
 ### Patch Changes

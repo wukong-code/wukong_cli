@@ -2,8 +2,10 @@
  * Footer/status bar — multi-line status display at the bottom of the TUI.
  *
  * Layout:
- *   Line 1: [yolo] [plan] <model> <cwd>  <git-badge>  <shortcut hints>
- *   Line 2: context: XX.X% (tokens/max)
+ *   Idle:   Today + contextual tip / modes + model + cwd + git + context
+ *   Active: deterministic gate evidence / modes + model + cwd + git + context
+ * The loop phase rail above the editor owns objective, iteration, phase, and
+ * blocked recovery copy so the footer does not repeat them.
  */
 
 import type { Component } from '@earendil-works/pi-tui';
@@ -14,7 +16,7 @@ import { ALL_TIPS, type ToolbarTip } from '#/tui/constant/tips';
 import { isRainbowDancing, renderDanceFooterModel } from '#/tui/easter-eggs/dance';
 import { currentTheme } from '#/tui/theme';
 import type { ColorPalette } from '#/tui/theme/colors';
-import type { AppState, UIMode } from '#/tui/types';
+import type { AppState } from '#/tui/types';
 import type { ChromeStateAggregator } from '#/tui/utils/chrome-state';
 import { formatTodayCompact } from '#/tui/utils/today-format';
 import {
@@ -27,7 +29,6 @@ import {
 import { safeUsageRatio } from '#/utils/usage/usage-format';
 
 const MAX_CWD_SEGMENTS = 3;
-const GOAL_TIMER_INTERVAL_MS = 1_000;
 
 // Toolbar tips — rotates every 10s. Most tips are short and pair up (two
 // joined by " | ") when space allows; tips flagged `solo` are long or
@@ -89,56 +90,30 @@ function tipsForIndex(index: number): { primary: string; pair: string | null } {
   return { primary: current.text, pair: current.text + TIP_SEPARATOR + next.text };
 }
 
-function formatLoopTrack(goal: NonNullable<AppState['goal']>, uiMode: UIMode): string {
-  const parts: string[] = [];
-  if (uiMode === 'blocked') {
-    parts.push(`Goal ● blocked`);
-  } else {
-    parts.push(`Goal: ${goal.objective}`);
-  }
-  if (goal.stopCondition) {
-    parts.push(`until ${goal.stopCondition}`);
-  }
-  if (goal.maxIterations !== undefined) {
-    parts.push(`${goal.iteration}/${goal.maxIterations}`);
-  } else {
-    parts.push(`${goal.iteration}`);
-  }
-  return parts.join(' · ');
-}
-
-function formatVerifyStatus(summary: import('#/tui/utils/chrome-state').VerifySummary | null): string {
-  if (summary === null) return 'Verify —';
+function formatVerifyStatus(
+  summary: import('#/tui/utils/chrome-state').VerifySummary | null,
+  colors: ColorPalette,
+): string {
+  if (summary === null) return chalk.hex(colors.textMuted)('Verify —');
   const icon = summary.status === 'passed' ? '✓' : '✗';
   const detail = summary.detail ? ` ${summary.detail}` : '';
-  return `Verify ${icon}${detail}`;
+  const paint = chalk.hex(summary.status === 'passed' ? colors.success : colors.error);
+  return paint(`Verify ${icon}${detail}`);
 }
 
-function formatProofStatus(summary: import('#/tui/utils/chrome-state').ProofSummary | null): string {
-  if (summary === null) return 'Proof —';
+function formatProofStatus(
+  summary: import('#/tui/utils/chrome-state').ProofSummary | null,
+  colors: ColorPalette,
+): string {
+  if (summary === null) return chalk.hex(colors.textMuted)('Proof —');
   const status = summary.status.toUpperCase();
   const detail = summary.summary ? ` · ${summary.summary}` : '';
-  return `Proof ${status}${detail}`;
-}
-
-function formatNextSuggestion(chromeState: ChromeStateAggregator): string | null {
-  const state = chromeState.getState();
-  if (state.uiMode !== 'blocked') return null;
-  if (state.lastProof?.status === 'blocked') {
-    return 'Next: wukong proof';
-  }
-  if (state.lastVerify?.status === 'failed') {
-    return 'Next: inspect failures or steer';
-  }
-  if (state.todayBriefing?.next[0] !== undefined) {
-    return `Next: ${state.todayBriefing.next[0]}`;
-  }
-  return 'Next: /goal resume or /loop stop';
+  const paint = chalk.hex(summary.status === 'pass' ? colors.success : colors.error);
+  return paint(`Proof ${status}${detail}`);
 }
 
 function buildConclusionLines(
   chromeState: ChromeStateAggregator,
-  appState: AppState,
   colors: ColorPalette,
 ): { lines: string[]; useWarning: boolean } {
   const state = chromeState.getState();
@@ -154,25 +129,17 @@ function buildConclusionLines(
     return { lines: [], useWarning: false };
   }
 
-  const primary = chalk.hex(colors.primary);
-  const warning = chalk.hex(colors.warning);
-  const useWarning = uiMode === 'blocked';
-
-  const track1 = goal !== null ? formatLoopTrack(goal, uiMode) : '';
-  const next = formatNextSuggestion(chromeState);
-  const line1Parts: string[] = [];
-  if (track1) line1Parts.push(primary(track1));
-  if (next) line1Parts.push(useWarning ? warning(next) : primary(next));
-
-  const line2Parts: string[] = [];
-  const verifyText = formatVerifyStatus(lastVerify);
-  const proofText = formatProofStatus(lastProof);
-  line2Parts.push(useWarning ? warning(verifyText) : primary(verifyText));
-  line2Parts.push(useWarning ? warning(proofText) : primary(proofText));
+  const gate = goal?.stopCondition ?? 'self';
+  const gatePaint = chalk.hex(uiMode === 'blocked' ? colors.warning : colors.textDim);
+  const evidence = [
+    gatePaint(`Gate ${gate}`),
+    formatVerifyStatus(lastVerify, colors),
+    formatProofStatus(lastProof, colors),
+  ];
 
   return {
-    lines: [line1Parts.join(' · '), line2Parts.join(' · ')],
-    useWarning,
+    lines: [evidence.join(chalk.hex(colors.textMuted)('  ·  '))],
+    useWarning: uiMode === 'blocked',
   };
 }
 
@@ -233,9 +200,6 @@ export class FooterComponent implements Component {
   private gitCache: GitStatusCache;
   private gitCacheWorkDir: string;
   private transientHint: string | null = null;
-  private goalSnapshotKey: string | null = null;
-  private goalObservedAtMs = Date.now();
-  private goalTimer: ReturnType<typeof setInterval> | null = null;
   /**
    * Non-terminal background-task counts split by kind so the footer can
    * render two distinct badges. `bashTasks` covers `bash-*` BPM tasks
@@ -256,8 +220,6 @@ export class FooterComponent implements Component {
     this.onRefresh = onRefresh;
     this.gitCacheWorkDir = state.workDir;
     this.gitCache = createGitStatusCache(state.workDir, { onChange: this.onRefresh });
-    this.syncGoalClock(state.goal);
-    this.syncGoalTimer(state.goal);
   }
 
   setState(state: AppState): void {
@@ -265,8 +227,6 @@ export class FooterComponent implements Component {
       this.gitCacheWorkDir = state.workDir;
       this.gitCache = createGitStatusCache(state.workDir, { onChange: this.onRefresh });
     }
-    this.syncGoalClock(state.goal);
-    this.syncGoalTimer(state.goal);
     this.state = state;
   }
 
@@ -300,11 +260,7 @@ export class FooterComponent implements Component {
     const colors = currentTheme.palette;
     const state = this.state;
 
-    const { lines: conclusionLines, useWarning } = buildConclusionLines(
-      this.chromeState,
-      state,
-      colors,
-    );
+    const { lines: conclusionLines, useWarning } = buildConclusionLines(this.chromeState, colors);
 
     // Idle mode: append rotating tips to the today line when space allows.
     const chromeState = this.chromeState.getState();
@@ -329,8 +285,17 @@ export class FooterComponent implements Component {
       renderedConclusion.push(truncateToWidth(raw, width, useWarning ? '…' : '…'));
     }
 
-    // ── Env track (indented 2 spaces): model · cwd · git · context ──
+    // ── Env track: modes · model · cwd · git · context ──
     const envParts: string[] = [];
+
+    if (state.permissionMode === 'auto') {
+      envParts.push(chalk.hex(colors.warning).bold('[auto]'));
+    }
+    if (state.permissionMode === 'yolo') {
+      envParts.push(chalk.hex(colors.warning).bold('[yolo]'));
+    }
+    if (state.planMode) envParts.push(chalk.hex(colors.primary).bold('[plan]'));
+    if (state.swarmMode) envParts.push(chalk.hex(colors.accent).bold('[swarm]'));
 
     const model = modelDisplayName(state);
     if (model) {
@@ -374,77 +339,21 @@ export class FooterComponent implements Component {
     );
     envParts.push(chalk.hex(colors.text)(contextText));
 
-    const envCore = envParts.join('  ');
-    const envLine = envCore.length > 0 ? `  ${envCore}` : '';
-
-    // ── Mode line (only when a non-default mode is active) ──
-    const modes: string[] = [];
-    if (state.permissionMode === 'auto') modes.push(chalk.hex(colors.warning).bold('auto'));
-    if (state.permissionMode === 'yolo') modes.push(chalk.hex(colors.warning).bold('yolo'));
-    if (state.planMode) modes.push(chalk.hex(colors.primary).bold('plan'));
-    if (state.swarmMode) modes.push(chalk.hex(colors.accent).bold('swarm'));
-
-    // Transient hint replaces the mode line when present (e.g. "Press Ctrl+C again to exit").
-    let modeLine = '';
-    if (this.transientHint) {
-      modeLine = chalk.hex(colors.warning).bold(
-        truncateToWidth(this.transientHint, Math.max(0, width - 2), '…'),
-      );
-    } else if (modes.length > 0) {
-      modeLine = `  ${modes.join(' ')}`;
-    }
+    const envLine = envParts.join('  ');
 
     const lines: string[] = [];
+    if (this.transientHint) {
+      lines.push(
+        chalk.hex(colors.warning).bold(
+          truncateToWidth(this.transientHint, Math.max(0, width), '…'),
+        ),
+      );
+    }
     for (const conclusion of renderedConclusion) {
       if (conclusion.length > 0) lines.push(conclusion);
     }
     if (envLine.length > 0) lines.push(truncateToWidth(envLine, width));
-    if (modeLine.length > 0) lines.push(truncateToWidth(modeLine, width));
 
     return lines.length > 0 ? lines : [''.padEnd(width, ' ')];
   }
-
-  private syncGoalClock(goal: AppState['goal']): void {
-    const key = goalSnapshotKey(goal);
-    if (key === this.goalSnapshotKey) return;
-    this.goalSnapshotKey = key;
-    this.goalObservedAtMs = Date.now();
-  }
-
-  private syncGoalTimer(goal: AppState['goal']): void {
-    if (goal?.status === 'active') {
-      if (this.goalTimer !== null) return;
-      this.goalTimer = setInterval(() => {
-        this.onRefresh();
-      }, GOAL_TIMER_INTERVAL_MS);
-      this.goalTimer.unref?.();
-      return;
-    }
-
-    if (this.goalTimer !== null) {
-      clearInterval(this.goalTimer);
-      this.goalTimer = null;
-    }
-  }
-
-  private goalWallClockMs(goal: AppState['goal']): number | undefined {
-    if (goal === null || goal === undefined) return undefined;
-    if (goal.status !== 'active') return goal.wallClockMs;
-    return goal.wallClockMs + Math.max(0, Date.now() - this.goalObservedAtMs);
-  }
-}
-
-function goalSnapshotKey(goal: AppState['goal']): string | null {
-  if (goal === null || goal === undefined) return null;
-  return [
-    goal.goalId,
-    goal.status,
-    goal.terminalReason ?? '',
-    String(goal.turnsUsed),
-    String(goal.tokensUsed),
-    String(goal.wallClockMs),
-    String(goal.budget.tokenBudget),
-    String(goal.budget.turnBudget),
-    String(goal.budget.wallClockBudgetMs),
-  ].join('\u0000');
 }

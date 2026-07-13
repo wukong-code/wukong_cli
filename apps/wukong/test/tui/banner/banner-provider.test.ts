@@ -1,10 +1,12 @@
-import { describe, expect, it } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 
 import {
+  BannerProvider,
   selectBannerState,
   selectDisplayableBanner,
   shouldDisplayBanner,
 } from '#/tui/banner/banner-provider';
+import { WUKONG_CODE_ANNOUNCEMENTS_URL } from '#/constant/app';
 import type { BannerState } from '#/tui/types';
 
 describe('selectBannerState', () => {
@@ -352,6 +354,117 @@ describe('selectBannerState', () => {
       ttlHours: 168,
     });
   });
+
+  it('reads the versioned announcements envelope', () => {
+    const result = selectBannerState(
+      {
+        schema_version: 1,
+        announcements: [
+          {
+            id: 'release-0.0.11',
+            enabled: true,
+            level: 'warning',
+            title: '升级提醒',
+            message: 'Wukong Code 0.0.11 已发布',
+            details: '本次更新修复了终端显示问题。',
+            action: { label: '查看更新', url: 'https://wukong.today/changelog' },
+            display: 'once',
+            min_client_version: '0.0.1',
+            max_client_version: '0.14.0',
+          },
+        ],
+      },
+      '0.14.0',
+      now,
+      () => 0,
+    );
+
+    expect(result).toMatchObject({
+      key: 'release-0.0.11',
+      level: 'warning',
+      tag: '升级提醒',
+      mainText: 'Wukong Code 0.0.11 已发布',
+      subText: '本次更新修复了终端显示问题。',
+      action: { label: '查看更新', url: 'https://wukong.today/changelog' },
+      display: 'once',
+    });
+  });
+
+  it('selects the first eligible announcement in file order', () => {
+    const result = selectBannerState(
+      {
+        schema_version: 1,
+        announcements: [
+          {
+            id: 'future',
+            enabled: true,
+            level: 'info',
+            title: 'Future',
+            message: 'Future client only',
+            display: 'always',
+            min_client_version: '1.0.0',
+          },
+          {
+            id: 'current',
+            enabled: true,
+            level: 'info',
+            title: 'Current',
+            message: 'Visible now',
+            display: 'always',
+          },
+        ],
+      },
+      '0.14.0',
+      now,
+      () => 0.9,
+    );
+    expect(result).toMatchObject({ key: 'current', mainText: 'Visible now' });
+  });
+
+  it('rejects malformed announcement policy fields and timestamps', () => {
+    for (const announcement of [
+      { id: 'bad-level', enabled: true, level: 'urgent', message: 'Bad', display: 'always' },
+      { id: 'bad-display', enabled: true, level: 'info', message: 'Bad', display: 'daily' },
+      {
+        id: 'bad-time',
+        enabled: true,
+        level: 'info',
+        message: 'Bad',
+        display: 'always',
+        start_time: 'not-a-date',
+      },
+    ]) {
+      expect(selectBannerState(
+        { schema_version: 1, announcements: [announcement] },
+        '0.14.0',
+        now,
+        () => 0,
+      )).toBeNull();
+    }
+  });
+
+  it('sanitizes terminal controls and drops unapproved action hosts', () => {
+    const result = selectBannerState(
+      {
+        schema_version: 1,
+        announcements: [{
+          id: 'safe',
+          enabled: true,
+          level: 'critical',
+          title: '\u001B[31m安全通知',
+          message: '\u001B]8;;https://evil.example\u0007请升级',
+          action: { label: '立即查看', url: 'https://evil.example/phishing' },
+          display: 'always',
+        }],
+      },
+      '0.14.0',
+      now,
+      () => 0,
+    );
+    expect(result?.tag).not.toContain('\u001B');
+    expect(result?.mainText).not.toContain('\u001B');
+    expect(result?.action).toBeNull();
+  });
 });
 
 describe('shouldDisplayBanner', () => {
@@ -359,9 +472,11 @@ describe('shouldDisplayBanner', () => {
 
   const banner: BannerState = {
     key: 'always',
+    level: 'info',
     tag: null,
     mainText: 'Always',
     subText: null,
+    action: null,
     display: 'always',
   };
 
@@ -601,5 +716,38 @@ describe('selectDisplayableBanner', () => {
     });
 
     expect(result).toMatchObject({ key: 'fallback-always', display: 'always' });
+  });
+});
+
+describe('BannerProvider', () => {
+  it('fetches the public announcements endpoint and parses its envelope', async () => {
+    const fetchImpl = vi.fn(async () => new Response(JSON.stringify({
+      schema_version: 1,
+      announcements: [{
+        id: 'remote-announcement',
+        enabled: true,
+        level: 'info',
+        title: 'NOTICE',
+        message: 'Remote message',
+        display: 'always',
+      }],
+    }), { status: 200 })) as unknown as typeof fetch;
+
+    const result = await new BannerProvider('0.14.0').load(fetchImpl, {
+      now: new Date('2026-06-16T12:00:00.000Z'),
+    });
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      WUKONG_CODE_ANNOUNCEMENTS_URL,
+      expect.objectContaining({ signal: expect.any(AbortSignal) }),
+    );
+    expect(result).toMatchObject({ key: 'remote-announcement', mainText: 'Remote message' });
+  });
+
+  it('fails open when the announcement request fails', async () => {
+    const fetchImpl = vi.fn(async () => {
+      throw new Error('offline');
+    }) as unknown as typeof fetch;
+    await expect(new BannerProvider('0.14.0').load(fetchImpl)).resolves.toBeNull();
   });
 });

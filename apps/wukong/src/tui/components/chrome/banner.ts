@@ -15,6 +15,11 @@ export class BannerComponent implements Component {
   render(width: number): string[] {
     const main = (s: string): string => currentTheme.boldFg('textStrong', s);
     const dim = (s: string): string => currentTheme.fg('textDim', s);
+    const accentToken = this.state.level === 'critical'
+      ? 'error'
+      : this.state.level === 'warning'
+        ? 'warning'
+        : 'primary';
 
     // Render nothing but the trailing blank if the terminal cannot hold a
     // single visible column.
@@ -26,7 +31,7 @@ export class BannerComponent implements Component {
     // Do not add a colon/tag suffix here; the caller-provided tag includes its
     // own punctuation/separator.
     const tagLabel = tagText.length > 0 ? `${PREFIX_STAR} ${tagText}` : '';
-    const tagStyled = tagLabel.length > 0 ? currentTheme.boldFg('primary', tagLabel) : '';
+    const tagStyled = tagLabel.length > 0 ? currentTheme.boldFg(accentToken, tagLabel) : '';
     const tagDisplay = tagStyled.length > 0 ? tagStyled + PADDING : '';
     const tagWidth = visibleWidth(tagDisplay);
     const showTag = tagWidth > 0 && tagWidth < width;
@@ -45,6 +50,9 @@ export class BannerComponent implements Component {
 
     const mainSegments = this.state.mainText.split('\n');
     const subSegments = this.state.subText ? this.state.subText.split('\n') : [];
+    if (this.state.action !== null) {
+      subSegments.push(`${this.state.action.label}: ${this.state.action.url}`);
+    }
 
     const result: string[] = [];
     for (let i = 0; i < mainSegments.length; i++) {

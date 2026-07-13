@@ -828,7 +828,7 @@ export class WukongTUI {
     ui.addChild(this.state.todoPanelContainer);
     ui.addChild(this.state.queueContainer);
     ui.addChild(this.state.btwPanelContainer);
-    ui.addChild(this.state.loopPhase);
+    ui.addChild(this.state.loopPhaseContainer);
     ui.addChild(this.state.editorUpperSeparator);
     ui.addChild(this.state.editorContainer);
     ui.addChild(this.state.editorLowerSeparator);

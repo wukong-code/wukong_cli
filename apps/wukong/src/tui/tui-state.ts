@@ -38,6 +38,7 @@ export interface TUIState {
   editorContainer: Container;
   editorUpperSeparator: SeparatorLineComponent;
   editorLowerSeparator: SeparatorLineComponent;
+  loopPhaseContainer: Container;
   loopPhase: LoopPhaseComponent;
   footer: FooterComponent;
   editor: CustomEditor;
@@ -76,11 +77,13 @@ export function createTUIState(options: WukongTUIOptions): TUIState {
   const editor = new CustomEditor(ui);
   const editorUpperSeparator = new SeparatorLineComponent();
   const editorLowerSeparator = new SeparatorLineComponent();
+  const loopPhaseContainer = new GutterContainer(CHROME_GUTTER, CHROME_GUTTER);
   const loopPhase = new LoopPhaseComponent({
     phase: 'waiting',
     iteration: 0,
     elapsedMs: 0,
   });
+  loopPhaseContainer.addChild(loopPhase);
   const chromeState = new ChromeStateAggregator({ cwd: initialAppState.workDir });
   const footer = new FooterComponent({ ...initialAppState }, chromeState, () => {
     ui.requestRender();
@@ -98,6 +101,7 @@ export function createTUIState(options: WukongTUIOptions): TUIState {
     editorContainer,
     editorUpperSeparator,
     editorLowerSeparator,
+    loopPhaseContainer,
     loopPhase,
     editor,
     footer,

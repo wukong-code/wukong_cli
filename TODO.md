@@ -4,7 +4,16 @@
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/技术方案，再同步本文件。
 
-## 📋 当前重点: Milestone 0.5 — Loop 控制层 + Merge Proof
+## 📋 当前重点: 0.0.11 — Hosted Evidence UX 与发布闭环
+
+- [x] TUI welcome/footer/loop/proof 文案与终端宽度对齐，窄终端安全降级（2026-07-13）
+- [x] Proof 完成后提示私有 history 与显式公开分享命令；`--public` 必须与 `--upload` 同用（2026-07-13）
+- [x] `wukong today` 登录态显示 hosted report 用量和 Dashboard 链接；网络失败不阻塞本地简报（2026-07-13）
+- [x] TUI 公告协议、版本/时间/频控过滤、安全链接白名单和非阻塞拉取（2026-07-13）
+- [ ] 生产验收：公告端点 200，0.0.10→0.0.11 更新提示，真实账号 proof upload/private history/public share/dashboard 全链路
+- [ ] 发布 `0.0.11` 并同步 `wukong-code` CHANGELOG、文档和安装 manifest
+
+## ✅ Milestone 0.5 — Loop 控制层 + Merge Proof
 
 实施顺序固定：`/proof` → `/judge` → `/goal` verification gate → `/loop`。不引入新引擎：proof/judge 复用 `@wukong/verification`，loop 执行核复用 `/goal`，`--every` 节流复用 agent-core cron scheduler。
 
@@ -44,7 +53,7 @@
 ### 文案同步（P0.5 收尾）
 
 - [x] README / 用户指南补充新命令（只写已实现的）
-- [ ] 官网 hero 切换 loop control plane / proof-layer 叙事（协同 `wukong_web/TODO.md` P0）
+- [x] 官网 hero 切换 loop control plane / proof-layer 叙事（协同 `wukong_web/TODO.md` P0）（2026-07-09）
 
 ## 📋 P1: `wukong today` / `/today`（Daily Proof Briefing）
 
@@ -62,7 +71,7 @@
 - [x] `~/.wukong/today/focus.json` 读写；`wukong today "..."` 设 focus，`--clear-focus` 清除
 - [x] `apps/wukong/src/cli/sub/today.ts` + TUI `/today`（无参=简报，参数=设 focus，`/today clear`）
 - [x] 人类可读输出 + `--json`；Next 1–2 条由规则映射（如 BLOCKED proof → 建议 `wukong proof`）
-- [ ] 登录态可选：hosted report 今日计数 + `https://wukong.today/dashboard` 链接（失败不阻塞本地简报）
+- [x] 登录态可选：hosted report 当月计数 + `https://wukong.today/dashboard` 链接（失败不阻塞本地简报）（2026-07-13）
 - [x] 测试：离线简报、设/清 focus、JSON schema、不触发 verify 执行
 
 ### 不做
@@ -98,17 +107,18 @@
 - [x] `/today` 与启动简报共用渲染器
 - [x] MINI_ART 保留为 compact 单行（见 `welcome-art.ts`）
 
-### Phase 3 — Polish（可选）
+### Phase 3 — Polish
 
 - [ ] `welcomeStyle` 配置：auto | compact | dashboard
 - [ ] 像素 mascot 帧按 loop phase 切换（`mascot.ts`）
+- [x] Dashboard 模式布局、状态文案、窄终端截断与 footer 列对齐（2026-07-13）
 
 ## 📋 下一批: Hosted Reports 前置（对应 ROADMAP Milestone 1）
 
-- [ ] `verify` / `scan` 增加登录态 report upload（opt-in + 清晰 redaction preview；上传失败不影响本地报告）
-- [ ] redacted report metadata 上传 schema（默认不上传完整源码 diff）
-- [ ] JSON output 增加 Web report API 需要的字段
-- [ ] redaction 测试: secret-like string、env 文件、token、private key、超大 diff
+- [x] `verify` / `scan` / `proof` 增加登录态 report upload（opt-in；上传失败不影响本地报告）
+- [x] redacted report metadata 上传 schema（默认不上传完整源码 diff）
+- [x] 本地 Markdown report 上传命令和 Web report API 字段
+- [x] redaction 测试: secret-like string、env 文件、token、private key、超大 diff
 
 ## ⏸ 暂缓（先不做，防止提前开工）
 
@@ -133,4 +143,4 @@
 
 ---
 
-**最后更新**: 2026-07-09（TUI loop chrome review 修复）
+**最后更新**: 2026-07-13（0.0.11 Hosted Evidence UX 与发布闭环）

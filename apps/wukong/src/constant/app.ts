@@ -62,6 +62,8 @@ export const WUKONG_CODE_CDN_LATEST_URL = `${WUKONG_CODE_CDN_BASE}/latest`;
 // stays unchanged forever — already-shipped clients hard-fail on non-semver
 // bodies, and the CDN install scripts read it for fresh installs.
 export const WUKONG_CODE_CDN_LATEST_JSON_URL = `${WUKONG_CODE_CDN_BASE}/latest.json`;
-export const WUKONG_CODE_TIPS_BANNER_URL = 'https://cdn.wukong.today/wukong-tips/tips.json';
+export const WUKONG_CODE_ANNOUNCEMENTS_URL = `${WUKONG_CODE_CDN_BASE}/cli/announcements.json`;
+// Keep the old name for internal compatibility while shipped callers migrate.
+export const WUKONG_CODE_TIPS_BANNER_URL = WUKONG_CODE_ANNOUNCEMENTS_URL;
 export const WUKONG_CODE_PLUGIN_MARKETPLACE_URL = `${WUKONG_CODE_CDN_BASE}/plugins/marketplace.json`;
 export const WUKONG_CODE_PLUGIN_MARKETPLACE_URL_ENV = 'WUKONG_CODE_PLUGIN_MARKETPLACE_URL';

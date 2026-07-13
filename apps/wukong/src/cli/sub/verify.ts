@@ -23,6 +23,7 @@ export interface VerifyCliOptions {
   readonly json?: boolean;
   readonly strict?: boolean;
   readonly upload?: boolean;
+  readonly public?: boolean;
 }
 
 export interface VerifyDeps {
@@ -34,6 +35,11 @@ export interface VerifyDeps {
 }
 
 export async function handleVerify(deps: VerifyDeps, options: VerifyCliOptions): Promise<number> {
+  if (options.public === true && options.upload !== true) {
+    deps.stderr.write('wukong verify: --public requires --upload.\n');
+    return 2;
+  }
+
   try {
     const result = await deps.runVerification({
       cwd: options.cwd ?? deps.cwd(),
@@ -50,7 +56,10 @@ export async function handleVerify(deps: VerifyDeps, options: VerifyCliOptions):
 
     if (options.upload === true) {
       const markdown = result.report ?? renderVerificationReport(result);
-      const outcome = await uploadReport({ kind: 'verify', result, markdown });
+      const outcome = await uploadReport(
+        { kind: 'verify', result, markdown },
+        { visibility: options.public === true ? 'public' : 'private' },
+      );
       if (outcome.ok) {
         deps.stdout.write(`\n${outcome.shareUrl ? `Uploaded: ${outcome.shareUrl}` : `Uploaded privately: ${outcome.id}`}\n`);
       } else {
@@ -77,6 +86,7 @@ export function registerVerifyCommand(parent: Command, deps?: Partial<VerifyDeps
     .option('--json', 'Print the structured verification result as JSON.')
     .option('--strict', 'Treat any risk as a failed verification.')
     .option('--upload', 'Upload the redacted report to wukong.today (requires login).')
+    .option('--public', 'Create a public share link when used with --upload.')
     .action(async (raw: RawVerifyOptions) => {
       const resolved = resolveDeps(deps);
       const code = await handleVerify(
@@ -102,6 +112,7 @@ export function registerVerifyCommand(parent: Command, deps?: Partial<VerifyDeps
           json: raw.json === true,
           strict: raw.strict === true,
           upload: raw.upload === true,
+          public: raw.public === true,
         },
       );
       if (code !== 0) process.exitCode = code;
@@ -116,6 +127,7 @@ interface RawVerifyOptions {
   readonly json?: boolean;
   readonly strict?: boolean;
   readonly upload?: boolean;
+  readonly public?: boolean;
 }
 
 function resolveDeps(deps: Partial<VerifyDeps> | undefined): VerifyDeps {

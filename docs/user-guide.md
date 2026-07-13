@@ -1,7 +1,7 @@
 # Wukong Code 用户指南
 
 > 适用范围: 当前 `wukong_cli` 新 Kimi-code base
-> 更新时间: 2026-07-07
+> 更新时间: 2026-07-13
 > 定位: AI 负责写代码，Wukong 负责判断能不能合并 —— AI Coding Loop 的控制层与验证层。
 > 原则: 本文只写当前可执行的能力。`verify`、`scan`、`guard`、`proof`、`judge`、`today`、Hosted Report 上传预览、TUI slash commands（`/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop`、`/today`）和 `wukong_verify` agent tool 已实现；top-level `wukong loop` 执行器、完整订阅管理、团队规则和 PR gate 仍未完成。
 
@@ -116,6 +116,16 @@ pnpm -C apps/wukong run dev:cli-only -- guard --status
 | `wukong migrate` | 已实现 | 迁移 legacy wukong-cli 数据 |
 | `wukong upgrade` / `wukong update` | 已实现 | 升级 Wukong |
 
+## 更新与 TUI 公告
+
+- CLI 启动时会检查更新；默认允许受支持的包管理器在后台自动安装。可在 `/settings` → `Upgrade` 中关闭，或设置 `~/.wukong/tui.toml` 的 `[upgrade].auto_install = false`。
+- `wukong upgrade` / `wukong update` 会立即主动检查最新版本；Homebrew 等不支持自动安装的来源会显示手动命令。
+- 主 TUI 启动后会异步拉取一次公告，3 秒超时。失败不会阻塞 CLI，每次最多展示一条。
+- 公告支持客户端版本、时间范围、`once` / `cooldown` / `always` 频控和安全链接白名单。
+- `0.0.10` 及更早版本不能读取新公告地址，需要先通过更新通道升级。
+
+完整实现和发布边界见 [CLI 更新与公告契约](operations/updates-and-announcements.md)。
+
 ## 商业化命令状态
 
 这些命令是商业化重构目标。当前 P0 已完成本地命令行闭环：
@@ -131,7 +141,17 @@ pnpm -C apps/wukong run dev:cli-only -- guard --status
 | `wukong_verify` agent tool | 让 agent 在完成前调用验证 | 已实现，作为 builtin tool 接入 agent-core |
 | `/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop` | TUI 内验证、扫描、guard 状态、查看报告、goal/loop 驱动 | 已实现 |
 | `wukong sync` | 云同步 | 等待新 base API 与本地数据模型对齐 |
-| `wukong today` / `/today` | Daily Proof Briefing：今日 verify/scan/proof/guard 统计 + focus（位置参数设置）；与 `wukong.today` 对齐 | 待实现（P1），见 [today 设计](design/today.md) |
+| `wukong today` / `/today` | Daily Proof Briefing：本地统计 + focus；登录时附 hosted report 当月用量和 Dashboard 链接，网络失败不阻塞 | 已实现，见 [today 设计](design/today.md) |
+
+## Hosted Report：默认私有，公开需显式确认
+
+```bash
+wukong login
+wukong proof --upload           # 私有，进入 Dashboard history
+wukong proof --upload --public  # 公开，返回可分享链接
+```
+
+`verify`、`scan` 和 `wukong report upload <path>` 同样支持 `--public`。单独使用 `--public` 会报错；本地报告始终可离线生成，上传失败不会改变验证退出状态。
 
 详见 [商业化重构技术实现方案](tech/commercial-refactor-implementation.md)。
 
