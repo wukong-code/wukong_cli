@@ -4,11 +4,15 @@
 
 ### Patch Changes
 
-- Add non-blocking TUI announcements with version targeting and safe action links.
+- Add non-blocking TUI announcements with client-version and UTC-window targeting, display frequency, terminal sanitization, and safe action links. Announcement fetch failures never block startup.
 
-- Add explicit public hosted-report sharing and show hosted usage in `wukong today`. Pass `--upload --public` to create a share link.
+- Add explicit public hosted-report sharing across verify, scan, proof, and local report upload. Uploads stay private by default; pass `--upload --public` to create a reviewer link.
 
-- Align the TUI welcome, loop status, proof actions, and footer across terminal widths.
+- Show hosted plan, usage, quota, and the Dashboard destination in logged-in `wukong today` output while keeping the local briefing fail-open.
+
+- Add hosted-history and public-share next actions after proof completion.
+
+- Align the TUI welcome, loop status, proof tracks, and footer across terminal widths, including narrow-terminal truncation.
 
 ## 0.0.10
 
