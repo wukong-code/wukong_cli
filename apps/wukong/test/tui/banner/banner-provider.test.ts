@@ -390,6 +390,69 @@ describe('selectBannerState', () => {
     });
   });
 
+  it('matches the hosted proof onboarding announcement only once on 0.0.11', () => {
+    const json = {
+      schema_version: 1,
+      announcements: [{
+        id: 'hosted-proof-sharing-0.0.11',
+        enabled: true,
+        level: 'info',
+        title: 'HOSTED PROOF',
+        message: 'Keep proof history private, or create a reviewer-ready public link.',
+        details: 'Run wukong proof --upload for private history. Add --public only when you want to share.',
+        action: {
+          label: 'View v0.0.11 release',
+          url: 'https://github.com/mutnpc/wukong-code/releases/tag/v0.0.11',
+        },
+        display: 'once',
+        start_time: '2026-07-13T07:17:12Z',
+        end_time: '2026-08-31T23:59:59Z',
+        min_client_version: '0.0.11',
+        max_client_version: '0.0.11',
+      }],
+    };
+    const activeAt = new Date('2026-07-13T08:00:00Z');
+    const emptyState = { version: 1 as const, shown: {} };
+    const current = selectDisplayableBanner({
+      json,
+      clientVersion: '0.0.11',
+      now: activeAt,
+      random: () => 0,
+      state: emptyState,
+    });
+
+    expect(current).toMatchObject({
+      key: 'hosted-proof-sharing-0.0.11',
+      mainText: 'Keep proof history private, or create a reviewer-ready public link.',
+      display: 'once',
+      action: {
+        label: 'View v0.0.11 release',
+        url: 'https://github.com/mutnpc/wukong-code/releases/tag/v0.0.11',
+      },
+    });
+    for (const clientVersion of ['0.0.10', '0.0.12']) {
+      expect(selectDisplayableBanner({
+        json,
+        clientVersion,
+        now: activeAt,
+        random: () => 0,
+        state: emptyState,
+      })).toBeNull();
+    }
+    expect(selectDisplayableBanner({
+      json,
+      clientVersion: '0.0.11',
+      now: activeAt,
+      random: () => 0,
+      state: {
+        version: 1,
+        shown: {
+          'hosted-proof-sharing-0.0.11': { lastShownAt: activeAt.toISOString() },
+        },
+      },
+    })).toBeNull();
+  });
+
   it('selects the first eligible announcement in file order', () => {
     const result = selectBannerState(
       {
