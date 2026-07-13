@@ -73,8 +73,7 @@ const running = computed(() => client.activity.value !== 'idle');
 
 // Auth readiness gates the main app. Once the first load finishes and auth is
 // still missing, show a full-page login entry instead of an in-app banner.
-const authLogoRef = ref<SVGSVGElement | null>(null);
-const { showAuthGate, blinkAuthLogo } = useAuthGate({ client, authLogoRef });
+const { showAuthGate } = useAuthGate({ client });
 
 
 // Static page title (app name only). The session title and workspace name are
@@ -536,18 +535,7 @@ function openPr(url: string): void {
     <ServerAuthDialog v-if="showServerAuth" />
     <section v-if="showAuthGate" class="auth-page">
       <div class="auth-page-inner">
-        <svg ref="authLogoRef" class="auth-page-logo ch-logo" viewBox="0 0 32 22" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Wukong" @mousedown.prevent @click="blinkAuthLogo">
-          <defs>
-            <mask id="authWukongEyes" maskUnits="userSpaceOnUse">
-              <rect x="0" y="0" width="32" height="22" fill="#fff" />
-              <g class="ch-eyes" fill="#000">
-                <rect class="ch-eye" x="11.8" y="7" width="2.8" height="8" rx="1.4" />
-                <rect class="ch-eye" x="17.4" y="7" width="2.8" height="8" rx="1.4" />
-              </g>
-            </mask>
-          </defs>
-          <rect x="1" y="1" width="30" height="20" rx="6" fill="var(--logo)" mask="url(#authWukongEyes)" />
-        </svg>
+        <img class="auth-page-logo" src="/wukong-logo.svg" alt="Wukong" />
         <div class="auth-page-copy">
           <h1>{{ t('app.authPageTitle') }}</h1>
           <p>{{ t('app.authPageMessage') }}</p>
@@ -997,11 +985,12 @@ function openPr(url: string): void {
 }
 .auth-page-logo {
   width: 64px;
-  height: 44px;
+  height: 64px;
   flex: none;
-  cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
+  object-fit: contain;
+  image-rendering: pixelated;
   transition: transform 0.18s ease;
 }
 .auth-page-logo:hover {

@@ -398,24 +398,8 @@ onBeforeUnmount(() => {
   clearTimeout(deleteArmTimer);
 });
 
-// Logo easter-egg: clicking the Wukong mark plays one quick blink. It's a one-shot
-// animation — force a reflow so rapid clicks restart it, then drop the class so
-// the idle look/blink loop resumes.
-const logoRef = ref<SVGSVGElement | null>(null);
-let blinkTimer: ReturnType<typeof setTimeout> | undefined;
-
 // Temporarily hide the new-workspace button while we evaluate the entry point.
 const showNewWorkspaceButton = false;
-
-function blinkOnce(): void {
-  const el = logoRef.value;
-  if (!el) return;
-  el.classList.remove('blink-now');
-  void el.getBoundingClientRect();
-  el.classList.add('blink-now');
-  clearTimeout(blinkTimer);
-  blinkTimer = setTimeout(() => el.classList.remove('blink-now'), 300);
-}
 </script>
 
 <template>
@@ -425,18 +409,7 @@ function blinkOnce(): void {
       <!-- Header: logo + settings (no hard border — flows into workspace list) -->
       <div class="ch">
         <div class="ch-brand">
-          <svg ref="logoRef" class="ch-logo" :class="{ 'is-dev': isDev }" viewBox="0 0 32 22" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Wukong" @click="blinkOnce">
-            <defs>
-              <mask id="wukongEyes" maskUnits="userSpaceOnUse">
-                <rect x="0" y="0" width="32" height="22" fill="#fff" />
-                <g class="ch-eyes" fill="#000">
-                  <rect class="ch-eye" x="11.8" y="7" width="2.8" height="8" rx="1.4" />
-                  <rect class="ch-eye" x="17.4" y="7" width="2.8" height="8" rx="1.4" />
-                </g>
-              </mask>
-            </defs>
-            <rect x="1" y="1" width="30" height="20" rx="6" fill="var(--logo)" mask="url(#wukongEyes)" />
-          </svg>
+          <img class="ch-logo" :class="{ 'is-dev': isDev }" src="/wukong-logo.svg" alt="Wukong" />
           <span class="ch-name">Wukong<span v-if="isDev" class="ch-endpoint"> · {{ endpoint }}</span></span>
         </div>
         <button
@@ -675,22 +648,21 @@ function blinkOnce(): void {
   box-sizing: border-box;
 }
 .ch-logo {
-  height: 22px;
+  height: 32px;
   width: 32px;
   flex: none;
   display: block;
-  cursor: pointer;
   user-select: none;
+  object-fit: contain;
+  image-rendering: pixelated;
   transition: transform 0.18s ease;
 }
 .ch-logo:hover {
   transform: scale(1.08);
 }
-/* Dev-only: tint the mark yellow so a `pnpm dev:web` tab is obvious at a
-   glance. `--logo` is read by the mark's `fill`; overriding it on the svg
-   recolors just this instance. */
+/* Dev-only: keep a visible environment cue without recoloring the brand art. */
 .ch-logo.is-dev {
-  --logo: #f5b301;
+  filter: drop-shadow(0 0 3px #f5b301);
 }
 .ch-brand {
   display: flex;

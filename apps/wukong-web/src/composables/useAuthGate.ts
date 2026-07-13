@@ -2,24 +2,20 @@
 // Auth readiness gates the main app. Once the first load finishes and auth is
 // still missing, show a full-page login entry instead of an in-app banner.
 
-import { computed, onUnmounted, ref, watch, type Ref } from 'vue';
+import { computed, ref, watch } from 'vue';
 import type { useWukongWebClient } from './useWukongWebClient';
 
 type WukongWebClient = ReturnType<typeof useWukongWebClient>;
 
 export interface UseAuthGateOptions {
   client: WukongWebClient;
-  /** Template ref to the auth-page logo SVG; owned by the component so the
-      template `ref=` binding links, passed here so the blink handler can drive it. */
-  authLogoRef: Ref<SVGSVGElement | null>;
 }
 
-export function useAuthGate({ client, authLogoRef }: UseAuthGateOptions) {
+export function useAuthGate({ client }: UseAuthGateOptions) {
   const authReady = computed(() => client.authReady.value);
   const showAuthGate = computed(() => client.initialized.value && !authReady.value);
   const LOGIN_PATH = '/login';
   const authReturnPath = ref<string | null>(null);
-  let authLogoBlinkTimer: ReturnType<typeof setTimeout> | null = null;
 
   function currentPathWithSuffix(): string {
     if (typeof window === 'undefined') return '/';
@@ -46,22 +42,5 @@ export function useAuthGate({ client, authLogoRef }: UseAuthGateOptions) {
     }
   }, { immediate: true });
 
-  function blinkAuthLogo(): void {
-    const el = authLogoRef.value;
-    if (!el) return;
-    el.classList.remove('blink-now');
-    void el.getBoundingClientRect();
-    el.classList.add('blink-now');
-    if (authLogoBlinkTimer !== null) clearTimeout(authLogoBlinkTimer);
-    authLogoBlinkTimer = setTimeout(() => {
-      authLogoBlinkTimer = null;
-      el.classList.remove('blink-now');
-    }, 300);
-  }
-
-  onUnmounted(() => {
-    if (authLogoBlinkTimer !== null) clearTimeout(authLogoBlinkTimer);
-  });
-
-  return { showAuthGate, blinkAuthLogo };
+  return { showAuthGate };
 }

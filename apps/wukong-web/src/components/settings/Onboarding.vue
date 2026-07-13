@@ -40,18 +40,7 @@ function finish(): void {
         </svg>
       </button>
       <div class="ob-brand">
-        <svg class="ob-logo" viewBox="0 0 32 22" fill="none" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Wukong">
-          <defs>
-            <mask id="obWukongEyes" maskUnits="userSpaceOnUse">
-              <rect x="0" y="0" width="32" height="22" fill="#fff" />
-              <g class="ob-eyes" fill="#000">
-                <rect class="ob-eye" x="11.8" y="7" width="2.8" height="8" rx="1.4" />
-                <rect class="ob-eye" x="17.4" y="7" width="2.8" height="8" rx="1.4" />
-              </g>
-            </mask>
-          </defs>
-          <rect x="1" y="1" width="30" height="20" rx="6" fill="var(--blue)" mask="url(#obWukongEyes)" />
-        </svg>
+        <img class="ob-logo" src="/wukong-logo.svg" alt="Wukong" />
         <div>
           <div class="ob-title">{{ t('onboarding.title') }}</div>
           <div class="ob-sub">{{ t('onboarding.subtitle') }}</div>
@@ -138,7 +127,9 @@ function finish(): void {
 }
 .ob-brand { display: flex; align-items: center; gap: 12px; margin-bottom: 18px; }
 .ob-logo {
-  width: 52px; height: 36px; flex: none;
+  width: 52px; height: 52px; flex: none;
+  object-fit: contain;
+  image-rendering: pixelated;
 }
 .ob-title { color: var(--ink); font-size: var(--ui-font-size-xl); font-weight: 700; }
 .ob-sub { color: var(--muted); font-size: var(--ui-font-size); margin-top: 1px; }
@@ -195,30 +186,6 @@ function finish(): void {
   cursor: pointer;
 }
 .ob-close:hover { background: var(--soft); color: var(--ink); }
-
-/* Onboarding logo: faster eye animations than the sidebar (6s look, 4s blink). */
-.ob-eyes {
-  animation: ob-eye-look 6s ease-in-out infinite;
-}
-.ob-eye {
-  transform-box: fill-box;
-  transform-origin: center;
-  animation: ob-eye-blink 4s ease-in-out infinite;
-}
-@keyframes ob-eye-look {
-  0%, 42% { transform: translateX(0); }
-  47%, 53% { transform: translateX(2px); }
-  58%, 80% { transform: translateX(0); }
-  84%, 90% { transform: translateX(-2px); }
-  95%, 100% { transform: translateX(0); }
-}
-@keyframes ob-eye-blink {
-  0%, 94%, 100% { transform: scaleY(1); }
-  96.5%, 98% { transform: scaleY(0.12); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .ob-eyes, .ob-eye { animation: none; }
-}
 
 @media (max-width: 480px) {
   .ob-themes { grid-template-columns: 1fr; }
