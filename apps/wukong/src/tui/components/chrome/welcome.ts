@@ -11,22 +11,20 @@ import { WUKONG_EMBLEM, renderWukongEmblem } from '#/tui/constant/welcome-art';
 import { isRainbowDancing, renderDanceWelcomeHeader } from '#/tui/easter-eggs/dance';
 import { currentTheme } from '#/tui/theme';
 import type { AppState, UIMode } from '#/tui/types';
-import { formatTodayCompact } from '#/tui/utils/today-format';
 import type { TodayBriefing } from '#/utils/stats';
 
 export class WelcomeComponent implements Component {
   private state: AppState;
-  private todayBriefing: TodayBriefing | null;
   private uiMode: UIMode;
 
   constructor(state: AppState, todayBriefing?: TodayBriefing | null, uiMode?: UIMode) {
     this.state = state;
-    this.todayBriefing = todayBriefing ?? null;
+    void todayBriefing;
     this.uiMode = uiMode ?? 'idle';
   }
 
   setState(todayBriefing: TodayBriefing | null, uiMode: UIMode): void {
-    this.todayBriefing = todayBriefing;
+    void todayBriefing;
     this.uiMode = uiMode;
   }
 
@@ -55,11 +53,7 @@ export class WelcomeComponent implements Component {
       return this.renderSetupBlock(safeWidth);
     }
 
-    if (this.todayBriefing !== null) {
-      return this.renderTodayBlock(safeWidth);
-    }
-
-    return this.renderWelcomeCard(safeWidth);
+    return this.renderReadyBlock(safeWidth);
   }
 
   private renderSetupBlock(safeWidth: number): string[] {
@@ -82,26 +76,12 @@ export class WelcomeComponent implements Component {
     return lines.map((line) => truncateToWidth(line, safeWidth, '…'));
   }
 
-  private renderTodayBlock(safeWidth: number): string[] {
-    const primary = (s: string): string => chalk.hex(currentTheme.palette.primary)(s);
-    const text = formatTodayCompact({ briefing: this.todayBriefing! });
-    const innerWidth = Math.max(1, safeWidth - 4);
-    const pad = '  ';
-
-    const content = `${chalk.bold.hex(currentTheme.palette.primary)('Today')} · ${text}`;
-    const truncated = truncateToWidth(content, innerWidth, '…');
-    const vis = visibleWidth(truncated);
-    const rightPad = Math.max(0, innerWidth - vis);
-
-    const lines: string[] = [
-      '',
-      primary('╭' + '─'.repeat(safeWidth - 2) + '╮'),
-      primary('│') + pad + truncated + ' '.repeat(rightPad) + primary('│'),
-      primary('╰' + '─'.repeat(safeWidth - 2) + '╯'),
-      '',
-    ];
-
-    return lines.map((line) => truncateToWidth(line, safeWidth, '…'));
+  private renderReadyBlock(safeWidth: number): string[] {
+    const title = chalk.bold.hex(currentTheme.palette.primary)('Wukong Code');
+    const prompt = chalk.hex(currentTheme.palette.textDim)(
+      'Ready · Describe a task, or use /loop <goal>',
+    );
+    return ['', title, prompt, ''].map((line) => truncateToWidth(line, safeWidth, '…'));
   }
 
   private renderWelcomeCard(safeWidth: number): string[] {

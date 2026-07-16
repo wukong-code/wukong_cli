@@ -9,6 +9,7 @@ export interface LoopCliOptions {
   readonly minIntervalMs?: number;
   readonly dryRun?: boolean;
   readonly model?: string;
+  readonly reviewModel?: string;
   readonly role?: string;
 }
 
@@ -23,6 +24,7 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
     .option('--max-iterations <n>', 'Maximum iterations before giving up.', '10')
     .option('--every <duration>', 'Optional minimum interval between iterations (e.g. 5m, 1h).')
     .option('--model <model>', 'Writer model alias for this Loop session.')
+    .option('--review-model <model>', 'Independent reviewer model alias for this Loop.')
     .option('--role <role>', 'Writer role profile for this Loop session.')
     .option('--dry-run', 'Validate arguments and print the planned loop without running it.', false)
     .action(async (objective: string, raw: RawLoopOptions) => {
@@ -43,6 +45,7 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
         minIntervalMs: everyResult.ms,
         dryRun: raw.dryRun === true,
         model: raw.model,
+        reviewModel: raw.reviewModel,
         role: raw.role,
       };
 
@@ -59,6 +62,9 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
         process.stdout.write(`  Max iterations: ${String(options.maxIterations)}\n`);
         if (options.minIntervalMs !== undefined) {
           process.stdout.write(`  Minimum interval: ${formatDuration(options.minIntervalMs)}\n`);
+        }
+        if (options.reviewModel !== undefined) {
+          process.stdout.write(`  Reviewer model: ${options.reviewModel}\n`);
         }
         process.exit(0);
       }
@@ -77,6 +83,7 @@ interface RawLoopOptions {
   readonly every?: string;
   readonly dryRun?: boolean;
   readonly model?: string;
+  readonly reviewModel?: string;
   readonly role?: string;
 }
 

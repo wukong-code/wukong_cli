@@ -77,11 +77,11 @@ function phaseLabel(phase: LoopPhase): string {
     case 'writing':
       return 'WRITE';
     case 'verifying':
-      return 'VERIFY';
+      return 'CHECK';
     case 'judging':
-      return 'JUDGE';
+      return 'REVIEW';
     case 'proofing':
-      return 'PROOF';
+      return 'REVIEW';
     case 'waiting':
       return 'WAIT';
     case 'paused':

@@ -6,40 +6,36 @@
 
 ## 📋 当前重点: 0.0.13 — Review Learning Loop
 
-> 方案: [docs/design/review-learning-loop.md](docs/design/review-learning-loop.md)。本版保留 0.0.12 Delivery Loop，新增跨任务的 Review Learning Loop：结构化 findings → 人工反馈 → policy proposal → 固定 eval → 人工批准。Improver 不能自动修改 active policy 或 reviewer skill。0.0.13 保持免费/BYOK，不实现支付；支付延后到 0.1.0。
+> 方案: [docs/design/review-learning-loop.md](docs/design/review-learning-loop.md)。本版是 Review Learning Loop 第一阶段：结构化 findings → 人工反馈 → 后续 Loop。自动 policy proposal、固定 eval improver 和支付不在 0.0.13 实现。
 
 ### P0：Review Contract
 
-- [ ] 统一 reviewer profile 与 runtime 的 JSON 输出格式，移除 `VERDICT` / `VERDICT_JSON` 冲突
-- [ ] 将单 blocker 升级为多 finding `ReviewResult`，包含 severity/category/evidence/nextAction/confidence/validationStatus
-- [ ] 只有 blocking finding 阻止 Loop；important/note 只展示和记录，不制造无限修复
-- [ ] 为旧单 blocker LoopResult 和 0.0.12 Goal record 提供兼容投影
-- [ ] 限制 finding 数量、单项长度和总 payload；invalid output 最多重试一次后返回 ERROR
+- [x] 统一 reviewer profile 与 runtime 的 JSON 输出格式，移除 `VERDICT` / `VERDICT_JSON` 冲突（2026-07-16）
+- [x] 将单 blocker 升级为多 finding `ReviewResult`，包含 severity/category/evidence/nextAction/confidence/validationStatus（2026-07-16）
+- [x] 只有 blocking finding 阻止 Loop；important/note 只展示和记录，不制造无限修复（2026-07-16）
+- [x] 为旧单 blocker LoopResult 和 0.0.12 Goal record 提供兼容投影（2026-07-16）
+- [x] 限制 finding 数量、单项长度和总 payload；invalid output 最多重试一次后返回 ERROR（2026-07-16）
 
-### P0：Project Review Policy 与受控验证
+### P0：Project Review Policy
 
-- [ ] 加载 `.wukong/review-policy.md`，纳入 config/workspace fingerprint 和 reviewer prompt
-- [ ] policy 缺失时保持 0.0.12 行为；policy 改变时拒绝陈旧 reviewer 结论
-- [ ] Reviewer 只返回 validation requests，不直接获得任意 Bash 或写权限
-- [ ] validation request 仅允许 `.wukong/checks.json`、已发现 package script 或用户授权 command
-- [ ] 为未授权、递归、超时、修改 workspace 的 validation request 增加拒绝与 E2E 覆盖
+- [x] 加载 `.wukong/review-policy.md`，纳入 config/workspace fingerprint 和 reviewer prompt（2026-07-16）
+- [x] policy 缺失时保持 0.0.12 行为；policy 改变时拒绝陈旧 reviewer 结论（2026-07-16）
+- [x] Reviewer 保持只读；额外验证只作为 `nextAction` 建议，不动态执行新命令（2026-07-16）
 
-### P0：人工 Feedback 与基础 Evals
+### P0：人工 Feedback
 
-- [ ] 实现本地 `~/.wukong/review/feedback.jsonl` schema 和 append-only store
-- [ ] 增加 `wukong review feedback <finding-id> accept|dismiss|fixed|unclear`
-- [ ] TUI finding 提供 `[accept] [false positive] [fixed] [unclear]` 最小入口
-- [ ] 聚合 acceptance、dismiss/false-positive、fixed、recurrence、review cycles、invalid-output 和 latency
-- [ ] 少于 10 条有反馈 findings 时只显示样本量，不输出质量百分比结论
-- [ ] 默认不上传 finding、diff、policy 或自由文本 feedback reason
+- [x] 实现本地 `~/.wukong/review/feedback.jsonl` schema 和 append-only store（2026-07-16）
+- [x] 增加 `wukong review feedback <finding-id> accept|dismiss|fixed|unclear`（2026-07-16）
+- [x] TUI 通过 `/review feedback <finding-id> <action>` 提供 accept/false-positive/fixed/unclear 最小入口（2026-07-16）
+- [x] 聚合 acceptance、dismiss/false-positive、fixed、review cycles、reviewer errors 和 invalid-output 原始数量（2026-07-16）
+- [x] 少于 10 条有反馈 findings 时只显示样本量，不输出质量百分比结论（2026-07-16）
+- [x] 默认不上传 finding、diff、policy 或自由文本 feedback reason（2026-07-16）
 
-### P1：安全的 Review Improver（实验）
+### P1：模型与统计
 
-- [ ] `wukong review improve --since <duration>` 只生成 policy patch + JSON proposal
-- [ ] 每条 proposal 引用 finding ID、人工反馈、理由和 confidence；默认至少 3 条一致反馈
-- [ ] 增加固定 eval fixtures，比较 policy before/after；eval 下降时拒绝提案
-- [ ] proposal 必须人工批准；不自动 edit/commit/push，不自动删除安全规则
-- [ ] 增加 `--review-model` 和 role 独立 reviewer model，0.0.13 保持 BYOK，不接支付 entitlement
+- [x] 增加 `--review-model` 和 role 独立 reviewer model，0.0.13 保持 BYOK，不接支付 entitlement（2026-07-16）
+- [x] TUI 移除常驻 Today/verify/scan/proof 零值统计，空闲态突出 `/loop`（2026-07-16）
+- [x] Web 首页、下载、定价、Dashboard、SEO、邮件和公告统一为 Goal → Write → Check → Review → Fix（2026-07-16；0.0.13 公告发布前保持 disabled）
 
 ### 明确延后到 0.1.0：支付与真实 Pro
 
@@ -52,11 +48,11 @@
 
 ### 0.0.13 发布门槛
 
-- [ ] 真实仓库 E2E：finding → feedback → proposal → eval → 人工 apply → 后续 review
-- [ ] Reviewer 无写权限、validation allowlist、policy fingerprint、旧结果兼容测试通过
-- [ ] Free 基础反馈/eval 有真实 runtime 行为；生产统计不再用注册数冒充 activated users
-- [ ] 中英文 README、user guide、CHANGELOG、公告、Web Pricing/Dashboard 最终同步，Pro/Team 保持 `Coming Soon`
-- [ ] 支付、GitHub PR 自动评论、团队 policy 同步和云端 improver 保持未完成口径，延后到 0.1.0+
+- [x] 真实临时 monorepo E2E + finding → feedback → fix → 后续 review 自动化覆盖（2026-07-16）
+- [x] Reviewer 无写权限、policy fingerprint、旧结果兼容测试通过（2026-07-16）
+- [x] Free 基础反馈/eval 有真实 runtime 行为；生产统计区分 registered users 与 activated Loop users（2026-07-16；feedback 保持 local-only）
+- [x] 中英文 README、user guide、CHANGELOG、公告草稿、0.0.13 preview page、Web Pricing/Dashboard 同步，Pro/Team 保持 `Coming Soon`（2026-07-16；公告待 release assets 就绪后启用）
+- [x] 支付、GitHub PR 自动评论、团队 policy 同步和云端 improver 保持未完成口径（2026-07-16）
 
 ## ✅ 0.0.12 — Loop-first
 
@@ -110,7 +106,7 @@
 ### 0.0.13+ Backlog
 
 - [ ] Hosted Report v2、Loop evidence `--save`/`--upload`、双版本 ingestion 和 Dashboard evidence 迁移（不是 0.0.13 Review Learning Loop 发布 blocker）
-- [ ] `--review-model`、role 独立 reviewer model（纳入 0.0.13 P1）；managed model credits 延后
+- [x] `--review-model`、role 独立 reviewer model（2026-07-16；保持 BYOK，managed model credits 延后）
 - [ ] 全语言自动检查推断、后台/云端 Loop、PR gate 和 Team Role Profiles
 
 ## ✅ 0.0.11 — Hosted Evidence UX 与发布闭环

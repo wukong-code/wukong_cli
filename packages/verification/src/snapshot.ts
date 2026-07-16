@@ -16,6 +16,7 @@ const CONFIG_PATHS = [
   'bun.lock',
   'bun.lockb',
   '.wukong/checks.json',
+  '.wukong/review-policy.md',
 ] as const;
 
 export async function createWorkspaceSnapshot(options: {

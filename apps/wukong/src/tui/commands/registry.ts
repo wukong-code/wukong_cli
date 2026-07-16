@@ -30,6 +30,12 @@ const ADD_DIR_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
   { value: 'list', description: 'Show configured additional workspace directories' },
 ];
 
+const REVIEW_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
+  { value: 'init', description: 'Create .wukong/review-policy.md' },
+  { value: 'feedback', description: 'Record local feedback for a finding' },
+  { value: 'stats', description: 'Show local review counts' },
+];
+
 /** Argument autocompletion for the `/goal` command (subcommands). */
 export function goalArgumentCompletions(argumentPrefix: string): AutocompleteItem[] | null {
   const nextMatch = argumentPrefix.match(/^next\s+(\S*)$/i);
@@ -55,6 +61,10 @@ export function addDirArgumentCompletions(argumentPrefix: string): AutocompleteI
     return completeAddDirPath(argumentPrefix);
   }
   return completeLeadingArg(ADD_DIR_ARG_COMPLETIONS, argumentPrefix);
+}
+
+export function reviewArgumentCompletions(argumentPrefix: string): AutocompleteItem[] | null {
+  return completeLeadingArg(REVIEW_ARG_COMPLETIONS, argumentPrefix);
 }
 
 function isPathLikeAddDirArgument(argumentPrefix: string): boolean {
@@ -397,6 +407,15 @@ export const BUILTIN_SLASH_COMMANDS = [
     aliases: [],
     description: 'Send feedback to make Wukong better',
     priority: 60,
+    availability: 'always',
+  },
+  {
+    name: 'review',
+    aliases: [],
+    description: 'Manage project review policy and local finding feedback',
+    priority: 70,
+    argumentHint: 'init | feedback <finding-id> <action> | stats',
+    completeArgs: reviewArgumentCompletions,
     availability: 'always',
   },
   {

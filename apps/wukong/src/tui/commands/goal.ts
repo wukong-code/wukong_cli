@@ -68,6 +68,7 @@ export type ParsedGoalCommand =
       readonly stopCondition?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
       readonly maxIterations?: number;
       readonly minIntervalMs?: number;
+      readonly reviewModel?: string;
     }
   | { readonly kind: 'next-add'; readonly objective: string }
   | { readonly kind: 'next-manage' }
@@ -428,6 +429,7 @@ async function startGoal(
       objective: parsed.objective,
       replace: parsed.replace,
       stopCondition: parsed.stopCondition,
+      reviewModel: parsed.reviewModel,
       maxIterations,
       minIntervalMs: parsed.minIntervalMs,
     });
@@ -543,6 +545,7 @@ export type ParsedLoopCommand =
       readonly stopCondition: 'proof-pass';
       readonly maxIterations: number;
       readonly minIntervalMs?: number;
+      readonly reviewModel?: string;
     }
   | { readonly kind: 'error'; readonly message: string; readonly severity?: 'error' | 'hint' };
 
@@ -557,6 +560,7 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
   let index = 0;
   let maxIterations = DEFAULT_MAX_ITERATIONS;
   let minIntervalMs: number | undefined;
+  let reviewModel: string | undefined;
 
   const stopCondition = parseStopCondition(tokens, index);
   if (stopCondition.condition !== undefined) {
@@ -587,6 +591,15 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
       index += 2;
       continue;
     }
+    if (token === '--review-model') {
+      const model = tokens[index + 1]?.trim();
+      if (!model) {
+        return { kind: 'error', message: '`--review-model` requires a model alias.' };
+      }
+      reviewModel = model;
+      index += 2;
+      continue;
+    }
     if (token === '--') {
       index += 1;
     }
@@ -607,7 +620,14 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
       message: `Loop objective is too long (max ${MAX_GOAL_OBJECTIVE_LENGTH} characters).`,
     };
   }
-  return { kind: 'create', objective, stopCondition: 'proof-pass', maxIterations, minIntervalMs };
+  return {
+    kind: 'create',
+    objective,
+    stopCondition: 'proof-pass',
+    maxIterations,
+    minIntervalMs,
+    reviewModel,
+  };
 }
 
 export async function handleLoopSlashCommand(host: SlashCommandHost, args: string): Promise<void> {
@@ -634,6 +654,7 @@ export async function handleLoopSlashCommand(host: SlashCommandHost, args: strin
           stopCondition: parsed.stopCondition,
           maxIterations: parsed.maxIterations,
           minIntervalMs: parsed.minIntervalMs,
+          reviewModel: parsed.reviewModel,
         },
         args,
         {

@@ -123,6 +123,19 @@ export interface LoopResultBlocker {
   readonly nextAction: string;
 }
 
+export interface LoopResultFinding {
+  readonly id: string;
+  readonly severity: 'blocking' | 'important' | 'note';
+  readonly category: 'correctness' | 'security' | 'test' | 'performance' | 'maintainability';
+  readonly summary: string;
+  readonly file?: string;
+  readonly line?: number;
+  readonly evidence: string;
+  readonly nextAction: string;
+  readonly confidence: 'high' | 'medium' | 'low';
+  readonly validationStatus: 'verified' | 'unverified' | 'failed';
+}
+
 export interface LoopResult {
   readonly schemaVersion: 2;
   readonly status: 'PASS' | 'NEEDS_WORK' | 'ERROR';
@@ -131,6 +144,7 @@ export interface LoopResult {
   readonly iterations: number;
   readonly checks: readonly LoopResultCheck[];
   readonly blockers: readonly LoopResultBlocker[];
+  readonly findings?: readonly LoopResultFinding[];
   readonly role?: string;
 }
 
@@ -140,6 +154,7 @@ interface GoalState {
   objective: string;
   completionCriterion?: string;
   stopCondition?: GoalStopCondition;
+  reviewModel?: string;
   maxIterations?: number;
   minIntervalMs?: number;
   iteration: number;
@@ -181,6 +196,7 @@ export interface GoalSnapshot {
   readonly objective: string;
   readonly completionCriterion?: string;
   readonly stopCondition?: GoalStopCondition;
+  readonly reviewModel?: string;
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
   readonly iteration: number;
@@ -231,6 +247,7 @@ export interface CreateGoalInput {
   readonly objective: string;
   readonly completionCriterion?: string;
   readonly stopCondition?: GoalStopCondition;
+  readonly reviewModel?: string;
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
   readonly replace?: boolean;
@@ -305,6 +322,7 @@ export class GoalMode {
       // 0.0.12 has one delivery gate. Keep old records readable, but migrate
       // their v1 stop condition as they enter the in-memory state.
       stopCondition: normalizeStopCondition(record.stopCondition),
+      reviewModel: record.reviewModel,
       maxIterations: record.maxIterations,
       minIntervalMs: record.minIntervalMs,
       iteration: 0,
@@ -423,6 +441,7 @@ export class GoalMode {
 
     const completionCriterion = normalizeCompletionCriterion(input.completionCriterion);
     const stopCondition = normalizeStopCondition(input.stopCondition);
+    const reviewModel = normalizeReviewModel(input.reviewModel);
     const maxIterations = normalizeMaxIterations(input.maxIterations);
     const minIntervalMs = normalizeMinIntervalMs(input.minIntervalMs);
     const state: GoalState = {
@@ -430,6 +449,7 @@ export class GoalMode {
       objective,
       completionCriterion,
       stopCondition,
+      reviewModel,
       maxIterations,
       minIntervalMs,
       iteration: 0,
@@ -448,6 +468,7 @@ export class GoalMode {
       objective: state.objective,
       completionCriterion: state.completionCriterion,
       stopCondition: state.stopCondition,
+      reviewModel: state.reviewModel,
       maxIterations: state.maxIterations,
       minIntervalMs: state.minIntervalMs,
     });
@@ -783,6 +804,7 @@ export class GoalMode {
       objective: state.objective,
       completionCriterion: state.completionCriterion,
       stopCondition: state.stopCondition,
+      reviewModel: state.reviewModel,
       maxIterations: state.maxIterations,
       minIntervalMs: state.minIntervalMs,
       iteration: state.iteration,
@@ -871,4 +893,9 @@ function normalizeStopCondition(value: string | undefined): GoalStopCondition | 
   if (value === 'proof-pass') return value;
   if (value === 'verify-pass' || value === 'scan-clean' || value === 'judge-pass') return 'proof-pass';
   return undefined;
+}
+
+function normalizeReviewModel(value: string | undefined): string | undefined {
+  const trimmed = value?.trim();
+  return trimmed?.length ? trimmed : undefined;
 }

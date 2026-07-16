@@ -80,6 +80,7 @@ export interface CreateGoalInput {
   readonly objective: string;
   readonly replace?: boolean;
   readonly stopCondition?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
+  readonly reviewModel?: string;
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
 }

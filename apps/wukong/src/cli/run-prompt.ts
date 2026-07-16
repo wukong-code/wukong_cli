@@ -204,6 +204,7 @@ async function runHeadlessGoal(
     objective: goal.objective,
     replace: goal.replace,
     ...(goal.stopCondition === undefined ? {} : { stopCondition: goal.stopCondition }),
+    reviewModel: goal.reviewModel,
     ...(maxIterations === undefined ? {} : { maxIterations }),
     ...(goal.minIntervalMs === undefined ? {} : { minIntervalMs: goal.minIntervalMs }),
   });

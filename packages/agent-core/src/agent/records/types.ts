@@ -88,6 +88,7 @@ export interface AgentRecordEvents {
     objective: string;
     completionCriterion?: string;
     stopCondition?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
+    reviewModel?: string;
     maxIterations?: number;
     minIntervalMs?: number;
   };

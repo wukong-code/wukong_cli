@@ -21,6 +21,7 @@ export interface HeadlessGoalCreate {
   readonly stopCondition?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
+  readonly reviewModel?: string;
 }
 
 /**
@@ -70,6 +71,7 @@ export function parseHeadlessGoalCreate(prompt: string): HeadlessGoalCreate | un
       replace: false,
       stopCondition: parsed.stopCondition,
       maxIterations: parsed.maxIterations,
+      reviewModel: parsed.reviewModel,
       ...(parsed.minIntervalMs === undefined ? {} : { minIntervalMs: parsed.minIntervalMs }),
     };
   }

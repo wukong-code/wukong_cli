@@ -273,6 +273,128 @@ describe('UpdateGoalTool verification gate', () => {
     }));
   });
 
+  it('keeps non-blocking findings without making them Loop blockers', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });
+    mocks.runProof.mockResolvedValue(proof('passed'));
+    const verdict = {
+      schemaVersion: 1,
+      status: 'NEEDS_WORK',
+      summary: 'One blocker remains.',
+      findings: [
+        {
+          id: 'auth-refresh',
+          severity: 'blocking',
+          category: 'correctness',
+          summary: 'Refresh tokens remain valid after logout.',
+          file: 'src/auth.ts',
+          line: 84,
+          evidence: 'logout removes the cookie but does not revoke the server token',
+          nextAction: 'Revoke the token during logout.',
+          confidence: 'high',
+          validationStatus: 'verified',
+        },
+        {
+          id: 'auth-comment',
+          severity: 'note',
+          category: 'maintainability',
+          summary: 'The revocation helper could use a short comment.',
+          evidence: 'the helper has non-obvious retry behavior',
+          nextAction: 'Consider documenting the retry behavior.',
+          confidence: 'medium',
+          validationStatus: 'unverified',
+        },
+      ],
+    };
+    const spawn = vi.fn().mockResolvedValue({
+      completion: Promise.resolve({
+        result: `Review complete.\nVERDICT_JSON: ${JSON.stringify(verdict)}`,
+      }),
+    });
+    const agent = makeAgent(store);
+    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+    const result = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+
+    expect(result.stopTurn).toBe(false);
+    expect(store.getGoal().goal?.loopResult?.blockers).toHaveLength(1);
+    expect(store.getGoal().goal?.loopResult?.blockers[0]?.id).toBe('auth-refresh');
+    expect(store.getGoal().goal?.loopResult?.findings).toHaveLength(2);
+  });
+
+  it('continues from a blocking finding and passes on the next review cycle', async () => {
+    const store = makeStore();
+    await store.createGoal({
+      objective: 'revoke tokens on logout',
+      stopCondition: 'proof-pass',
+      maxIterations: 3,
+    });
+    mocks.runProof.mockResolvedValue(proof('passed'));
+    const spawn = vi.fn()
+      .mockResolvedValueOnce({
+        completion: Promise.resolve({
+          result: `Review complete.
+VERDICT_JSON: ${JSON.stringify({
+            schemaVersion: 1,
+            status: 'NEEDS_WORK',
+            summary: 'Logout still leaves the token valid.',
+            findings: [{
+              id: 'auth-refresh',
+              severity: 'blocking',
+              category: 'security',
+              summary: 'Refresh tokens remain valid after logout.',
+              file: 'src/auth.ts',
+              line: 84,
+              evidence: 'logout removes the cookie without revoking the token',
+              nextAction: 'Revoke the refresh token during logout.',
+              confidence: 'high',
+              validationStatus: 'verified',
+            }],
+          })}`,
+        }),
+      })
+      .mockResolvedValueOnce({
+        completion: Promise.resolve({
+          result: 'Review complete.\nVERDICT_JSON: {"schemaVersion":1,"status":"PASS","summary":"Logout now revokes the token.","findings":[]}',
+        }),
+      });
+    const agent = makeAgent(store);
+    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+    const first = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+    expect(first.stopTurn).toBe(false);
+    expect(store.getGoal().goal?.loopResult?.blockers[0]?.id).toBe('auth-refresh');
+
+    const second = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+    expect(second.stopTurn).toBe(true);
+    expect(store.getGoal().goal).toBeNull();
+    expect(spawn).toHaveBeenCalledTimes(2);
+  });
+
+  it('uses the Loop reviewer model without changing the writer model', async () => {
+    const store = makeStore();
+    await store.createGoal({
+      objective: 'ship the change',
+      stopCondition: 'proof-pass',
+      reviewModel: 'reviewer-model',
+    });
+    mocks.runProof.mockResolvedValue(proof('passed'));
+    const spawn = vi.fn().mockResolvedValue({
+      completion: Promise.resolve({
+        result: 'Review complete.\nVERDICT_JSON: {"schemaVersion":1,"status":"PASS","summary":"Ready.","findings":[]}',
+      }),
+    });
+    const agent = makeAgent(store);
+    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({
+      profileName: 'reviewer',
+      modelAlias: 'reviewer-model',
+    }));
+  });
+
   it('stops with a verification error when the fresh reviewer is unavailable', async () => {
     const store = makeStore();
     await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });

@@ -133,11 +133,12 @@ describe('FooterComponent — context NaN resilience', () => {
     );
 
     const lines = footer.render(160).map(strip);
-    expect(lines).toHaveLength(1);
-    expect(lines[0]).toContain('[yolo]');
-    expect(lines[0]).toContain('[plan]');
-    expect(lines[0]).toContain('[swarm]');
-    expect(lines[0]).toContain('context: 0.0%');
+    expect(lines).toHaveLength(2);
+    expect(lines[0]).toContain('/loop <goal>');
+    expect(lines[1]).toContain('[yolo]');
+    expect(lines[1]).toContain('[plan]');
+    expect(lines[1]).toContain('[swarm]');
+    expect(lines[1]).toContain('context: 0.0%');
   });
 
   it('uses one shared left edge for every footer row', () => {

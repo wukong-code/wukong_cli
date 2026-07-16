@@ -82,6 +82,7 @@ export interface RunSubagentOptions {
 
 export interface SpawnSubagentOptions extends RunSubagentOptions {
   readonly profileName: string;
+  readonly modelAlias?: string;
   readonly swarmItem?: string;
 }
 
@@ -123,7 +124,7 @@ export class SessionSubagentHost {
     const completion = this.runWithActiveChild(id, options, async (runOptions) => {
       this.emitSubagentSpawned(parent, id, profile.name, runOptions);
       try {
-        await this.configureChild(parent, agent, profile);
+        await this.configureChild(parent, agent, profile, options.modelAlias);
         return await this.runPromptTurn(parent, id, agent, profile.name, runOptions);
       } catch (error) {
         this.emitSubagentFailed(parent, id, runOptions, error);
@@ -361,11 +362,11 @@ export class SessionSubagentHost {
     parent: Agent,
     child: Agent,
     profile: ResolvedAgentProfile,
+    modelAlias?: string,
   ): Promise<void> {
-    // A subagent always inherits the parent agent's model.
     child.config.update({
       cwd: parent.config.cwd,
-      modelAlias: parent.config.modelAlias,
+      modelAlias: modelAlias ?? parent.config.modelAlias,
       thinkingLevel: parent.config.thinkingLevel,
     });
 

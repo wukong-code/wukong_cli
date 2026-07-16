@@ -558,6 +558,10 @@ export abstract class SDKRpcClientBase {
       agentId: this.interactiveAgentId,
       objective: input.objective,
       replace: input.replace,
+      stopCondition: input.stopCondition,
+      reviewModel: input.reviewModel,
+      maxIterations: input.maxIterations,
+      minIntervalMs: input.minIntervalMs,
     });
   }
 

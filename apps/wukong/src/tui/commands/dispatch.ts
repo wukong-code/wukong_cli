@@ -54,6 +54,7 @@ import { handleSwarmCommand } from './swarm';
 import { handleUndoCommand } from './undo';
 import { handleWebCommand } from './web';
 import { handleTransformCommand } from './role';
+import { handleReviewSlashCommand } from './review';
 import {
   handleVerifySlashCommand,
   handleScanSlashCommand,
@@ -368,6 +369,9 @@ async function handleBuiltInSlashCommand(
       return;
     case 'report':
       await handleReportSlashCommand(host);
+      return;
+    case 'review':
+      await handleReviewSlashCommand(host, args);
       return;
     default:
       host.showError(`Unknown slash command: /${String(name)}`);

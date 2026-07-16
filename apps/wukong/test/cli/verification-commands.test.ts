@@ -1,3 +1,8 @@
+import { mkdtemp, readFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { Command } from 'commander';
 import { describe, expect, it, vi, beforeEach } from 'vitest';
 
 vi.mock('#/cli/lib/report-upload', () => ({
@@ -10,6 +15,7 @@ import { createProgram } from '#/cli/commands';
 import { handleGuard, type GuardDeps } from '#/cli/sub/guard';
 import { handleJudge, type JudgeDeps } from '#/cli/sub/judge';
 import { handleProof, type ProofDeps } from '#/cli/sub/proof';
+import { registerReviewCommand } from '#/cli/sub/review';
 import { handleScan, type ScanDeps } from '#/cli/sub/scan';
 import { handleVerify, type VerifyDeps } from '#/cli/sub/verify';
 import type { ScanOptions, VerificationOptions, ProofOptions } from '@wukong/verification';
@@ -54,6 +60,33 @@ describe('verification command registration', () => {
     expect(help).not.toMatch(/^\s+scan\b/m);
     expect(help).not.toMatch(/^\s+proof\b/m);
     expect(help).toMatch(/^\s+loop\b/m);
+  });
+});
+
+describe('review command', () => {
+  it('records local finding feedback and hides quality rates for small samples', async () => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'wukong-review-feedback-'));
+    const stdout = writable();
+    const program = new Command();
+    program.exitOverride();
+    registerReviewCommand(program, {
+      cwd: () => '/workspace/example',
+      dataDir: () => dataDir,
+      now: () => new Date('2026-07-16T00:00:00.000Z'),
+      stdout: stdout.writer,
+    });
+
+    await program.parseAsync(['review', 'feedback', 'auth-refresh', 'false-positive'], { from: 'user' });
+    await program.parseAsync(['review', 'stats'], { from: 'user' });
+
+    const contents = await readFile(join(dataDir, 'review', 'feedback.jsonl'), 'utf8');
+    expect(contents).toContain('"findingId":"auth-refresh"');
+    expect(contents).toContain('"action":"false_positive"');
+    expect(contents).not.toContain('/workspace/example');
+    expect(stdout.chunks.join('')).toContain('false-positive: 1');
+    expect(stdout.chunks.join('')).toContain('hidden until at least 10');
+    expect(stdout.chunks.join('')).toContain('Review cycles: 0');
+    expect(stdout.chunks.join('')).toContain('Invalid reviewer output: 0');
   });
 });
 

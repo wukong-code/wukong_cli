@@ -155,6 +155,19 @@ export interface LoopResultBlocker {
   readonly nextAction: string;
 }
 
+export interface LoopResultFinding {
+  readonly id: string;
+  readonly severity: 'blocking' | 'important' | 'note';
+  readonly category: 'correctness' | 'security' | 'test' | 'performance' | 'maintainability';
+  readonly summary: string;
+  readonly file?: string;
+  readonly line?: number;
+  readonly evidence: string;
+  readonly nextAction: string;
+  readonly confidence: 'high' | 'medium' | 'low';
+  readonly validationStatus: 'verified' | 'unverified' | 'failed';
+}
+
 export interface LoopResult {
   readonly schemaVersion: 2;
   readonly status: 'PASS' | 'NEEDS_WORK' | 'ERROR';
@@ -163,6 +176,7 @@ export interface LoopResult {
   readonly iterations: number;
   readonly checks: readonly LoopResultCheck[];
   readonly blockers: readonly LoopResultBlocker[];
+  readonly findings?: readonly LoopResultFinding[];
   readonly role?: string;
 }
 
@@ -184,6 +198,7 @@ export interface GoalSnapshot {
   readonly objective: string;
   readonly completionCriterion?: string;
   readonly stopCondition?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
+  readonly reviewModel?: string;
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
   readonly iteration: number;
@@ -861,6 +876,19 @@ export const loopResultBlockerSchema = z.object({
   nextAction: z.string(),
 }) satisfies z.ZodType<LoopResultBlocker>;
 
+export const loopResultFindingSchema = z.object({
+  id: z.string(),
+  severity: z.enum(['blocking', 'important', 'note']),
+  category: z.enum(['correctness', 'security', 'test', 'performance', 'maintainability']),
+  summary: z.string(),
+  file: z.string().optional(),
+  line: z.number().optional(),
+  evidence: z.string(),
+  nextAction: z.string(),
+  confidence: z.enum(['high', 'medium', 'low']),
+  validationStatus: z.enum(['verified', 'unverified', 'failed']),
+}) satisfies z.ZodType<LoopResultFinding>;
+
 export const loopResultSchema = z.object({
   schemaVersion: z.literal(2),
   status: z.enum(['PASS', 'NEEDS_WORK', 'ERROR']),
@@ -869,6 +897,7 @@ export const loopResultSchema = z.object({
   iterations: z.number(),
   checks: z.array(loopResultCheckSchema),
   blockers: z.array(loopResultBlockerSchema),
+  findings: z.array(loopResultFindingSchema).optional(),
   role: z.string().optional(),
 }) satisfies z.ZodType<LoopResult>;
 
@@ -890,6 +919,7 @@ export const goalSnapshotSchema = z.object({
   objective: z.string(),
   completionCriterion: z.string().optional(),
   stopCondition: z.enum(['proof-pass', 'verify-pass', 'scan-clean', 'judge-pass']).optional(),
+  reviewModel: z.string().optional(),
   maxIterations: z.number().optional(),
   minIntervalMs: z.number().optional(),
   iteration: z.number(),

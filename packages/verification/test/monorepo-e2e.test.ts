@@ -28,6 +28,11 @@ describe('real monorepo proof E2E', () => {
     }, null, 2)}\n`);
     await writeRepoFile(cwd, 'packages/api/src/index.ts', 'export const api = true;\n');
     await writeRepoFile(cwd, 'packages/web/src/index.ts', 'export const web = true;\n');
+    await writeRepoFile(
+      cwd,
+      '.wukong/review-policy.md',
+      '# Review policy\n\n- Public API changes require tests.\n',
+    );
     await gitAdd(cwd);
 
     const result = await runProof({ cwd, writeReport: false });
@@ -42,6 +47,7 @@ describe('real monorepo proof E2E', () => {
     expect(result.verification.commandResults).toHaveLength(4);
     expect(result.verification.commandResults.every((item) => item.status === 'passed')).toBe(true);
     expect(result.snapshotId).toMatch(/^[a-f0-9]{64}$/);
+    expect(result.workspaceFingerprint.configDigest).toMatch(/^[a-f0-9]{64}$/);
     expect(result.blockers).toEqual([]);
   });
 

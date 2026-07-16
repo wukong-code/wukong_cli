@@ -6,8 +6,8 @@
 
 ## 产品定位
 
-> **AI 负责写代码，Wukong 负责判断能不能合并。**
-> Wukong Code 是 AI Coding Loop 的控制层与验证层（proof layer for AI-written code）。
+> **给 Wukong 一个目标，它会写、检查、审查并修复，直到没有 blocking finding。**
+> Wukong Code 是 review 驱动的 AI Coding Loop。
 
 命令分层对应 loop engineering：
 
@@ -15,7 +15,7 @@
 |---|---|---|
 | Turn-based | TUI 默认 | 已实现 |
 | Goal-based | `/goal` | 已实现（verification gate 已实现，归 M0.5） |
-| 本机迭代 | `/loop` / `wukong loop` | 已实现（proof-pass、fresh reviewer、max-iterations、`--every` pacing） |
+| 本机迭代 | `/loop` / `wukong loop` | 已实现（fresh reviewer、结构化 findings、max-iterations、`--every` pacing） |
 | Time-based（本机巡检） | cron 工具（CronCreate 等） | 已实现（会话内 recurring/one-shot） |
 | Time-based（云端） | `/schedule` | 待实现（归 hosted） |
 | Loop 内部检查层 | `/verify` `/scan` `/proof` | 已实现；直接调用仅用于高级诊断 |
@@ -38,7 +38,7 @@
 - [0.0.12 release notes / What's Changed](releases/0.0.12.md)
   定义 Loop-first 状态机、独立 reviewer、Loop session 额度、Role Profiles，以及 verify/scan/proof 的内部层与兼容边界。
 - [0.0.13 Review Learning Loop](design/review-learning-loop.md)
-  定义多 finding Review Contract、项目 review policy、受控验证、人工反馈、本地 eval，以及只生成提案且必须人工批准的外层 improver。
+  定义多 finding Review Contract、项目 review policy、人工反馈和独立 reviewer model；自动 improver 与支付不在本版本。
 - [执行层 TODO](../TODO.md)
   按 ROADMAP milestone 拆解的任务清单，记录当前重点（0.0.13 Review Learning Loop）、暂缓项和已完成基线。
 
@@ -57,6 +57,7 @@ wukong guard
 wukong proof
 wukong judge
 wukong loop
+wukong review
 wukong login
 wukong doctor
 wukong export
@@ -100,6 +101,6 @@ wukong upgrade
 任务级清单以 [../TODO.md](../TODO.md) 为准，本节只保留方向摘要：
 
 1. 0.0.12 Loop-first 已发布；继续保持 PASS/NEEDS_WORK/ERROR 和 deterministic checks + fresh reviewer 的内层交付闭环。
-2. 0.0.13 增加 Review Learning Loop：结构化 findings、项目 policy、人工 feedback、基础 eval 和安全的 policy proposal。
-3. Reviewer 不直接获得任意 Bash；验证请求复用现有 check runner，Improver 不自动修改 active policy 或 skill。
+2. 0.0.13 第一批实现结构化 findings、项目 policy、人工 feedback 和独立 reviewer model。
+3. Reviewer 不直接获得任意 Bash；额外检查只作为 next action 建议，不动态执行。
 4. 0.0.13 不做支付，Pro/Team 保持 `Coming Soon`；真实价格、Checkout、Billing 生命周期、GitHub PR adapter 和团队 policy 统一延后到 0.1.0+。

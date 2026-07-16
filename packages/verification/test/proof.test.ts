@@ -3,9 +3,22 @@ import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 
 import { runProof, WorkspaceChangedError } from '../src/proof';
+import { createWorkspaceSnapshot } from '../src/snapshot';
 import { gitAdd, makeTempRepo, writeJson, writeRepoFile } from './helpers';
 
 describe('runProof', () => {
+  it('includes project review policy changes in the workspace fingerprint', async () => {
+    const cwd = await makeTempRepo('wukong-review-policy-fingerprint-');
+    await writeRepoFile(cwd, '.wukong/review-policy.md', '# Policy\nBlock auth regressions.\n');
+    const before = await createWorkspaceSnapshot({ cwd });
+
+    await writeRepoFile(cwd, '.wukong/review-policy.md', '# Policy\nBlock auth and cache regressions.\n');
+    const after = await createWorkspaceSnapshot({ cwd });
+
+    expect(after.configDigest).not.toBe(before.configDigest);
+    expect(after.id).not.toBe(before.id);
+  });
+
   it('passes on a clean repo with passing verification commands', async () => {
     const cwd = await makeTempRepo('wukong-proof-pass-');
     await writeJson(join(cwd, 'package.json'), {

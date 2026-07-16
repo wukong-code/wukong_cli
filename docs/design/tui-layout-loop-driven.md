@@ -92,15 +92,15 @@ TUI 最稀缺的资源是垂直行数。**底部 chrome（心跳行到 mode 行�
 2  上分隔线
 3  ❯ 输入
 4  下分隔线
-5  Loop/Proof 轨（合并一行；idle 时显示 today 摘要）
+5  Loop/Review 轨（idle 时显示开始 Loop 的引导）
 6  Env 轨（model · cwd · git · context）
 7  Mode 行（plan/auto/yolo；default 模式可省略）
 ```
 
 **明确否决五轨堆叠方案**（focus / loop / proof / env / mode 各占一行）：loop 运行时那正是用户最需要看 transcript 日志的时候，chrome 不能反而变高。合并规则：
 
-- **Focus 并入 Loop/Proof 轨**：idle 时 `Today: verify 4 (2✓) · proof PASS · Focus: ship auth`；active 时 focus 让位给 loop 状态（focus 详情看 `/today`）。
-- **Verify/Proof 合并**：`Verify ✗ 2 failing · Proof —` 一行放得下；窄终端优先保 Proof 结论。
+- **Idle 不常驻 Today 统计**：零值 verify/scan/proof 对新用户没有信息价值；`wukong today` 保留为独立命令。
+- **Review 结论优先**：active 时显示 blocking finding 数量；确定性 checks 是 Review 的证据，不再作为三套并列产品轨。
 
 ### 3.3 心跳行：loop 的实时仪表
 
@@ -124,24 +124,24 @@ TUI 最稀缺的资源是垂直行数。**底部 chrome（心跳行到 mode 行�
 
 ```text
 ── idle ──────────────────────────────────────────
-  Today: verify 4 (2✓) · proof PASS · Focus: ship auth fix
+  Ready · /loop <goal> to start
   [model] │ cwd │ git:(main*) │ ctx 8%
 
 ── active ────────────────────────────────────────
   Goal: fix auth tests · until verify-pass · 3/10
-  Verify ✗ 2 failing · Proof — · 5 files changed
+  Checks ✓ · Review NEEDS_WORK · 2 blocking
   [model] │ cwd │ git │ ctx 8%
   ⏵ auto mode
 
 ── blocked ───────────────────────────────────────
-  Goal ● blocked · 5/10 · Next: wukong proof
-  Verify ✗ session.test.ts · Proof BLOCKED
+  Goal ● blocked · 5/10 · Next: fix blocking findings
+  Checks ✓ · Review NEEDS_WORK · 1 blocking
   [model] │ cwd │ git │ ctx 8%
 ```
 
 设计要点：
 
-1. **Proof 轨是 Wukong 与 Claude Code 最大的差异**，必须常驻——Claude 没有「能不能合并」这一层。
+1. **Review 结论是 Wukong 与 Claude Code 最大的差异**：用户应该看到 blocker 和下一步，而不是三套旧命令统计。
 2. **Next 建议 deterministic 生成**（规则映射，同 `today` 的 Next 逻辑），不调模型。
 3. 现有 goal badge（`[goal ● active · 4m · 7 turns]`）升级为完整 loop 轨；`stopCondition` / `iteration` / `maxIterations` 已在 `GoalSnapshot`（`packages/protocol/src/events.ts`），**无需新增 SDK 管道**。
 4. rotating tips 在 active/blocked 模式让位给 loop 轨，idle 恢复。

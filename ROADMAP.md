@@ -109,7 +109,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 |---|---|---|
 | `0.0.11` | 把当前产品做成可理解、可发现、可运维的 Hosted Evidence 闭环 | TUI 文案与对齐完成；Dashboard 证据优先布局上线；公告端点 200；`proof → private history / public share → dashboard` 真实链路通过；文档与实现一致 |
 | `0.0.12` | Loop-first v2 | Loop 状态机；fresh-context reviewer；仅 Loop session 额度；BYOK model alias；轻量 Role Profiles；高级命令兼容；真实 E2E 通过 |
-| `0.0.13` | Review Learning Loop | 结构化多 findings、项目 review policy、本地反馈/eval、受控验证、只生成 proposal 的 improver；保持免费/BYOK，不上线支付 |
+| `0.0.13` | Smarter Review Loop | 结构化多 findings、项目 review policy、独立 reviewer model、本地反馈、Loop-first TUI 与 Web 文案；保持免费/BYOK，不上线支付 |
 | `0.1.0` | 真实 PR 工作流 + 支付 | GitHub PR comment/status check 与 Pro 支付生命周期可用；visibility/redaction 和 checkout→entitlement→cancel/failure E2E 通过；至少 1 个真实付费 Team Pilot 或 3 个非关联个人付费用户 |
 
 `0.1.0` 的条件式目标是 **2026 年 8 月上旬，最早 8 月 3 日当周**。日期不是发布承诺；上表的 PR Evidence 和真实试点门槛未满足时不升 `0.1.0`。
@@ -253,29 +253,29 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 ## Milestone 2: 0.0.13 Review Learning Loop
 
-状态：计划中。设计 contract 见 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。本版本只验证 Reviewer 学习价值，保持免费/BYOK，支付与完整 Billing 生命周期明确延后到 0.1.0。
+状态：开发中。Review Contract、项目 policy、本地 feedback、独立 reviewer model、Loop-first TUI/Web 文案、真实临时 monorepo E2E、受保护的生产统计接口和发布预览文案已实现；正式发布、部署验证与公告启用仍待 release 阶段完成。设计 contract 见 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。本版本只验证 Reviewer 学习价值，保持免费/BYOK，支付与完整 Billing 生命周期明确延后到 0.1.0。
 
-目标：在不扩大 reviewer 权限的前提下，让本地 Reviewer 从人工反馈中形成可评估、可审批的项目策略提案，并用真实反馈证明 reviewer 是否在变准。
+目标：在不扩大 reviewer 权限的前提下，让本地 Reviewer 输出可操作的多 findings，并收集真实反馈验证 reviewer 是否有价值。
 
 交付项：
 
 - 统一 reviewer profile/runtime JSON contract，消除 `VERDICT` / `VERDICT_JSON` 冲突。
 - 多 finding Review Result：severity、category、evidence、next action、confidence 和 validation status。
 - `.wukong/review-policy.md` 项目审查策略，进入 fingerprint 和 reviewer input。
-- Reviewer 只返回受控 validation request，由现有 check runner 执行已授权命令。
-- 本地 finding feedback 和基础 eval：accept、dismiss、fixed、unclear、误报率和修复率。
-- 实验 `wukong review improve`：只生成可追溯 policy proposal，通过固定 eval 和人工批准后才能应用。
+- Reviewer 保持只读，额外验证只作为 `nextAction` 建议。
+- 本地 finding feedback：accept、false-positive、fixed、unclear。
 - 实验性独立 `--review-model` 保持 BYOK，不绑定支付 entitlement。
+- TUI 和 Web 全部迁移到 Goal → Write → Check → Review → Fix。
 - Pricing、Dashboard 和 CLI 继续显示 Pro/Team `Coming Soon`，不创建付费 Checkout 用户路径。
 
 验收：
 
 - Review Result 可返回多个 findings，只有 blocking finding 阻止 Delivery Loop。
-- Reviewer 不能直接写文件或执行任意 shell；未授权 validation request 可验证地被拒绝。
-- 本地完整走通 finding → feedback → proposal → eval → 人工 apply → 后续 review，improver 不自动修改 active policy。
+- Reviewer 不能直接写文件或执行任意 shell。
+- 本地完整走通 finding → feedback → fix → 后续 review。
 - 无 `.wukong/review-policy.md` 的仓库保持 0.0.12 reviewer 行为和旧结果兼容。
 - 用户可离线使用基础 feedback/eval，独立 reviewer model 仍由用户 BYOK。
-- 生产统计能区分 activated Loop users、review feedback、proposal 和 eval，不用注册数冒充使用量。
+- 生产统计能区分注册和 activated Loop users；review feedback 保持 local-only 时明确标记服务端不可见，不用注册数或 Loop 数冒充 feedback。
 - Pricing 页面不显示价格，不把 Pro、Team、支付或 GitHub PR 能力写成 live。
 
 不做：

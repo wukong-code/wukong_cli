@@ -18,7 +18,6 @@ import { currentTheme } from '#/tui/theme';
 import type { ColorPalette } from '#/tui/theme/colors';
 import type { AppState } from '#/tui/types';
 import type { ChromeStateAggregator } from '#/tui/utils/chrome-state';
-import { formatTodayCompact } from '#/tui/utils/today-format';
 import {
   createGitStatusCache,
   formatGitBadgeBase,
@@ -117,16 +116,10 @@ function buildConclusionLines(
   colors: ColorPalette,
 ): { lines: string[]; useWarning: boolean } {
   const state = chromeState.getState();
-  const { uiMode, goal, lastVerify, lastProof, todayBriefing } = state;
+  const { uiMode, goal, lastVerify, lastProof } = state;
 
   if (uiMode === 'idle') {
-    if (todayBriefing !== null) {
-      return {
-        lines: [formatTodayCompact({ briefing: todayBriefing })],
-        useWarning: false,
-      };
-    }
-    return { lines: [], useWarning: false };
+    return { lines: ['Ready · /loop <goal> to start'], useWarning: false };
   }
 
   const gate = goal?.stopCondition ?? 'self';
@@ -261,9 +254,30 @@ export class FooterComponent implements Component {
     const state = this.state;
 
     const { lines: conclusionLines, useWarning } = buildConclusionLines(this.chromeState, colors);
-
-    // Idle mode: append rotating tips to the today line when space allows.
     const chromeState = this.chromeState.getState();
+    const backgroundBadges: string[] = [];
+    if (this.backgroundBashTaskCount > 0) {
+      const noun = this.backgroundBashTaskCount === 1 ? 'task' : 'tasks';
+      backgroundBadges.push(
+        chalk.hex(colors.primary)(`[${String(this.backgroundBashTaskCount)} ${noun} running]`),
+      );
+    }
+    if (this.backgroundAgentCount > 0) {
+      const noun = this.backgroundAgentCount === 1 ? 'agent' : 'agents';
+      backgroundBadges.push(
+        chalk.hex(colors.primary)(`[${String(this.backgroundAgentCount)} ${noun} running]`),
+      );
+    }
+    if (
+      chromeState.uiMode === 'idle'
+      && conclusionLines[0] !== undefined
+      && backgroundBadges.length > 0
+    ) {
+      const candidate = `${conclusionLines[0]}  ${backgroundBadges.join('  ')}`;
+      if (visibleWidth(candidate) <= width) conclusionLines[0] = candidate;
+    }
+
+    // Idle mode: append rotating tips to the ready line when space allows.
     let idleTip: string | null = null;
     if (chromeState.uiMode === 'idle' && conclusionLines[0] !== undefined) {
       const { primary, pair } = tipsForIndex(currentTipIndex());
@@ -311,18 +325,7 @@ export class FooterComponent implements Component {
     // Background-task badges sit immediately before cwd. `bash-*` tasks
     // (shell processes) and `agent-*` tasks (background subagents) get
     // separate badges so the user can distinguish them at a glance.
-    if (this.backgroundBashTaskCount > 0) {
-      const noun = this.backgroundBashTaskCount === 1 ? 'task' : 'tasks';
-      envParts.push(
-        chalk.hex(colors.primary)(`[${String(this.backgroundBashTaskCount)} ${noun} running]`),
-      );
-    }
-    if (this.backgroundAgentCount > 0) {
-      const noun = this.backgroundAgentCount === 1 ? 'agent' : 'agents';
-      envParts.push(
-        chalk.hex(colors.primary)(`[${String(this.backgroundAgentCount)} ${noun} running]`),
-      );
-    }
+    if (chromeState.uiMode !== 'idle') envParts.push(...backgroundBadges);
 
     const cwd = shortenCwd(state.workDir);
     if (cwd) envParts.push(chalk.hex(colors.textDim)(cwd));

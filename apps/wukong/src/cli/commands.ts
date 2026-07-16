@@ -13,6 +13,7 @@ import { registerLoopCommand } from './sub/loop';
 import { registerProofCommand } from './sub/proof';
 import { registerProviderCommand } from './sub/provider';
 import { registerReportUploadCommand } from './sub/report-upload';
+import { registerReviewCommand } from './sub/review';
 import { registerRolesCommand } from './sub/roles';
 import { registerScanCommand } from './sub/scan';
 import { registerServerCommand } from './sub/server';
@@ -109,6 +110,7 @@ export function createProgram(
   registerLoopCommand(program, (loop) => {
     const raw = program.opts<Record<string, unknown>>();
     const every = loop.minIntervalMs === undefined ? '' : ` --every ${String(loop.minIntervalMs / 1_000)}s`;
+    const reviewModel = loop.reviewModel === undefined ? '' : ` --review-model ${loop.reviewModel}`;
     onMain({
       session: undefined,
       continue: false,
@@ -118,7 +120,7 @@ export function createProgram(
       model: loop.model ?? raw['model'] as string | undefined,
       role: loop.role ?? raw['role'] as string | undefined,
       outputFormat: raw['outputFormat'] as CLIOptions['outputFormat'],
-      prompt: `/loop --max-iterations ${String(loop.maxIterations)}${every} -- ${loop.objective ?? ''}`,
+      prompt: `/loop --max-iterations ${String(loop.maxIterations)}${every}${reviewModel} -- ${loop.objective ?? ''}`,
       skillsDirs: raw['skillsDir'] as string[],
       addDirs: raw['addDir'] as string[],
     });
@@ -126,6 +128,7 @@ export function createProgram(
   registerGuardCommand(program);
   registerLoginCommand(program);
   registerReportUploadCommand(program);
+  registerReviewCommand(program);
   registerRolesCommand(program);
   registerDoctorCommand(program);
   registerTodayCommand(program);

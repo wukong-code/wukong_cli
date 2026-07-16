@@ -4,13 +4,13 @@
 
 ## 什么是 Wukong Code
 
-> **AI 负责写代码，Wukong 负责判断能不能合并。**
+> **给 Wukong 一个目标，它会循环工作直到改动准备好。**
 
-Wukong Code 是本地优先的终端 AI coding agent，定位是 **AI Coding Loop 的控制层与验证层**。它不和 Cursor / Claude Code / Codex 拼写代码，而是补上它们留下的问题：*这段 AI 写的代码能不能合并？*
+Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal → Write → Check → Review → Fix**。给 `/loop` 一个目标，它会持续修改，直到独立 reviewer 不再返回 blocking finding，或达到迭代上限。
 
-当前 P0 本地闭环和 Hosted Reports MVP 已实现：`verify`、`scan`、`proof` 可上传脱敏报告，Dashboard 展示真实 history，公开分享需要显式 `--upload --public`。完整订阅生命周期、GitHub PR Evidence、团队规则和 deep review 仍是后续工作。
+`0.0.13` 正在开发。第一阶段增加结构化多 findings、`.wukong/review-policy.md` 项目规则、本地 finding feedback，以及可选的独立 reviewer model。本版本继续免费并由用户提供模型 API，不做支付；真实 Pro 权益延后到 `0.1.0`。
 
-`0.0.12` 改为 Loop-first：Wukong 负责修改代码、运行真实项目检查，再由 fresh-context reviewer 独立判断，不通过就继续迭代。`verify`、`scan`、`proof` 仍保留为高级诊断命令，但只是 Loop 的内部层，不再各自形成产品或额度。可选 model alias 和轻量 Role Profile 用于处理特定任务。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md)。
+`0.0.12` 建立了 Loop-first runtime。`verify`、`scan`、`proof` 仍保留为高级诊断命令，但只是 Loop 的内部层，不再各自形成产品或额度。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md) 和 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。
 
 Loop 只返回一个持久化结果：`PASS`（退出码 `0`）、`NEEDS_WORK`（退出码 `1`）或 `ERROR`（退出码 `2`）。未登录用户有 1 次、最多 2 轮的本地试用；登录后的 Free 用户每月 10 个 Loop session，每次最多 5 轮，内部检查不重复计数。额度服务暂时不可用时，CLI 会警告并按本地 5 轮安全上限继续。旧 `verify-pass`、`scan-clean`、`judge-pass` Goal records 和 flags 仍可读取，并迁移到统一 proof gate；详见 [兼容矩阵](docs/design/0.0.12-compatibility.md)。
 
@@ -27,7 +27,11 @@ wukong server                  # 启动本地 REST/WebSocket server
 wukong web                     # 打开本地 web UI
 wukong loop "完成当前改动"      # 迭代直到独立交付 gate 通过
 wukong loop "修复测试" --model fast --role tester
+wukong loop "修复测试" --review-model reviewer
 wukong loop "修复测试" --max-iterations 5 --every 30s
+wukong review init             # 创建 .wukong/review-policy.md
+wukong review feedback <finding-id> accept
+wukong review stats            # 查看本地 feedback 数量
 wukong guard                   # 查看或运行 best-effort 命令风险 guard
 wukong judge                   # 只审不写的合并判定
 wukong login                   # 通过 device-code flow 登录
@@ -40,7 +44,7 @@ wukong upgrade                 # 升级 Wukong Code
 
 高级诊断命令仍可直接用于 CI 和调试：`wukong verify`、`wukong scan`、`wukong proof`。Loop 会自动运行这些内部层，因此它们不再出现在主帮助入口。
 
-待实现命令：`wukong ship`、`wukong review`、`wukong schedule`（云端例程）。
+待实现命令：`wukong ship`、`wukong schedule`（云端例程）。
 
 完整参数以 `wukong --help` 为准。
 
@@ -85,13 +89,13 @@ pnpm build      # 构建所有包
 
 ## 商业化重构
 
-当前产品方向是把 Wukong Code 做成 **AI 写代码时代的合并前验证层** —— AI Coding Loop 的控制层与验证层。实现计划见：
+当前产品方向是把 Wukong Code 做成 **AI 写代码时代的 review 驱动控制循环**。实现计划见：
 
 - [产品路线图](ROADMAP.md)
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [技术实现方案](docs/tech/commercial-refactor-implementation.md)
 
-P0 本地 CLI 命令、TUI 验证命令、`/proof`、`/judge`、`/goal --until` verification gate、`/loop`、top-level `wukong loop`、Loop 配额闭环和 `wukong_verify` agent tool 已经实现。后续工作包括完整计费生命周期、Hosted Evidence v2、团队规则和深度 review。
+第一批 `0.0.13` 已实现 Loop runtime、独立 reviewer、结构化 findings、项目 review policy、本地 feedback store 和 reviewer-model override。发布前还需要真实仓库 E2E、最终公告与 CHANGELOG 同步，以及生产 activated Loop / feedback 统计验收。
 
 ## 致谢
 

@@ -1,5 +1,15 @@
 # @wukong.today/code
 
+## 0.0.13 (Unreleased)
+
+### Patch Changes
+
+- Add structured multi-finding Loop reviews with blocking, important, and note severity levels.
+- Add `.wukong/review-policy.md` project criteria through `wukong review init`.
+- Add local finding feedback and reviewer diagnostics through `wukong review feedback`, `wukong review stats`, and `/review`.
+- Add `--review-model` for an independent BYOK reviewer without changing the writer model.
+- Make the TUI and bundled Web experience Loop-first with Goal → Write → Check → Review → Fix copy.
+
 ## 0.0.12
 
 ### Patch Changes
@@ -11,7 +21,7 @@
 - Add experimental Role Profiles for task-specific writer prompts, model aliases, and tool allowlist narrowing. The independent reviewer stays read-only.
 - Enable Role Profiles through `experimental.role_profiles`, then use `wukong roles list`, `wukong --role <name>`, or `/transform <name>`.
 - Preserve 0.0.11 Goal records and legacy `verify-pass`, `scan-clean`, and `judge-pass` flags by migrating them to the unified `proof-pass` gate.
-- Keep reports optional. Loop does not persist or upload evidence unless the user explicitly requests it; Hosted Evidence v2 remains planned for 0.0.13.
+- Keep reports optional. Loop does not persist or upload evidence unless the user explicitly requests it; Hosted Evidence v2 remains deferred beyond 0.0.13.
 
 ## 0.0.11
 

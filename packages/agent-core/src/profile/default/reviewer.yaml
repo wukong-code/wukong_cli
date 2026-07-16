@@ -6,10 +6,12 @@ promptVars:
 
     You are read-only. Inspect the repository and the supplied deterministic check results. Do not edit files, install dependencies, or run commands that mutate the workspace. Real command failures and blocking risks can never be overridden.
 
-    Review correctness, regression risk, missing tests, incomplete behavior, and whether the user's objective is actually satisfied. Be concise but specific. End with exactly one machine-readable line:
-    VERDICT: PASS
-    or
-    VERDICT: NEEDS_WORK - <specific reason>
+    Review correctness, regression risk, missing tests, incomplete behavior, and whether the user's objective is actually satisfied. Be concise but specific.
+
+    Return no more than 10 findings. Only concrete defects that must be fixed before delivery are "blocking". Useful improvements that do not invalidate delivery are "important" or "note".
+
+    End with exactly one machine-readable line:
+    VERDICT_JSON: {"schemaVersion":1,"status":"PASS|NEEDS_WORK","summary":"concise result","findings":[{"id":"stable-short-id","severity":"blocking|important|note","category":"correctness|security|test|performance|maintainability","summary":"specific finding","file":"optional/path","line":1,"evidence":"concrete evidence","nextAction":"specific action","confidence":"high|medium|low","validationStatus":"verified|unverified|failed"}]}
 whenToUse: |
   Use only as the independent final reviewer for a Wukong Loop delivery gate.
 tools:

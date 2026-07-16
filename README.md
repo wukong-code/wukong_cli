@@ -4,13 +4,13 @@
 
 ## What Is Wukong Code
 
-> **AI can write the code. Wukong proves whether it should ship.**
+> **Give Wukong a goal. It loops until the change is ready.**
 
-Wukong Code is a local-first terminal AI coding agent built as the **control and verification layer for AI Coding Loops**. It does not compete with Cursor / Claude Code / Codex on writing code; it answers the question they leave open: *can this AI-written code be merged?*
+Wukong Code is a terminal AI coding agent built around one primary workflow: **Goal → Write → Check → Review → Fix**. Give `/loop` a goal and Wukong keeps working until an independent reviewer has no blocking findings or the iteration limit is reached.
 
-The local P0 loop and Hosted Reports MVP are implemented: `verify`, `scan`, and `proof` can upload redacted reports, the Dashboard shows real report history, and public sharing requires explicit `--upload --public`. Interactive `/loop` and headless `wukong loop` are available; the complete billing lifecycle, GitHub PR Evidence, team rules, and deep review remain planned work.
+Version `0.0.13` is under development. Its first phase adds structured multi-finding reviews, project-specific rules in `.wukong/review-policy.md`, local finding feedback, and an optional independent reviewer model. It remains free and bring-your-own-key; payments and real Pro entitlements are deferred to `0.1.0`.
 
-Version `0.0.12` is Loop-first: Wukong writes, runs real project checks, asks a fresh-context reviewer, and iterates until the delivery gate passes. `verify`, `scan`, and `proof` remain available as advanced diagnostics, but they are internal Loop layers rather than separate products or quotas. Optional model aliases and lightweight Role Profiles add task-specific behavior. See the [0.0.12 design contract](docs/design/verification-loop-v2.md).
+Version `0.0.12` established the Loop-first runtime. `verify`, `scan`, and `proof` remain available as advanced diagnostics, but they are internal Loop layers rather than separate products or quotas. See the [0.0.12 design contract](docs/design/verification-loop-v2.md) and the [0.0.13 review design](docs/design/review-learning-loop.md).
 
 Loop returns one durable result: `PASS` (exit `0`), `NEEDS_WORK` (exit `1`), or `ERROR` (exit `2`). Guests receive one two-iteration local trial; signed-in Free users receive 10 Loop sessions per month with up to five iterations each. Internal checks never consume additional quota. Temporary quota-service failures warn and continue locally with the five-iteration safety cap. Legacy `verify-pass`, `scan-clean`, and `judge-pass` Goal records and flags remain readable and migrate to the unified proof gate; see the [compatibility matrix](docs/design/0.0.12-compatibility.md).
 
@@ -27,7 +27,11 @@ wukong server                  # run the local REST/WebSocket server
 wukong web                     # open the local web UI
 wukong loop "ship the change"  # iterate until the independent delivery gate passes
 wukong loop "fix tests" --model fast --role tester
+wukong loop "fix tests" --review-model reviewer
 wukong loop "fix tests" --max-iterations 5 --every 30s
+wukong review init             # create .wukong/review-policy.md
+wukong review feedback <finding-id> accept
+wukong review stats            # show local feedback counts
 wukong guard                   # inspect or run the best-effort command risk guard
 wukong judge                   # evaluator-only merge decision
 wukong login                   # authenticate through the device-code flow
@@ -40,7 +44,7 @@ wukong upgrade                 # upgrade Wukong Code
 
 Advanced diagnostics remain directly executable for CI and debugging: `wukong verify`, `wukong scan`, and `wukong proof`. Loop runs these layers automatically, so they are intentionally omitted from the primary help surface.
 
-Planned commands (not yet implemented): `wukong ship`, `wukong review`, `wukong schedule` (cloud routine).
+Planned commands (not yet implemented): `wukong ship`, `wukong schedule` (cloud routine).
 
 Run `wukong --help` for the complete option list.
 
@@ -85,13 +89,13 @@ Update checks, automatic installation, TUI announcements, and rollout status are
 
 ## Commercial Refactor
 
-The current product direction is to turn Wukong Code into the **proof layer for AI-written code** — the control and verification layer of an AI Coding Loop. The implementation plan is tracked in:
+The current product direction is to make Wukong Code the **review-driven control loop for AI-written code**. The implementation plan is tracked in:
 
 - [Roadmap](ROADMAP.md)
 - [Commercial refactor plan](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [Technical implementation plan](docs/tech/commercial-refactor-implementation.md)
 
-The P0 local CLI commands, TUI verification commands, unified `/goal --until proof-pass` delivery gate, interactive `/loop`, headless `wukong loop`, Loop quota accounting, hosted report preview, and `wukong_verify` agent tool are implemented. Follow-up work includes the complete billing lifecycle, team rules, hosted evidence v2, and deep review.
+The Loop runtime, independent reviewer, structured findings, project review policy, local feedback store, and reviewer-model override are implemented for the first `0.0.13` development tranche. Real-repository E2E validation, release copy, announcements, and production activation metrics remain before release.
 
 ## Acknowledgments
 

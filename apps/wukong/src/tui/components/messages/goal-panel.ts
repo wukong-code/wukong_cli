@@ -176,6 +176,29 @@ export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRA
   if (goal.stopCondition !== undefined) {
     lines.push(row('Iteration', value(`${goal.iteration}${goal.maxIterations !== undefined ? `/${String(goal.maxIterations)}` : ''}`)));
   }
+  if (goal.reviewModel !== undefined) {
+    lines.push(row('Reviewer', value(goal.reviewModel)));
+  }
+  const findings = goal.loopResult?.findings ?? [];
+  if (findings.length > 0) {
+    const blocking = findings.filter((finding) => finding.severity === 'blocking');
+    const nonBlocking = findings.length - blocking.length;
+    lines.push(
+      row(
+        'Review',
+        value(
+          `${String(blocking.length)} blocking${nonBlocking > 0 ? ` · ${String(nonBlocking)} non-blocking` : ''}`,
+        ),
+      ),
+    );
+    for (const finding of blocking.slice(0, 3)) {
+      const location = finding.file === undefined
+        ? ''
+        : ` (${finding.file}${finding.line === undefined ? '' : `:${String(finding.line)}`})`;
+      lines.push(muted(`  ${finding.id}: ${finding.summary}${location}`));
+    }
+    lines.push(muted('  Feedback: wukong review feedback <finding-id> <action>'));
+  }
   if (!isComplete) {
     const stop = formatStopRow(goal);
     lines.push(
