@@ -1,6 +1,6 @@
 # CLI 更新与公告契约
 
-> 更新时间：2026-07-13
+> 更新时间：2026-07-16
 > 范围：`wukong_cli` 的更新检查、自动安装和 TUI 公告；公告发布源由 `wukong_web` 管理。
 
 更新与公告是两条独立通道。更新通道负责让用户获得新版本；公告通道负责在 TUI 内展示版本、迁移、故障或预览信息。公告不能替代更新检查。
@@ -14,10 +14,11 @@
 
 ### 更新通道
 
-- `wukong upgrade` 与 `wukong update` 等价，始终主动获取最新版本，不受被动分批发布限制。
+- `wukong upgrade` 与 `wukong update` 等价，始终主动获取最新版本，不受被动分批发布限制；检测到可升级版本后直接安装，不再二次询问。
 - 交互式启动会先读取本地更新缓存，再在后台刷新远端 manifest。
 - `npm`、`pnpm`、`yarn`、`bun` 全局安装支持后台自动安装；默认 `auto_install = true`。
-- Homebrew、native 和无法识别的安装来源只显示手动命令，不自动执行。
+- Homebrew 和 native binary 不会在启动 preflight 中执行后台安装；native macOS/Linux 用户会被引导运行 `wukong upgrade`。
+- 主动运行 `wukong upgrade` 时，受支持的包管理器、Homebrew 和 native macOS/Linux 会直接完成升级；native 安装器锁定目标版本、校验 Release SHA-256，并以原子替换更新当前二进制。native Windows 和无法识别的安装来源回退到下载页。
 - 后台安装成功后，下次交互式启动显示成功通知和 changelog 链接。
 - 在 TUI 输入 `/settings`，选择 `Upgrade` 可以开关后台自动安装；也可以编辑 `~/.wukong/tui.toml`：
 

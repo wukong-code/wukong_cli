@@ -5,17 +5,12 @@ import { refreshUpdateCache } from '#/cli/update/refresh';
 import { selectUpdateTarget } from '#/cli/update/select';
 import { detectInstallSource } from '#/cli/update/source';
 import {
-  canAutoInstall,
+  canInstallFromUpgradeCommand,
   installCommandFor,
   installUpdate as installUpdateForeground,
   renderInstallSuccessMessage,
   renderManualUpdateMessage,
 } from '#/cli/update/preflight';
-import {
-  promptForInstallChoice,
-  type InstallPromptChoiceValue,
-  type InstallPromptOptions,
-} from '#/cli/update/prompt';
 import {
   NPM_PACKAGE_NAME,
   type InstallSource,
@@ -37,13 +32,9 @@ export interface UpgradeDeps {
     version: string,
     platform: NodeJS.Platform,
   ) => Promise<void>;
-  readonly promptForInstallChoice: (
-    options: InstallPromptOptions,
-  ) => Promise<InstallPromptChoiceValue>;
   readonly platform: NodeJS.Platform;
   readonly stdout: WritableLike;
   readonly stderr: WritableLike;
-  readonly isInteractive: boolean;
   readonly track: UpgradeTrack;
   readonly logger: UpgradeLogger;
 }
@@ -86,7 +77,7 @@ export async function handleUpgrade(
 
   const source = await deps.detectInstallSource().catch(() => 'unsupported' as const);
   const installCommand = installCommandFor(source, target.version, deps.platform);
-  if (!canAutoInstall(source, deps.platform) || !deps.isInteractive) {
+  if (!canInstallFromUpgradeCommand(source, deps.platform)) {
     trackUpgradeEvent(deps.track, 'upgrade_command_manual_command', {
       current_version: currentVersion,
       target_version: target.version,
@@ -101,37 +92,10 @@ export async function handleUpgrade(
     return 0;
   }
 
-  trackUpgradeEvent(deps.track, 'upgrade_command_prompted', {
-    current_version: currentVersion,
-    target_version: target.version,
-    source,
-  });
-  logUpgradeInfo(deps.logger, 'manual upgrade prompted', {
-    currentVersion,
-    targetVersion: target.version,
-    source,
-  });
-  const choice = await deps.promptForInstallChoice({
-    currentVersion,
-    target,
-    installCommand,
-    installSource: source,
-  });
-  if (choice === 'skip') {
-    trackUpgradeEvent(deps.track, 'upgrade_command_skipped', {
-      current_version: currentVersion,
-      target_version: target.version,
-      source,
-    });
-    logUpgradeInfo(deps.logger, 'manual upgrade skipped', {
-      currentVersion,
-      targetVersion: target.version,
-      source,
-    });
-    return 0;
-  }
-
   try {
+    deps.stdout.write(
+      `Upgrading Wukong ${formatDisplayVersion(currentVersion)} -> ${formatDisplayVersion(target.version)}...\n`,
+    );
     trackUpgradeEvent(deps.track, 'upgrade_command_install_selected', {
       current_version: currentVersion,
       target_version: target.version,
@@ -177,11 +141,9 @@ function createDefaultUpgradeDeps(overrides: Partial<UpgradeDeps>): UpgradeDeps 
     refreshUpdateCache: overrides.refreshUpdateCache ?? (() => refreshUpdateCache()),
     detectInstallSource: overrides.detectInstallSource ?? (() => detectInstallSource()),
     installUpdate: overrides.installUpdate ?? installUpdateForeground,
-    promptForInstallChoice: overrides.promptForInstallChoice ?? promptForInstallChoice,
     platform: overrides.platform ?? process.platform,
     stdout: overrides.stdout ?? process.stdout,
     stderr: overrides.stderr ?? process.stderr,
-    isInteractive: overrides.isInteractive ?? (process.stdin.isTTY && process.stdout.isTTY),
     track: overrides.track ?? trackTelemetry,
     logger: overrides.logger ?? log,
   };

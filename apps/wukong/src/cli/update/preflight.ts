@@ -1,4 +1,5 @@
 import { spawn } from 'node:child_process';
+import { dirname } from 'node:path';
 
 import { log, type Logger } from '@wukong/wukong-sdk';
 import type { TelemetryProperties } from '@wukong/wukong-telemetry';
@@ -48,6 +49,8 @@ export interface RunUpdatePreflightOptions {
 const AUTO_INSTALL_FAILURE_PROMPT_THRESHOLD = 2;
 const AUTO_INSTALL_ACTIVE_TTL_MS = 6 * 60 * 60 * 1000;
 const USER_VISIBLE_UPDATE_REFRESH_TIMEOUT_MS = 1_000;
+const DOWNLOAD_URL = 'https://wukong.today/download';
+const NATIVE_INSTALL_COMMAND = 'curl -fsSL https://wukong.today/install.sh | sh';
 
 type UpdateLogger = Pick<Logger, 'info' | 'warn'>;
 
@@ -62,7 +65,7 @@ function bunCommand(platform: NodeJS.Platform): string {
 export function installCommandFor(
   source: InstallSource,
   version: string,
-  _platform: NodeJS.Platform,
+  platform: NodeJS.Platform,
 ): string {
   switch (source) {
     case 'npm-global':
@@ -76,9 +79,11 @@ export function installCommandFor(
     case 'homebrew':
       return 'brew upgrade wukong';
     case 'native':
-      return `npm install -g ${NPM_PACKAGE_NAME}@${version}`;
+      return platform === 'darwin' || platform === 'linux'
+        ? 'wukong upgrade'
+        : DOWNLOAD_URL;
     case 'unsupported':
-      return `npm install -g ${NPM_PACKAGE_NAME}@${version}`;
+      return DOWNLOAD_URL;
   }
 }
 
@@ -94,9 +99,32 @@ export function canAutoInstall(source: InstallSource, _platform: NodeJS.Platform
       // behind the CDN release — prompt the user to run `brew upgrade` manually.
       return false;
     case 'native':
-      // Native installer endpoints are not a verified update surface in this
-      // repository. Do not execute remote install scripts from auto-update.
+      // Passive startup checks must never execute a remote native installer.
+      // The explicit `wukong upgrade` command handles this source instead.
       return false;
+    case 'unsupported':
+      return false;
+  }
+}
+
+/**
+ * Whether an explicit `wukong upgrade` command can install this source.
+ * This is intentionally broader than passive auto-install: startup must not
+ * execute a remote native installer, but an explicit upgrade command may.
+ */
+export function canInstallFromUpgradeCommand(
+  source: InstallSource,
+  platform: NodeJS.Platform,
+): boolean {
+  switch (source) {
+    case 'npm-global':
+    case 'pnpm-global':
+    case 'yarn-global':
+    case 'bun-global':
+    case 'homebrew':
+      return true;
+    case 'native':
+      return platform === 'darwin' || platform === 'linux';
     case 'unsupported':
       return false;
   }
@@ -105,6 +133,7 @@ export function canAutoInstall(source: InstallSource, _platform: NodeJS.Platform
 interface SpawnCommand {
   readonly cmd: string;
   readonly args: readonly string[];
+  readonly env?: NodeJS.ProcessEnv;
 }
 
 export function spawnForSource(
@@ -123,8 +152,20 @@ export function spawnForSource(
       return { cmd: bunCommand(platform), args: ['add', '-g', `${NPM_PACKAGE_NAME}@${version}`] };
     case 'homebrew':
       return { cmd: 'brew', args: ['upgrade', 'wukong'] };
-    case 'native':
-      throw new Error('native install source cannot be auto-installed');
+    case 'native': {
+      if (!canInstallFromUpgradeCommand(source, platform)) {
+        throw new Error(`native install source cannot be upgraded automatically on ${platform}`);
+      }
+      return {
+        cmd: 'sh',
+        args: ['-c', NATIVE_INSTALL_COMMAND],
+        env: {
+          ...process.env,
+          WUKONG_VERSION: version.startsWith('v') ? version : `v${version}`,
+          WUKONG_INSTALL_DIR: dirname(process.execPath),
+        },
+      };
+    }
     case 'unsupported':
       throw new Error('unsupported install source cannot be auto-installed');
   }
@@ -152,17 +193,20 @@ export function renderManualUpdateMessage(
       sourceDesc = 'homebrew';
       break;
     case 'native':
-      sourceDesc = 'native binary. Auto-update is not supported for this install source.';
+      sourceDesc = 'native binary. Automatic background updates are disabled.';
       break;
     case 'unsupported':
       sourceDesc = 'unsupported package manager or layout.';
       break;
   }
+  const updateInstruction = installCommand.startsWith('https://')
+    ? `To update manually, visit: ${installCommand}\n`
+    : `To update manually, run: ${installCommand}\n`;
   return (
     `A newer version of ${NPM_PACKAGE_NAME} is available ` +
     `(${currentVersion} -> ${target.version}).\n` +
     `Detected install source: ${sourceDesc}\n` +
-    `To update manually, run: ${installCommand}\n`
+    updateInstruction
   );
 }
 
@@ -479,9 +523,9 @@ export async function installUpdate(
   version: string,
   platform: NodeJS.Platform,
 ): Promise<void> {
-  const { cmd, args } = spawnForSource(source, version, platform);
+  const { cmd, args, env } = spawnForSource(source, version, platform);
   await new Promise<void>((resolve, reject) => {
-    const child = spawn(cmd, [...args], { stdio: 'inherit' });
+    const child = spawn(cmd, [...args], { stdio: 'inherit', env });
     child.once('error', reject);
     child.once('exit', (code, signal) => {
       if (code === 0) {
@@ -537,7 +581,7 @@ async function startBackgroundInstall(
       source,
     });
 
-    const { cmd, args } = spawnForSource(source, target.version, platform);
+    const { cmd, args, env } = spawnForSource(source, target.version, platform);
     let settled = false;
 
     const finish = (succeeded: boolean): void => {
@@ -589,7 +633,7 @@ async function startBackgroundInstall(
       });
     };
 
-    const child = spawn(cmd, [...args], { detached: true, stdio: 'ignore' });
+    const child = spawn(cmd, [...args], { detached: true, stdio: 'ignore', env });
     child.once('error', () => { finish(false); });
     child.once('exit', (code) => { finish(code === 0); });
     child.unref();

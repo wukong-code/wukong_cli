@@ -128,7 +128,7 @@ Loop 的最终三态和退出码为 `PASS=0`、`NEEDS_WORK=1`、`ERROR=2`；登�
 ## 更新与 TUI 公告
 
 - CLI 启动时会检查更新；默认允许受支持的包管理器在后台自动安装。可在 `/settings` → `Upgrade` 中关闭，或设置 `~/.wukong/tui.toml` 的 `[upgrade].auto_install = false`。
-- `wukong upgrade` / `wukong update` 会立即主动检查最新版本；Homebrew 等不支持自动安装的来源会显示手动命令。
+- `wukong upgrade` / `wukong update` 会立即检查并安装最新版本，不再二次询问。native macOS/Linux 会校验 Release SHA-256 后原子替换当前二进制；native Windows 或无法识别的安装来源会回退到下载页。
 - 主 TUI 启动后会异步拉取一次公告，3 秒超时。失败不会阻塞 CLI，每次最多展示一条。
 - 公告支持客户端版本、时间范围、`once` / `cooldown` / `always` 频控和安全链接白名单。
 - `0.0.10` 及更早版本不能读取新公告地址，需要先通过更新通道升级。

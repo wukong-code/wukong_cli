@@ -461,7 +461,7 @@ describe('runUpdatePreflight', () => {
     expect(mocks.spawn).not.toHaveBeenCalled();
   });
 
-  it('native on darwin: prints npm fallback command, does not spawn', async () => {
+  it('native on darwin: directs the user to the automatic upgrade command', async () => {
     mocks.readUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.refreshUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.detectInstallSource.mockResolvedValue('native');
@@ -470,7 +470,8 @@ describe('runUpdatePreflight', () => {
     try {
       const { stdout, options } = captureOutput();
       await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
-      expect(stdout.join('')).toContain('npm install -g @wukong.today/code@0.5.0');
+      expect(stdout.join('')).toContain('To update manually, run: wukong upgrade');
+      expect(stdout.join('')).not.toContain('npm install');
       expect(promptForInstallChoice).not.toHaveBeenCalled();
       expect(mocks.spawn).not.toHaveBeenCalled();
     } finally {
@@ -478,7 +479,7 @@ describe('runUpdatePreflight', () => {
     }
   });
 
-  it('native on win32: prints npm fallback command, does not spawn', async () => {
+  it('native on win32: links to the download page, does not spawn', async () => {
     mocks.readUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.refreshUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.detectInstallSource.mockResolvedValue('native');
@@ -487,7 +488,8 @@ describe('runUpdatePreflight', () => {
     try {
       const { stdout, options } = captureOutput();
       await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
-      expect(stdout.join('')).toContain('npm install -g @wukong.today/code@0.5.0');
+      expect(stdout.join('')).toContain('To update manually, visit: https://wukong.today/download');
+      expect(stdout.join('')).not.toContain('npm install');
       expect(promptForInstallChoice).not.toHaveBeenCalled();
       expect(mocks.spawn).not.toHaveBeenCalled();
     } finally {
@@ -495,13 +497,14 @@ describe('runUpdatePreflight', () => {
     }
   });
 
-  it('unsupported: prints fallback npm command', async () => {
+  it('unsupported: links to the download page', async () => {
     mocks.readUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.refreshUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.detectInstallSource.mockResolvedValue('unsupported');
     const { stdout, options } = captureOutput();
     await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
-    expect(stdout.join('')).toContain('npm install -g @wukong.today/code@0.5.0');
+    expect(stdout.join('')).toContain('To update manually, visit: https://wukong.today/download');
+    expect(stdout.join('')).not.toContain('npm install');
     expect(mocks.spawn).not.toHaveBeenCalled();
   });
 
@@ -1050,9 +1053,22 @@ describe('runUpdatePreflight', () => {
 });
 
 describe('spawnForSource native', () => {
-  it('does not auto-install native sources through remote scripts', () => {
-    expect(() => spawnForSource('native', '0.5.0', 'darwin')).toThrow(
-      'native install source cannot be auto-installed',
+  it('builds a pinned native installer command for explicit upgrades', () => {
+    const command = spawnForSource('native', '0.5.0', 'darwin');
+
+    expect(command.cmd).toBe('sh');
+    expect(command.args).toEqual([
+      '-c',
+      'curl -fsSL https://wukong.today/install.sh | sh',
+    ]);
+    expect(command.env).toEqual(expect.objectContaining({
+      WUKONG_VERSION: 'v0.5.0',
+    }));
+  });
+
+  it('does not auto-install a native Windows binary', () => {
+    expect(() => spawnForSource('native', '0.5.0', 'win32')).toThrow(
+      'native install source cannot be upgraded automatically on win32',
     );
   });
 });

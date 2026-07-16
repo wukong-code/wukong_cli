@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from 'vitest';
 
 import { handleUpgrade } from '#/cli/sub/upgrade';
-import type { InstallPromptChoiceValue } from '#/cli/update/prompt';
 import type { InstallSource, UpdateCache } from '#/cli/update/types';
 
 function cacheWith(
@@ -40,8 +39,7 @@ function createDeps(overrides: {
   readonly latest?: string | null;
   readonly manifest?: UpdateCache['manifest'];
   readonly source?: InstallSource;
-  readonly isInteractive?: boolean;
-  readonly promptForInstallChoice?: () => Promise<InstallPromptChoiceValue>;
+  readonly platform?: NodeJS.Platform;
   readonly installUpdate?: (source: InstallSource, version: string, platform: NodeJS.Platform) => Promise<void>;
 } = {}) {
   const installUpdate =
@@ -57,8 +55,6 @@ function createDeps(overrides: {
       .fn()
       .mockResolvedValue(cacheWith(overrides.latest ?? '0.5.0', overrides.manifest ?? null)),
     detectInstallSource: vi.fn().mockResolvedValue(overrides.source ?? 'npm-global'),
-    promptForInstallChoice:
-      overrides.promptForInstallChoice ?? vi.fn().mockResolvedValue('install'),
     installUpdate,
     track: vi.fn(),
     logger: {
@@ -67,13 +63,12 @@ function createDeps(overrides: {
       error: vi.fn(),
       debug: vi.fn(),
     },
-    platform: 'darwin' as NodeJS.Platform,
-    isInteractive: overrides.isInteractive ?? true,
+    platform: overrides.platform ?? 'darwin' as NodeJS.Platform,
   };
 }
 
 describe('handleUpgrade', () => {
-  it('prompts before installing the latest version when the install source supports it', async () => {
+  it('installs the latest version immediately when the install source supports it', async () => {
     const { stdout, stderr, writable } = captureOutput();
     const deps = createDeps({ latest: '0.5.0', source: 'npm-global' });
 
@@ -81,18 +76,7 @@ describe('handleUpgrade', () => {
 
     expect(deps.refreshUpdateCache).toHaveBeenCalledTimes(1);
     expect(deps.detectInstallSource).toHaveBeenCalledTimes(1);
-    expect(deps.promptForInstallChoice).toHaveBeenCalledWith({
-      currentVersion: '0.4.0',
-      target: { version: '0.5.0' },
-      installCommand: 'npm install -g @wukong.today/code@0.5.0',
-      installSource: 'npm-global',
-    });
     expect(deps.installUpdate).toHaveBeenCalledWith('npm-global', '0.5.0', 'darwin');
-    expect(deps.track).toHaveBeenCalledWith('upgrade_command_prompted', expect.objectContaining({
-      current_version: '0.4.0',
-      target_version: '0.5.0',
-      source: 'npm-global',
-    }));
     expect(deps.track).toHaveBeenCalledWith('upgrade_command_install_selected', expect.objectContaining({
       target_version: '0.5.0',
       source: 'npm-global',
@@ -109,25 +93,6 @@ describe('handleUpgrade', () => {
     expect(stderr.join('')).toBe('');
   });
 
-  it('skips the foreground install when the update prompt is declined', async () => {
-    const { stdout, writable } = captureOutput();
-    const deps = createDeps({
-      latest: '0.5.0',
-      source: 'npm-global',
-      promptForInstallChoice: vi.fn().mockResolvedValue('skip'),
-    });
-
-    await expect(handleUpgrade('0.4.0', { ...deps, ...writable })).resolves.toBe(0);
-
-    expect(deps.promptForInstallChoice).toHaveBeenCalledTimes(1);
-    expect(deps.installUpdate).not.toHaveBeenCalled();
-    expect(deps.track).toHaveBeenCalledWith('upgrade_command_skipped', expect.objectContaining({
-      target_version: '0.5.0',
-      source: 'npm-global',
-    }));
-    expect(stdout.join('')).toBe('');
-  });
-
   it('prints up-to-date status without detecting the install source when no newer version exists', async () => {
     const { stdout, writable } = captureOutput();
     const deps = createDeps({ latest: '0.4.0' });
@@ -142,34 +107,51 @@ describe('handleUpgrade', () => {
     expect(stdout.join('')).toContain('Wukong is already up to date (v0.4.0).');
   });
 
-  it('prints the manual update command when the install source cannot be auto-installed', async () => {
+  it('links to the download page when the install source is unsupported', async () => {
     const { stdout, writable } = captureOutput();
     const deps = createDeps({ latest: '0.5.0', source: 'unsupported' });
 
     await expect(handleUpgrade('0.4.0', { ...deps, ...writable })).resolves.toBe(0);
 
     expect(deps.installUpdate).not.toHaveBeenCalled();
-    expect(deps.promptForInstallChoice).not.toHaveBeenCalled();
     expect(deps.track).toHaveBeenCalledWith('upgrade_command_manual_command', expect.objectContaining({
       target_version: '0.5.0',
       source: 'unsupported',
     }));
-    expect(stdout.join('')).toContain('To update manually, run: npm install -g @wukong.today/code@0.5.0');
+    expect(stdout.join('')).toContain('To update manually, visit: https://wukong.today/download');
+    expect(stdout.join('')).not.toContain('npm install');
   });
 
-  it('prints the manual update command without prompting when not interactive', async () => {
+  it('automatically upgrades a native macOS binary', async () => {
     const { stdout, writable } = captureOutput();
-    const deps = createDeps({ latest: '0.5.0', source: 'npm-global', isInteractive: false });
+    const deps = createDeps({ latest: '0.5.0', source: 'native' });
 
     await expect(handleUpgrade('0.4.0', { ...deps, ...writable })).resolves.toBe(0);
 
-    expect(deps.promptForInstallChoice).not.toHaveBeenCalled();
+    expect(deps.installUpdate).toHaveBeenCalledWith('native', '0.5.0', 'darwin');
+    expect(stdout.join('')).toContain('Upgrading Wukong v0.4.0 -> v0.5.0...');
+    expect(stdout.join('')).toContain('Updated @wukong.today/code to 0.5.0');
+    expect(stdout.join('')).not.toContain('npm install');
+  });
+
+  it('automatically upgrades without requiring an interactive terminal', async () => {
+    const { stdout, writable } = captureOutput();
+    const deps = createDeps({ latest: '0.5.0', source: 'npm-global' });
+
+    await expect(handleUpgrade('0.4.0', { ...deps, ...writable })).resolves.toBe(0);
+
+    expect(deps.installUpdate).toHaveBeenCalledWith('npm-global', '0.5.0', 'darwin');
+    expect(stdout.join('')).toContain('Updated @wukong.today/code to 0.5.0');
+  });
+
+  it('links to the download page for a native Windows binary', async () => {
+    const { stdout, writable } = captureOutput();
+    const deps = createDeps({ latest: '0.5.0', source: 'native', platform: 'win32' });
+
+    await expect(handleUpgrade('0.4.0', { ...deps, ...writable })).resolves.toBe(0);
+
     expect(deps.installUpdate).not.toHaveBeenCalled();
-    expect(deps.track).toHaveBeenCalledWith('upgrade_command_manual_command', expect.objectContaining({
-      target_version: '0.5.0',
-      source: 'npm-global',
-    }));
-    expect(stdout.join('')).toContain('To update manually, run: npm install -g @wukong.today/code@0.5.0');
+    expect(stdout.join('')).toContain('To update manually, visit: https://wukong.today/download');
   });
 
   it('returns a failing exit code when the foreground install fails', async () => {
