@@ -1,7 +1,7 @@
 # Wukong Code 商业化与产品重构方案
 
-> 版本: v1.3
-> 日期: 2026-07-14
+> 版本: v1.4
+> 日期: 2026-07-16
 > 当前范围: `wukong_cli` 新 Kimi-code base
 > 技术落地: [商业化重构技术实现方案](../tech/commercial-refactor-implementation.md)
 
@@ -246,6 +246,7 @@ Loop 必须提供真实免费体验，但额度只作用于顶层 session，不�
 | Loop sessions | 10 sessions/月，每个最多 5 轮；第 3 次起软提示 Pro | 一次 session 计一次；所有内部检查与 reviewer 不重复计数 |
 | 高级 verify/scan/proof | 不限制 | 兼容 CI/debug，不作为默认产品入口或付费点 |
 | BYOK reviewer | 包含在 Loop 中 | 不增加另一套 AI credits；provider token 由用户承担 |
+| 本地 review policy / feedback / 基础 eval | 不限制 | 免费层必须能积累真实反馈并验证 reviewer 价值；默认只保存在本地 |
 | 基础 `wukong guard` / `guard --status` | 暂不限制 | P0 guard 是 best-effort，不能作为强安全付费承诺 |
 | provider/login/doctor/export | 暂不限制 | 属于基础 CLI 使用、诊断和迁移能力 |
 
@@ -257,8 +258,10 @@ Loop 必须提供真实免费体验，但额度只作用于顶层 session，不�
 
 | 收费功能 | 推荐层级 | 价值 | 当前状态 |
 |---|---|---|---|
-| Hosted Reports / 分享链接 | Pro / Team | 上传 redacted report，生成可分享链接，保留历史记录 | 已实现基础闭环；0.0.12 补 v2 schema |
-| 更多 Loop + Deep Reviewer | Pro | 更长迭代、fresh-context 深度审查和更具体的修复反馈 | 0.0.12 先做 BYOK 基础版；Pro 价值待验证 |
+| Hosted Reports / 分享链接 | Pro / Team | 上传 redacted report，生成可分享链接，保留历史记录 | v1 基础闭环已实现；v2 属于 0.0.13+ backlog |
+| 更多 Loop + Deep Reviewer | Pro | 更长迭代、fresh-context 深度审查和更具体的修复反馈 | 0.0.12 BYOK 基础版已实现；0.0.13 验证 Pro 价值 |
+| Review Improver + 长期 Evals | Pro | 从人工反馈中生成可追溯 policy proposal，对比调整前后质量；不自动应用 | 0.0.13 设计完成，待实现 |
+| Shared Review Policy + Feedback Learning | Team | 团队共享审查偏好、误报处理、审批和质量趋势 | 0.1.0+，待实现 |
 | Wukong Product APIs | Pro / Team | report upload/share、PR comment/gate、rules evaluate、redaction、audit events | 部分实现：report upload/share 已有，其余待实现 |
 | Managed Model Add-on | Pro / Team / Credits | Wukong 提供托管模型调用，解决用户不想配置 key 的场景 | 待实现 |
 | Team Rules | Team | 团队统一验证命令、风险阈值、路径策略和 guard policy | 待实现 |
@@ -275,13 +278,13 @@ Loop 必须提供真实免费体验，但额度只作用于顶层 session，不�
 
 建议按以下顺序推进：
 
-1. 更多/更长 Loop + deep reviewer：最接近日常重复价值。
-2. Team Role Profiles + Team Rules + PR Gate：把个人 Trust Loop 变成团队流程。
-3. Wukong Product APIs：提供 PR gate、rules、audit 和显式 evidence sharing 的服务边界。
+1. 更多/更长 Loop + Review Learning Loop + deep reviewer：最接近日常重复价值，也能用人工反馈证明 reviewer 是否值得付费。
+2. Team Role Profiles + Shared Review Policy + PR Gate：把个人 Trust Loop 变成团队流程。
+3. Wukong Product APIs：提供 PR gate、rules、feedback、audit 和显式 evidence sharing 的服务边界。
 4. Managed Model Add-on：Wukong 承担模型成本时再引入独立 credits。
 5. Saved/Shared Evidence 与 Audit Log：只服务明确的协作和审计需求，不作为所有用户的前置流程。
 
-当前阶段先完成 0.0.12 免费 Trust Loop 的真实使用验证，再在 0.0.13 做 **真实付费 Preview / design partner**。Hosted report 与安装路径已有基础闭环；公开自助收费前还需要完成 billing 生命周期、稳定的 v2 entitlement、明确的个人/团队权益和真实付款验收。
+当前阶段以 0.0.12 免费 Trust Loop 的真实使用为基线，0.0.13 只验证 **Reviewer 是否能从反馈中持续变准**，保持免费/BYOK，不实现支付。完整 contract 见 [0.0.13 Review Learning Loop](../design/review-learning-loop.md)。0.1.0 才开放真实价格、Checkout、付费 entitlement 和 Team Pilot 支付路径。
 
 ### 4.5 商业验证门槛
 
@@ -292,7 +295,22 @@ Loop 必须提供真实免费体验，但额度只作用于顶层 session，不�
 - 至少 15% activated users 触达 80% 用量或 quota warning。
 - 触达 warning 的用户中，至少 10% 点击升级或主动请求更多额度；这仍只是升级意向。
 
-0.0.13 才验证真实付费：使用真实价格和 Checkout，观察付款完成、退款/取消与次月续费。进入公开 Pro 前至少需要 3 个非关联真实付款用户或 1 个付费 Team Pilot，并出现至少 1 个续费/持续付费信号；未满足时继续 design-partner 试点，不用虚假 Free 订阅记录替代付费证据。
+0.0.13 只验证 review 质量和使用意愿：
+
+- 至少累计 30 条有人类反馈的 findings，样本不足时只展示原始数量；
+- blocking finding acceptance/fixed rate、dismiss rate 和每个 Loop 的 review cycles 可真实计算；
+- 至少一个项目完成 finding → feedback → proposal → eval → 人工 apply → 后续 review；
+- policy 调整必须在固定 eval 上不退化，不能用“生成更多评论”替代质量证据；
+- 至少 20 个 activated Loop users、累计 50 次 Loop runs，并出现明确的 quota warning 或升级意愿；
+- Pricing 和 Dashboard 继续显示 `Coming Soon`，不展示价格或创建 Checkout 路径。
+
+0.1.0 才验证真实付费：
+
+- 使用真实价格和 Checkout，观察付款完成、退款/取消与次月续费；
+- checkout → entitlement → quota → portal → cancel/payment failure → grace 全链路通过；
+- 至少 3 个非关联真实付款用户或 1 个付费 Team Pilot，并出现至少 1 个续费/持续付费信号。
+
+未满足 0.0.13 的使用门槛时不开放 0.1.0 支付；继续免费验证，不用虚假 Free 订阅记录、注册数或模型自评替代真实使用和付费证据。
 
 ## 5. 实现优先级
 

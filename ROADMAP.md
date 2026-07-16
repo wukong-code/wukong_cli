@@ -101,6 +101,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 9. `/loop`（本机迭代，关机即停）和定时巡检拆开：迭代收敛归 `/loop`，本机巡检用已实现的 cron 工具，云端例程归 `/schedule`（hosted，Milestone 3+）。
 10. loop 的停止判断不由写代码的 agent 自评：用 deterministic verification 或独立 evaluator，也可挂载自定义验证 skill（借鉴 Claude Code 的 verify-skill 模式）。前提是先落地 `/goal` verification gate。
 11. 不重复造轮子：`/loop` 的时间触发复用 agent-core cron scheduler，执行核复用 `/goal`，proof/judge 复用 verification 引擎。
+12. Reviewer 的长期改进必须来自可追溯的人工反馈和固定 eval；外层 improver 只生成 policy proposal，不能自动修改 active policy 或 reviewer skill。
 
 ## 版本发布序列
 
@@ -108,8 +109,8 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 |---|---|---|
 | `0.0.11` | 把当前产品做成可理解、可发现、可运维的 Hosted Evidence 闭环 | TUI 文案与对齐完成；Dashboard 证据优先布局上线；公告端点 200；`proof → private history / public share → dashboard` 真实链路通过；文档与实现一致 |
 | `0.0.12` | Loop-first v2 | Loop 状态机；fresh-context reviewer；仅 Loop session 额度；BYOK model alias；轻量 Role Profiles；高级命令兼容；真实 E2E 通过 |
-| `0.0.13` | 关闭付费生命周期缺口 | Stripe customer portal、取消/付款失败状态、grace 规则、Billing UI 与 entitlement 状态一致；至少能观察 quota→upgrade 转化 |
-| `0.1.0` | 从个人 Trust Loop 进入真实 PR 工作流 | GitHub PR comment 与 status check 可用；visibility/redaction E2E 通过；至少 1 个 Team Pilot 在真实 repo 连续使用；0.0.12/0.0.13 无阻断级回归 |
+| `0.0.13` | Review Learning Loop | 结构化多 findings、项目 review policy、本地反馈/eval、受控验证、只生成 proposal 的 improver；保持免费/BYOK，不上线支付 |
+| `0.1.0` | 真实 PR 工作流 + 支付 | GitHub PR comment/status check 与 Pro 支付生命周期可用；visibility/redaction 和 checkout→entitlement→cancel/failure E2E 通过；至少 1 个真实付费 Team Pilot 或 3 个非关联个人付费用户 |
 
 `0.1.0` 的条件式目标是 **2026 年 8 月上旬，最早 8 月 3 日当周**。日期不是发布承诺；上表的 PR Evidence 和真实试点门槛未满足时不升 `0.1.0`。
 
@@ -192,7 +193,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 ## Milestone 0.6: 0.0.12 Free Trust Loop v2
 
-状态：已规划，待实现。
+状态：已实现并于 2026-07-16 发布。
 
 目标：只把 Loop 作为普通用户主产品。`verify`、`scan`、`proof` 降级为 Loop 内部层和高级诊断命令；用户只理解目标、迭代和最终 PASS / NEEDS_WORK / ERROR。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md)。
 
@@ -224,7 +225,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - deterministic 失败不能被模型改为 PASS；AI finding 必须标注来源、模型和置信度。
 - built-in/user/project role 与权限收缩、project trust 有自动化覆盖。
 - Loop session quota、幂等 start、月度重置、超限和内部不重复计数有自动化覆盖。
-- 旧 Goal records 和 0.0.11 flags 有兼容覆盖；Hosted Report v1 保持可读，v2 延后到0.0.13。
+- 旧 Goal records 和 0.0.11 flags 有兼容覆盖；Hosted Report v1 保持可读，v2 延后到 0.0.13+，且不是 Review Learning Loop 发布 blocker。
 
 ## Milestone 1: Hosted Reports MVP
 
@@ -250,32 +251,42 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - reviewer 打开 share page 时看不到 secrets 或完整源码 diff。
 - redaction 测试覆盖 secret-like string、env 文件、token、private key 和超大 diff。
 
-## Milestone 2: 0.0.13 Pro Preview Billing
+## Milestone 2: 0.0.13 Review Learning Loop
 
-状态：部分实现。Hosted report quota 已由服务端控制；customer portal、付款失败/grace 状态和完整 Billing UI 仍未完成。
+状态：计划中。设计 contract 见 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。本版本只验证 Reviewer 学习价值，保持免费/BYOK，支付与完整 Billing 生命周期明确延后到 0.1.0。
 
-目标：让 Pro Preview 至少包含一个真实付费能力，而不是 early access 文案。
+目标：在不扩大 reviewer 权限的前提下，让本地 Reviewer 从人工反馈中形成可评估、可审批的项目策略提案，并用真实反馈证明 reviewer 是否在变准。
 
 交付项：
 
-- Free / Pro Preview / Team Pilot 的 entitlement model。
-- hosted report quota 和 retention 的服务端校验。
-- Stripe webhook 覆盖 subscription create/update/cancel/payment failure。
-- Dashboard 的 customer portal 入口。
-- Billing UI 展示当前 plan、usage、quota、renewal、failed payment 状态。
-- Pricing 页面文案与真实 entitlement 对齐。
+- 统一 reviewer profile/runtime JSON contract，消除 `VERDICT` / `VERDICT_JSON` 冲突。
+- 多 finding Review Result：severity、category、evidence、next action、confidence 和 validation status。
+- `.wukong/review-policy.md` 项目审查策略，进入 fingerprint 和 reviewer input。
+- Reviewer 只返回受控 validation request，由现有 check runner 执行已授权命令。
+- 本地 finding feedback 和基础 eval：accept、dismiss、fixed、unclear、误报率和修复率。
+- 实验 `wukong review improve`：只生成可追溯 policy proposal，通过固定 eval 和人工批准后才能应用。
+- 实验性独立 `--review-model` 保持 BYOK，不绑定支付 entitlement。
+- Pricing、Dashboard 和 CLI 继续显示 Pro/Team `Coming Soon`，不创建付费 Checkout 用户路径。
 
 验收：
 
-- Free 用户可以用本地 CLI，但不能超过 hosted report quota。
-- Pro 用户可以按套餐上传并保留 reports。
-- 取消或付款失败后，按 grace 规则失去付费 hosted 能力。
-- Dashboard plan state 与数据库 entitlement state 一致。
-- Pricing 页面不把未完成的 Team 或 deep review 功能写成 live。
+- Review Result 可返回多个 findings，只有 blocking finding 阻止 Delivery Loop。
+- Reviewer 不能直接写文件或执行任意 shell；未授权 validation request 可验证地被拒绝。
+- 本地完整走通 finding → feedback → proposal → eval → 人工 apply → 后续 review，improver 不自动修改 active policy。
+- 无 `.wukong/review-policy.md` 的仓库保持 0.0.12 reviewer 行为和旧结果兼容。
+- 用户可离线使用基础 feedback/eval，独立 reviewer model 仍由用户 BYOK。
+- 生产统计能区分 activated Loop users、review feedback、proposal 和 eval，不用注册数冒充使用量。
+- Pricing 页面不显示价格，不把 Pro、Team、支付或 GitHub PR 能力写成 live。
 
-## Milestone 3: GitHub PR Evidence
+不做：
 
-目标：让 Wukong 进入 code review 流程，而不是只停在本地命令。
+- 不自动修改 reviewer skill 或 active policy。
+- 不从单条 PR comment、源码注释或模型输出学习永久规则。
+- 不做支付、Stripe portal、付费 entitlement、GitHub PR 自动评论、团队 policy 同步或云端定时 improver；这些仍是 0.1.0+。
+
+## Milestone 3: 0.1.0 GitHub PR Evidence + Payment
+
+目标：让 Wukong 进入真实 code review 流程，并在已经验证 Review Learning Loop 使用价值后开放第一条真实付费路径。
 
 交付项：
 
@@ -284,6 +295,10 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - PR status check：基于 `verify` / `scan` 结果。
 - GitHub Actions / CI 模式上传 reports。
 - GitHub org/repo 和 Wukong team/workspace 的映射。
+- Free / Pro / Team entitlement model 和服务端强制限制。
+- Stripe Checkout、customer portal，以及 subscription create/update/cancel/payment failure webhook。
+- grace、renewal、failed payment 状态与 Dashboard Billing UI 一致。
+- Pricing 页面显示经过验证的真实价格和权益，不再只显示 `Coming Soon`。
 
 验收：
 
@@ -292,6 +307,8 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - Report link 使用正确的 visibility rule。
 - GitHub comment 中不出现 secrets。
 - 上传失败不能把 verification 标记为 passed。
+- checkout → entitlement → quota → portal → cancel/payment failure → grace 全链路通过。
+- 至少 3 个非关联真实个人付费用户，或 1 个持续使用真实 repo 的付费 Team Pilot。
 
 ## Milestone 4: Team Rules And Audit Log
 

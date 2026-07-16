@@ -1,10 +1,64 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准，实现方案以 [技术实现方案](docs/tech/commercial-refactor-implementation.md) 为准，测试项以 [测试计划](docs/test/verification-cli-test-plan.md) 为准；本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.13 以 [Review Learning Loop 设计](docs/design/review-learning-loop.md) 为准，共享验证基础以 [技术实现方案](docs/tech/commercial-refactor-implementation.md) 为准，现有测试基线以 [测试计划](docs/test/verification-cli-test-plan.md) 为准；本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
-> 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/技术方案，再同步本文件。
+> 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
-## 📋 当前重点: 0.0.12 — Loop-first
+## 📋 当前重点: 0.0.13 — Review Learning Loop
+
+> 方案: [docs/design/review-learning-loop.md](docs/design/review-learning-loop.md)。本版保留 0.0.12 Delivery Loop，新增跨任务的 Review Learning Loop：结构化 findings → 人工反馈 → policy proposal → 固定 eval → 人工批准。Improver 不能自动修改 active policy 或 reviewer skill。0.0.13 保持免费/BYOK，不实现支付；支付延后到 0.1.0。
+
+### P0：Review Contract
+
+- [ ] 统一 reviewer profile 与 runtime 的 JSON 输出格式，移除 `VERDICT` / `VERDICT_JSON` 冲突
+- [ ] 将单 blocker 升级为多 finding `ReviewResult`，包含 severity/category/evidence/nextAction/confidence/validationStatus
+- [ ] 只有 blocking finding 阻止 Loop；important/note 只展示和记录，不制造无限修复
+- [ ] 为旧单 blocker LoopResult 和 0.0.12 Goal record 提供兼容投影
+- [ ] 限制 finding 数量、单项长度和总 payload；invalid output 最多重试一次后返回 ERROR
+
+### P0：Project Review Policy 与受控验证
+
+- [ ] 加载 `.wukong/review-policy.md`，纳入 config/workspace fingerprint 和 reviewer prompt
+- [ ] policy 缺失时保持 0.0.12 行为；policy 改变时拒绝陈旧 reviewer 结论
+- [ ] Reviewer 只返回 validation requests，不直接获得任意 Bash 或写权限
+- [ ] validation request 仅允许 `.wukong/checks.json`、已发现 package script 或用户授权 command
+- [ ] 为未授权、递归、超时、修改 workspace 的 validation request 增加拒绝与 E2E 覆盖
+
+### P0：人工 Feedback 与基础 Evals
+
+- [ ] 实现本地 `~/.wukong/review/feedback.jsonl` schema 和 append-only store
+- [ ] 增加 `wukong review feedback <finding-id> accept|dismiss|fixed|unclear`
+- [ ] TUI finding 提供 `[accept] [false positive] [fixed] [unclear]` 最小入口
+- [ ] 聚合 acceptance、dismiss/false-positive、fixed、recurrence、review cycles、invalid-output 和 latency
+- [ ] 少于 10 条有反馈 findings 时只显示样本量，不输出质量百分比结论
+- [ ] 默认不上传 finding、diff、policy 或自由文本 feedback reason
+
+### P1：安全的 Review Improver（实验）
+
+- [ ] `wukong review improve --since <duration>` 只生成 policy patch + JSON proposal
+- [ ] 每条 proposal 引用 finding ID、人工反馈、理由和 confidence；默认至少 3 条一致反馈
+- [ ] 增加固定 eval fixtures，比较 policy before/after；eval 下降时拒绝提案
+- [ ] proposal 必须人工批准；不自动 edit/commit/push，不自动删除安全规则
+- [ ] 增加 `--review-model` 和 role 独立 reviewer model，0.0.13 保持 BYOK，不接支付 entitlement
+
+### 明确延后到 0.1.0：支付与真实 Pro
+
+- [ ] Stripe Checkout、customer portal、subscription cancel/payment failure、grace 状态和 webhook E2E
+- [ ] Free / Pro / Team entitlement 与 reviewer/Loop/hosted/PR 权益统一
+- [ ] Billing UI 展示 plan、usage、quota、renewal、failed payment 和 portal 入口
+- [ ] Pricing、Dashboard、CLI upgrade 提示与真实价格、entitlement 对齐
+- [ ] 验证 quota warning → checkout → entitlement → cancel/failure/grace 全链路
+- [ ] 达到 3 个非关联真实个人付费用户，或 1 个持续使用真实 repo 的付费 Team Pilot
+
+### 0.0.13 发布门槛
+
+- [ ] 真实仓库 E2E：finding → feedback → proposal → eval → 人工 apply → 后续 review
+- [ ] Reviewer 无写权限、validation allowlist、policy fingerprint、旧结果兼容测试通过
+- [ ] Free 基础反馈/eval 有真实 runtime 行为；生产统计不再用注册数冒充 activated users
+- [ ] 中英文 README、user guide、CHANGELOG、公告、Web Pricing/Dashboard 最终同步，Pro/Team 保持 `Coming Soon`
+- [ ] 支付、GitHub PR 自动评论、团队 policy 同步和云端 improver 保持未完成口径，延后到 0.1.0+
+
+## ✅ 0.0.12 — Loop-first
 
 > 方案: [docs/design/verification-loop-v2.md](docs/design/verification-loop-v2.md)。本版只向普通用户提供一个主产品：Loop。`verify`、`scan`、`proof` 降级为 Loop 内部检查层和高级调试命令，不再各自形成产品、额度或报告流程。
 
@@ -53,10 +107,10 @@
 - [x] 真实 monorepo、无测试项目、snapshot stale、fresh reviewer、角色权限、usage start 幂等、Loop 收敛 E2E（2026-07-16）
 - [x] 更新中英文 README、help、公告、CHANGELOG 和 release notes（2026-07-16；公开仓发布时同步生成物）
 
-### 延后到 0.0.13
+### 0.0.13+ Backlog
 
-- [ ] Hosted Report v2、Loop evidence `--save`/`--upload`、双版本 ingestion 和 Dashboard evidence 迁移
-- [ ] `--review-model`、role 独立 reviewer model 和 managed model credits
+- [ ] Hosted Report v2、Loop evidence `--save`/`--upload`、双版本 ingestion 和 Dashboard evidence 迁移（不是 0.0.13 Review Learning Loop 发布 blocker）
+- [ ] `--review-model`、role 独立 reviewer model（纳入 0.0.13 P1）；managed model credits 延后
 - [ ] 全语言自动检查推断、后台/云端 Loop、PR gate 和 Team Role Profiles
 
 ## ✅ 0.0.11 — Hosted Evidence UX 与发布闭环
@@ -199,4 +253,4 @@
 
 ---
 
-**最后更新**: 2026-07-14（0.0.12 Free Trust Loop v2 规划）
+**最后更新**: 2026-07-16（0.0.13 Review Learning Loop 规划；支付延后到 0.1.0）

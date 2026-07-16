@@ -266,7 +266,7 @@ interface WorkspaceSnapshot {
 | `--json` | JSON stdout，不落盘 |
 | 旧高级命令显式 report/upload | 继续使用0.0.11 Hosted Report v1兼容链路 |
 
-中间 CHECK/REVIEW 不上传。0.0.12 Dashboard 只新增 Loop 用量、重置时间和最近最终状态，不上传 diff 或 evidence。Loop `--save`/`--upload`、Hosted Report v2 和 Loop 历史详情延后到0.0.13；现有 Hosted Report v1 保持兼容但不作为 Loop 的完成步骤。
+中间 CHECK/REVIEW 不上传。0.0.12 Dashboard 只新增 Loop 用量、重置时间和最近最终状态，不上传 diff 或 evidence。Loop `--save`/`--upload`、Hosted Report v2 和 Loop 历史详情延后到 0.0.13+，且不是 0.0.13 Review Learning Loop 的发布 blocker；现有 Hosted Report v1 保持兼容但不作为 Loop 的完成步骤。
 
 ## 12. 旧命令兼容与降级
 

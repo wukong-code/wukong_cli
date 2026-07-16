@@ -2,7 +2,7 @@
 
 > 日期: 2026-07-14
 > 范围: 现有 verification v1 兼容回归，以及 0.0.12 Loop-first 状态机、fresh reviewer、session 额度和角色集成
-> 状态: v1 已实现；0.0.12 v2 主流程、Role Profiles 基础运行时、Loop quota 与真实 monorepo E2E 已实现。Hosted Evidence v2 延后至 0.0.13。contract 以 [0.0.12 Trust Loop v2](../design/verification-loop-v2.md) 为准
+> 状态: v1 已实现；0.0.12 v2 主流程、Role Profiles 基础运行时、Loop quota 与真实 monorepo E2E 已实现。Hosted Evidence v2 延后至 0.0.13+，且不是 Review Learning Loop 发布 blocker。contract 以 [0.0.12 Trust Loop v2](../design/verification-loop-v2.md) 为准
 
 ## 0. 0.0.12 v2 发布测试门槛
 

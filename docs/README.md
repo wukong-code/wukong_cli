@@ -1,6 +1,6 @@
 # Wukong Code 文档索引
 
-> 最后更新: 2026-07-15
+> 最后更新: 2026-07-16
 > 当前事实基线: `wukong_cli` 内部实现仓库，产品名称为 **Wukong Code**
 > 状态说明: 本目录区分 **当前已实现** 与 **商业化后续待实现**。
 
@@ -37,8 +37,10 @@
 - [0.0.12 Goal 与 flags 兼容矩阵](design/0.0.12-compatibility.md)
 - [0.0.12 release notes / What's Changed](releases/0.0.12.md)
   定义 Loop-first 状态机、独立 reviewer、Loop session 额度、Role Profiles，以及 verify/scan/proof 的内部层与兼容边界。
+- [0.0.13 Review Learning Loop](design/review-learning-loop.md)
+  定义多 finding Review Contract、项目 review policy、受控验证、人工反馈、本地 eval，以及只生成提案且必须人工批准的外层 improver。
 - [执行层 TODO](../TODO.md)
-  按 ROADMAP milestone 拆解的任务清单，记录当前重点（0.0.12 Free Trust Loop v2）、暂缓项和已完成基线。
+  按 ROADMAP milestone 拆解的任务清单，记录当前重点（0.0.13 Review Learning Loop）、暂缓项和已完成基线。
 
 当前可用 top-level commands 以 `wukong --help` 为准，主要包括：
 
@@ -90,7 +92,7 @@ wukong upgrade
 
 任务级清单以 [../TODO.md](../TODO.md) 为准，本节只保留方向摘要：
 
-1. 0.0.12 以 Loop 为唯一主流程，统一为 PASS/NEEDS_WORK/ERROR。
-2. verify/scan/proof 降级为 Loop 内部层和高级诊断命令；只限制 Loop sessions，模型和 Role Profile 是可选增强。
-3. 默认不生成报告；用真实 monorepo、幂等 usage start、角色权限和 Loop 收敛 E2E 验证发布门槛。
-4. Billing 完整生命周期后移到 0.0.13；PR gate 继续作为 0.1.0 门槛。
+1. 0.0.12 Loop-first 已发布；继续保持 PASS/NEEDS_WORK/ERROR 和 deterministic checks + fresh reviewer 的内层交付闭环。
+2. 0.0.13 增加 Review Learning Loop：结构化 findings、项目 policy、人工 feedback、基础 eval 和安全的 policy proposal。
+3. Reviewer 不直接获得任意 Bash；验证请求复用现有 check runner，Improver 不自动修改 active policy 或 skill。
+4. 0.0.13 不做支付，Pro/Team 保持 `Coming Soon`；真实价格、Checkout、Billing 生命周期、GitHub PR adapter 和团队 policy 统一延后到 0.1.0+。
