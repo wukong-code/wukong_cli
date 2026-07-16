@@ -62,6 +62,12 @@ const config = withMermaid(defineConfig({
           { text: 'Login and Sync Test Plan', link: '/test/test-login-sync' },
         ],
       },
+      {
+        text: 'Confirmed, Unscheduled',
+        items: [
+          { text: 'Cross-Agent Session Resume', link: '/design/cross-agent-resume' },
+        ],
+      },
     ],
     socialLinks: [
       { icon: 'github', link: 'https://github.com/mutnpc/wukong_cli' },

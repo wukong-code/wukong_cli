@@ -88,6 +88,13 @@ wukong upgrade
 - [Verification CLI 自动化测试计划](test/verification-cli-test-plan.md)
   记录 `verify`、`scan`、`guard`、TUI slash commands 和 `wukong_verify` 的核心测试、CLI smoke 和后续测试 TODO。
 
+## 已确认但未排期的方向
+
+以下文档只记录已经确认的产品方向和实现边界，不属于任何已排版本，也不代表当前已经实现：
+
+- [跨 Agent Session Resume](design/cross-agent-resume.md)
+  扩展现有 `/resume`，在统一 picker 中发现 Wukong、Codex、Claude Code、Cursor 的本地 session；Wukong session 原生恢复，外部 session 明确定义为“导入并在 Wukong 中继续”，可进一步进入 `/loop`。
+
 ## 当前最高优先级 TODO
 
 任务级清单以 [../TODO.md](../TODO.md) 为准，本节只保留方向摘要：
