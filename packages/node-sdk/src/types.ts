@@ -27,6 +27,10 @@ export type {
   ExperimentalFeatureState,
   ExperimentalFlagMap,
   ExperimentalFlagSource,
+  ActiveRole,
+  RoleDefinition,
+  RoleSource,
+  RoleSummary,
   ExportSessionManifest,
   GoalBudgetLimits,
   GoalBudgetReport,
@@ -35,6 +39,9 @@ export type {
   GoalSnapshot,
   GoalStatus,
   GoalToolResult,
+  LoopResult,
+  LoopResultBlocker,
+  LoopResultCheck,
   WukongConfig,
   WukongConfigPatch,
   LoopControl,
@@ -72,7 +79,7 @@ export type PermissionMode = 'yolo' | 'manual' | 'auto';
 export interface CreateGoalInput {
   readonly objective: string;
   readonly replace?: boolean;
-  readonly stopCondition?: 'verify-pass' | 'scan-clean' | 'judge-pass';
+  readonly stopCondition?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
 }

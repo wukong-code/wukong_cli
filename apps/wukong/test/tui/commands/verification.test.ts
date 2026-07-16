@@ -258,6 +258,10 @@ describe('verification slash commands', () => {
       },
       summary: 'Merge proof blocked: verification passed, scan failed, 1 changed files.',
       recommendation: 'High-risk changes detected; review before merging.',
+      reasonCode: 'risk_high',
+      snapshotId: 'snapshot-id',
+      workspaceFingerprint: { inputDigest: 'input', configDigest: 'config' },
+      blockers: [],
       reportPath: '/repo/wukong-proof-report.md',
     });
 
@@ -320,6 +324,10 @@ describe('verification slash commands', () => {
         },
         summary: 'Merge proof blocked.',
         recommendation: 'High-risk changes detected; review before merging.',
+        reasonCode: 'risk_high',
+        snapshotId: 'snapshot-id',
+        workspaceFingerprint: { inputDigest: 'input', configDigest: 'config' },
+        blockers: [],
       },
     });
 

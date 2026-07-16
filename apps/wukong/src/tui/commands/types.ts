@@ -8,6 +8,8 @@ export interface WukongSlashCommand<Name extends string = string> extends SlashC
   readonly aliases: readonly string[];
   readonly description: string;
   readonly priority?: number;
+  /** Keep the command executable by name while omitting it from help and autocomplete. */
+  readonly hidden?: boolean;
   readonly availability?: SlashCommandAvailability | ((args: string) => SlashCommandAvailability);
   /** When set, the command is hidden from the palette and blocked unless this flag is enabled. */
   readonly experimentalFlag?: FlagId;

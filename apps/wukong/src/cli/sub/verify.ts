@@ -76,8 +76,8 @@ export async function handleVerify(deps: VerifyDeps, options: VerifyCliOptions):
 
 export function registerVerifyCommand(parent: Command, deps?: Partial<VerifyDeps>): void {
   parent
-    .command('verify')
-    .description('Run deterministic verification checks and generate an evidence report.')
+    .command('verify', { hidden: true })
+    .description('Advanced diagnostic: run the project checks used by Loop.')
     .option('--build', 'Include the package build script when auto-detecting commands.')
     .option('--command <command>', 'Run an explicit verification command. Can be repeated.', collect, [])
     .option('--report <path>', 'Write the evidence report to this path.')

@@ -70,8 +70,8 @@ export async function handleProof(deps: ProofDeps, options: ProofCliOptions): Pr
 
 export function registerProofCommand(parent: Command, deps?: Partial<ProofDeps>): void {
   parent
-    .command('proof')
-    .description('Run verification and scan, then generate a Merge Proof Report.')
+    .command('proof', { hidden: true })
+    .description('Advanced diagnostic: inspect Loop delivery-gate inputs.')
     .option('--command <command>', 'Run an explicit verification command. Can be repeated.', collect, [])
     .option('--report <path>', 'Write the merge proof report to this path.')
     .option('--no-report', 'Do not write a markdown merge proof report.')

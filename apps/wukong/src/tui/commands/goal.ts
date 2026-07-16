@@ -1,6 +1,7 @@
-import { ErrorCodes, isWukongError, type PermissionMode } from '@wukong/wukong-sdk';
+import { ErrorCodes, isWukongError, type GoalSnapshot, type PermissionMode } from '@wukong/wukong-sdk';
 
 import { parseLoopDuration } from '#/utils/duration';
+import { beginLoopQuota, completeTrackedTuiLoop, registerTrackedTuiLoop } from '#/cli/lib/loop-quota';
 
 import {
   GoalStartPermissionPromptComponent,
@@ -49,6 +50,8 @@ type GoalCommandHost = Pick<
 >;
 
 export interface GoalStartOptions {
+  readonly prepareCreate?: () => Promise<{ readonly maxIterations?: number } | false>;
+  readonly afterCreate?: (snapshot: GoalSnapshot) => void;
   readonly beforeSend?: () => boolean | Promise<boolean>;
   readonly sendInput?: (objective: string) => void;
 }
@@ -62,7 +65,7 @@ export type ParsedGoalCommand =
       readonly kind: 'create';
       readonly objective: string;
       readonly replace: boolean;
-      readonly stopCondition?: 'verify-pass' | 'scan-clean' | 'judge-pass';
+      readonly stopCondition?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
       readonly maxIterations?: number;
       readonly minIntervalMs?: number;
     }
@@ -133,13 +136,13 @@ export function parseGoalCommand(rawArgs: string): ParsedGoalCommand {
 function parseStopCondition(
   tokens: readonly string[],
   startIndex: number,
-): { readonly condition?: 'verify-pass' | 'scan-clean' | 'judge-pass'; readonly consumed: number } {
+): { readonly condition?: 'proof-pass'; readonly consumed: number } {
   if (tokens[startIndex] !== '--until') return { consumed: 0 };
   const value = tokens[startIndex + 1];
-  if (value !== 'verify-pass' && value !== 'scan-clean' && value !== 'judge-pass') {
+  if (value !== 'proof-pass' && value !== 'verify-pass' && value !== 'scan-clean' && value !== 'judge-pass') {
     return { consumed: 0 };
   }
-  return { condition: value, consumed: 2 };
+  return { condition: 'proof-pass', consumed: 2 };
 }
 
 export async function handleGoalCommand(host: SlashCommandHost, args: string): Promise<void> {
@@ -416,12 +419,16 @@ async function startGoal(
   parsed: Extract<ParsedGoalCommand, { kind: 'create' }>,
   options: GoalStartOptions,
 ): Promise<boolean> {
+  const prepared = await options.prepareCreate?.();
+  if (prepared === false) return false;
+  const maxIterations = prepared?.maxIterations ?? parsed.maxIterations;
+  let snapshot: GoalSnapshot;
   try {
-    await host.requireSession().createGoal({
+    snapshot = await host.requireSession().createGoal({
       objective: parsed.objective,
       replace: parsed.replace,
       stopCondition: parsed.stopCondition,
-      maxIterations: parsed.maxIterations,
+      maxIterations,
       minIntervalMs: parsed.minIntervalMs,
     });
   } catch (error) {
@@ -434,6 +441,7 @@ async function startGoal(
     host.showError(formatErrorMessage(error));
     return false;
   }
+  options.afterCreate?.(snapshot);
   if (options.beforeSend !== undefined && !(await options.beforeSend())) {
     return false;
   }
@@ -487,7 +495,11 @@ async function resumeGoal(host: SlashCommandHost): Promise<void> {
 async function cancelGoal(host: SlashCommandHost): Promise<void> {
   const session = host.requireSession();
   try {
+    const active = (await session.getGoal()).goal;
     await session.cancelGoal();
+    if (active !== null) {
+      void completeTrackedTuiLoop(active.goalId, 'ERROR', active.iteration);
+    }
     if (isStreaming(host)) await session.cancel();
   } catch (error) {
     if (isWukongError(error) && error.code === ErrorCodes.GOAL_NOT_FOUND) {
@@ -528,7 +540,7 @@ export type ParsedLoopCommand =
   | {
       readonly kind: 'create';
       readonly objective: string;
-      readonly stopCondition: 'verify-pass' | 'scan-clean' | 'judge-pass';
+      readonly stopCondition: 'proof-pass';
       readonly maxIterations: number;
       readonly minIntervalMs?: number;
     }
@@ -575,14 +587,10 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
       index += 2;
       continue;
     }
+    if (token === '--') {
+      index += 1;
+    }
     break;
-  }
-
-  if (stopCondition.condition === undefined) {
-    return {
-      kind: 'error',
-      message: 'Provide a stop condition, e.g. `/loop --until verify-pass fix tests`.',
-    };
   }
 
   const objective = tokens.slice(index).join(' ').trim();
@@ -590,7 +598,7 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
     return {
       kind: 'error',
       severity: 'hint',
-      message: 'Provide a loop objective, e.g. `/loop --until verify-pass fix tests`.',
+      message: 'Provide a loop objective, e.g. `/loop fix the failing tests`.',
     };
   }
   if (objective.length > MAX_GOAL_OBJECTIVE_LENGTH) {
@@ -599,7 +607,7 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
       message: `Loop objective is too long (max ${MAX_GOAL_OBJECTIVE_LENGTH} characters).`,
     };
   }
-  return { kind: 'create', objective, stopCondition: stopCondition.condition, maxIterations, minIntervalMs };
+  return { kind: 'create', objective, stopCondition: 'proof-pass', maxIterations, minIntervalMs };
 }
 
 export async function handleLoopSlashCommand(host: SlashCommandHost, args: string): Promise<void> {
@@ -616,6 +624,7 @@ export async function handleLoopSlashCommand(host: SlashCommandHost, args: strin
       await cancelGoal(host);
       return;
     case 'create': {
+      let grant: Awaited<ReturnType<typeof beginLoopQuota>> | undefined;
       await createGoal(
         host,
         {
@@ -628,6 +637,18 @@ export async function handleLoopSlashCommand(host: SlashCommandHost, args: strin
         },
         args,
         {
+          prepareCreate: async () => {
+            grant = await beginLoopQuota();
+            if (grant.message !== undefined) {
+              if (grant.allowed) host.showStatus(grant.message);
+              else host.showError(grant.message);
+            }
+            if (!grant.allowed) return false;
+            return { maxIterations: Math.min(parsed.maxIterations, grant.maxIterations) };
+          },
+          afterCreate: (snapshot) => {
+            if (grant !== undefined) registerTrackedTuiLoop(snapshot.goalId, grant);
+          },
           sendInput: () => {
             // The loop objective is sent as a normal user input after goal creation.
             host.sendNormalUserInput(parsed.objective);

@@ -9,7 +9,7 @@ import {
 import { WUKONG_CODE_ANNOUNCEMENTS_URL } from '#/constant/app';
 import type { BannerState } from '#/tui/types';
 
-const LIVE_ANNOUNCEMENTS_URL = process.env.WUKONG_CODE_LIVE_ANNOUNCEMENTS_URL;
+const LIVE_ANNOUNCEMENTS_URL = process.env['WUKONG_CODE_LIVE_ANNOUNCEMENTS_URL'];
 
 describe('selectBannerState', () => {
   const now = new Date('2026-06-15T12:00:00+08:00');

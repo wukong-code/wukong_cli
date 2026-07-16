@@ -11,6 +11,7 @@ import type { SDKRpcClientBase } from '#/rpc';
 import type {
   AddAdditionalDirOptions,
   AddAdditionalDirResult,
+  ActiveRole,
   BackgroundTaskInfo,
   CompactOptions,
   CreateGoalInput,
@@ -24,6 +25,7 @@ import type {
   PromptInput,
   ReloadSessionOptions,
   ReloadSummary,
+  RoleSummary,
   ResumedSessionState,
   ResumedSessionSummary,
   SessionPlan,
@@ -152,6 +154,21 @@ export class Session {
   async getSessionWarnings() {
     this.ensureOpen();
     return this.rpc.getSessionWarnings({ sessionId: this.id });
+  }
+
+  async listRoles(): Promise<readonly RoleSummary[]> {
+    this.ensureOpen();
+    return this.rpc.listRoles({ sessionId: this.id });
+  }
+
+  async getActiveRole(): Promise<ActiveRole> {
+    this.ensureOpen();
+    return this.rpc.getActiveRole({ sessionId: this.id });
+  }
+
+  async setRole(role?: string): Promise<ActiveRole> {
+    this.ensureOpen();
+    return this.rpc.setRole({ sessionId: this.id, role });
   }
 
   async addAdditionalDir(

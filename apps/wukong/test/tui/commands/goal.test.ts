@@ -20,6 +20,27 @@ import {
 import type { SlashCommandHost } from '#/tui/commands/dispatch';
 import { getBuiltInPalette } from '#/tui/theme';
 
+const loopQuotaMocks = vi.hoisted(() => ({
+  begin: vi.fn(async (): Promise<{
+    allowed: boolean;
+    requestId: string;
+    maxIterations: number;
+    tracked: boolean;
+    message?: string;
+  }> => ({
+    allowed: true,
+    requestId: 'request123',
+    maxIterations: 5,
+    tracked: true,
+  })),
+  register: vi.fn(),
+}));
+
+vi.mock('#/cli/lib/loop-quota', () => ({
+  beginLoopQuota: loopQuotaMocks.begin,
+  registerTrackedTuiLoop: loopQuotaMocks.register,
+}));
+
 vi.mock('#/tui/goal-queue-store', () => ({
   appendGoalQueueItem: vi.fn(async () => ({
     goals: [{ id: 'q1', objective: 'obj', createdAt: '', updatedAt: '' }],
@@ -219,17 +240,17 @@ describe('parseGoalCommand', () => {
     expect(parseGoalCommand('--until verify-pass fix tests')).toMatchObject({
       kind: 'create',
       objective: 'fix tests',
-      stopCondition: 'verify-pass',
+      stopCondition: 'proof-pass',
     });
     expect(parseGoalCommand('--until scan-clean clean up risks')).toMatchObject({
       kind: 'create',
       objective: 'clean up risks',
-      stopCondition: 'scan-clean',
+      stopCondition: 'proof-pass',
     });
     expect(parseGoalCommand('--until judge-pass make it mergeable')).toMatchObject({
       kind: 'create',
       objective: 'make it mergeable',
-      stopCondition: 'judge-pass',
+      stopCondition: 'proof-pass',
     });
   });
 
@@ -245,7 +266,7 @@ describe('parseGoalCommand', () => {
       kind: 'create',
       objective: 'fix tests',
       replace: true,
-      stopCondition: 'verify-pass',
+      stopCondition: 'proof-pass',
     });
   });
 
@@ -255,15 +276,29 @@ describe('parseGoalCommand', () => {
 });
 
 describe('parseLoopCommand', () => {
-  it('requires --until', () => {
-    expect(parseLoopCommand('fix tests')).toMatchObject({ kind: 'error' });
+  it('defaults to proof-pass without --until', () => {
+    expect(parseLoopCommand('fix tests')).toEqual({
+      kind: 'create',
+      objective: 'fix tests',
+      stopCondition: 'proof-pass',
+      maxIterations: 10,
+    });
+  });
+
+  it('allows an objective beginning with an option-like token after --', () => {
+    expect(parseLoopCommand('--max-iterations 2 -- --fix-all now')).toEqual({
+      kind: 'create',
+      objective: '--fix-all now',
+      stopCondition: 'proof-pass',
+      maxIterations: 2,
+    });
   });
 
   it('parses --until verify-pass with default max iterations', () => {
     expect(parseLoopCommand('--until verify-pass fix tests')).toEqual({
       kind: 'create',
       objective: 'fix tests',
-      stopCondition: 'verify-pass',
+      stopCondition: 'proof-pass',
       maxIterations: 10,
     });
   });
@@ -272,7 +307,7 @@ describe('parseLoopCommand', () => {
     expect(parseLoopCommand('--until scan-clean --max-iterations 5 clean risks')).toEqual({
       kind: 'create',
       objective: 'clean risks',
-      stopCondition: 'scan-clean',
+      stopCondition: 'proof-pass',
       maxIterations: 5,
     });
   });
@@ -281,14 +316,14 @@ describe('parseLoopCommand', () => {
     expect(parseLoopCommand('--until verify-pass --every 5m fix tests')).toEqual({
       kind: 'create',
       objective: 'fix tests',
-      stopCondition: 'verify-pass',
+      stopCondition: 'proof-pass',
       maxIterations: 10,
       minIntervalMs: 300_000,
     });
     expect(parseLoopCommand('--until verify-pass --every 1h --max-iterations 3 fix tests')).toEqual({
       kind: 'create',
       objective: 'fix tests',
-      stopCondition: 'verify-pass',
+      stopCondition: 'proof-pass',
       maxIterations: 3,
       minIntervalMs: 3_600_000,
     });
@@ -307,7 +342,7 @@ describe('parseLoopCommand', () => {
     expect(parseLoopCommand('--until judge-pass make mergeable')).toEqual({
       kind: 'create',
       objective: 'make mergeable',
-      stopCondition: 'judge-pass',
+      stopCondition: 'proof-pass',
       maxIterations: 10,
     });
   });
@@ -813,6 +848,15 @@ describe('dispatchInput /goal integration', () => {
 });
 
 describe('handleLoopSlashCommand', () => {
+  beforeEach(() => {
+    loopQuotaMocks.begin.mockResolvedValue({
+      allowed: true,
+      requestId: 'request123',
+      maxIterations: 5,
+      tracked: true,
+    });
+  });
+
   it('creates a loop goal with stop condition, max iterations, and min interval', async () => {
     const { host, session } = makeHost();
 
@@ -821,12 +865,29 @@ describe('handleLoopSlashCommand', () => {
     expect(session.createGoal).toHaveBeenCalledWith(
       expect.objectContaining({
         objective: 'fix tests',
-        stopCondition: 'verify-pass',
+        stopCondition: 'proof-pass',
         maxIterations: 3,
         minIntervalMs: 300_000,
       }),
     );
     expect(host.sendNormalUserInput).toHaveBeenCalledWith('fix tests');
+    expect(loopQuotaMocks.register).toHaveBeenCalledWith('g1', expect.objectContaining({ tracked: true }));
+  });
+
+  it('blocks an interactive Loop before goal creation when quota is exhausted', async () => {
+    loopQuotaMocks.begin.mockResolvedValueOnce({
+      allowed: false,
+      requestId: 'request123',
+      maxIterations: 5,
+      tracked: false,
+      message: 'Monthly Loop limit reached.',
+    });
+    const { host, session } = makeHost();
+
+    await handleLoopSlashCommand(host, 'fix tests');
+
+    expect(session.createGoal).not.toHaveBeenCalled();
+    expect(host.showError).toHaveBeenCalledWith('Monthly Loop limit reached.');
   });
 
   it('rejects an invalid --every duration', async () => {

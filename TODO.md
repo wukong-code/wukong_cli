@@ -4,7 +4,62 @@
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/技术方案，再同步本文件。
 
-## 📋 当前重点: 0.0.11 — Hosted Evidence UX 与发布闭环
+## 📋 当前重点: 0.0.12 — Loop-first
+
+> 方案: [docs/design/verification-loop-v2.md](docs/design/verification-loop-v2.md)。本版只向普通用户提供一个主产品：Loop。`verify`、`scan`、`proof` 降级为 Loop 内部检查层和高级调试命令，不再各自形成产品、额度或报告流程。
+
+### Loop contract 与额度
+
+- [x] 冻结 Loop 状态机：INSPECT → WORK → CHECK → REVIEW → PASS / NEEDS_WORK / ERROR（2026-07-16）
+- [x] 用户结果只保留 PASS→0、NEEDS_WORK→1、ERROR→2；执行前 auth/quota→3，中断→130（2026-07-16）
+- [x] 默认停止条件统一为 `proof-pass`；旧停止条件进入时统一归一化（2026-07-15）
+- [x] 只有顶层 Loop session 计额度；内部 verify/scan/proof 不重复计数（2026-07-16）
+- [x] Guest：1 个 Loop session、最多2轮；Free：10个 Loop sessions/月、每个最多5轮；第3次开始软提示 Pro，第10次后硬限制（2026-07-16）
+- [x] 实现幂等 trust-runs start/complete + trust-usage；不实现 Checks、reservation、lease 或 AI credits（2026-07-16）
+- [x] 默认不生成 report/evidence；只有显式 `--save`/`--upload` 才持久化（2026-07-16）
+
+### Loop 执行与交付 Gate
+
+- [x] 每轮 agent 修改后运行真实项目检查和风险扫描，再交给 fresh-context reviewer 判定（2026-07-15）
+- [x] 写代码的 agent 不能自判通过；reviewer 使用独立上下文和只读 profile，且不能覆盖 deterministic blocker（2026-07-15）
+- [x] 将失败摘要、具体文件/命令和 next action 注入下一轮，限制 feedback 大小（2026-07-16）
+- [x] NEEDS_WORK 才继续修改；ERROR 停止；transient reviewer error 最多原地重试一次（2026-07-16）
+- [x] 达到最大轮次返回 NEEDS_WORK/max_iterations，不增加 EXHAUSTED 用户状态（2026-07-16）
+- [x] 无测试项目：源代码改动阻断；纯文档改动可进入 reviewer（2026-07-15）
+- [x] `wukong loop` 支持 headless 运行及 `--model/--role` writer；reviewer 独立且只读（2026-07-15）
+- [x] `--every` 继续复用 agent-core scheduler，不新增 timer（2026-07-16，现有实现已满足）
+
+### 内部检查层与兼容
+
+- [x] 统一 workspace/nested project discovery、真实 command 结果和 stable finding schema（2026-07-16）
+- [x] `proof-pass` 编排检查、扫描与 reviewer；共享 snapshot，并在输入变化时拒绝陈旧结论（2026-07-16）
+- [x] `verify`、`scan`、`proof` 保留为高级/CI/debug 命令（2026-07-15）
+- [x] 从 CLI 主帮助、TUI autocomplete/help 隐藏三个高级命令，但旧命令仍可直接执行（2026-07-15）
+- [x] 旧 verify-pass/scan-clean/judge-pass 在兼容期映射到 `proof-pass`；CLI 显式旧参数输出弃用提示（2026-07-15）
+- [x] 不再把 Reports 或独立 evidence 作为 Loop 默认完成步骤（2026-07-16；Loop 内部 gate 已使用 `writeReport: false`）
+
+### 变身 Role Profiles
+
+- [x] 内置 general/reviewer/security/tester，支持全局 `--role` 和 TUI `/transform`（实验开关默认关闭，2026-07-15）
+- [x] 用户角色存 `~/.wukong/roles/`；项目角色必须以 `project:<name>` 显式选择，不能覆盖 builtin（2026-07-15）
+- [x] role 只定义 prompt、默认 model、允许 tools、verify profile；工具 allowlist 只能收窄基础 profile，未知字段会被拒绝（2026-07-15）
+- [x] `wukong roles list/show/init`；0.0.12 不做市场、团队同步或多角色自动编排（2026-07-15）
+- [x] 将 `loop --role` 接到 Session role resolver；内部检查不单独选择角色或模型（2026-07-15）
+
+### 端到端同步与发布门槛
+
+- [x] CLI、TUI、agent tool 使用同一 Loop 三态；Dashboard 只展示 Loop 用量、重置时间和最近最终状态（2026-07-16）
+- [x] 旧 Goal record migration 和旧 CLI flags compatibility matrix（Hosted Report v1 保持兼容，不做 v2 migration）（2026-07-16）
+- [x] 真实 monorepo、无测试项目、snapshot stale、fresh reviewer、角色权限、usage start 幂等、Loop 收敛 E2E（2026-07-16）
+- [x] 更新中英文 README、help、公告、CHANGELOG 和 release notes（2026-07-16；公开仓发布时同步生成物）
+
+### 延后到 0.0.13
+
+- [ ] Hosted Report v2、Loop evidence `--save`/`--upload`、双版本 ingestion 和 Dashboard evidence 迁移
+- [ ] `--review-model`、role 独立 reviewer model 和 managed model credits
+- [ ] 全语言自动检查推断、后台/云端 Loop、PR gate 和 Team Role Profiles
+
+## ✅ 0.0.11 — Hosted Evidence UX 与发布闭环
 
 - [x] TUI welcome/footer/loop/proof 文案与终端宽度对齐，窄终端安全降级（2026-07-13）
 - [x] Proof 完成后提示私有 history 与显式公开分享命令；`--public` 必须与 `--upload` 同用（2026-07-13）
@@ -144,4 +199,4 @@
 
 ---
 
-**最后更新**: 2026-07-13（0.0.11 Hosted Evidence UX 与发布闭环）
+**最后更新**: 2026-07-14（0.0.12 Free Trust Loop v2 规划）

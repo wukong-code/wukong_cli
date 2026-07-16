@@ -49,6 +49,11 @@ describe('verification command registration', () => {
     expect(names).toContain('today');
     expect(names).toContain('guard');
     expect(names).toContain('report');
+    const help = program.helpInformation();
+    expect(help).not.toMatch(/^\s+verify\b/m);
+    expect(help).not.toMatch(/^\s+scan\b/m);
+    expect(help).not.toMatch(/^\s+proof\b/m);
+    expect(help).toMatch(/^\s+loop\b/m);
   });
 });
 
@@ -368,6 +373,10 @@ describe('handleProof', () => {
         },
         summary: 'Merge proof blocked: verification passed, scan failed, 1 changed files.',
         recommendation: 'High-risk changes detected; review before merging.',
+        reasonCode: 'risk_high',
+        snapshotId: 'snapshot-id',
+        workspaceFingerprint: { inputDigest: 'input', configDigest: 'config' },
+        blockers: [],
       }),
     };
 
@@ -411,6 +420,10 @@ describe('handleProof', () => {
           },
           summary: 'All good.',
           recommendation: 'Safe to merge.',
+          reasonCode: 'passed',
+          snapshotId: 'snapshot-id',
+          workspaceFingerprint: { inputDigest: 'input', configDigest: 'config' },
+          blockers: [],
         };
       },
     };
@@ -440,6 +453,10 @@ describe('handleProof', () => {
         },
         summary: 'All good.',
         recommendation: 'Safe to merge.',
+        reasonCode: 'passed',
+        snapshotId: 'snapshot-id',
+        workspaceFingerprint: { inputDigest: 'input', configDigest: 'config' },
+        blockers: [],
       }),
     };
 
@@ -495,6 +512,10 @@ describe('handleProof', () => {
         },
         summary: 'All good.',
         recommendation: 'Safe to merge.',
+        reasonCode: 'passed',
+        snapshotId: 'snapshot-id',
+        workspaceFingerprint: { inputDigest: 'input', configDigest: 'config' },
+        blockers: [],
         report: '# Proof Report',
       }),
     };
@@ -561,6 +582,10 @@ describe('handleJudge', () => {
           },
           summary: 'Merge proof blocked.',
           recommendation: 'High-risk changes detected; review before merging.',
+          reasonCode: 'risk_high',
+          snapshotId: 'snapshot-id',
+          workspaceFingerprint: { inputDigest: 'input', configDigest: 'config' },
+          blockers: [],
         },
       }),
     };
@@ -608,6 +633,10 @@ describe('handleJudge', () => {
           },
           summary: 'All good.',
           recommendation: 'Safe to merge.',
+          reasonCode: 'passed',
+          snapshotId: 'snapshot-id',
+          workspaceFingerprint: { inputDigest: 'input', configDigest: 'config' },
+          blockers: [],
         },
       }),
     };

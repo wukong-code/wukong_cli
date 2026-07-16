@@ -13,6 +13,7 @@ import { registerLoopCommand } from './sub/loop';
 import { registerProofCommand } from './sub/proof';
 import { registerProviderCommand } from './sub/provider';
 import { registerReportUploadCommand } from './sub/report-upload';
+import { registerRolesCommand } from './sub/roles';
 import { registerScanCommand } from './sub/scan';
 import { registerServerCommand } from './sub/server';
 import { registerTodayCommand } from './sub/today';
@@ -63,6 +64,9 @@ export function createProgram(
       ),
     )
     .addOption(
+      new Option('--role <role>', 'Transform the agent for this invocation (for example: security).'),
+    )
+    .addOption(
       new Option(
         '-p, --prompt <prompt>',
         'Run one prompt non-interactively and print the response.',
@@ -102,10 +106,27 @@ export function createProgram(
   registerScanCommand(program);
   registerProofCommand(program);
   registerJudgeCommand(program);
-  registerLoopCommand(program);
+  registerLoopCommand(program, (loop) => {
+    const raw = program.opts<Record<string, unknown>>();
+    const every = loop.minIntervalMs === undefined ? '' : ` --every ${String(loop.minIntervalMs / 1_000)}s`;
+    onMain({
+      session: undefined,
+      continue: false,
+      yolo: false,
+      auto: false,
+      plan: false,
+      model: loop.model ?? raw['model'] as string | undefined,
+      role: loop.role ?? raw['role'] as string | undefined,
+      outputFormat: raw['outputFormat'] as CLIOptions['outputFormat'],
+      prompt: `/loop --max-iterations ${String(loop.maxIterations)}${every} -- ${loop.objective ?? ''}`,
+      skillsDirs: raw['skillsDir'] as string[],
+      addDirs: raw['addDir'] as string[],
+    });
+  });
   registerGuardCommand(program);
   registerLoginCommand(program);
   registerReportUploadCommand(program);
+  registerRolesCommand(program);
   registerDoctorCommand(program);
   registerTodayCommand(program);
   registerVisCommand(program);
@@ -146,6 +167,7 @@ export function createProgram(
       auto: autoValue,
       plan: raw['plan'] as boolean,
       model: raw['model'] as string | undefined,
+      role: raw['role'] as string | undefined,
       outputFormat: raw['outputFormat'] as CLIOptions['outputFormat'],
       prompt: raw['prompt'] as string | undefined,
       skillsDirs: raw['skillsDir'] as string[],

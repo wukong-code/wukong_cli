@@ -1,5 +1,7 @@
 import type { GoalSnapshot } from '@wukong/wukong-sdk';
 
+import { parseLoopTerminalReason } from '#/utils/loop-result';
+
 interface GoalCompletionStats {
   readonly terminalReason?: string | undefined;
   readonly turnsUsed: number;
@@ -17,7 +19,10 @@ export function buildGoalCompletionMessage(goal: GoalSnapshot): string {
 }
 
 export function buildGoalCompletionMessageFromStats(goal: GoalCompletionStats): string {
-  const head = `✓ Goal complete${goal.terminalReason ? ` — ${goal.terminalReason}` : ''}.`;
+  const loop = parseLoopTerminalReason(goal.terminalReason);
+  const head = loop?.status === 'PASS'
+    ? `✓ Loop PASS — ${loop.summary}`
+    : `✓ Goal complete${goal.terminalReason ? ` — ${goal.terminalReason}` : ''}.`;
   const turns = `${goal.turnsUsed} turn${goal.turnsUsed === 1 ? '' : 's'}`;
   const stats = `Worked ${turns} over ${formatElapsed(goal.wallClockMs)}, using ${formatTokens(goal.tokensUsed)} tokens.`;
   return `${head}\n${stats}`;

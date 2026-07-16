@@ -39,5 +39,7 @@ subagents:
     description: Good at general software engineering tasks.
   explore:
     description: Fast codebase exploration with prompt-enforced read-only behavior.
+  reviewer:
+    description: Fresh-context, read-only delivery reviewer for Loop gates.
   plan:
     description: Read-only implementation planning and architecture design.

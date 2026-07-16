@@ -232,6 +232,18 @@ describe('CLI options parsing', () => {
     });
   });
 
+  describe('--role', () => {
+    it('parses an invocation-only role profile', () => {
+      expect(parse(['--role', 'security']).role).toBe('security');
+    });
+
+    it('rejects an empty role name', () => {
+      const opts = parse(['--role', '   ']);
+      expect(() => validateOptions(opts)).toThrow(OptionConflictError);
+      expect(() => validateOptions(opts)).toThrow('Role cannot be empty.');
+    });
+  });
+
   describe('--prompt / -p', () => {
     it('parses -p as prompt mode', () => {
       const opts = parse(['-p', 'explain this repo']);
@@ -394,6 +406,7 @@ describe('CLI options parsing', () => {
         'guard',
         'login',
         'report',
+        'roles',
         'doctor',
         'today',
         'vis',

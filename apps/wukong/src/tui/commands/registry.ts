@@ -136,21 +136,24 @@ export const BUILTIN_SLASH_COMMANDS = [
   {
     name: 'verify',
     aliases: [],
-    description: 'Run deterministic verification on the current workspace',
+    description: 'Advanced: inspect the project checks used by Loop',
+    hidden: true,
     priority: 70,
     availability: 'idle-only',
   },
   {
     name: 'scan',
     aliases: [],
-    description: 'Scan the current workspace for delivery risks',
+    description: 'Advanced: inspect the risk rules used by Loop',
+    hidden: true,
     priority: 70,
     availability: 'idle-only',
   },
   {
     name: 'proof',
     aliases: [],
-    description: 'Generate a Merge Proof Report for the current workspace',
+    description: 'Advanced: inspect the Loop delivery gate',
+    hidden: true,
     priority: 70,
     availability: 'idle-only',
   },
@@ -233,6 +236,20 @@ export const BUILTIN_SLASH_COMMANDS = [
     description: 'Switch LLM model',
     priority: 100,
     availability: 'always',
+  },
+  {
+    name: 'transform',
+    aliases: ['role'],
+    description: 'Transform the agent with a role profile',
+    priority: 80,
+    argumentHint: '<role|off|list>',
+    availability: 'idle-only',
+    experimentalFlag: 'role_profiles',
+    completeArgs: (prefix) => {
+      const values = ['general', 'reviewer', 'security', 'tester', 'off', 'list', 'status'];
+      const matches = values.filter((value) => value.startsWith(prefix.trim().toLowerCase()));
+      return matches.map((value) => ({ value, label: value }));
+    },
   },
   {
     name: 'provider',

@@ -1,7 +1,7 @@
 import type { ContentPart, TokenUsage } from '@wukong/kosong';
 
 import type { LoopRecordedEvent } from '../../loop';
-import type { GoalActor, GoalBudgetLimits, GoalStatus } from '../goal';
+import type { GoalActor, GoalBudgetLimits, GoalStatus, LoopResult } from '../goal';
 import type { ToolStoreUpdate } from '../../tools/store';
 import type { CompactionBeginData, CompactionResult } from '../compaction';
 import type { AgentConfigUpdateData } from '../config';
@@ -87,7 +87,7 @@ export interface AgentRecordEvents {
     goalId: string;
     objective: string;
     completionCriterion?: string;
-    stopCondition?: 'verify-pass' | 'scan-clean' | 'judge-pass';
+    stopCondition?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
     maxIterations?: number;
     minIntervalMs?: number;
   };
@@ -100,6 +100,7 @@ export interface AgentRecordEvents {
     iteration?: number;
     reason?: string;
     actor?: GoalActor;
+    loopResult?: LoopResult;
   };
   'goal.clear': {};
 }

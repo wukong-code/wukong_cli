@@ -407,6 +407,15 @@ export class ToolManager {
       type: 'tools.set_active_tools',
       names,
     });
+    this.applyActiveTools(names);
+  }
+
+  /** Apply invocation-only tool access without adding a persistence record. */
+  setActiveToolsTransient(names: readonly string[]): void {
+    this.applyActiveTools(names);
+  }
+
+  private applyActiveTools(names: readonly string[]): void {
     // MCP entries are glob patterns gated separately; the rest are exact
     // builtin/user tool names. The split keeps every caller on one string[].
     this.enabledTools = new Set(names.filter((name) => !isMcpToolName(name)));

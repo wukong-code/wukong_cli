@@ -1,8 +1,71 @@
 # Verification CLI 自动化测试计划
 
-> 日期: 2026-07-07
-> 范围: `@wukong/verification`、`wukong verify`、`wukong scan`、`wukong guard`、TUI slash commands（含 `/goal`）、`wukong_verify`；P0.5 的 `/proof`、`/judge`、`/goal` verification gate、`/loop` 为待实现测试项
-> 状态: P0 已实现并纳入自动化测试；P0.5 待实现（实施顺序 proof → judge → goal gate → loop）
+> 日期: 2026-07-14
+> 范围: 现有 verification v1 兼容回归，以及 0.0.12 Loop-first 状态机、fresh reviewer、session 额度和角色集成
+> 状态: v1 已实现；0.0.12 v2 主流程、Role Profiles 基础运行时、Loop quota 与真实 monorepo E2E 已实现。Hosted Evidence v2 延后至 0.0.13。contract 以 [0.0.12 Trust Loop v2](../design/verification-loop-v2.md) 为准
+
+## 0. 0.0.12 v2 发布测试门槛
+
+当前自动化落点：
+
+- Goal record/legacy flags：`packages/agent-core/test/agent/goal.test.ts`、`apps/wukong/test/cli/loop.test.ts`
+- shared snapshot、无测试项目、stale workspace：`packages/verification/test/proof.test.ts`
+- 真实 nested npm monorepo：`packages/verification/test/monorepo-e2e.test.ts`
+- fresh reviewer、结构化反馈、max iterations：`packages/agent-core/test/tools/goal-gate.test.ts`
+- Role Profile 权限和 session：`packages/agent-core/test/role/*`、`packages/agent-core/test/harness/role-session.test.ts`
+- Guest/Free quota 与幂等 start/complete：`apps/wukong/test/cli/loop-quota.test.ts`、`wukong_web/test/api/loop-quota.test.ts`
+
+### Loop v2
+
+- 默认 gate 是 proof-pass，不由 agent 自评完成。
+- 每轮 agent 修改后建立新 snapshot，旧 Proof 不得复用。
+- 内部真实命令、风险规则和 reviewer 的输入都来自同一 snapshot。
+- 真实命令失败或 blocking finding 不能被 reviewer 改成 PASS。
+- reviewer 使用 fresh context、只读工具，且不得继承 writer 对话。
+- 无测试的源代码改动返回 NEEDS_WORK/tests_missing；纯文档改动可由 reviewer 给出明确理由后通过。
+- NEEDS_WORK 的结构化反馈进入下一轮且有大小上限。
+- 只有 NEEDS_WORK 进入下一模型轮；ERROR 立即结束并给恢复动作。
+- transient ERROR 最多原地重试一次，不增加 iteration、不再次调用模型。
+- writer model 优先级为 `--model` > role model > 用户 default；无效 alias 在 usage start 前拒绝。
+- 达到最大轮次返回 NEEDS_WORK/max_iterations；用户停止 exit 130，不产生假 verdict。
+- `--every` 继续复用 agent-core scheduler，断言无第二套 timer。
+- 默认不生成中间或最终文件；显式保存/上传只生成最终 `type=loop` evidence。
+
+### Loop quota
+
+- Guest 1 Loop session、最多 2 轮。
+- Free 10 Loop sessions/月且每个最多 5 轮；第 3 次起软提示 Pro，第 10 次后硬限制。
+- 内部 verify/scan/proof/reviewer 不计数；直接运行高级诊断命令也不计数。
+- 相同 idempotency key 的并发/retry start 只创建一个 run、增加一次 used。
+- 参数/plan/model/role 验证失败不计数；start 成功后的取消、失败或崩溃计入一次。
+- 月度重置、LIMIT_REACHED、SIGN_IN_REQUIRED、USAGE_UNAVAILABLE/exit 3 有覆盖，且它们不产生 Loop verdict；不存在 Checks/reservation/lease/AI credit 分支。
+
+### 高级命令兼容
+
+- `verify`、`scan`、`proof` 不出现在 CLI 主帮助和 TUI autocomplete，但旧输入仍可直接执行。
+- TUI 直接执行时提示其为 Loop 内部高级诊断；CLI 保持脚本/CI 输出兼容。
+- 旧 `verify-pass`、`scan-clean`、`judge-pass` 映射到 `proof-pass`，并输出一次弃用提示。
+
+### Role Profiles
+
+- 内置 general/reviewer/security/tester 可 list/show/use。
+- `--role` 与 TUI `/transform` 使用同一 active role；`/transform off` 恢复默认。
+- 用户 role 从 `~/.wukong/roles/` 读取；project role 只有显式 `project:<name>` + 当前 plan trust 才加载，不能 shadow builtin。
+- role tool allowlist 只能收窄权限，不能扩大权限或执行内嵌 shell command。
+- role model/profile/prompt 生效，且运行仍只计对应 Check 或 Loop session。
+- 角色切换不写入 replay；`/transform off` 恢复切换前的 model、默认 prompt 与工具集合。
+- 未知 frontmatter 字段和超出基础 profile 的工具被拒绝。
+
+### Hosted 与兼容
+
+- Web ingestion 同时接受 Hosted Report v1 和 `schema_version=2`。
+- v2 `trust_status`/`decision` 经 adapter 映射到 Dashboard 三态 view model。
+- 0.0.11 CLI 仍可上传 v1 report；0.0.12 CLI 上传 v2 report。
+- v2 接受 `type=loop`，v1 validator 仍只接受 verify/scan/proof；两者不能互相误判。
+- D1 旧行保持 `schema_version=1`/`legacy_status`；v2 trust status、model/role metadata、legacy projection 与 dual reader 正确。
+- 发布顺序测试/预演保证 Web dual reader 先于 CLI v2 writer 上线。
+- v1 `verify-pass`、`scan-clean`、`judge-pass` 的持久化 Goal 能迁移并恢复。
+- v1 公开 flags 全部保留或输出明确 warning，不能静默忽略。
 
 ## 1. 测试目标
 
@@ -85,9 +148,9 @@ tsx --tsconfig apps/wukong/tsconfig.dev.json \
 3. 如果 P1 实现 shell hook 安装，必须增加 profile 幂等写入和 disable 安全测试。
 4. runner 层 stdout/stderr 截断（`MAX_CAPTURE_CHARS`）行为测试。
 
-## 6. P0.5 测试 TODO（按实施顺序：`/proof` → `/judge` → goal gate → `/loop`）
+## 6. v1 P0.5 回归清单（按实施顺序：`/proof` → `/judge` → goal gate → `/loop`）
 
-这些能力尚未实现，以下为实现后必须覆盖的测试项：
+这些能力已经在 v1 实现。以下测试在 v2 重写期间仍需保留或迁移，不能因为实现替换而丢失原有 gate/loop 回归覆盖：
 
 ### 第 1 步：`/proof` Merge Proof Report
 

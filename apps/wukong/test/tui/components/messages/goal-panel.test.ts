@@ -93,6 +93,18 @@ describe('buildGoalReportLines', () => {
     expect(goalPanelTitle(goal({ status: 'complete' }))).toBe(' Goal · complete ');
   });
 
+  it('shows Loop status and decoded reason for a terminal Loop', () => {
+    const terminal = goal({
+      status: 'blocked',
+      terminalReason: 'loop:NEEDS_WORK:max_iterations:Maximum Loop iterations reached.',
+    });
+
+    expect(goalPanelTitle(terminal)).toBe(' Loop · NEEDS_WORK ');
+    const out = lines(terminal);
+    expect(out).toContain('NEEDS_WORK — Maximum Loop iterations reached.');
+    expect(out).not.toContain('loop:NEEDS_WORK');
+  });
+
   it('truncates a very long objective with an ellipsis', () => {
     const long = 'word '.repeat(200).trim();
     const out = lines(goal({ objective: long }));

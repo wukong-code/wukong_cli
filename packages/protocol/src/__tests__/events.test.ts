@@ -8,6 +8,7 @@ import {
   agentEventSchema,
   assistantDeltaEventSchema,
   eventSchema,
+  goalSnapshotSchema,
   toolCallStartedEventSchema,
 } from '../events';
 import type { Event } from '../events';
@@ -80,6 +81,36 @@ describe('events / display re-exports', () => {
       }).success,
     ).toBe(true);
   });
+
+  it.each(['verify-pass', 'scan-clean', 'judge-pass'] as const)(
+    'keeps the legacy %s Goal wire value readable',
+    (stopCondition) => {
+      const parsed = goalSnapshotSchema.parse({
+        goalId: 'legacy-goal',
+        objective: 'resume old work',
+        stopCondition,
+        iteration: 0,
+        status: 'paused',
+        turnsUsed: 1,
+        tokensUsed: 10,
+        wallClockMs: 100,
+        budget: {
+          tokenBudget: null,
+          turnBudget: null,
+          wallClockBudgetMs: null,
+          remainingTokens: null,
+          remainingTurns: null,
+          remainingWallClockMs: null,
+          tokenBudgetReached: false,
+          turnBudgetReached: false,
+          wallClockBudgetReached: false,
+          overBudget: false,
+        },
+      });
+
+      expect(parsed.stopCondition).toBe(stopCondition);
+    },
+  );
 
   it('rejects unknown event types through the full agent event union', () => {
     expect(

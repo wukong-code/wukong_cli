@@ -22,7 +22,7 @@ export const CreateGoalToolInputSchema = z
       .optional()
       .describe('How to verify the goal is complete. Include when the user provides one.'),
     stopCondition: z
-      .enum(['verify-pass', 'scan-clean', 'judge-pass'])
+      .enum(['proof-pass', 'verify-pass', 'scan-clean', 'judge-pass'])
       .optional()
       .describe('A deterministic gate that must pass before the goal can be marked complete.'),
     maxIterations: z

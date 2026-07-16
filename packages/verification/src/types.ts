@@ -16,6 +16,16 @@ export interface GitInspection {
   readonly changedFiles: readonly ChangedFile[];
 }
 
+export interface WorkspaceSnapshot {
+  readonly id: string;
+  readonly cwd: string;
+  readonly headSha?: string;
+  readonly inputDigest: string;
+  readonly configDigest: string;
+  readonly planDigest: string;
+  readonly git: GitInspection;
+}
+
 export interface VerificationRisk {
   readonly id: string;
   readonly severity: RiskSeverity;
@@ -27,7 +37,7 @@ export interface VerificationRisk {
 
 export interface VerificationCommand {
   readonly command: string;
-  readonly source: 'explicit' | 'package-script';
+  readonly source: 'explicit' | 'package-script' | 'workspace-script' | 'project-config';
 }
 
 export interface VerificationCommandResult {
@@ -47,6 +57,8 @@ export interface VerificationOptions {
   readonly reportPath?: string;
   readonly timeoutMs?: number;
   readonly strict?: boolean;
+  readonly snapshot?: WorkspaceSnapshot;
+  readonly selectedCommands?: readonly VerificationCommand[];
 }
 
 export interface VerificationResult {
@@ -69,6 +81,7 @@ export interface ScanOptions {
   readonly secrets?: boolean;
   readonly writeReport?: boolean;
   readonly reportPath?: string;
+  readonly snapshot?: WorkspaceSnapshot;
 }
 
 export interface ScanResult {

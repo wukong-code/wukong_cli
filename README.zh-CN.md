@@ -10,6 +10,12 @@ Wukong Code 是本地优先的终端 AI coding agent，定位是 **AI Coding Loo
 
 当前 P0 本地闭环和 Hosted Reports MVP 已实现：`verify`、`scan`、`proof` 可上传脱敏报告，Dashboard 展示真实 history，公开分享需要显式 `--upload --public`。完整订阅生命周期、GitHub PR Evidence、团队规则和 deep review 仍是后续工作。
 
+`0.0.12` 改为 Loop-first：Wukong 负责修改代码、运行真实项目检查，再由 fresh-context reviewer 独立判断，不通过就继续迭代。`verify`、`scan`、`proof` 仍保留为高级诊断命令，但只是 Loop 的内部层，不再各自形成产品或额度。可选 model alias 和轻量 Role Profile 用于处理特定任务。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md)。
+
+Loop 只返回一个持久化结果：`PASS`（退出码 `0`）、`NEEDS_WORK`（退出码 `1`）或 `ERROR`（退出码 `2`）。未登录用户有 1 次、最多 2 轮的本地试用；登录后的 Free 用户每月 10 个 Loop session，每次最多 5 轮，内部检查不重复计数。额度服务暂时不可用时，CLI 会警告并按本地 5 轮安全上限继续。旧 `verify-pass`、`scan-clean`、`judge-pass` Goal records 和 flags 仍可读取，并迁移到统一 proof gate；详见 [兼容矩阵](docs/design/0.0.12-compatibility.md)。
+
+Role Profiles 基础能力已经实现并处于实验阶段。在 `~/.wukong/config.toml` 启用 `experimental.role_profiles` 后，可运行 `wukong roles list`，用 `wukong --role security` 启动，或在 TUI 中通过 `/transform security` 与 `/transform off` 切换和恢复。
+
 ## 当前命令面
 
 ```sh
@@ -19,12 +25,11 @@ wukong provider                # 管理 LLM provider
 wukong acp                     # 以 Agent Client Protocol server 运行
 wukong server                  # 启动本地 REST/WebSocket server
 wukong web                     # 打开本地 web UI
-wukong verify                  # 运行确定性检查并生成证据报告
-wukong scan                    # 扫描 git 改动中的交付风险
+wukong loop "完成当前改动"      # 迭代直到独立交付 gate 通过
+wukong loop "修复测试" --model fast --role tester
+wukong loop "修复测试" --max-iterations 5 --every 30s
 wukong guard                   # 查看或运行 best-effort 命令风险 guard
-wukong proof                   # 生成 Merge Proof Report（verify + scan）
 wukong judge                   # 只审不写的合并判定
-wukong loop                    # 启动带验证 gate 的本机迭代 loop
 wukong login                   # 通过 device-code flow 登录
 wukong doctor                  # 校验配置文件
 wukong export [sessionId]      # 导出 session ZIP
@@ -32,6 +37,8 @@ wukong vis [sessionId]         # 打开 session visualizer
 wukong migrate                 # 迁移 legacy wukong-cli 数据
 wukong upgrade                 # 升级 Wukong Code
 ```
+
+高级诊断命令仍可直接用于 CI 和调试：`wukong verify`、`wukong scan`、`wukong proof`。Loop 会自动运行这些内部层，因此它们不再出现在主帮助入口。
 
 待实现命令：`wukong ship`、`wukong review`、`wukong schedule`（云端例程）。
 
@@ -84,7 +91,7 @@ pnpm build      # 构建所有包
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [技术实现方案](docs/tech/commercial-refactor-implementation.md)
 
-P0 本地 CLI 命令、TUI 验证命令、`/proof`、`/judge`、`/goal --until` verification gate、`/loop`（含 `--every` cron scheduler pacing）和 `wukong_verify` agent tool 已经实现。剩余文档继续追踪云端报告、计费、团队规则和深度 review 等后续工作。
+P0 本地 CLI 命令、TUI 验证命令、`/proof`、`/judge`、`/goal --until` verification gate、`/loop`、top-level `wukong loop`、Loop 配额闭环和 `wukong_verify` agent tool 已经实现。后续工作包括完整计费生命周期、Hosted Evidence v2、团队规则和深度 review。
 
 ## 致谢
 

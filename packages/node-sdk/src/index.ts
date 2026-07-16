@@ -67,6 +67,14 @@ export { loadRuntimeConfigSafe, resolveConfigPath } from '@wukong/agent-core';
 // outbound fetch honors HTTP_PROXY / HTTPS_PROXY / NO_PROXY.
 export { installGlobalProxyDispatcher } from '@wukong/agent-core';
 
+export {
+  assertRoleName,
+  BUILTIN_ROLES,
+  listRoles,
+  resolveRole,
+  roleTemplate,
+} from '@wukong/agent-core';
+
 // Experimental feature flags — types only. Resolved values come from
 // `WukongHarness.getExperimentalFeatures()` over RPC, not from a re-exported runtime value.
 export type {

@@ -8,6 +8,7 @@ export interface CLIOptions {
   auto: boolean;
   plan: boolean;
   model: string | undefined;
+  role?: string | undefined;
   outputFormat: PromptOutputFormat | undefined;
   prompt: string | undefined;
   skillsDirs: string[];
@@ -34,6 +35,9 @@ export function validateOptions(opts: CLIOptions): ValidatedOptions {
   }
   if (opts.model !== undefined && opts.model.trim().length === 0) {
     throw new OptionConflictError('Model cannot be empty.');
+  }
+  if (opts.role !== undefined && opts.role.trim().length === 0) {
+    throw new OptionConflictError('Role cannot be empty.');
   }
   if (!promptMode && opts.outputFormat !== undefined) {
     throw new OptionConflictError('Output format is only supported in prompt mode.');

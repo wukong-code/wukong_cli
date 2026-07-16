@@ -20,6 +20,19 @@ describe('buildGoalMarker', () => {
     expect(strip(blocked!.render(80))).toContain('Goal blocked');
   });
 
+  it('renders a Loop terminal state instead of exposing its encoded reason', () => {
+    const blocked = buildGoalMarker({
+      kind: 'lifecycle',
+      status: 'blocked',
+      reason: 'loop:ERROR:workspace_changed:Workspace changed during checks.',
+    } as GoalChange, true);
+
+    const rendered = strip(blocked!.render(80));
+    expect(rendered).toContain('Loop ERROR');
+    expect(rendered).toContain('Workspace changed during checks.');
+    expect(rendered).not.toContain('loop:ERROR');
+  });
+
   it('renders user interruption pause and user resume as prominent markers', () => {
     const paused = buildGoalMarker(
       { kind: 'lifecycle', status: 'paused', reason: 'Paused after interruption' } as GoalChange,

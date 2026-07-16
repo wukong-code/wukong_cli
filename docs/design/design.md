@@ -1,14 +1,14 @@
 # Wukong Code 产品设计文档
 
-> 版本: v1.2
-> 日期: 2026-07-07
+> 版本: v1.3
+> 日期: 2026-07-16
 > 状态: 目标设计文档，不代表所有命令已实现。
 
 ## 1. 设计基线
 
 当前 `wukong_cli` 新 base 已经提供交互式终端 AI agent 能力。商业化设计的目标是在这个底座上加入验证、风险扫描、命令防护、交付证据，并用 `/loop`（本机）和 `/schedule`（云端）把它们编排成 AI Coding Loop 的控制层。
 
-当前已实现的 top-level command 以 `wukong --help` 为准。`verify`、`scan`、`guard`、`/goal` 已实现；`loop`、`proof`、`judge`、`journey`、`today`、云端报告仍是目标体验。
+当前已实现的 top-level command 以 `wukong --help` 为准。`verify`、`scan`、`guard`、`proof`、`judge`、`loop` 已实现；TUI 也已实现 `/goal`、`/proof`、`/judge`、`/loop`、`/today`。Hosted report v1 已可登录上传、查看历史和分享；`journey`、云端 `/schedule`、Hosted Evidence v2 与团队能力仍是目标体验。
 
 ## 2. 产品定位
 
@@ -70,7 +70,7 @@ wukong guard -- rm -rf ./tmp
 
 TUI 内已实现 `/verify`、`/scan`、`/guard`、`/report`、`/goal`（含队列管理）。
 
-### P0.5 目标命令（待实现，实施顺序 proof → judge → goal gate → loop）
+### P0.5 已实现命令（proof → judge → goal gate → loop）
 
 ```bash
 # Merge Proof Report（Wow Moment，第 1 步）
@@ -100,7 +100,7 @@ wukong schedule every hour "check feedback channel"    # Milestone 3+
 3. 失败时说明具体命令、退出码和风险。
 4. JSON 输出适合 agent/CI，Markdown report 适合人读。
 5. Guard 必须明确 best-effort，不做不可绕过承诺。
-6. `/loop`、`/schedule` 停止判断必须由 deterministic verification、独立 evaluator（`/judge`）或自定义验证 skill 决定，不能由写代码的 agent 自评；落地方式是 `/goal` verification gate（当前 `/goal` 完成判定仍是 agent 自评，gate 归 M0.5）。
+6. `/loop` 的完成由统一 `proof-pass` gate 判断：deterministic proof 通过后，必须再经 fresh-context 只读 reviewer；写代码的 agent 不能自评通过。旧 `verify-pass`、`scan-clean`、`judge-pass` flag 和 Goal record 会兼容归一化。云端 `/schedule` 复用同一原则。
 7. `/loop` 有 max-iterations 上限和单轮超时，人可随时 stop；核心语义是迭代直到验证通过，`--every` 只是可选轮间节流（复用 cron scheduler）；定时巡检本机归 cron 工具，跨机器持续性归 `/schedule`（hosted）。
 
 ## 5. 输出格式
@@ -154,14 +154,14 @@ Continue? [y/N]
 | 紧箍咒 | 危险命令确认和策略约束 |
 | 分身术 | agent/tool 调用 Wukong 验证 |
 | 筋斗云 | 未来 cloud reports 和跨设备状态 |
-| 七十二变 | 未来专家工作模式 |
+| 七十二变 | Role Profiles（实验性）：为 agent 选择专门角色与约束 |
 | 取经路 | 未来 verification stats 和复盘 |
 
 ## 7. 成长体系与 `today`
 
-成长体系依赖真实 verification 事件，不应先于 verify/guard 落地。`wukong today` / `/today` 是 P1 的**日维度入口**（简报 + focus 合并为一条命令），详见 [today 设计](today.md)。
+成长体系依赖真实 verification 事件。`/today` 已作为 TUI 的**日维度入口**落地；top-level `wukong today` 尚未提供，详见 [today 设计](today.md)。
 
-P1 之后可基于这些事件计算并在 `today` 中展示：
+当前与后续可基于这些事件在 `today` 中展示：
 
 - verification count（今日 / streak）。
 - guard confirmed/blocked events。
@@ -170,7 +170,7 @@ P1 之后可基于这些事件计算并在 `today` 中展示：
 
 `today` focus 与 `/goal` 分工：focus 是今天的大方向；goal 是可执行任务 + 停止条件。
 
-P1 之后 `retro`（周）、P2 之后 `journey`（长期趋势）是 `today` 在时间维度上的延伸。
+后续 `retro`（周）和 `journey`（长期趋势）是 `today` 在时间维度上的延伸。
 
 不再使用 companion 时代指标，例如喂养次数、饥饿值、情绪日记、XP quests。
 

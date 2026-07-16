@@ -21,7 +21,7 @@ const mocks = vi.hoisted(() => {
     setApprovalHandler: vi.fn(),
     setQuestionHandler: vi.fn(),
     createGoal: vi.fn(),
-    getGoal: vi.fn(async () => ({ goal: null })),
+    getGoal: vi.fn(async (): Promise<{ goal: any }> => ({ goal: null })),
     getStatus: vi.fn(
       async (): Promise<{ readonly permission: string; readonly model?: string }> => ({
         permission: 'manual',
@@ -91,6 +91,19 @@ const mocks = vi.hoisted(() => {
     goalSummaryJson: vi.fn((snapshot: any) => snapshot),
     formatGoalSummaryText: vi.fn((snapshot: any) => `Goal [${snapshot?.status ?? 'none'}]`),
     goalExitCode: vi.fn(() => 0),
+    beginLoopQuota: vi.fn(async (): Promise<{
+      allowed: boolean;
+      requestId: string;
+      maxIterations: number;
+      tracked: boolean;
+      message?: string;
+    }> => ({
+      allowed: true,
+      requestId: 'request123',
+      maxIterations: 5,
+      tracked: true,
+    })),
+    completeLoopQuota: vi.fn(async () => {}),
   };
 });
 
@@ -175,6 +188,11 @@ vi.mock('#/cli/goal-prompt', async (importOriginal) => {
   };
 });
 
+vi.mock('#/cli/lib/loop-quota', () => ({
+  beginLoopQuota: mocks.beginLoopQuota,
+  completeLoopQuota: mocks.completeLoopQuota,
+}));
+
 function opts(overrides: Partial<Parameters<typeof runPrompt>[0]> = {}) {
   return {
     session: undefined,
@@ -248,6 +266,12 @@ describe('runPrompt', () => {
       (snapshot: any) => `Goal [${snapshot?.status ?? 'none'}]`,
     );
     mocks.goalExitCode.mockReturnValue(0);
+    mocks.beginLoopQuota.mockResolvedValue({
+      allowed: true,
+      requestId: 'request123',
+      maxIterations: 5,
+      tracked: true,
+    });
     mocks.createWukongCodeHostIdentity.mockImplementation((version: string) => ({
       userAgentProduct: 'wukong-code',
       version,
@@ -976,6 +1000,7 @@ describe('runPrompt', () => {
     it('runs a headless /goal prompt and emits JSON output', async () => {
       process.exitCode = undefined;
       mocks.parseHeadlessGoalCreate.mockReturnValue({
+        kind: 'goal',
         objective: 'write tests',
         replace: false,
       });
@@ -1024,6 +1049,63 @@ describe('runPrompt', () => {
       );
       expect(stderr.text()).toBe('');
       expect(process.exitCode).toBeUndefined();
+    });
+
+    it('reserves Loop quota and caps Free sessions at five iterations', async () => {
+      process.exitCode = undefined;
+      mocks.parseHeadlessGoalCreate.mockReturnValue({
+        kind: 'loop',
+        objective: 'fix tests',
+        replace: false,
+        stopCondition: 'proof-pass',
+        maxIterations: 10,
+      });
+      mocks.session.getGoal.mockResolvedValueOnce({
+        goal: {
+          status: 'blocked',
+          iteration: 5,
+          terminalReason: 'loop:NEEDS_WORK:max_iterations:Tests still fail.',
+        },
+      });
+      const stderr = writer();
+
+      await runPrompt(opts({ prompt: '/loop fix tests' }), '1.2.3-test', {
+        stdout: writer(),
+        stderr,
+      });
+
+      expect(mocks.session.createGoal).toHaveBeenCalledWith(expect.objectContaining({
+        objective: 'fix tests',
+        maxIterations: 5,
+      }));
+      expect(mocks.beginLoopQuota).toHaveBeenCalledTimes(1);
+      expect(mocks.completeLoopQuota).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not create a Loop when the monthly quota is exhausted', async () => {
+      process.exitCode = undefined;
+      mocks.parseHeadlessGoalCreate.mockReturnValue({
+        kind: 'loop',
+        objective: 'fix tests',
+        replace: false,
+      });
+      mocks.beginLoopQuota.mockResolvedValueOnce({
+        allowed: false,
+        requestId: 'request123',
+        maxIterations: 5,
+        tracked: false,
+        message: 'Monthly Loop limit reached (10/10). Pro is coming soon.',
+      });
+      const stderr = writer();
+
+      await runPrompt(opts({ prompt: '/loop fix tests' }), '1.2.3-test', {
+        stdout: writer(),
+        stderr,
+      });
+
+      expect(mocks.session.createGoal).not.toHaveBeenCalled();
+      expect(stderr.text()).toContain('Monthly Loop limit reached');
+      expect(process.exitCode).toBe(3);
     });
 
     it('throws when no model is configured', async () => {

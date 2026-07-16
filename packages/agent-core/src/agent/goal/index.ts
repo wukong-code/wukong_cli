@@ -94,7 +94,7 @@ export type GoalStatus =
    */
   | 'complete';
 
-export type GoalStopCondition = 'verify-pass' | 'scan-clean' | 'judge-pass';
+export type GoalStopCondition = 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
 
 /** Who performed a goal action. `cleared` is a record action, not a status. */
 export type GoalActor = 'user' | 'model' | 'runtime' | 'system';
@@ -103,6 +103,35 @@ export interface GoalBudgetLimits {
   readonly tokenBudget?: number;
   readonly turnBudget?: number;
   readonly wallClockBudgetMs?: number;
+}
+
+export interface LoopResultCheck {
+  readonly command: string;
+  readonly status: 'passed' | 'failed' | 'timed_out';
+  readonly exitCode: number | null;
+  readonly durationMs: number;
+}
+
+export interface LoopResultBlocker {
+  readonly id: string;
+  readonly kind: 'check' | 'risk' | 'workspace' | 'review';
+  readonly summary: string;
+  readonly file?: string;
+  readonly line?: number;
+  readonly command?: string;
+  readonly evidence?: string;
+  readonly nextAction: string;
+}
+
+export interface LoopResult {
+  readonly schemaVersion: 2;
+  readonly status: 'PASS' | 'NEEDS_WORK' | 'ERROR';
+  readonly reasonCode: string;
+  readonly summary: string;
+  readonly iterations: number;
+  readonly checks: readonly LoopResultCheck[];
+  readonly blockers: readonly LoopResultBlocker[];
+  readonly role?: string;
 }
 
 /** In-memory goal state rebuilt from agent records. */
@@ -129,6 +158,7 @@ interface GoalState {
   budgetLimits: GoalBudgetLimits;
   /** Human-readable reason for a stopped or completed goal. */
   terminalReason?: string;
+  loopResult?: LoopResult;
 }
 
 /** Computed budget view exposed through snapshots and tools. */
@@ -160,6 +190,7 @@ export interface GoalSnapshot {
   readonly wallClockMs: number;
   readonly budget: GoalBudgetReport;
   readonly terminalReason?: string;
+  readonly loopResult?: LoopResult;
 }
 
 /** Wrapper returned by goal read operations and tools. */
@@ -271,7 +302,9 @@ export class GoalMode {
       goalId: record.goalId,
       objective: record.objective,
       completionCriterion: record.completionCriterion,
-      stopCondition: record.stopCondition,
+      // 0.0.12 has one delivery gate. Keep old records readable, but migrate
+      // their v1 stop condition as they enter the in-memory state.
+      stopCondition: normalizeStopCondition(record.stopCondition),
       maxIterations: record.maxIterations,
       minIntervalMs: record.minIntervalMs,
       iteration: 0,
@@ -307,6 +340,7 @@ export class GoalMode {
       state.wallClockResumedAt = undefined;
     }
     if (record.budgetLimits !== undefined) state.budgetLimits = record.budgetLimits;
+    if (record.loopResult !== undefined) state.loopResult = record.loopResult;
     if (status === undefined) return;
 
     this.agent.replayBuilder.push({
@@ -620,6 +654,19 @@ export class GoalMode {
     return this.toSnapshot(state);
   }
 
+  recordLoopResult(result: Omit<LoopResult, 'iterations'>): LoopResult | null {
+    const state = this.state;
+    if (state === undefined) return null;
+    const loopResult: LoopResult = {
+      ...result,
+      iterations: state.iteration,
+    };
+    state.loopResult = loopResult;
+    this.persistState(state);
+    this.appendGoalUpdate({ loopResult });
+    return loopResult;
+  }
+
   // --- Internals ---------------------------------------------------------
 
   private clearInternal(
@@ -745,6 +792,7 @@ export class GoalMode {
       wallClockMs: liveWallClockMs(state, Date.now()),
       budget: computeBudgetReport(state, Date.now()),
       terminalReason: state.terminalReason,
+      loopResult: state.loopResult,
     };
   }
 }
@@ -820,6 +868,7 @@ function normalizeCompletionCriterion(value: string | undefined): string | undef
 }
 
 function normalizeStopCondition(value: string | undefined): GoalStopCondition | undefined {
-  if (value === 'verify-pass' || value === 'scan-clean' || value === 'judge-pass') return value;
+  if (value === 'proof-pass') return value;
+  if (value === 'verify-pass' || value === 'scan-clean' || value === 'judge-pass') return 'proof-pass';
   return undefined;
 }

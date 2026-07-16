@@ -51,6 +51,14 @@ import { noopTelemetryClient, type TelemetryClient } from '../telemetry';
 import { SessionSubagentHost } from './subagent-host';
 import type { ToolServices } from '../tools/support/services';
 import { FlagResolver, type ExperimentalFlagResolver } from '../flags';
+import {
+  listRoles as loadRoleSummaries,
+  resolveRole,
+  roleSummary,
+  type ActiveRole,
+  type RoleDefinition,
+  type RoleSummary,
+} from '../role';
 import { abortError } from '../utils/abort';
 
 export interface SessionOptions {
@@ -172,6 +180,8 @@ export class Session {
   };
   private writeMetadataPromise = Promise.resolve();
   private agentsMdWarning: string | undefined;
+  private activeRole: RoleDefinition | undefined;
+  private roleBaseModel: string | undefined;
 
   constructor(public readonly options: SessionOptions) {
     // Attach the per-session log sink up front so the constructor's
@@ -480,6 +490,76 @@ export class Session {
         message: agentsMdWarning,
         code: 'agents-md-oversized',
       });
+    }
+  }
+
+  async listRoles(): Promise<readonly RoleSummary[]> {
+    this.requireRoleProfilesEnabled();
+    return loadRoleSummaries({
+      cwd: this.options.kaos.getcwd(),
+      wukongHomeDir: this.options.wukongHomeDir,
+    });
+  }
+
+  getActiveRole(): ActiveRole {
+    const agent = this.getReadyAgent('main');
+    return {
+      active: this.activeRole !== undefined,
+      role: this.activeRole === undefined ? undefined : roleSummary(this.activeRole),
+      model: agent?.config.modelAlias,
+    };
+  }
+
+  async setRole(selection: string | undefined): Promise<ActiveRole> {
+    this.requireRoleProfilesEnabled();
+    const agent = await this.ensureAgentResumed('main');
+    const base = DEFAULT_AGENT_PROFILES['agent'];
+    if (base === undefined) throw new Error('Default agent profile is unavailable.');
+    const context = await prepareSystemPromptContext(
+      this.systemContextKaos(agent.kaos.getcwd()),
+      this.options.wukongHomeDir,
+      { additionalDirs: this.additionalDirs },
+    );
+
+    const normalized = selection?.trim();
+    if (normalized === undefined || normalized.length === 0 || normalized === 'off') {
+      if (this.activeRole === undefined) return this.getActiveRole();
+      agent.useTransientProfile(base, context);
+      agent.setModelTransient(this.roleBaseModel);
+      this.activeRole = undefined;
+      this.roleBaseModel = undefined;
+      return this.getActiveRole();
+    }
+
+    const role = await resolveRole(normalized, {
+      cwd: agent.config.cwd,
+      wukongHomeDir: this.options.wukongHomeDir,
+    });
+    if (this.activeRole === undefined) this.roleBaseModel = agent.config.modelAlias;
+    const roleAdditional = renderRoleAdditional(role);
+    const roleTools = role.tools === undefined ? [...base.tools] : restrictRoleTools(role.tools, base.tools);
+    const roleModel = role.model ?? this.roleBaseModel;
+    agent.validateModel(roleModel);
+    agent.useTransientProfile(
+      {
+        name: base.name,
+        description: role.description,
+        systemPrompt: (promptContext) => base.systemPrompt({ ...promptContext, roleAdditional }),
+        tools: roleTools,
+        subagents: base.subagents,
+      },
+      context,
+    );
+    agent.setModelTransient(roleModel);
+    this.activeRole = role;
+    return this.getActiveRole();
+  }
+
+  private requireRoleProfilesEnabled(): void {
+    if (!this.experimentalFlags.enabled('role_profiles')) {
+      throw new Error(
+        'Role profiles are experimental. Enable experimental.role_profiles in config.toml or set WUKONG_CODE_EXPERIMENTAL_ROLE_PROFILES=1.',
+      );
     }
   }
 
@@ -867,4 +947,30 @@ function initCompletionReminder(agentsMd: string): string {
     'Latest AGENTS.md file content:',
     latest,
   ].join('\n');
+}
+
+function renderRoleAdditional(role: RoleDefinition): string {
+  return [
+    '<active_role_profile>',
+    `Name: ${role.name}`,
+    `Source: ${role.source}`,
+    role.verifyProfile === undefined ? undefined : `Verification profile: ${role.verifyProfile}`,
+    '',
+    role.prompt,
+    '</active_role_profile>',
+  ]
+    .filter((line): line is string => line !== undefined)
+    .join('\n');
+}
+
+function restrictRoleTools(requested: readonly string[], base: readonly string[]): string[] {
+  const exact = new Set(base.filter((tool) => !tool.startsWith('mcp__')));
+  const allowsMcp = base.includes('mcp__*');
+  const disallowed = requested.filter(
+    (tool) => !exact.has(tool) && !(allowsMcp && tool.startsWith('mcp__')),
+  );
+  if (disallowed.length > 0) {
+    throw new Error(`Role cannot enable tools outside the base agent profile: ${disallowed.join(', ')}`);
+  }
+  return [...requested];
 }

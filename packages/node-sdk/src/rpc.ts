@@ -9,6 +9,8 @@ import {
   type CoreAPI,
   type Event,
   type ExperimentalFeatureState,
+  type ActiveRole,
+  type RoleSummary,
   type QuestionRequest,
   type QuestionResult,
   type RPCMethods,
@@ -72,6 +74,10 @@ export interface ReloadSessionRpcInput extends SessionIdRpcInput {
 
 export interface SetSessionModelRpcInput extends SessionIdRpcInput {
   readonly model: string;
+}
+
+export interface SetSessionRoleRpcInput extends SessionIdRpcInput {
+  readonly role?: string | undefined;
 }
 
 export interface SetSessionModelRpcResult {
@@ -280,6 +286,21 @@ export abstract class SDKRpcClientBase {
   async getSessionWarnings(input: SessionIdRpcInput) {
     const rpc = await this.getRpc();
     return rpc.getSessionWarnings({ sessionId: input.sessionId });
+  }
+
+  async listRoles(input: SessionIdRpcInput): Promise<readonly RoleSummary[]> {
+    const rpc = await this.getRpc();
+    return rpc.listRoles({ sessionId: input.sessionId });
+  }
+
+  async getActiveRole(input: SessionIdRpcInput): Promise<ActiveRole> {
+    const rpc = await this.getRpc();
+    return rpc.getActiveRole({ sessionId: input.sessionId });
+  }
+
+  async setRole(input: SetSessionRoleRpcInput): Promise<ActiveRole> {
+    const rpc = await this.getRpc();
+    return rpc.setRole({ sessionId: input.sessionId, role: input.role });
   }
 
   async addAdditionalDir(input: AddAdditionalDirInput): Promise<AddAdditionalDirResult> {

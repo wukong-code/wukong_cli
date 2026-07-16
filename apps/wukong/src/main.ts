@@ -110,6 +110,7 @@ const MIGRATE_CLI_OPTIONS: CLIOptions = {
   auto: false,
   plan: false,
   model: undefined,
+  role: undefined,
   outputFormat: undefined,
   prompt: undefined,
   skillsDirs: [],

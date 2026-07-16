@@ -261,6 +261,28 @@ export class Agent {
     this.tools.setActiveTools(profile.tools);
   }
 
+  useTransientProfile(profile: ResolvedAgentProfile, context?: PreparedSystemPromptContext): void {
+    const systemPrompt = profile.systemPrompt({
+      osEnv: this.kaos.osEnv,
+      cwd: this.config.cwd,
+      skills: this.skills?.registry,
+      cwdListing: context?.cwdListing,
+      agentsMd: context?.agentsMd,
+      additionalDirsInfo: context?.additionalDirsInfo,
+    });
+    this.config.updateTransient({ systemPrompt });
+    this.tools.setActiveToolsTransient(profile.tools);
+  }
+
+  setModelTransient(model: string | undefined): void {
+    this.validateModel(model);
+    this.config.updateTransient({ modelAlias: model });
+  }
+
+  validateModel(model: string | undefined): void {
+    if (model !== undefined) this.modelProvider?.resolveProviderConfig(model);
+  }
+
   async resume(options?: AgentRecordsReplayOptions): Promise<{ warning?: string }> {
     const result = await this.records.replay(options);
     try {

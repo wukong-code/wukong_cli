@@ -34,4 +34,13 @@ describe('buildGoalCompletionMessage', () => {
     expect(text).toContain('800 tokens');
     expect(text).toContain('5s');
   });
+
+  it('renders the public Loop PASS result without the encoded reason', () => {
+    const text = buildGoalCompletionMessage(snapshot({
+      terminalReason: 'loop:PASS:passed:Delivery gate passed.',
+    }));
+
+    expect(text).toContain('Loop PASS — Delivery gate passed.');
+    expect(text).not.toContain('loop:PASS');
+  });
 });

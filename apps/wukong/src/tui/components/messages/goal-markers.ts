@@ -13,6 +13,7 @@ import type { GoalChange } from '@wukong/wukong-sdk';
 import { STATUS_BULLET } from '#/tui/constant/symbols';
 import { currentTheme } from '#/tui/theme';
 import type { ColorToken } from '#/tui/theme';
+import { parseLoopTerminalReason } from '#/utils/loop-result';
 
 const HEAD_INDENT = '  ';
 const DETAIL_INDENT = '    ';
@@ -125,9 +126,13 @@ function markerSpec(
         return prominentMarker(pausedHeadline(change.reason, actor), 'warning');
       case 'active':
         return prominentMarker(resumedHeadline(actor), 'primary');
-      case 'blocked':
+      case 'blocked': {
         // The system stopped pursuing the goal; resumable via `/goal resume`.
-        return { headline: 'Goal blocked', accentToken: 'warning' };
+        const loop = parseLoopTerminalReason(change.reason);
+        return loop === null
+          ? { headline: 'Goal blocked', accentToken: 'warning' }
+          : { headline: `Loop ${loop.status}`, detail: loop.summary, accentToken: 'warning' };
+      }
       case "complete":
       case undefined:
         return null;

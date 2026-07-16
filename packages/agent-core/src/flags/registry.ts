@@ -20,6 +20,14 @@ export const FLAG_DEFINITIONS = [
     default: true,
     surface: 'core',
   },
+  {
+    id: 'role_profiles',
+    title: 'Role profiles',
+    description: 'Transform the active agent with built-in or custom role instructions.',
+    env: 'WUKONG_CODE_EXPERIMENTAL_ROLE_PROFILES',
+    default: false,
+    surface: 'both',
+  },
 ] as const satisfies readonly FlagDefinitionInput[];
 
 /** Literal union of registered flag ids. */

@@ -8,7 +8,7 @@ import type { ScanOptions, ScanResult } from './types';
 
 export async function runScan(options: ScanOptions = {}): Promise<ScanResult> {
   const cwd = resolve(options.cwd ?? process.cwd());
-  const git = await inspectGit(cwd);
+  const git = options.snapshot?.git ?? await inspectGit(cwd);
   const risks = scanRisks({ git, includeCommandRisks: false });
   const base = {
     status: statusFrom(risks, [], false),

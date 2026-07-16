@@ -10,12 +10,12 @@ import type { VerificationOptions, VerificationResult } from './types';
 
 export async function runVerification(options: VerificationOptions = {}): Promise<VerificationResult> {
   const cwd = resolve(options.cwd ?? process.cwd());
-  const selected = await selectVerificationCommands({
+  const selected = options.selectedCommands ?? await selectVerificationCommands({
     cwd,
     commands: options.commands,
     includeBuild: options.includeBuild,
   });
-  const git = await inspectGit(cwd);
+  const git = options.snapshot?.git ?? await inspectGit(cwd);
   const commandResults = await runVerificationCommands(selected, {
     cwd,
     timeoutMs: options.timeoutMs,

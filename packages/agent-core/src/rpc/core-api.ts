@@ -16,6 +16,7 @@ import type { SwarmModeTrigger } from '#/agent/swarm';
 import type { ToolInfo } from '#/agent/tool';
 import type { WukongConfig, WukongConfigPatch, McpServerConfig } from '#/config';
 import type { ExperimentalFeatureState } from '#/flags';
+import type { ActiveRole, RoleSummary } from '#/role';
 import type { ResumeSessionResult } from '#/rpc/resumed';
 import type { SessionMeta } from '#/session';
 import type { ContentPart } from '@wukong/kosong';
@@ -58,6 +59,10 @@ export interface CreateSessionPayload {
   readonly mcpServers?: Readonly<Record<string, McpServerConfig>>;
   readonly additionalDirs?: readonly string[];
   readonly client?: ClientTelemetryInfo | undefined;
+}
+
+export interface SetRolePayload {
+  readonly role?: string | undefined;
 }
 
 export interface CloseSessionPayload {
@@ -350,7 +355,7 @@ export type {
 export interface CreateGoalPayload {
   readonly objective: string;
   readonly replace?: boolean;
-  readonly stopCondition?: 'verify-pass' | 'scan-clean' | 'judge-pass';
+  readonly stopCondition?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
 }
@@ -425,6 +430,9 @@ export interface SessionAPI extends AgentAPIWithId {
   generateAgentsMd: (payload: EmptyPayload) => void;
   getSessionWarnings: (payload: EmptyPayload) => readonly SessionWarning[];
   addAdditionalDir: (payload: AddAdditionalDirPayload) => AddAdditionalDirResult;
+  listRoles: (payload: EmptyPayload) => readonly RoleSummary[];
+  getActiveRole: (payload: EmptyPayload) => ActiveRole;
+  setRole: (payload: SetRolePayload) => ActiveRole;
 }
 
 type SessionAPIWithId = WithSessionId<SessionAPI>;

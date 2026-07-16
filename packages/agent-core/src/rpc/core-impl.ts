@@ -32,6 +32,7 @@ import {
   type ExperimentalFeatureState,
 } from '../flags';
 import type { Logger } from '../logging/types';
+import type { ActiveRole, RoleSummary } from '../role';
 import { resolveSessionMcpConfig, mergeCallerMcpServers, type SessionMcpConfig } from '../mcp';
 import { Session, type SessionMeta, type SessionSkillConfig } from '../session';
 import { exportSessionDirectory } from '../session/export';
@@ -98,6 +99,7 @@ import type {
   SetWukongConfigPayload,
   SetModelPayload,
   SetModelResult,
+  SetRolePayload,
   SetPermissionPayload,
   SetPluginEnabledPayload,
   SetPluginMcpServerEnabledPayload,
@@ -774,6 +776,24 @@ export class WukongCore implements PromisableMethods<CoreAPI> {
     ...payload
   }: SessionScopedPayload<AddAdditionalDirPayload>): Promise<AddAdditionalDirResult> {
     return this.requireSession(sessionId).addAdditionalDir(payload.path, payload.persist);
+  }
+
+  listRoles({
+    sessionId,
+    ...payload
+  }: SessionScopedPayload<EmptyPayload>): Promise<readonly RoleSummary[]> {
+    return this.sessionApi(sessionId).listRoles(payload);
+  }
+
+  getActiveRole({ sessionId, ...payload }: SessionScopedPayload<EmptyPayload>): ActiveRole {
+    return this.sessionApi(sessionId).getActiveRole(payload);
+  }
+
+  setRole({
+    sessionId,
+    ...payload
+  }: SessionScopedPayload<SetRolePayload>): Promise<ActiveRole> {
+    return this.sessionApi(sessionId).setRole(payload);
   }
 
   startBtw({ sessionId, ...payload }: SessionAgentPayload<EmptyPayload>): Promise<string> {

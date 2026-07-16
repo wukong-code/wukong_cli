@@ -1,9 +1,10 @@
 # Wukong 商业化重构技术实现方案
 
-> 版本: v1.2
-> 日期: 2026-07-07
+> 版本: v1.3
+> 日期: 2026-07-14
 > 对应商业方案: `docs/business/COMMERCIAL_REFACTOR_PLAN.md`
 > 适用范围: `wukong_cli` 新 Kimi-code base；legacy 代码只作为迁移参考；web/计费不在本轮修改范围内。
+> 说明: §1–§8 记录已经实现的 v1 基线；0.0.12 的替换 contract 以 §9.3–§9.6 和 [Trust Loop v2](../design/verification-loop-v2.md) 为准。两者冲突时使用 v2。
 
 ---
 
@@ -21,7 +22,7 @@ P0 必须交付的真实能力是:
 4. `wukong_verify`: 让外部 AI agent 通过 MCP / tool 方式调用验证。
 5. 报告和本地统计为后续云端、团队与商业化能力提供数据基础。
 
-P0.5 必须交付的核心能力是（见 §8.5,按实施顺序）:
+P0.5 已交付的核心能力是（见 §8.5,按实施顺序）:
 
 6. `wukong proof` / `/proof`: Merge Proof Report,把 verify+scan+report 串成可分享的合并证据（Wow Moment）。
 7. `wukong judge` / `/judge`: evaluator-only 判定,复用 verification 引擎,只审不写,deterministic 模式先行。
@@ -77,13 +78,13 @@ P0.5 必须交付的核心能力是（见 §8.5,按实施顺序）:
 6. **loop 停止判断不由 agent 自评**
    - `/goal`、`/loop`、`/schedule` 的停止判断必须由 deterministic verification（`verify`/`scan`）、独立 evaluator（`/judge`），或自定义验证 skill 决定。
    - 禁止写代码的 agent 自己判断"我完成了"。
-   - 事实核对：当前已实现的 `/goal` 完成判定仍是 agent 自评（agent 调用 goal 工具宣布 completed），可选 verify 字段只是自由文本提示。因此 §8.5.4 的 verification gate 是 P0.5 硬前置，落地前 `/loop` 不得复用 `/goal` 执行核。
+   - 当前实现：带 stop condition 的 `/goal` 已有强制 gate；0.0.12 将旧条件归一化为 `proof-pass`，并在 deterministic proof 通过后启动 fresh-context 只读 reviewer。
 
 7. **loop 质量靠系统而非靠运气**（借鉴 Claude Code）
    - 保持 codebase 整洁：agent 遵循已有模式和约定。
    - 给 agent 自验证能力：用 verification + verify-skill 编码"什么叫好"，检查越定量越有效。
    - 文档可达：框架/库文档保持最新最佳实践。
-   - 第二 agent 审查：`/judge --agent` 提供 fresh-context 对抗性审查（P0.5 末 / P1 初），loop 出口可挂载。
+   - 第二 agent 审查：Loop 的统一 `proof-pass` gate 在 deterministic proof 通过后启动 fresh-context 只读 reviewer；standalone `/judge` 保持 deterministic evaluator。
 
 8. **时间触发不重复造引擎**
    - `packages/agent-core/src/tools/cron/` 已有完整的会话内调度引擎（CronScheduler：recurring/one-shot、jitter、coalescing、会话持久化与 resume 恢复）。
@@ -114,7 +115,7 @@ flowchart TD
   RiskScanner --> PolicyEngine
 
   Server -. future .-> CloudData["Reports / Quota / Billing"]
-  Verification --> LocalStore["~/.wukong/reports + stats"]
+  Verification --> LocalStore["ephemeral verdict + optional ~/.wukong/workspaces/<repo-id>/evidence + stats"]
 ```
 
 ### 3.1 新增包
@@ -638,15 +639,15 @@ wukong test --coverage
 
 ---
 
-## 8.5 P0.5: `proof` / `judge` / goal gate / `loop`
+## 8.5 P0.5 已实现基线: `proof` / `judge` / goal gate / `loop`
 
-这一组是下一个重点（对应 ROADMAP Milestone 0.5）。`loop` 是产品组织核心，`proof` 是 Wow Moment，`judge` 是 loop 的独立判定出口。全部构建在 `@wukong/verification`、已实现的 `/goal` 和 agent-core cron scheduler 之上，不引入新核心引擎。
+这一组已按 ROADMAP Milestone 0.5 完成。`loop` 是产品组织核心，`proof` 是 deterministic evidence，`judge` 是独立的 deterministic evaluator；Loop 的最终出口统一为 proof + fresh-context reviewer。全部构建在 `@wukong/verification`、`/goal` 和 agent-core cron scheduler 之上，不引入新核心引擎。
 
 实施顺序固定为：**`/proof`（§8.5.2）→ `/judge`（§8.5.3）→ `/goal` verification gate（§8.5.4）→ `/loop`（§8.5.1）**。理由：proof/judge 只是 verify+scan 的编排与重排版，便宜且先产出可分享物；judge-pass 与 goal gate 是 loop 停止判断的前提；loop 最后落地时只做编排。
 
 两个复用决策（本节其余部分以此为前提）：
 
-- **执行核复用 `/goal`**：但当前 `/goal` 的完成判定是 agent 自评，必须先落地 §8.5.4 的 verification gate，`/loop` 才能复用（见 §2.1 原则 6）。
+- **执行核复用 `/goal`**：`/goal` 已具备强制 delivery gate，`/loop` 只负责设置 `proof-pass`、迭代上限和 pacing。
 - **时间触发复用 cron**：`/loop` 的可选 `--every` 节流由 agent-core cron scheduler 驱动，不新写 timer（见 §2.1 原则 8）。
 
 ### 8.5.1 `wukong loop` / `/loop` — 本机迭代 loop（核心，最后落地）
@@ -758,11 +759,11 @@ sequenceDiagram
 - `--every` 节流复用 agent-core cron scheduler（session-scoped、关机即停，与 cron 现有语义一致），不新写 timer。
 - `/loop` 额外提供的只有：多轮编排、失败反馈注入下一轮 prompt、迭代历史快照（`LoopResult.history` 取自每轮 gate 的 `VerificationResult`）。
 
-#### P0.5 边界
+#### P0.5 已交付边界
 
 - 只做**本机** `/loop`：在当前 TUI 会话 / 当前 CLI 进程内迭代。**关机即停。**
 - 不做 `/schedule` 云端例程（归 hosted，Milestone 3+）；定时巡检型任务指向 cron 工具，不塞进 `/loop`。
-- 停止条件 P0.5 支持 `verify-pass`、`scan-clean`、`judge-pass`；`skill` 在验证 skill 机制落地后接入（P0.5 末或 P1 初）。
+- 新建 Loop 的停止条件统一为 `proof-pass`；旧 `verify-pass`、`scan-clean`、`judge-pass` flags 与持久化 Goal record 在读取时兼容归一化。验证 skill 不属于 0.0.12 gate contract。
 - token 失控防护：`maxIterations` 默认上限、单轮超时、人可随时 stop、`--dry-run`。
 
 ---
@@ -849,8 +850,8 @@ export interface ProofResult {
 
 如实分层，避免叙事超前于实现：
 
-- **P0.5 默认模式（deterministic）**：复用 `runVerification` + `runScan`，不调用模型，离线免费。此模式本质是 proof 引擎的对抗性判定档（BLOCK 倾向更强），文档与 help 必须如实描述为"deterministic 判定"，不得宣传为"第二 agent 审查"。
-- **`--agent` 模式（fresh-context 第二 agent，P0.5 末 / P1 初）**：用 fresh context 的只读 evaluator agent（复用现有 fork/side-agent 基础设施）读取 diff + ProofResult，输出 BLOCK/PASS + 理由。BYOK，模型成本归用户。"火眼金睛第二-agent reviewer"的差异化叙事在此模式落地后才对外使用。
+- **standalone `/judge`（deterministic）**：复用 `runVerification` + `runScan`，不调用模型，离线免费；如实描述为 deterministic 判定。
+- **Loop fresh-context reviewer（已实现）**：统一 `proof-pass` gate 在 proof 通过后，用用户配置的模型启动只读 evaluator session；输出 `pass`、`blocked` 或 `inconclusive`，不得写代码。它不是 `/judge --agent` 的别名。
 
 #### 命令契约
 
@@ -859,7 +860,6 @@ export interface ProofResult {
 /judge
 /judge --assume-broken      # 默认即如此，显式声明
 /judge --strict             # warning 也判 BLOCK
-/judge --agent              # fresh-context 第二 agent 审查（P0.5 末 / P1 初，BYOK）
 
 # CLI
 wukong judge
@@ -892,7 +892,7 @@ wukong judge --agent
 
 #### 现状与问题
 
-当前 `/goal` 的完成判定是 agent 自评：agent 通过 goal 工具（`agent-core/src/tools/builtin/goal/`）宣布 completed/blocked，`create-goal` 的 verify 字段只是自由文本提示，没有强制评估。这与 §2.1 原则 6 直接冲突——如果 `/loop` 不加处理直接复用 `/goal`，loop 的停止判断实际上还是 agent 自评。
+历史问题是 `/goal` 只依赖 agent 自评。当前实现已在 `UpdateGoal('complete')` 出口强制运行 gate；0.0.12 再将其统一为 `proof-pass`，避免 Loop 由 writer 自己决定是否完成。
 
 #### 设计
 
@@ -926,8 +926,8 @@ export interface GoalGateResult {
 P0 本地:
 
 ```text
-~/.wukong/reports/*.md
-~/.wukong/reports/index.json
+~/.wukong/workspaces/<repo-id>/evidence/*.md   # 仅显式 --save
+~/.wukong/workspaces/<repo-id>/evidence/index.json
 ~/.wukong/guard/events.jsonl
 ```
 
@@ -997,13 +997,101 @@ team_rules(
 
 | Feature | Free | Pro | Team |
 |---|---|---|---|
-| local verify | unlimited | unlimited | unlimited |
-| hosted reports | 3/month | unlimited or high cap | org cap |
+| Loop sessions | 3/month, max 5 iterations/session | higher cap | pooled/org policy |
 | local guard | unlimited | unlimited | team policy 可加强 |
-| deep review | credits | credits included | pooled credits |
+| advanced verify/scan/proof | unlimited | unlimited | CI/org policy |
+| BYOK reviewer | included in Loop | included | org policy |
 | team rules | no | no | yes |
 
-不要限制本地 `verify` 和本地 guard 的使用次数（对安全提醒功能限量会直接伤害信任）。商业化应限制云端托管、深度模型审查、团队规则和审计能力。`wukong_cli` 侧只需要保证 report metadata、guard event 和 redaction 边界清楚。
+0.0.12 只保留 Loop sessions 一类用户额度。verify/scan/proof 无论由 Loop 内部调用还是高级用户直接调用，都不产生独立 usage。BYOK reviewer 包含在 Loop run 中，不增加 AI credits。完整 contract 见 [0.0.12 Trust Loop v2](../design/verification-loop-v2.md)。
+
+现有 Hosted Evidence 上传/retention 限制继续作为次级存储策略，不出现在 Trust Run 主额度中，也不阻塞默认本地 verdict。
+
+### 9.4 Trust Run 编排与 usage
+
+`@wukong/verification` 保持 quota/auth 无关；Loop orchestration 负责唯一 usage 边界。每个 Loop run 携带 `runId`、`origin`、`artifactMode`、writer `modelAlias` 和 `roleName`。内部检查和 reviewer 不单独调用 usage API。
+
+服务端 contract：
+
+| Endpoint | 作用 |
+|---|---|
+| `POST /api/v1/trust-runs/start` | 幂等、原子地创建 Loop run 并增加 session used |
+| `POST /api/v1/trust-runs/:id/complete` | 幂等记录最终状态、耗时、model/role 与实际迭代数 |
+| `GET /api/v1/trust-usage` | 返回 Loop sessions 的 limit、used、remaining 和 reset timestamp |
+
+服务端新增：
+
+```sql
+trust_usage(
+  user_id text not null,
+  period_start text not null,
+  bucket text not null,
+  used integer not null default 0,
+  primary key (user_id, period_start, bucket)
+);
+
+trust_runs(
+  id text primary key,
+  user_id text not null,
+  command text not null,
+  idempotency_key text not null,
+  status text not null,
+  model_alias text,
+  role_name text,
+  actual_iterations integer,
+  duration_ms integer,
+  reason_code text,
+  created_at text not null,
+  completed_at text,
+  unique(user_id, idempotency_key)
+);
+```
+
+参数、project plan、model alias 与 role 在 `start` 前验证；start 成功后即计数，取消、失败或崩溃不退回。相同 `idempotency_key` 的 CLI 重试返回原 run，不重复增加 used。0.0.12 不实现 reservation、renew、release、offline lease 或额外 AI credit ledger。
+
+### 9.5 Snapshot、项目配置信任与 evidence 路径
+
+- 每个 verify/scan/proof run 只消费一个精简 `WorkspaceSnapshot`：HEAD、input、config 与 plan digest。
+- input 在运行中变化时最多自动重建一次；再次变化返回 ERROR/workspace_changed，不能拿旧结果判 PASS。
+- 用户交互式运行顶层 verify/proof，视为授权执行已展示的标准 package scripts；`.wukong/config.toml` 自定义 command 首次执行仍需确认。
+- 自动 Loop、agent tool 与非交互模式必须信任当前 repo identity + plan digest；`--trust-project` 只信任当前 plan。
+- Role Profile 只允许 prompt、model alias、tool allowlist 与 verify profile，不能内嵌任意 shell command 或扩大权限。
+- 默认只返回 ephemeral verdict，不写文件。显式 `--save` 写入 `~/.wukong/workspaces/<repo-id>/evidence/`；`--report <path>` 才写用户指定路径，`--upload` 可直接上传 redacted payload。0.0.12 不提供隐式读取旧报告的 `--from-latest`；复用必须显式传入当前 run 的 snapshot/evidence id 并校验 digest。
+
+### 9.6 Hosted Evidence v2 与兼容
+
+0.0.12 使用一个用户状态与一个 decision：
+
+```ts
+type TrustStatus = 'PASS' | 'NEEDS_WORK' | 'ERROR';
+type TrustDecision = 'pass' | 'needs_work' | 'none';
+```
+
+wire payload 延续 snake_case，写入 `schema_version`、`type`、`trust_status`、`decision`、`reason_code`、`snapshot_id`，以及可选 model/role metadata。v2 `type` 增加 `loop`；只有用户显式 upload 时构建 payload，中间 gate 不上传。Dashboard、公开 evidence page 和 API validator 使用同一个 adapter。
+
+D1 migration 采用增量字段，不删除现有 `status`：
+
+```sql
+ALTER TABLE verification_reports ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1;
+ALTER TABLE verification_reports ADD COLUMN snapshot_id TEXT;
+ALTER TABLE verification_reports ADD COLUMN trust_status TEXT;
+ALTER TABLE verification_reports ADD COLUMN decision TEXT;
+ALTER TABLE verification_reports ADD COLUMN reason_code TEXT;
+ALTER TABLE verification_reports ADD COLUMN model_alias TEXT;
+ALTER TABLE verification_reports ADD COLUMN role_name TEXT;
+ALTER TABLE verification_reports ADD COLUMN legacy_status TEXT;
+ALTER TABLE verification_reports ADD COLUMN redacted_payload_json TEXT;
+```
+
+- migration 后所有已有行保持 `schema_version=1`，并把当前 `status` 复制到 `legacy_status`；不为旧行伪造 snapshot 或 v2 execution fields。
+- v1 ingestion 原样保存 legacy status，并通过 adapter 读取；v2 ingestion 校验 wire schema 后写 v2 columns 与 redacted payload。
+- 由于当前 `status` 非空，兼容期内 v2 同时写 legacy projection：PASS→passed，NEEDS_WORK→blocked，ERROR→warning；该列只供旧页面读取，不再是 v2 truth source。
+- v1 passed→PASS；warning→PASS + legacy warning；failed/blocked→NEEDS_WORK。v1 无法反推 ERROR，页面必须标注 legacy result。
+- migration 必须覆盖旧行、v2 insert/read、`type=loop`、model/role metadata、Dashboard 和 public evidence projection。
+
+部署顺序固定为：先部署 D1 migration + Web v1/v2 dual reader/validator，再发布 0.0.12 CLI v2 writer，最后观察 v1/v2 ingest 与 projection 指标。CLI v2 不能先于 Web contract 上线；兼容窗口结束也必须单独发布公告，不能在 0.0.12 内移除 v1。
+
+Loop 默认使用 Proof gate。旧 `--until verify-pass`、`--until scan-clean`、`--until judge-pass` 以及对应持久化 Goal records 在 0.0.12 继续解析并输出 deprecation 提示，不能静默改变含义。
 
 ---
 
@@ -1091,9 +1179,9 @@ pnpm -C apps/wukong run dev:cli-only -- guard --disable
 pnpm --filter @wukong/wukong exec vitest run test/tui/commands/verification.test.ts
 ```
 
-### Milestone 4.75: Loop 控制层 + Merge Proof（P0.5）
+### Milestone 4.75: Loop 控制层 + Merge Proof（P0.5，已完成）
 
-对应 §8.5。这是 P0 完成后、云端商业化之前的下一个重点。实施顺序：proof → judge → goal gate → loop。
+对应 §8.5。已按 proof → judge → goal gate → loop 的顺序完成。
 
 交付:
 
@@ -1196,7 +1284,7 @@ packages/verification/test/fixtures/
 | guard alias 破坏用户 shell | 高 | 幂等 block、备份、status、disable 测试 |
 | agent detection 不可靠 | 中 | 明确是 heuristic,支持 `always/agent-only/off` |
 | verify 自动检测命令误跑重任务 | 中 | 默认只跑常见短命令,build 需要显式 `--build` |
-| report 泄露敏感信息 | 高 | 本地报告默认完整,外部上传默认 metadata + redacted report |
+| evidence 泄露敏感信息 | 高 | v2 默认不落盘；显式本地保存可完整，外部上传只允许 metadata + redacted evidence |
 | cloud/sandbox 过早承诺 | 高 | P0 不做完整云终端和隔离沙盒 |
 | 包名和安装名不一致 | 高 | 发布前统一 package name、docs、install script |
 | `/loop` 失控（agent 持续烧 token） | 高 | max-iterations 默认上限、单轮超时、dry-run、人可随时 stop |
@@ -1217,15 +1305,15 @@ packages/verification/test/fixtures/
 4. `wukong guard`（已完成）
 5. `wukong_verify` tool（已完成）
 6. `/goal` 持续修复（已完成）
-7. `wukong proof`（Merge Proof Report，P0.5 第 1 步）
-8. `wukong judge`（evaluator-only 判定，P0.5 第 2 步）
-9. `/goal` verification gate（`/loop` 硬前置，P0.5 第 3 步）
-10. `wukong loop`（本机迭代 loop，P0.5 第 4 步，核心）
+7. `wukong proof`（已完成，Merge Proof Report）
+8. `wukong judge`（已完成，deterministic evaluator）
+9. `/goal` verification gate（已完成，proof + fresh-context reviewer）
+10. `wukong loop`（已完成，本机迭代 Loop，配额与三态结果）
 11. report history / share link
-12. `review --deep` 与 `judge --agent`
+12. Hosted Evidence v2 与更深的 reviewer policy
 13. team rules / audit log interface
 14. 跨会话 loop（hosted/CI daemon）
 15. sandbox / external cloud execution
 
-前六项已完成，Wukong 的验证内核真实成立。第 7-10 项（proof/judge/gate/loop）把内核升级成 **AI Coding Loop 的控制层**，是下一个重点:
+前十项已完成，Wukong 的验证内核与 **AI Coding Loop 控制层** 已真实成立。下一阶段重点是 Hosted Evidence v2、团队规则和跨会话执行：
 **AI agent 写完代码后，Wukong 持续驱动验证、产出合并证据，并判断能不能合并。**

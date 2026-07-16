@@ -317,6 +317,60 @@ describe('GoalMode records', () => {
     expect(goals.getGoal().goal?.budget.turnBudget).toBe(2);
   });
 
+  it.each(['verify-pass', 'scan-clean', 'judge-pass'] as const)(
+    'migrates legacy %s Goal records to the proof gate',
+    (stopCondition) => {
+      const { goals } = makeGoalMode();
+
+      goals.restoreCreate({
+        type: 'goal.create',
+        goalId: `legacy-${stopCondition}`,
+        objective: 'finish the old goal',
+        stopCondition,
+        maxIterations: 3,
+        time: Date.parse('2026-01-01T00:00:00.000Z'),
+      });
+
+      expect(goals.getGoal().goal).toMatchObject({
+        stopCondition: 'proof-pass',
+        maxIterations: 3,
+        iteration: 0,
+      });
+    },
+  );
+
+  it('records and restores the durable Loop result', async () => {
+    const { goals, records } = makeGoalMode();
+
+    await goals.createGoal({ objective: 'make the gate pass' });
+    await goals.incrementIteration();
+    const result = goals.recordLoopResult({
+      schemaVersion: 2,
+      status: 'NEEDS_WORK',
+      reasonCode: 'check_failed',
+      summary: 'Tests are still failing.',
+      checks: [{ command: 'npm test', status: 'failed', exitCode: 1, durationMs: 50 }],
+      blockers: [{ id: 'test', kind: 'check', summary: 'Fix the failing test.', nextAction: 'Run npm test.' }],
+    });
+
+    expect(result).toMatchObject({ iterations: 1, status: 'NEEDS_WORK' });
+    const update = records.at(-1);
+    expect(update).toMatchObject({ type: 'goal.update', loopResult: result });
+
+    const restored = makeGoalMode().goals;
+    restored.restoreCreate({
+      type: 'goal.create',
+      goalId: 'g-loop',
+      objective: 'make the gate pass',
+      time: Date.parse('2026-01-01T00:00:00.000Z'),
+    });
+    restored.restoreUpdate({ type: 'goal.update', iteration: 1 });
+    if (update?.type !== 'goal.update') throw new Error('expected goal.update record');
+    restored.restoreUpdate(update);
+
+    expect(restored.getGoal().goal?.loopResult).toEqual(result);
+  });
+
   it('projects restored goal status changes into replay records', () => {
     const { goals, replay } = makeGoalMode();
 

@@ -350,6 +350,7 @@ micro_compaction = false
     });
     expect(features).toEqual([
       expect.objectContaining({ id: 'micro_compaction', enabled: false }),
+      expect.objectContaining({ id: 'role_profiles', enabled: false }),
     ]);
   });
 

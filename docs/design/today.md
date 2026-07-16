@@ -75,7 +75,7 @@ Focus: (not set) — wukong today "<your goal>"
 | 字段 | 来源 |
 |---|---|
 | 今日 verify/scan/proof/guard 次数与 pass/fail | `~/.wukong/stats/events.jsonl`（或等价索引，P1 先定义 schema） |
-| Last proof 结论 | `~/.wukong/reports/` 最近一条 proof 报告 |
+| Last proof 结论 | stats ledger 中最近一条 proof completion event；若用户显式保存 evidence，再附本地 artifact 路径 |
 | Workspace git 快照 | `inspectGit(cwd)` — changed files 计数 |
 | 进行中 goal/loop | 当前 session / goal store |
 | Streak | 连续 N 天至少有 1 次 clean verify（基于 stats 按日聚合） |

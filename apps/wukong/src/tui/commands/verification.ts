@@ -16,6 +16,7 @@ import { handleReportSlashCommand } from './report';
 export { handleReportSlashCommand };
 
 export async function handleVerifySlashCommand(host: SlashCommandHost, _args: string): Promise<void> {
+  host.showStatus('Advanced diagnostic · /loop runs project checks automatically.');
   const spinner = host.showProgressSpinner('Running Wukong verification...');
   try {
     const result = await runVerification({
@@ -42,6 +43,7 @@ export async function handleVerifySlashCommand(host: SlashCommandHost, _args: st
 }
 
 export async function handleScanSlashCommand(host: SlashCommandHost): Promise<void> {
+  host.showStatus('Advanced diagnostic · /loop runs risk checks automatically.');
   const spinner = host.showProgressSpinner('Running Wukong risk scan...');
   try {
     const result = await runScan({
@@ -82,6 +84,7 @@ export async function handleGuardSlashCommand(host: SlashCommandHost, args: stri
 }
 
 export async function handleProofSlashCommand(host: SlashCommandHost): Promise<void> {
+  host.showStatus('Advanced diagnostic · /loop runs the delivery gate automatically.');
   const spinner = host.showProgressSpinner('Running Wukong merge proof...');
   try {
     const result = await runProof({

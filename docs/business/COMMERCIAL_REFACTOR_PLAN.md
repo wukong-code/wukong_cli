@@ -1,7 +1,7 @@
 # Wukong Code 商业化与产品重构方案
 
 > 版本: v1.3
-> 日期: 2026-07-11
+> 日期: 2026-07-14
 > 当前范围: `wukong_cli` 新 Kimi-code base
 > 技术落地: [商业化重构技术实现方案](../tech/commercial-refactor-implementation.md)
 
@@ -33,10 +33,9 @@ wukong upgrade
 
 已实现的 TUI slash commands 包括 `/verify`、`/scan`、`/guard`、`/report`、`/goal`（含 verification gate 和队列）、`/proof`、`/judge`、`/loop`、`/today`。agent-core 另已实现会话内 cron 调度工具（CronCreate/CronList/CronDelete，支持 recurring/one-shot、持久化与 resume 恢复），是 `/loop` 时间触发的复用基础。Hosted Report 的登录上传、配额、历史和分享预览也已实现。
 
-当前 top-level CLI 尚未完整实现：
+当前仍未实现的 top-level CLI 扩展是：
 
 ```text
-wukong loop      # 只有参数校验和 --dry-run；实际执行目前使用 TUI /loop
 wukong schedule  # 云端例程（归 hosted，Milestone 3+）
 wukong ship      # 发布 gate（更靠后）
 wukong review    # AI 辅助代码审查（P1）
@@ -64,13 +63,13 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 |---|---|---|---|---|
 | Turn-based | 用户 prompt | agent 自判完成 | TUI 默认 agentic loop | 已实现 |
 | Goal-based | 实时手动 | verification gate + 回合/预算上限 | `/goal` | 已实现 |
-| Time-based（本机） | 手动启动，轮次自动衔接（`--every` 可选节流） | 停止条件满足 or 迭代上限 or 取消 | TUI `/loop` | 已实现；top-level driver 待实现 |
+| Time-based（本机） | 手动启动，轮次自动衔接（`--every` 可选节流） | proof/reviewer gate 通过 or 迭代上限 or 取消 | `wukong loop` / TUI `/loop` | 已实现 |
 | Time-based（云端） | 计划 | 任务达标退出，例程持续 | `/schedule` | 待实现（归 hosted） |
 | 工具层 | 手动/被 loop 调用 | 单次 | `/verify` `/scan` `/guard` | 已实现 |
 | 证据层 | 手动 | 单次 | `/proof` | 已实现 |
 | 评估层 | 手动/被 loop 调用 | 单次 | `/judge` | deterministic 模式已实现 |
 
-`/loop` 的核心语义是**迭代直到验证通过**（关机即停）：轮次自动衔接，`--every` 只是可选的轮间节流；时间触发复用 agent-core 已有 cron scheduler，不新写定时引擎。定时巡检型任务本机由 cron 工具承载，云端归 `/schedule`（hosted，Milestone 3+）。停止判断不由写代码的 agent 自评——注意当前 `/goal` 的完成判定仍是 agent 自评，P0.5 必须先给 `/goal` 出口落地 deterministic verification gate，`/loop` 复用该 gate，评估用 verify/scan、独立 evaluator（`/judge`）或自定义验证 skill。
+`/loop` 的核心语义是**迭代直到验证通过**（关机即停）：轮次自动衔接，`--every` 只是可选的轮间节流；时间触发复用 agent-core 已有 cron scheduler，不新写定时引擎。定时巡检型任务本机由 cron 工具承载，云端归 `/schedule`（hosted，Milestone 3+）。0.0.12 的 `/goal` 出口已经统一为 `proof-pass`：先运行 deterministic checks，再由 fresh-context 只读 reviewer 判定，写代码的 agent 不能自判通过。
 
 用户在 Claude Code、Cursor、Copilot、Codex 或其他 agent 生成代码后，用 Wukong 运行确定性检查、扫描风险、生成证据报告，再决定是否相信、提交或合并。Wukong 补上 agent 最薄弱的一环：
 
@@ -89,7 +88,7 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 | 紧箍咒 | 权限约束 | `guard`、policy、command confirmation |
 | 分身术 | agent 能力分发 | `wukong_verify` tool / MCP bridge |
 | 筋斗云 | 持续驱动与远程能力 | `loop`（本机迭代）、cron 工具（本机巡检，已实现）、`schedule`（云端例程）、`sync`、cloud reports |
-| 七十二变 | 专家模式 | future prompt/tool profiles |
+| 七十二变 | 专家模式 | 实验性 Role Profiles：可选择 agent 角色、prompt 与工具约束 |
 | 取经路 | 成长与复盘 | `today`（日简报+focus）、`retro`（周）、`journey`（长期），P1+ |
 
 ## 3. 目标命令结构
@@ -105,22 +104,22 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 | `/verify`、`/scan`、`/guard`、`/report` | 已实现 | TUI 会话内运行验证、扫描、guard 状态和查看报告 |
 | `/goal` | 已实现 | 单任务跑到验证条件满足，含队列管理 |
 
-### P0.5: Loop 控制层 + Merge Proof（下一个重点）
+### P0.5: Loop 控制层 + Merge Proof（已完成）
 
 实施顺序固定为 proof → judge → goal gate → loop：
 
 | 命令 | 状态 | 目标 |
 |---|---|---|
-| `wukong proof` / `/proof` | 待实现（第 1 步） | 把 verify+scan+report 串成 Merge Proof Report（Wow Moment） |
-| `wukong judge` / `/judge` | 待实现（第 2 步） | evaluator-only 判定，默认 `--assume-broken`，只审不写；deterministic 模式先行，`--agent` 第二-agent 审查后置 |
-| `/goal` verification gate | 待实现（第 3 步） | 把 `/goal` 完成判定从 agent 自评升级为 deterministic gate，是 `/loop` 的硬前置 |
-| `wukong loop` / `/loop` | 待实现（第 4 步，核心） | 本机迭代 loop：驱动 agent + 验证 + 修复直到停止条件满足；复用 cron scheduler 与 goal gate，关机即停 |
+| `wukong proof` / `/proof` | 已实现 | 把 verify+scan+report 串成 Merge Proof Report；Loop 内作为统一 gate 的 deterministic 前置 |
+| `wukong judge` / `/judge` | 已实现 | evaluator-only deterministic 判定；Loop gate 另接 fresh-context 只读 reviewer |
+| `/goal` verification gate | 已实现 | proof checks + fresh-context 只读 reviewer；写代码的 agent 不能自判通过 |
+| `wukong loop` / `/loop` | 已实现（核心） | 本机迭代 loop：驱动 agent + 验证 + 修复直到 gate 通过；复用 scheduler，关机即停 |
 
 ### P1: 工作流扩展
 
 | 命令 | 状态 | 目标 |
 |---|---|---|
-| `wukong today` / `/today` | 待实现 | **Daily Proof Briefing**：今日 verify/scan/proof/guard 统计 + 工作区快照 + streak + 基于状态的 Next；位置参数设今日 focus，与 `wukong.today` 域名对齐。详见 [today 设计](../design/today.md) |
+| `/today` | TUI 已实现 | **Daily Proof Briefing**：今日 verify/scan/proof/guard 统计 + 工作区快照 + streak + 基于状态的 Next；top-level `wukong today` 尚未提供。详见 [today 设计](../design/today.md) |
 | `wukong review` | 待实现 | AI 辅助代码审查，消耗 credits 或本地模型 |
 | `wukong test` | 待实现 | 项目测试入口和模板化测试策略 |
 | `wukong ship` | 待实现 | proof + 版本/changelog/dry-run 发布前 gate |
@@ -130,7 +129,7 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 
 | 能力 | 状态 | 目标 |
 |---|---|---|
-| cloud reports | 待实现 | 上传 metadata/redacted report，支持分享 |
+| hosted reports v1 | 已实现 | 登录上传、配额、历史和分享预览；Evidence v2/redaction contract 后续完善 |
 | team rules | 待实现 | 团队共享验证规则和 guard policy |
 | audit log | 待实现 | 记录验证、拦截和发布证据 |
 | `/schedule` 云端例程 | 待实现 | 机器关了也跑的 time-based loop，归 hosted（Milestone 3+） |
@@ -143,8 +142,8 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 
 | 层 | 含义 | Wukong 对应 | 状态 |
 |---|---|---|---|
-| 第一层：Agentic Coding Loop | agent 写代码 → 跑测试 → 修错 → 再跑 | `/loop`（本机）+ `/schedule`（云端）+ `/goal` + `/verify` + `/scan` + `/guard` | TUI `/loop` 与工具层已实现；top-level driver 和 `/schedule` 待实现 |
-| 第二层：Developer Feedback Loop | 人看报告、决定接受、更新规则 | `/proof`、`/judge`、`/report`、`/today`、`/sessions`、`/undo`、`/rules`(待实现) | 一半已实现；`/today` 待实现（P1） |
+| 第一层：Agentic Coding Loop | agent 写代码 → 跑测试 → 修错 → 再跑 | `wukong loop` / `/loop`（本机）+ `/goal` + 内部 checks | 本机 top-level/TUI 均已实现；云端 `/schedule` 待实现 |
+| 第二层：Developer Feedback Loop | 人看报告、决定接受、更新规则 | `/proof`、`/judge`、`/report`、`/today`、`/sessions`、`/undo`、`/rules`(待实现) | 本地证据与 TUI briefing 已实现；共享 rules 待实现 |
 | 第三层：External Feedback Loop | 用户 bug、CI 失败、issue、PR review 回到 loop | GitHub Issues、CI、Sentry、Linear、Slack 集成 | 未实现，归 hosted/CI |
 
 ## 3.2 Loop 代码质量保障原则
@@ -154,25 +153,25 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 1. **保持代码库整洁**：agent 遵循 codebase 已有的模式和约定。
 2. **给 agent 自验证能力**：用 deterministic verification（`verify`/`scan`）和自定义验证 skill 编码"什么叫好"；检查越定量越有效。
 3. **文档可达**：框架/库文档保持最新最佳实践。
-4. **用第二 agent 做审查**：fresh context 的 reviewer 偏见更少——这是 `/judge --agent` 的目标形态（P0.5 末 / P1 初）。P0.5 默认的 `/judge` 是 deterministic 判定，落地前不对外宣传"第二 agent 审查"。
+4. **用第二 agent 做审查**：Loop 的 `proof-pass` gate 已在 deterministic proof 通过后启动 fresh-context 只读 reviewer，降低写代码 agent 的自评偏见；standalone `/judge` 仍保持 deterministic evaluator，不混淆两者。
 
 ## 4. 商业模型
 
-商业化不应限制本地 `verify` 的基本使用。更合理的付费边界是云端协作、深度模型审查、报告托管、团队策略、审计和 Wukong 自有 API 服务。
+0.0.12 只用受额度限制的免费 Loop 验证重复使用和升级意愿。`verify`、`scan`、`proof` 是 Loop 内部能力和高级诊断入口，不分别售卖、不单独计费；未来付费边界包括更多 Loop sessions、更长迭代、深度模型审查、团队策略、PR gate、审计和 Wukong 自有 API 服务。
 
 核心收费原则：
 
 ```text
 用户自带 API Key = 模型成本归用户
-Wukong 收费 = 验证流程、报告托管、PR 协作、团队治理和审计证据
+Wukong 收费 = 更多 Loop sessions、更强 reviewer、团队角色、PR 协作、策略和审计
 Wukong 托管模型调用 = 作为可选 credits / add-on 收费
 ```
 
 | 层级 | 建议权益 |
 |---|---|
-| Free | BYOK、本地 verify/scan、本地报告、基础 guard |
-| Pro | BYOK、hosted reports、report history、分享链接、增强 guard rules、可选 managed review credits |
-| Team | org-level BYOK、GitHub PR comment/gate、共享规则、团队审计日志、组织模板 |
+| Free | BYOK、10 Loop sessions/月、每次最多 5 轮、基础 roles/guard；第 3 次起提示 Pro |
+| Pro | BYOK、更多/更长 Loop、deep reviewer、更多角色、可选 evidence history/share |
+| Team | org-level BYOK、共享 Role Profiles、GitHub PR gate、团队规则和审计日志 |
 | Enterprise | 私有部署、合规、SSO、SLA、私有 runner |
 | Credits / Add-on | Wukong 托管模型调用、深度 review、批量验证、托管报告额度 |
 
@@ -204,21 +203,24 @@ Wukong 支持用户自带 API Key，但 BYOK 不代表所有功能都应免费�
 ```text
 Free
 - BYOK
-- Local scan / verify / markdown report
-- No hosted report history
+- 10 Loop sessions/month, max 5 iterations/session; show a Pro prompt from session 3
+- Advanced verify/scan/proof diagnostics remain available without a separate quota
+- Fresh-context reviewer with a configured alias
+- Evidence is saved/uploaded only when requested
 
 Pro $8-12/user/month
 - BYOK
-- 100 hosted reports/month
-- Report history and share links
-- Optional managed review credits
+- More and longer Loop sessions
+- Deep reviewer workflows
+- More custom roles
+- Optional evidence history and share links
 
 Team $99-299/team/month or $15-29/user/month
 - Org-level BYOK
 - 500 PR checks/month
 - GitHub App, PR comments, PR gates
-- Team rules, audit log, shared reports
-- Overage: $0.10-$0.30/check or report
+- Shared Role Profiles, team rules, audit log
+- Overage: $0.10-$0.30/check or managed review unit
 
 Managed AI Add-on
 - Wukong provides model calls
@@ -235,34 +237,37 @@ Managed AI Add-on
 5. 用户 key、org-level key 和 Wukong managed key 必须隔离存储、隔离审计。
 6. Team/Enterprise 应提供私有 runner 或 self-hosted 方案，降低源码和密钥出域顾虑。
 
-### 4.2 不建议收费的基础能力
+### 4.2 免费基础层与用量限制
 
-这些能力应作为免费入口，负责证明产品价值和扩大使用面：
+Loop 必须提供真实免费体验，但额度只作用于顶层 session，不能让用户理解多套计数规则。完整计数规则见 [0.0.12 Trust Loop v2](../design/verification-loop-v2.md)。
 
-| 能力 | 原因 |
-|---|---|
-| 基础 `wukong verify` | 本地确定性验证是核心入口，收费会降低试用率 |
-| 基础 `wukong scan` | 只读风险扫描适合作为日常默认动作 |
-| 基础 `wukong guard` / `guard --status` | P0 guard 是 best-effort，不能作为强安全付费承诺 |
-| 本地 Markdown report | 本地证据报告应作为免费闭环的一部分 |
-| provider/login/doctor/export | 属于基础 CLI 使用、诊断和迁移能力 |
+| 能力 | Free 初始额度 | 计数边界 |
+|---|---|---|
+| Loop sessions | 10 sessions/月，每个最多 5 轮；第 3 次起软提示 Pro | 一次 session 计一次；所有内部检查与 reviewer 不重复计数 |
+| 高级 verify/scan/proof | 不限制 | 兼容 CI/debug，不作为默认产品入口或付费点 |
+| BYOK reviewer | 包含在 Loop 中 | 不增加另一套 AI credits；provider token 由用户承担 |
+| 基础 `wukong guard` / `guard --status` | 暂不限制 | P0 guard 是 best-effort，不能作为强安全付费承诺 |
+| provider/login/doctor/export | 暂不限制 | 属于基础 CLI 使用、诊断和迁移能力 |
+
+未登录用户可运行 1 个最多 2 轮的 Loop。免费额度必须足以产生第一次真实结果，但不能长期替代 Pro。参数校验和 plan 建立在 usage start 前完成；start 成功后即计数，取消或崩溃不回退。默认不生成报告，只有显式 `--save`/`--upload` 才产生 evidence。
 
 ### 4.3 适合收费的功能
 
-付费点应建立在“团队协作、云端证据、模型成本、审计责任”上，而不是限制本地基础命令。
+付费点建立在“更高 Trust Loop 用量、团队协作、云端证据、模型能力和审计责任”上。四个命令不分别售卖，Pro 解锁整条 Trust Loop。
 
 | 收费功能 | 推荐层级 | 价值 | 当前状态 |
 |---|---|---|---|
-| Hosted Reports / 分享链接 | Pro / Team | 上传 redacted report，生成可分享链接，保留历史记录 | 待实现 |
-| Deep Review Credits | Pro / Credits | 用模型做深度代码审查、风险解释和修复建议 | 待实现 |
-| Wukong Product APIs | Pro / Team | report upload/share、PR comment/gate、rules evaluate、redaction、audit events | 待实现 |
+| Hosted Reports / 分享链接 | Pro / Team | 上传 redacted report，生成可分享链接，保留历史记录 | 已实现基础闭环；0.0.12 补 v2 schema |
+| 更多 Loop + Deep Reviewer | Pro | 更长迭代、fresh-context 深度审查和更具体的修复反馈 | 0.0.12 先做 BYOK 基础版；Pro 价值待验证 |
+| Wukong Product APIs | Pro / Team | report upload/share、PR comment/gate、rules evaluate、redaction、audit events | 部分实现：report upload/share 已有，其余待实现 |
 | Managed Model Add-on | Pro / Team / Credits | Wukong 提供托管模型调用，解决用户不想配置 key 的场景 | 待实现 |
 | Team Rules | Team | 团队统一验证命令、风险阈值、路径策略和 guard policy | 待实现 |
 | GitHub PR Gate / CI Gate | Team | PR 自动跑 verify/scan，发布检查状态和 report link | 待实现 |
 | Audit Log | Team / Enterprise | 记录谁验证、谁 override、失败原因和最终交付证据 | 待实现 |
 | Agent Enforcement | Team | 要求 agent 完成前必须调用 `wukong_verify`，否则标记未完成 | 部分实现：tool 已有，策略层待实现 |
 | Enhanced Guard Policy | Pro / Team | shell hook、PATH shim、集中规则、危险命令审计 | 待实现 |
-| Report History / Quality Trend | Pro / Team | 项目质量趋势、失败率、placeholder/mock/skipped test 趋势 | 待实现 |
+| Saved/Shared Evidence | Pro / Team | 用户明确需要协作或审计时保存、分享 | 已实现基础闭环；不是默认工作流 |
+| Quality Trend | Pro / Team | 失败率、风险类型、skipped test、mock/placeholder 趋势 | 待实现 |
 | Private Runner / 私有部署 | Enterprise | 私有网络内运行验证、保留源码不出域 | 待实现 |
 | SSO / 合规 / SLA | Enterprise | 企业采购和合规要求 | 待实现 |
 
@@ -270,13 +275,24 @@ Managed AI Add-on
 
 建议按以下顺序推进：
 
-1. Hosted Reports：最接近当前本地 report，付费价值直接。
-2. Wukong Product APIs：把 hosted report、PR comment/gate、rules、audit 变成可计费服务边界。
-3. Team Rules + PR Gate：把个人工具变成团队流程。
-4. Deep Review Credits / Managed Model Add-on：把模型成本和增值能力对应起来，但不要早于报告和 PR 工作流。
-5. Audit Log：服务团队负责人和企业合规场景。
+1. 更多/更长 Loop + deep reviewer：最接近日常重复价值。
+2. Team Role Profiles + Team Rules + PR Gate：把个人 Trust Loop 变成团队流程。
+3. Wukong Product APIs：提供 PR gate、rules、audit 和显式 evidence sharing 的服务边界。
+4. Managed Model Add-on：Wukong 承担模型成本时再引入独立 credits。
+5. Saved/Shared Evidence 与 Audit Log：只服务明确的协作和审计需求，不作为所有用户的前置流程。
 
-当前阶段适合做 **付费试点 / design partner**，不适合直接做公开自助订阅。公开收费前至少需要完成 hosted report、billing entitlement、发布安装路径和团队/个人套餐边界。
+当前阶段先完成 0.0.12 免费 Trust Loop 的真实使用验证，再在 0.0.13 做 **真实付费 Preview / design partner**。Hosted report 与安装路径已有基础闭环；公开自助收费前还需要完成 billing 生命周期、稳定的 v2 entitlement、明确的个人/团队权益和真实付款验收。
+
+### 4.5 商业验证门槛
+
+0.0.12 只判断“用户是否反复使用、免费额度是否形成压力”，不宣称已验证付费意愿。初始方向性门槛：
+
+- 至少 20 个完成首个 Proof 的 activated users，且累计至少 50 次完成的顶层 Trust Run；样本不足只记录现象，不做商业结论。
+- activated users 的 7 日重复使用率达到 25% 以上。
+- 至少 15% activated users 触达 80% 用量或 quota warning。
+- 触达 warning 的用户中，至少 10% 点击升级或主动请求更多额度；这仍只是升级意向。
+
+0.0.13 才验证真实付费：使用真实价格和 Checkout，观察付款完成、退款/取消与次月续费。进入公开 Pro 前至少需要 3 个非关联真实付款用户或 1 个付费 Team Pilot，并出现至少 1 个续费/持续付费信号；未满足时继续 design-partner 试点，不用虚假 Free 订阅记录替代付费证据。
 
 ## 5. 实现优先级
 
@@ -291,7 +307,7 @@ Managed AI Add-on
 7. `/goal` 持续修复（单任务跑到验证条件满足，含队列）。
 8. fixtures、unit tests、CLI/TUI/tool smoke tests。
 
-### P0.5 下一个重点：Loop 控制层 + Merge Proof
+### P0.5 已完成：Loop 控制层 + Merge Proof v1
 
 1. `/proof` Merge Proof Report：verify+scan+report 固定格式汇总（Wow Moment，第 1 步）。
 2. `/judge` evaluator-only 判定：默认 `--assume-broken`，deterministic 模式复用 verification 引擎（第 2 步）。
@@ -299,11 +315,19 @@ Managed AI Add-on
 4. `/loop` 本机迭代 loop：驱动 agent + 验证 + 修复直到停止条件满足，复用 cron scheduler 与 goal gate，关机即停（第 4 步，产品核心）。
 5. 文档与官网 hero 切换到 loop control plane / proof-layer 叙事。
 
-### 下一个 P0/P1 交界
+### Hosted Evidence 基线已完成
 
 1. report history / redaction metadata。
-2. cloud report metadata upload。
-3. hosted report quota / billing boundary。
+2. cloud report metadata upload 与显式公开分享。
+3. hosted report quota 基础边界。
+
+### 当前重点：0.0.12 Free Trust Loop v2
+
+1. 重写 Loop 的 snapshot、状态与错误 contract；verify/scan/proof 变成内部检查层。
+2. 只实现 Loop session 额度，以及幂等 start/complete/usage；不引入 Checks、reservation/lease。
+3. Loop 支持用户指定 writer model/role，并使用 fresh-context reviewer；reviewer 不能覆盖真实失败。
+4. 增加轻量 Role Profiles（内置、本地自定义、`--role`、`/transform`），不建立第二套 agent。
+5. 旧 verify/scan/proof 命令兼容但从主入口隐藏；evidence history 保持次级。
 
 ### P0 不做
 
@@ -362,6 +386,6 @@ P1 之后再评估：
 
 ## 9. 结论
 
-Wukong 的可商业化内核已经有本地 CLI/TUI/agent 闭环：deterministic verification、risk scan、best-effort guard、report、`wukong_verify` 和 `/goal`。下一个重点（P0.5）按 proof → judge → goal gate → loop 的顺序，用 `/loop` 把这套工具编排成 AI Coding Loop 的控制层：`/proof` 是可截图、可分享的 Wow Moment；`/judge` 先以 deterministic 判定落地，第二-agent 审查（`--agent`）落地后差异化叙事才对外成立。这之后，hosted reports、redaction/report history、团队规则、跨会话 loop（hosted/CI）和计费边界，把本地验证价值转成可收费的协作与审计能力。
+Wukong 的 0.0.12 内核已经形成本地 CLI/TUI/agent 闭环：deterministic verification、risk scan、best-effort guard、Merge Proof、fresh-context reviewer、Role Profiles、配额与三态 Loop。P0.5 的 proof → judge → goal gate → loop 已完成。下一阶段重点是 Hosted Evidence v2、redaction/report history、团队规则、跨会话 loop（hosted/CI）和完整计费边界，把本地 Loop 价值转成可收费的协作与审计能力。
 
 一句话：**AI 负责写代码，Wukong 负责判断能不能合并，并用 loop 持续驱动这件事直到成立。**

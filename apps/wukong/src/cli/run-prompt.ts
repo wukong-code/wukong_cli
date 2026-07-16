@@ -24,13 +24,17 @@ import { CLI_SHUTDOWN_TIMEOUT_MS } from '#/constant/app';
 import type { CLIOptions, PromptOutputFormat } from './options';
 import {
   formatGoalSummaryText,
+  formatLoopSummaryText,
   goalExitCode,
   goalSummaryJson,
+  loopExitCode,
+  loopSummaryJson,
   parseHeadlessGoalCreate,
   type HeadlessGoalCreate,
 } from './goal-prompt';
 import { createCliTelemetryBootstrap, initializeCliTelemetry } from './telemetry';
 import { createWukongCodeHostIdentity } from './version';
+import { beginLoopQuota, completeLoopQuota, type LoopQuotaGrant } from './lib/loop-quota';
 
 interface PromptOutput {
   readonly columns?: number | undefined;
@@ -116,6 +120,16 @@ export async function runPrompt(
     for (const warning of (await harness.getConfigDiagnostics()).warnings) {
       stderr.write(`Warning: ${warning}\n`);
     }
+    if (opts.role !== undefined) {
+      const roleFeature = (await harness.getExperimentalFeatures()).find(
+        (feature) => feature.id === 'role_profiles',
+      );
+      if (roleFeature?.enabled !== true) {
+        throw new Error(
+          'Role profiles are experimental. Enable experimental.role_profiles in config.toml before using --role.',
+        );
+      }
+    }
     const { session, restorePermission, telemetryModel, goalModel } =
       await resolvePromptSession(
         harness,
@@ -128,6 +142,11 @@ export async function runPrompt(
         },
       );
     restorePromptSessionPermission = restorePermission;
+
+    if (opts.role !== undefined) {
+      await session.setRole(opts.role);
+      if (opts.model !== undefined) await session.setModel(opts.model);
+    }
 
     initializeCliTelemetry({
       harness,
@@ -169,9 +188,24 @@ async function runHeadlessGoal(
   stderr: PromptOutput,
 ): Promise<void> {
   requireConfiguredModel(model);
+  let loopGrant: LoopQuotaGrant | undefined;
+  if (goal.kind === 'loop') {
+    loopGrant = await beginLoopQuota();
+    if (loopGrant.message !== undefined) stderr.write(`${loopGrant.message}\n`);
+    if (!loopGrant.allowed) {
+      process.exitCode = 3;
+      return;
+    }
+  }
+  const maxIterations = loopGrant === undefined
+    ? goal.maxIterations
+    : Math.min(goal.maxIterations ?? loopGrant.maxIterations, loopGrant.maxIterations);
   await session.createGoal({
     objective: goal.objective,
     replace: goal.replace,
+    ...(goal.stopCondition === undefined ? {} : { stopCondition: goal.stopCondition }),
+    ...(maxIterations === undefined ? {} : { maxIterations }),
+    ...(goal.minIntervalMs === undefined ? {} : { minIntervalMs: goal.minIntervalMs }),
   });
   let completedSnapshot: GoalSnapshot | null = null;
   const unsubscribeGoalEvents = session.onEvent((event) => {
@@ -192,13 +226,21 @@ async function runHeadlessGoal(
     unsubscribeGoalEvents();
     const snapshot = completedSnapshot ?? (await session.getGoal()).goal;
     if (outputFormat === 'stream-json') {
-      stdout.write(`${JSON.stringify(goalSummaryJson(snapshot))}\n`);
+      const summary = goal.kind === 'loop' ? loopSummaryJson(snapshot) : goalSummaryJson(snapshot);
+      stdout.write(`${JSON.stringify(summary)}\n`);
     } else {
-      stderr.write(`${formatGoalSummaryText(snapshot)}\n`);
+      const summary = goal.kind === 'loop' ? formatLoopSummaryText(snapshot) : formatGoalSummaryText(snapshot);
+      stderr.write(`${summary}\n`);
     }
     // Map the terminal goal status to a distinct, non-fatal exit code. A turn
     // that threw (error / cancellation) already propagates its own exit path.
-    if (snapshot !== null && snapshot.status !== 'complete') {
+    if (goal.kind === 'loop') {
+      if (loopGrant !== undefined) {
+        const result = loopSummaryJson(snapshot);
+        await completeLoopQuota(loopGrant, result.status, result.iterations);
+      }
+      process.exitCode = loopExitCode(snapshot);
+    } else if (snapshot !== null && snapshot.status !== 'complete') {
       process.exitCode = goalExitCode(snapshot.status);
     }
   }

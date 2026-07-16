@@ -77,4 +77,32 @@ describe('selectVerificationCommands', () => {
       expect(selected[0]?.command, lockfile ?? 'no lockfile').toBe(expected);
     }
   });
+
+  it('discovers checks in nested workspace packages when root scripts are absent', async () => {
+    const cwd = await makeTempDir('wukong-scripts-workspace-');
+    await writeJson(join(cwd, 'package.json'), { private: true });
+    await writeRepoFile(cwd, 'pnpm-lock.yaml', '');
+    await writeRepoFile(cwd, 'apps/web/package.json', JSON.stringify({ scripts: { lint: 'eslint .' } }));
+    await writeRepoFile(cwd, 'packages/api/package.json', JSON.stringify({ scripts: { test: 'vitest run' } }));
+
+    const selected = await selectVerificationCommands({ cwd });
+
+    expect(selected).toEqual([
+      { command: "pnpm --dir 'apps/web' run lint", source: 'workspace-script' },
+      { command: "pnpm --dir 'packages/api' run test", source: 'workspace-script' },
+    ]);
+  });
+
+  it('uses project-authorized checks before inferred package scripts', async () => {
+    const cwd = await makeTempDir('wukong-scripts-config-');
+    await writeJson(join(cwd, 'package.json'), { scripts: { test: 'vitest run' } });
+    await writeRepoFile(cwd, '.wukong/checks.json', JSON.stringify({
+      commands: ['pnpm test:unit', 'pnpm typecheck'],
+    }));
+
+    await expect(selectVerificationCommands({ cwd })).resolves.toEqual([
+      { command: 'pnpm test:unit', source: 'project-config' },
+      { command: 'pnpm typecheck', source: 'project-config' },
+    ]);
+  });
 });

@@ -53,6 +53,7 @@ import {
 import { handleSwarmCommand } from './swarm';
 import { handleUndoCommand } from './undo';
 import { handleWebCommand } from './web';
+import { handleTransformCommand } from './role';
 import {
   handleVerifySlashCommand,
   handleScanSlashCommand,
@@ -277,6 +278,9 @@ async function handleBuiltInSlashCommand(
       return;
     case 'model':
       await handleModelCommand(host, args);
+      return;
+    case 'transform':
+      await handleTransformCommand(host, args);
       return;
     case 'provider':
       await handleProviderCommand(host);

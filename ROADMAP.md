@@ -1,12 +1,13 @@
 # Wukong Code Roadmap
 
-> 最后更新: 2026-07-13
+> 最后更新: 2026-07-14
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 
 这份 ROADMAP 是当前商业化方向的执行层文档。更细的商业模型和技术方案仍以这些文档为准：
 
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [商业化重构技术实现方案](docs/tech/commercial-refactor-implementation.md)
+- [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md)
 - [TODO.md](TODO.md)：本仓库执行层任务清单，按本 ROADMAP 的 milestone 拆解
 - `wukong_web/TODO.md`：官网与托管产品 TODO，位于 sibling web 仓库中
 
@@ -35,19 +36,18 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 | Goal-based `/goal` | 单任务驱动 agent 多轮推进 | 实时手动 | agent 自评完成 or 回合/预算上限 or verification gate | 已实现（verification gate 已落地，归 M0.5） |
 | Time-based `/loop` | 本机迭代驱动 agent 直到验证通过 | 手动启动，轮次自动衔接（`--every` 复用 cron scheduler 节流） | 停止条件满足 or 迭代上限 or 取消 | 已实现 |
 | Cloud routine `/schedule` | 云端例程，机器关了也跑 | 计划 | 任务达标退出，例程持续 | 待实现（归 hosted） |
-| 工具层 `/verify` `/scan` `/guard` | deterministic proof | 手动/被 loop 调用 | 单次 | 已实现 |
-| 证据层 `/proof` | 把三件套串成 Merge Proof Report | 手动 | 单次 | 已实现 |
+| Loop 内部检查层 | 项目命令、风险规则、交付判定 | 默认由 loop 调用；高级用户可直接调试 | 单次 | v1 命令已实现；0.0.12 从主入口降级 |
 | 评估层 `/judge` | evaluator-only，只审不写，默认怀疑 | 手动/被 loop 调用 | 单次 | 已实现 |
 
 - `/loop` 的核心语义是**迭代直到验证通过**（iterate-until-verified）：上一轮验证未过就注入失败反馈立即开始下一轮；`--every` 只是可选的轮间最小间隔（节流），用于等 CI 等外部反馈的场景。**关机即停。**
 - 定时巡检型任务（"每小时 check PR"）不属于 `/loop`：本机由已实现的 agent-core cron 工具承载，云端归 `/schedule`（hosted，Milestone 3+）。
 - `/loop` 不新写引擎：时间触发复用 agent-core 已有的 cron scheduler，执行核复用 `/goal`。
-- 停止判断不由写代码的 agent 自评。注意：当前 `/goal` 的完成判定仍是 agent 自评 + 回合/预算上限，M0.5 必须先给 `/goal` 出口加 deterministic verification gate（agent 宣布完成 → 强制 verify/scan/judge → 未过打回），`/loop` 复用该 gate。
-- `/proof` 是第一个 Wow Moment：AI 写完后一键生成合并证据。
+- 停止判断不由写代码的 agent 自评。v1 `/goal` verification gate 已实现；0.0.12 将它收敛到统一 Proof gate 和 PASS/NEEDS_WORK/ERROR。
+- 0.0.12 的 Wow Moment 是 Loop 自己收敛并给出可信交付结论；独立 proof/evidence 只是高级调试和显式分享能力。
 - `/judge` 只审不写：M0.5 默认是 deterministic 对抗性判定（复用 proof 引擎，BLOCK 倾向）；fresh-context 第二 agent 审查（`--agent`）落地前，不对外宣传"第二 agent reviewer"。
 - 托管报告闭环已经实现；PR gates、team rules、audit log 是下一阶段真正能扩大团队付费意愿的能力。
 
-免费版负责让开发者愿意安装、使用、截图和分享；付费版负责解决团队真实痛点：报告历史、PR 证据、共享策略、权限、计费和审计。
+免费版负责让开发者形成重复 Loop 习惯；付费版提供更多 Loop sessions、deep reviewer、团队角色、PR gate、共享策略和审计。Evidence history 是辅助能力，不是所有用户的主流程。
 
 ## 当前基线
 
@@ -65,8 +65,8 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 | Agent verification tool | 已实现 | `wukong_verify` builtin tool |
 | `/goal` 持续修复 | 已实现 | 让 agent 多轮迭代直到验证条件满足，含队列管理 |
 | `/goal` verification gate | 已实现 | agent 宣布完成时运行 deterministic gate，未过打回 |
-| `/loop` 本机迭代 loop | 已实现 | iterate-until-verified，复用 `/goal` 执行核；`--every` 节流待完整落地 |
-| `/proof` Merge Proof Report | 已实现 | verify+scan 串成可分享报告 |
+| `/loop` 本机迭代 loop | v1 已实现 | 0.0.12 改为统一 `proof-pass` gate、结构化反馈和受限轮次 |
+| `/proof` Merge Verdict / Evidence | v1 已实现 | 0.0.12 重写为共享 snapshot、三态结论；默认不写报告，显式保存/上传 |
 | `/judge` evaluator-only 判定 | 已实现 | deterministic 判定先行；`--agent` 第二-agent 审查后置 |
 | 公开官网 | 已实现 | `wukong.today`、download、docs、pricing、changelog |
 | Auth / billing 基础 | 部分实现 | Web auth、Stripe checkout、subscription 表已存在 |
@@ -85,18 +85,18 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 | GitHub PR comment / gate | 未实现 | 把个人工具变成团队工作流 |
 | Team rules | 未实现 | 团队愿意付费的核心原因之一 |
 | Audit log | 未实现 | 管理者、安全团队和企业采购需要 |
-| Deep review credits | 未实现 | 可选的模型/API 增值能力 |
+| Model-assisted review | 0.0.12 待实现 | BYOK 基础版使用用户 model alias；managed credits 后移 |
 | Private runner / self-hosted path | 未实现 | 企业级承诺前必须具备的边界 |
 
 ## 路线图原则
 
-1. 本地 `verify`、`scan`、`guard`、本地 Markdown report、provider 设置和基础 CLI 使用保持免费。
-2. 收费点放在 hosted reports、report history、PR 协作、team rules、audit logs、managed review credits 和 Wukong 自有产品 API。
+1. 只有顶层 `loop` session 受额度限制；`verify`、`scan`、`proof` 是内部层和不计额度的高级诊断命令。
+2. 免费额度用于让用户完成真实 Loop 并验证重复使用意愿；后续 Pro 提供更多 sessions、deep review、更长迭代、hosted history、PR 协作和团队策略。
 3. 用户自带 API Key 时，模型成本归用户；Wukong 收 workflow、storage、evidence、policy 和 collaboration 的钱。
-4. 默认不上传完整源码 diff，只上传 redacted metadata 和 report artifacts。
+4. 默认不写文件、不上传；用户显式保存/分享时只处理 redacted metadata 和 evidence artifacts，不上传完整源码 diff。
 5. 在 guard、redaction、audit、private runner 真正完成前，不宣传安全合规能力。
 6. 每个 milestone 必须有可见用户路径和验收方式，不能只完成路由或表结构。
-7. 优先做 Wow Moment（`/proof`）和差异化记忆点（`/judge`），不在 hot 窗口期堆大而全功能。
+7. 优先做 Loop 自动收敛这一 Wow Moment；独立 `/proof`、`/judge` 不再占据普通用户心智。
 8. 不把 Loop Engineering 第三层（GitHub/CI/Sentry 外部反馈集成）写成已具备能力，集成未完成前只作为叙事。
 9. `/loop`（本机迭代，关机即停）和定时巡检拆开：迭代收敛归 `/loop`，本机巡检用已实现的 cron 工具，云端例程归 `/schedule`（hosted，Milestone 3+）。
 10. loop 的停止判断不由写代码的 agent 自评：用 deterministic verification 或独立 evaluator，也可挂载自定义验证 skill（借鉴 Claude Code 的 verify-skill 模式）。前提是先落地 `/goal` verification gate。
@@ -107,8 +107,9 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 | 版本 | 目标 | 发布门槛 |
 |---|---|---|
 | `0.0.11` | 把当前产品做成可理解、可发现、可运维的 Hosted Evidence 闭环 | TUI 文案与对齐完成；Dashboard 证据优先布局上线；公告端点 200；`proof → private history / public share → dashboard` 真实链路通过；文档与实现一致 |
-| `0.0.12` | 关闭付费生命周期缺口 | Stripe customer portal、取消/付款失败状态、grace 规则、Billing UI 与 entitlement 状态一致；至少能观察 install→proof→upload 转化 |
-| `0.1.0` | 从个人报告工具进入真实 PR 工作流 | GitHub PR comment 与 status check 可用；visibility/redaction E2E 通过；至少 1 个 Team Pilot 在真实 repo 连续使用；0.0.11/0.0.12 无阻断级回归 |
+| `0.0.12` | Loop-first v2 | Loop 状态机；fresh-context reviewer；仅 Loop session 额度；BYOK model alias；轻量 Role Profiles；高级命令兼容；真实 E2E 通过 |
+| `0.0.13` | 关闭付费生命周期缺口 | Stripe customer portal、取消/付款失败状态、grace 规则、Billing UI 与 entitlement 状态一致；至少能观察 quota→upgrade 转化 |
+| `0.1.0` | 从个人 Trust Loop 进入真实 PR 工作流 | GitHub PR comment 与 status check 可用；visibility/redaction E2E 通过；至少 1 个 Team Pilot 在真实 repo 连续使用；0.0.12/0.0.13 无阻断级回归 |
 
 `0.1.0` 的条件式目标是 **2026 年 8 月上旬，最早 8 月 3 日当周**。日期不是发布承诺；上表的 PR Evidence 和真实试点门槛未满足时不升 `0.1.0`。
 
@@ -189,6 +190,42 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - 报告可被人读懂并定位失败原因。
 - 官网 hero 切换为 loop control plane / proof-layer 文案后，不出现任何未实现能力的承诺（尤其不宣称 `/schedule` 云端例程、CI 集成、第二-agent 审查已可用）。
 
+## Milestone 0.6: 0.0.12 Free Trust Loop v2
+
+状态：已规划，待实现。
+
+目标：只把 Loop 作为普通用户主产品。`verify`、`scan`、`proof` 降级为 Loop 内部层和高级诊断命令；用户只理解目标、迭代和最终 PASS / NEEDS_WORK / ERROR。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md)。
+
+交付顺序：
+
+1. 冻结 Loop 状态机和精简 snapshot；用户只看到 PASS / NEEDS_WORK / ERROR。
+2. 每轮由 writer 修改、真实项目检查和风险规则执行，再由 fresh-context reviewer 独立判断。
+3. 只有 NEEDS_WORK 进入下一轮；ERROR 停止；最大轮次映射为 NEEDS_WORK/max_iterations。
+4. 实现幂等 `loop-runs/start`、`complete` 和 session usage；不引入 Checks、reservation、lease 或 AI credits。
+5. verify/scan/proof 保留直接调用兼容，但从主 help、TUI autocomplete 和 onboarding 中隐藏。
+6. 默认不写报告；保存、上传和分享都是显式次级动作。
+7. 增加轻量 Role Profiles：`--role`、`/transform`、内置与本地自定义角色，复用现有 agent。
+
+免费初始额度：
+
+- 未登录：1 个 Loop session、最多 2 轮。
+- Free 账号：10 个 Loop sessions/月且每个最多 5 轮；第3次开始提示 Pro，第10次后硬限制。
+- 内部检查和直接运行高级诊断命令都不消耗额外额度。
+- BYOK 模型不增加另一套 AI credits；用户承担 provider token。
+- 参数校验失败和无法建立执行计划不扣额度。
+
+验收重点：
+
+- 空根 package + `app`/`api` 子项目能被正确发现。
+- 没有检查、证据不足或 runtime 缺失是 ERROR，不是假 NEEDS_WORK。
+- 内部 scan scope 有真实行为，staged 与 workspace 可验证地不同。
+- Loop gate 共享一次 snapshot 并校验 stale；0.0.12 默认不写文件，也不新增 Loop evidence 上传。
+- loop 每轮使用新的 Proof；NEEDS_WORK 才继续，达到上限返回 NEEDS_WORK/max_iterations。
+- deterministic 失败不能被模型改为 PASS；AI finding 必须标注来源、模型和置信度。
+- built-in/user/project role 与权限收缩、project trust 有自动化覆盖。
+- Loop session quota、幂等 start、月度重置、超限和内部不重复计数有自动化覆盖。
+- 旧 Goal records 和 0.0.11 flags 有兼容覆盖；Hosted Report v1 保持可读，v2 延后到0.0.13。
+
 ## Milestone 1: Hosted Reports MVP
 
 状态：代码闭环已完成；`0.0.11` 负责生产部署与真实账号验收。
@@ -213,7 +250,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - reviewer 打开 share page 时看不到 secrets 或完整源码 diff。
 - redaction 测试覆盖 secret-like string、env 文件、token、private key 和超大 diff。
 
-## Milestone 2: Pro Preview Billing
+## Milestone 2: 0.0.13 Pro Preview Billing
 
 状态：部分实现。Hosted report quota 已由服务端控制；customer portal、付款失败/grace 状态和完整 Billing UI 仍未完成。
 
@@ -327,7 +364,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - `/download` 保持短、准、可安装。
 - `/pricing` 必须绑定真实 entitlement。
 - 使用真实上传 report 作为 docs / pricing 演示素材，不制作 placeholder。
-- Dashboard 继续围绕真实 report history、quota 和下一步动作优化。
+- Dashboard 围绕真实状态、quota 和下一步动作优化；用户主动上传的 evidence history 是次级区域，不把 reports 当主流程。
 - changelog 保持和公开 release 同步。
 
 不要做：
@@ -380,7 +417,7 @@ Team Pilot 可以开始试点的最低条件：
 
 - Install completion rate。
 - 24 小时内首次成功 `wukong verify`。
-- 每个活跃开发者每周生成 report 数。
+- 每个活跃开发者每周完成 Trust Run 数；保存/分享 evidence 的比例只作次级指标。
 - Hosted report upload conversion。
 - Share link open rate。
 - PR gate pass/fail rate。

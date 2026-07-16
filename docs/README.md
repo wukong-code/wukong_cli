@@ -1,6 +1,6 @@
 # Wukong Code 文档索引
 
-> 最后更新: 2026-07-08
+> 最后更新: 2026-07-15
 > 当前事实基线: `wukong_cli` 内部实现仓库，产品名称为 **Wukong Code**
 > 状态说明: 本目录区分 **当前已实现** 与 **商业化后续待实现**。
 
@@ -15,11 +15,10 @@
 |---|---|---|
 | Turn-based | TUI 默认 | 已实现 |
 | Goal-based | `/goal` | 已实现（verification gate 已实现，归 M0.5） |
-| Time-based（本机迭代） | `/loop` | 已实现（核心 gate、max-iterations、`--every` cron scheduler pacing） |
+| 本机迭代 | `/loop` / `wukong loop` | 已实现（proof-pass、fresh reviewer、max-iterations、`--every` pacing） |
 | Time-based（本机巡检） | cron 工具（CronCreate 等） | 已实现（会话内 recurring/one-shot） |
 | Time-based（云端） | `/schedule` | 待实现（归 hosted） |
-| 工具层 | `/verify` `/scan` `/guard` | 已实现 |
-| 证据层 | `/proof` | 已实现（Wow Moment） |
+| Loop 内部检查层 | `/verify` `/scan` `/proof` | 已实现；直接调用仅用于高级诊断 |
 | 评估层 | `/judge` | 已实现（deterministic 先行，`--agent` 后置） |
 
 ## 当前已实现
@@ -34,8 +33,12 @@
   面向仓库入口的当前能力说明。
 - [产品路线图](../ROADMAP.md)
   记录从本地验证闭环到 loop 控制层、hosted reports、Pro Preview、PR gate、Team Pilot 的交付顺序和验收标准。
+- [0.0.12 Trust Loop v2](design/verification-loop-v2.md)
+- [0.0.12 Goal 与 flags 兼容矩阵](design/0.0.12-compatibility.md)
+- [0.0.12 release notes / What's Changed](releases/0.0.12.md)
+  定义 Loop-first 状态机、独立 reviewer、Loop session 额度、Role Profiles，以及 verify/scan/proof 的内部层与兼容边界。
 - [执行层 TODO](../TODO.md)
-  按 ROADMAP milestone 拆解的任务清单，记录当前重点（Milestone 0.5）、暂缓项和已完成基线。
+  按 ROADMAP milestone 拆解的任务清单，记录当前重点（0.0.12 Free Trust Loop v2）、暂缓项和已完成基线。
 
 当前可用 top-level commands 以 `wukong --help` 为准，主要包括：
 
@@ -64,7 +67,7 @@ wukong upgrade
 
 ## 商业化文档
 
-这些文档记录当前 P0 实现和后续计划。`verify`、`scan`、`guard` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。Milestone 0.5 已按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序完整落地，`/loop --every` 复用 agent-core cron scheduler 实现轮间 pacing。`/schedule`（云端例程）归 hosted。sync/today、云端报告、计费和团队能力仍是后续工作：
+这些文档记录当前 P0/P0.5 实现和后续计划。`verify`、`scan`、`guard`、`proof`、`judge`、`loop` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop`、`/today` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。Milestone 0.5 已按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序完整落地，`/loop --every` 复用 agent-core cron scheduler 实现轮间 pacing。Hosted report v1 已支持登录上传、历史和分享；后续工作是 `/schedule`、sync、Hosted Evidence v2、完整计费与团队能力：
 
 - [商业化与产品重构方案](business/COMMERCIAL_REFACTOR_PLAN.md)
   定义产品定位、商业模型、目标命令结构（含 loop/proof/judge/schedule）和路线图。
@@ -87,8 +90,7 @@ wukong upgrade
 
 任务级清单以 [../TODO.md](../TODO.md) 为准，本节只保留方向摘要：
 
-1. Milestone 0.5 已按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序完整落地（`/loop` 为本机迭代 loop，复用 `/goal` 执行核与 agent-core cron scheduler 实现 `--every` 轮间 pacing，不新写定时引擎）。
-2. 实现 report history / redaction metadata，避免未来云端报告上传源码 diff 或敏感片段。
-3. 统一发布渠道、package version、安装文档和收费边界。
-4. 实现 `wukong today`（P1）：先定 stats 事件 schema，再实现简报 + focus，见 [today 设计](design/today.md)；`sync` / `journey` 仍待本地数据模型与 redaction 边界。
-5. 在文档站重新发布前，补齐实际页面或保持当前单层文档结构，不再链接不存在的 `/en/guides/*`、`/zh/guides/*`。
+1. 0.0.12 以 Loop 为唯一主流程，统一为 PASS/NEEDS_WORK/ERROR。
+2. verify/scan/proof 降级为 Loop 内部层和高级诊断命令；只限制 Loop sessions，模型和 Role Profile 是可选增强。
+3. 默认不生成报告；用真实 monorepo、幂等 usage start、角色权限和 Loop 收敛 E2E 验证发布门槛。
+4. Billing 完整生命周期后移到 0.0.13；PR gate 继续作为 0.1.0 门槛。

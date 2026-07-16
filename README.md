@@ -8,7 +8,13 @@
 
 Wukong Code is a local-first terminal AI coding agent built as the **control and verification layer for AI Coding Loops**. It does not compete with Cursor / Claude Code / Codex on writing code; it answers the question they leave open: *can this AI-written code be merged?*
 
-The local P0 loop and Hosted Reports MVP are implemented: `verify`, `scan`, and `proof` can upload redacted reports, the Dashboard shows real report history, and public sharing requires explicit `--upload --public`. The non-interactive `wukong loop` driver, complete billing lifecycle, GitHub PR Evidence, team rules, and deep review remain planned work.
+The local P0 loop and Hosted Reports MVP are implemented: `verify`, `scan`, and `proof` can upload redacted reports, the Dashboard shows real report history, and public sharing requires explicit `--upload --public`. Interactive `/loop` and headless `wukong loop` are available; the complete billing lifecycle, GitHub PR Evidence, team rules, and deep review remain planned work.
+
+Version `0.0.12` is Loop-first: Wukong writes, runs real project checks, asks a fresh-context reviewer, and iterates until the delivery gate passes. `verify`, `scan`, and `proof` remain available as advanced diagnostics, but they are internal Loop layers rather than separate products or quotas. Optional model aliases and lightweight Role Profiles add task-specific behavior. See the [0.0.12 design contract](docs/design/verification-loop-v2.md).
+
+Loop returns one durable result: `PASS` (exit `0`), `NEEDS_WORK` (exit `1`), or `ERROR` (exit `2`). Guests receive one two-iteration local trial; signed-in Free users receive 10 Loop sessions per month with up to five iterations each. Internal checks never consume additional quota. Temporary quota-service failures warn and continue locally with the five-iteration safety cap. Legacy `verify-pass`, `scan-clean`, and `judge-pass` Goal records and flags remain readable and migrate to the unified proof gate; see the [compatibility matrix](docs/design/0.0.12-compatibility.md).
+
+The experimental Role Profiles foundation is now implemented. Enable `experimental.role_profiles` in `~/.wukong/config.toml`, then run `wukong roles list`, start with `wukong --role security`, or switch the current TUI session with `/transform security` and `/transform off`.
 
 ## Current Command Surface
 
@@ -19,12 +25,11 @@ wukong provider                # manage LLM providers
 wukong acp                     # run as an Agent Client Protocol server
 wukong server                  # run the local REST/WebSocket server
 wukong web                     # open the local web UI
-wukong verify                  # run deterministic checks and write an evidence report
-wukong scan                    # scan git changes for delivery risks
+wukong loop "ship the change"  # iterate until the independent delivery gate passes
+wukong loop "fix tests" --model fast --role tester
+wukong loop "fix tests" --max-iterations 5 --every 30s
 wukong guard                   # inspect or run the best-effort command risk guard
-wukong proof                   # generate a Merge Proof Report (verify + scan)
 wukong judge                   # evaluator-only merge decision
-wukong loop --dry-run          # validate a loop plan; execute /loop interactively in the TUI
 wukong login                   # authenticate through the device-code flow
 wukong doctor                  # validate configuration files
 wukong export [sessionId]      # export a session ZIP
@@ -32,6 +37,8 @@ wukong vis [sessionId]         # open the session visualizer
 wukong migrate                 # migrate legacy wukong-cli data
 wukong upgrade                 # upgrade Wukong Code
 ```
+
+Advanced diagnostics remain directly executable for CI and debugging: `wukong verify`, `wukong scan`, and `wukong proof`. Loop runs these layers automatically, so they are intentionally omitted from the primary help surface.
 
 Planned commands (not yet implemented): `wukong ship`, `wukong review`, `wukong schedule` (cloud routine).
 
@@ -84,7 +91,7 @@ The current product direction is to turn Wukong Code into the **proof layer for 
 - [Commercial refactor plan](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [Technical implementation plan](docs/tech/commercial-refactor-implementation.md)
 
-The P0 local CLI commands, TUI verification commands, `/proof`, `/judge`, `/goal --until` verification gates, interactive `/loop`, hosted report preview, and `wukong_verify` agent tool are implemented. The non-interactive `wukong loop` driver and follow-up work such as complete billing lifecycle, team rules, and deep review remain planned.
+The P0 local CLI commands, TUI verification commands, unified `/goal --until proof-pass` delivery gate, interactive `/loop`, headless `wukong loop`, Loop quota accounting, hosted report preview, and `wukong_verify` agent tool are implemented. Follow-up work includes the complete billing lifecycle, team rules, hosted evidence v2, and deep review.
 
 ## Acknowledgments
 

@@ -27,6 +27,7 @@ import type {
   SetModelPayload,
   SetPermissionPayload,
   SetThinkingPayload,
+  SetRolePayload,
   SkillSummary,
   SteerPayload,
   StopBackgroundPayload,
@@ -37,6 +38,7 @@ import type {
 import type { PromisableMethods } from '#/utils/types';
 
 import type { Session, SessionMeta } from '.';
+import type { ActiveRole, RoleSummary } from '../role';
 import {
   promptMetadataTextFromPayload,
   promptMetadataTextFromSkill,
@@ -102,6 +104,18 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
 
   addAdditionalDir(payload: AddAdditionalDirPayload): Promise<AddAdditionalDirResult> {
     return this.session.addAdditionalDir(payload.path, payload.persist);
+  }
+
+  listRoles(_payload: EmptyPayload): Promise<readonly RoleSummary[]> {
+    return this.session.listRoles();
+  }
+
+  getActiveRole(_payload: EmptyPayload): ActiveRole {
+    return this.session.getActiveRole();
+  }
+
+  setRole(payload: SetRolePayload): Promise<ActiveRole> {
+    return this.session.setRole(payload.role);
   }
 
   async prompt({ agentId, ...payload }: AgentScopedPayload<PromptPayload>) {

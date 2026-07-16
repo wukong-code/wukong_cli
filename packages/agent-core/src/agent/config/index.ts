@@ -40,11 +40,21 @@ export class ConfigState {
       type: 'config_updated',
       config: changed,
     });
+    this.apply(changed);
+  }
+
+  /** Apply invocation-only config without adding replay or persistence records. */
+  updateTransient(changed: AgentConfigUpdateData): void {
+    if (Object.keys(changed).length === 0) return;
+    this.apply(changed);
+  }
+
+  private apply(changed: AgentConfigUpdateData): void {
     if (changed.cwd) {
       this._cwd = changed.cwd;
       void this.agent.kaos.chdir(changed.cwd);
     }
-    if (changed.modelAlias) {
+    if ('modelAlias' in changed) {
       this._modelAlias = changed.modelAlias;
     }
     if (changed.profileName) {
@@ -59,7 +69,7 @@ export class ConfigState {
     if (changed.systemPrompt !== undefined) {
       this._systemPrompt = changed.systemPrompt;
     }
-    if (this.hasProvider && (changed.cwd !== undefined || changed.modelAlias)) {
+    if (this.hasProvider && (changed.cwd !== undefined || changed.modelAlias !== undefined)) {
       this.agent.tools.initializeBuiltinTools();
     }
     this.agent.emitStatusUpdated();

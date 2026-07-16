@@ -5,6 +5,9 @@ import {
   goalExitCode,
   GOAL_EXIT_CODES,
   goalSummaryJson,
+  LOOP_EXIT_CODES,
+  loopExitCode,
+  loopSummaryJson,
   parseHeadlessGoalCreate,
 } from '#/cli/goal-prompt';
 
@@ -41,6 +44,7 @@ describe('parseHeadlessGoalCreate', () => {
 
   it('parses a plain objective', () => {
     expect(parseHeadlessGoalCreate('/goal write tests')).toEqual({
+      kind: 'goal',
       objective: 'write tests',
       replace: false,
     });
@@ -48,6 +52,7 @@ describe('parseHeadlessGoalCreate', () => {
 
   it('parses replace goals', () => {
     expect(parseHeadlessGoalCreate('/goal replace fix the bug')).toEqual({
+      kind: 'goal',
       objective: 'fix the bug',
       replace: true,
     });
@@ -55,13 +60,74 @@ describe('parseHeadlessGoalCreate', () => {
 
   it('parses stop conditions', () => {
     expect(parseHeadlessGoalCreate('/goal --until verify-pass ship it')).toEqual({
+      kind: 'goal',
       objective: 'ship it',
       replace: false,
+      stopCondition: 'proof-pass',
+    });
+  });
+
+  it('parses Loop as a headless goal with the delivery gate', () => {
+    expect(parseHeadlessGoalCreate('/loop --max-iterations 5 fix the tests')).toEqual({
+      kind: 'loop',
+      objective: 'fix the tests',
+      replace: false,
+      stopCondition: 'proof-pass',
+      maxIterations: 5,
     });
   });
 
   it('ignores status subcommand', () => {
     expect(parseHeadlessGoalCreate('/goal status')).toBeUndefined();
+  });
+});
+
+describe('Loop result contract', () => {
+  it('maps a completed Loop to PASS and exit 0', () => {
+    const snapshot = {
+      status: 'complete',
+      terminalReason: 'loop:PASS:passed:Delivery gate passed.',
+      iteration: 2,
+    } as any;
+
+    expect(loopSummaryJson(snapshot)).toMatchObject({
+      type: 'loop.result',
+      schemaVersion: 2,
+      status: 'PASS',
+      reasonCode: 'passed',
+      iterations: 2,
+      blockers: [],
+    });
+    expect(loopExitCode(snapshot)).toBe(LOOP_EXIT_CODES.PASS);
+  });
+
+  it('maps max iterations to NEEDS_WORK and exit 1', () => {
+    const snapshot = {
+      status: 'blocked',
+      terminalReason: 'loop:NEEDS_WORK:max_iterations:Maximum Loop iterations reached.',
+      iteration: 5,
+    } as any;
+
+    expect(loopSummaryJson(snapshot)).toMatchObject({
+      status: 'NEEDS_WORK',
+      reasonCode: 'max_iterations',
+      iterations: 5,
+    });
+    expect(loopExitCode(snapshot)).toBe(LOOP_EXIT_CODES.NEEDS_WORK);
+  });
+
+  it('maps delivery runtime failures to ERROR and exit 2', () => {
+    const snapshot = {
+      status: 'blocked',
+      terminalReason: 'loop:ERROR:workspace_changed:Workspace changed.',
+      iteration: 1,
+    } as any;
+
+    expect(loopSummaryJson(snapshot)).toMatchObject({
+      status: 'ERROR',
+      reasonCode: 'workspace_changed',
+    });
+    expect(loopExitCode(snapshot)).toBe(LOOP_EXIT_CODES.ERROR);
   });
 });
 

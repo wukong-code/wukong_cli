@@ -8,6 +8,7 @@ export interface CapturedProcess {
 }
 
 const MAX_CAPTURE_CHARS = 24_000;
+const TRUNCATION_MARKER = '\n[output truncated; showing beginning and end]\n';
 
 export function runFile(
   file: string,
@@ -103,5 +104,7 @@ function runSpawn(
 function appendLimited(current: string, next: string): string {
   const combined = current + next;
   if (combined.length <= MAX_CAPTURE_CHARS) return combined;
-  return combined.slice(0, MAX_CAPTURE_CHARS) + '\n[output truncated]\n';
+  const headLength = Math.floor((MAX_CAPTURE_CHARS - TRUNCATION_MARKER.length) / 2);
+  const tailLength = MAX_CAPTURE_CHARS - TRUNCATION_MARKER.length - headLength;
+  return combined.slice(0, headLength) + TRUNCATION_MARKER + combined.slice(-tailLength);
 }

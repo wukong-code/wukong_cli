@@ -1,5 +1,6 @@
 export * from './types';
 export * from './git';
+export * from './snapshot';
 export * from './scripts';
 export * from './runner';
 export * from './risks';

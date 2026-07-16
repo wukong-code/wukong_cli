@@ -307,6 +307,7 @@ export class WukongTUI {
         auto: startupInput.cliOptions.auto,
         plan: startupInput.cliOptions.plan,
         model: startupInput.cliOptions.model,
+        role: startupInput.cliOptions.role,
         startupNotice: startupInput.startupNotice,
       },
     };
@@ -351,8 +352,8 @@ export class WukongTUI {
   // =========================================================================
 
   private getSlashCommands(): readonly WukongSlashCommand[] {
-    const builtins = sortSlashCommands(BUILTIN_SLASH_COMMANDS).filter((command) =>
-      isExperimentalFlagEnabled(command.experimentalFlag),
+    const builtins = sortSlashCommands(BUILTIN_SLASH_COMMANDS).filter(
+      (command) => command.hidden !== true && isExperimentalFlagEnabled(command.experimentalFlag),
     );
     return [...builtins, ...this.skillCommands];
   }
@@ -634,6 +635,11 @@ export class WukongTUI {
 
   private async init(): Promise<boolean> {
     setExperimentalFeatures(await this.harness.getExperimentalFeatures());
+    if (this.options.startup.role !== undefined && !isExperimentalFlagEnabled('role_profiles')) {
+      throw new Error(
+        'Role profiles are experimental. Enable experimental.role_profiles in config.toml before using --role.',
+      );
+    }
     await this.authFlow.refreshAvailableModels();
     void this.refreshProviderModelsInBackground();
 
@@ -711,6 +717,10 @@ export class WukongTUI {
         if (startup.model !== undefined) {
           await session.setModel(startup.model);
         }
+      }
+      if (session !== undefined && startup.role !== undefined) {
+        await session.setRole(startup.role);
+        if (startup.model !== undefined) await session.setModel(startup.model);
       }
     } catch (error) {
       if (!isOAuthLoginRequiredError(error)) throw error;

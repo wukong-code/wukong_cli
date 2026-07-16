@@ -26,6 +26,7 @@ import { MESSAGE_INDENT } from '#/tui/constant/rendering';
 import { STATUS_BULLET } from '#/tui/constant/symbols';
 import { currentTheme } from '#/tui/theme';
 import type { ColorToken } from '#/tui/theme';
+import { parseLoopTerminalReason } from '#/utils/loop-result';
 import { formatTokenCount } from '#/utils/usage/usage-format';
 import { formatGoalElapsed } from './goal-format';
 import { UsagePanelComponent } from './usage-panel';
@@ -125,6 +126,8 @@ export class GoalStatusMessageComponent implements Component {
 
 /** Box title, e.g. ` Goal · active `. */
 export function goalPanelTitle(goal: GoalSnapshot): string {
+  const loop = parseLoopTerminalReason(goal.terminalReason);
+  if (loop !== null) return ` Loop · ${loop.status} `;
   return ` Goal · ${goal.status} `;
 }
 
@@ -137,7 +140,8 @@ export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRA
   // (active / paused / blocked) is a persisted, resumable goal that still shows
   // its stop condition. A reason is worth surfacing for stopped / complete states.
   const isComplete = goal.status === 'complete';
-  const reason = goal.terminalReason;
+  const loop = parseLoopTerminalReason(goal.terminalReason);
+  const reason = loop?.summary ?? goal.terminalReason;
   const showReason =
     (goal.status === 'paused' && reason !== undefined) || goal.status === 'blocked' || isComplete;
   const lines: string[] = [];
@@ -161,7 +165,7 @@ export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRA
     lines.push(
       row(
         'Status',
-        currentTheme.fg(statusColor, goal.status) +
+        currentTheme.fg(statusColor, loop?.status ?? goal.status) +
           (reason !== undefined ? muted(` — ${reason}`) : ''),
       ),
     );

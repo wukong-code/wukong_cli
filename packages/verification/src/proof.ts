@@ -1,9 +1,10 @@
 import { resolve } from 'node:path';
 
-import { inspectGit } from './git';
 import { renderMergeProofReport, writeReport } from './report';
 import { runScan } from './scan';
-import type { ScanResult, VerificationResult } from './types';
+import { selectVerificationCommands } from './scripts';
+import { createWorkspaceSnapshot, workspaceSnapshotMatches } from './snapshot';
+import type { ScanResult, VerificationResult, WorkspaceSnapshot } from './types';
 import { runVerification } from './verify';
 
 export type ProofStatus = 'passed' | 'blocked';
@@ -24,19 +25,59 @@ export interface ProofResult {
   readonly scan: ScanResult;
   readonly summary: string;
   readonly recommendation: string;
+  readonly reasonCode: string;
+  readonly snapshotId: string;
+  readonly workspaceFingerprint: {
+    readonly headSha?: string;
+    readonly inputDigest: string;
+    readonly configDigest: string;
+  };
+  readonly blockers: readonly ProofBlocker[];
   readonly reportPath?: string;
   readonly report?: string;
 }
 
+export interface ProofBlocker {
+  readonly id: string;
+  readonly kind: 'check' | 'risk' | 'workspace' | 'review';
+  readonly summary: string;
+  readonly file?: string;
+  readonly line?: number;
+  readonly command?: string;
+  readonly evidence?: string;
+  readonly nextAction: string;
+}
+
+export class WorkspaceChangedError extends Error {
+  readonly code = 'workspace_changed';
+
+  constructor() {
+    super('Workspace changed while the delivery gate was running twice; no conclusion was produced.');
+    this.name = 'WorkspaceChangedError';
+  }
+}
+
 export async function runProof(options: ProofOptions = {}): Promise<ProofResult> {
   const cwd = resolve(options.cwd ?? process.cwd());
+  let attempt = await runProofAttempt(cwd, options);
+  if (!workspaceSnapshotMatches(attempt.snapshot, attempt.after)) {
+    attempt = await runProofAttempt(cwd, options);
+    if (!workspaceSnapshotMatches(attempt.snapshot, attempt.after)) {
+      throw new WorkspaceChangedError();
+    }
+  }
 
-  const [verification, scan] = await Promise.all([
-    runVerification({ cwd, commands: options.commands, writeReport: false }),
-    runScan({ cwd, writeReport: false }),
-  ]);
+  const { snapshot, rawVerification, scan } = attempt;
+  const verification: VerificationResult = isDocsOnlyMissingChecks(rawVerification)
+    ? {
+        ...rawVerification,
+        status: 'warning',
+        risks: rawVerification.risks.filter((risk) => risk.id !== 'commands.none_detected'),
+      }
+    : rawVerification;
 
   const status = proofStatusFrom(verification, scan, options.strict === true);
+  const blockers = buildBlockers(verification, scan, status, options.strict === true);
   const recommendation = buildRecommendation(verification, scan, status);
   const summary = buildSummary(verification, scan, status);
 
@@ -48,14 +89,45 @@ export async function runProof(options: ProofOptions = {}): Promise<ProofResult>
     scan,
     summary,
     recommendation,
+    reasonCode: reasonCodeFrom(status, blockers),
+    snapshotId: snapshot.id,
+    workspaceFingerprint: {
+      headSha: snapshot.headSha,
+      inputDigest: snapshot.inputDigest,
+      configDigest: snapshot.configDigest,
+    },
+    blockers,
   };
 
   if (options.writeReport === false) return base;
 
-  const git = await inspectGit(cwd);
-  const report = renderMergeProofReport({ ...base, git });
+  const report = renderMergeProofReport({ ...base, git: snapshot.git });
   const reportPath = await writeReport(options.reportPath ?? 'wukong-proof-report.md', report, cwd);
   return { ...base, reportPath, report };
+}
+
+async function runProofAttempt(cwd: string, options: ProofOptions): Promise<{
+  readonly snapshot: WorkspaceSnapshot;
+  readonly after: WorkspaceSnapshot;
+  readonly rawVerification: VerificationResult;
+  readonly scan: ScanResult;
+}> {
+  const selectedCommands = await selectVerificationCommands({
+    cwd,
+    commands: options.commands,
+  });
+  const snapshot = await createWorkspaceSnapshot({ cwd, commands: selectedCommands });
+  const [rawVerification, scan] = await Promise.all([
+    runVerification({
+      cwd,
+      selectedCommands,
+      snapshot,
+      writeReport: false,
+    }),
+    runScan({ cwd, snapshot, writeReport: false }),
+  ]);
+  const after = await createWorkspaceSnapshot({ cwd, commands: selectedCommands });
+  return { snapshot, after, rawVerification, scan };
 }
 
 function proofStatusFrom(
@@ -63,9 +135,26 @@ function proofStatusFrom(
   scan: ScanResult,
   strict: boolean,
 ): ProofStatus {
-  if (verification.status === 'failed' || scan.status === 'failed') return 'blocked';
+  if (scan.status === 'failed') return 'blocked';
+  if (verification.status === 'failed' && !isDocsOnlyMissingChecks(verification)) return 'blocked';
+  if (hasUnverifiedSourceChanges(verification)) return 'blocked';
   if (strict && (verification.risks.length > 0 || scan.risks.length > 0)) return 'blocked';
   return 'passed';
+}
+
+function isDocsOnlyMissingChecks(verification: VerificationResult): boolean {
+  return verification.selectedCommands.length === 0
+    && verification.commandResults.length === 0
+    && !verification.changedFiles.some((file) => SOURCE_CHANGE_PATTERN.test(file.path))
+    && verification.risks.length > 0
+    && verification.risks.every((risk) => risk.id === 'commands.none_detected');
+}
+
+const SOURCE_CHANGE_PATTERN = /\.(?:[cm]?[jt]sx?|py|go|rs|java|kt|kts|swift|rb|php|cs|c|cc|cpp|cxx|h|hh|hpp|hxx|vue|svelte)$/i;
+
+function hasUnverifiedSourceChanges(verification: VerificationResult): boolean {
+  return verification.selectedCommands.length === 0
+    && verification.changedFiles.some((file) => SOURCE_CHANGE_PATTERN.test(file.path));
 }
 
 function buildSummary(verification: VerificationResult, scan: ScanResult, status: ProofStatus): string {
@@ -92,6 +181,10 @@ function buildRecommendation(
     reasons.push('verification commands failed; fix failing checks before merging');
   }
 
+  if (hasUnverifiedSourceChanges(verification)) {
+    reasons.push('source code changed but no project checks were discovered; add or configure a verification command');
+  }
+
   const highRisks = [...verification.risks, ...scan.risks].filter((risk) => risk.severity === 'high');
   if (highRisks.length > 0) {
     reasons.push('high-risk changes detected; review before merging');
@@ -111,9 +204,76 @@ function buildRecommendation(
   return `${capitalizeFirst(reasons.join('; '))}.`;
 }
 
+function buildBlockers(
+  verification: VerificationResult,
+  scan: ScanResult,
+  status: ProofStatus,
+  strict: boolean,
+): ProofBlocker[] {
+  if (status === 'passed') return [];
+  const blockers: ProofBlocker[] = [];
+  for (const result of verification.commandResults) {
+    if (result.status === 'passed') continue;
+    blockers.push({
+      id: result.status === 'timed_out' ? 'check_timed_out' : 'check_failed',
+      kind: 'check',
+      summary: `${result.command} ${result.status === 'timed_out' ? 'timed out' : 'failed'}.`,
+      command: result.command,
+      evidence: truncateEvidence(result.stderr || result.stdout),
+      nextAction: `Run ${result.command} and fix the reported failure.`,
+    });
+  }
+  if (hasUnverifiedSourceChanges(verification)) {
+    const file = verification.changedFiles.find((changed) => SOURCE_CHANGE_PATTERN.test(changed.path))?.path;
+    blockers.push({
+      id: 'tests_missing',
+      kind: 'workspace',
+      summary: 'Source code changed but no project checks were discovered.',
+      file,
+      nextAction: 'Add a project test/typecheck script or configure .wukong/checks.json.',
+    });
+  }
+  const risks = [...verification.risks, ...scan.risks]
+    .filter((risk) => risk.severity === 'high' || strict)
+    .slice(0, 20 - blockers.length);
+  for (const risk of risks) {
+    blockers.push({
+      id: risk.id,
+      kind: 'risk',
+      summary: risk.message,
+      file: risk.file,
+      line: risk.line,
+      evidence: risk.evidence === undefined ? undefined : truncateEvidence(risk.evidence),
+      nextAction: risk.file === undefined
+        ? 'Review and resolve this risk before delivery.'
+        : `Review and resolve the risk in ${risk.file}.`,
+    });
+  }
+  if (blockers.length === 0) {
+    blockers.push({
+      id: 'verification_policy',
+      kind: 'workspace',
+      summary: 'The delivery gate was blocked by verification policy.',
+      nextAction: 'Inspect the verification warnings and configure an explicit project gate.',
+    });
+  }
+  return blockers.slice(0, 20);
+}
+
+function reasonCodeFrom(status: ProofStatus, blockers: readonly ProofBlocker[]): string {
+  if (status === 'passed') return 'passed';
+  return blockers[0]?.id ?? 'verification_policy';
+}
+
+function truncateEvidence(value: string): string | undefined {
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return undefined;
+  if (trimmed.length <= 500) return trimmed;
+  return `${trimmed.slice(0, 245)}\n...[evidence truncated]...\n${trimmed.slice(-225)}`;
+}
+
 function capitalizeFirst(value: string): string {
   if (value.length === 0) return value;
   const first = value.charAt(0);
   return `${first.toUpperCase()}${value.slice(1)}`;
 }
-

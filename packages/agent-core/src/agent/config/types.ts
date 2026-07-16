@@ -12,7 +12,7 @@ export interface AgentConfigData {
 
 export type AgentConfigUpdateData = Partial<{
   cwd: string;
-  modelAlias: string;
+  modelAlias: string | undefined;
   profileName: string;
   thinkingLevel: string;
   systemPrompt: string;

@@ -137,6 +137,35 @@ export interface GoalBudgetLimits {
   readonly wallClockBudgetMs?: number;
 }
 
+export interface LoopResultCheck {
+  readonly command: string;
+  readonly status: 'passed' | 'failed' | 'timed_out';
+  readonly exitCode: number | null;
+  readonly durationMs: number;
+}
+
+export interface LoopResultBlocker {
+  readonly id: string;
+  readonly kind: 'check' | 'risk' | 'workspace' | 'review';
+  readonly summary: string;
+  readonly file?: string;
+  readonly line?: number;
+  readonly command?: string;
+  readonly evidence?: string;
+  readonly nextAction: string;
+}
+
+export interface LoopResult {
+  readonly schemaVersion: 2;
+  readonly status: 'PASS' | 'NEEDS_WORK' | 'ERROR';
+  readonly reasonCode: string;
+  readonly summary: string;
+  readonly iterations: number;
+  readonly checks: readonly LoopResultCheck[];
+  readonly blockers: readonly LoopResultBlocker[];
+  readonly role?: string;
+}
+
 export interface GoalBudgetReport {
   readonly tokenBudget: number | null;
   readonly turnBudget: number | null;
@@ -154,7 +183,7 @@ export interface GoalSnapshot {
   readonly goalId: string;
   readonly objective: string;
   readonly completionCriterion?: string;
-  readonly stopCondition?: 'verify-pass' | 'scan-clean' | 'judge-pass';
+  readonly stopCondition?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
   readonly iteration: number;
@@ -164,6 +193,7 @@ export interface GoalSnapshot {
   readonly wallClockMs: number;
   readonly budget: GoalBudgetReport;
   readonly terminalReason?: string;
+  readonly loopResult?: LoopResult;
 }
 
 export interface GoalToolResult {
@@ -813,6 +843,35 @@ export const goalBudgetLimitsSchema = z.object({
   wallClockBudgetMs: z.number().optional(),
 }) satisfies z.ZodType<GoalBudgetLimits>;
 
+export const loopResultCheckSchema = z.object({
+  command: z.string(),
+  status: z.enum(['passed', 'failed', 'timed_out']),
+  exitCode: z.number().nullable(),
+  durationMs: z.number(),
+}) satisfies z.ZodType<LoopResultCheck>;
+
+export const loopResultBlockerSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['check', 'risk', 'workspace', 'review']),
+  summary: z.string(),
+  file: z.string().optional(),
+  line: z.number().optional(),
+  command: z.string().optional(),
+  evidence: z.string().optional(),
+  nextAction: z.string(),
+}) satisfies z.ZodType<LoopResultBlocker>;
+
+export const loopResultSchema = z.object({
+  schemaVersion: z.literal(2),
+  status: z.enum(['PASS', 'NEEDS_WORK', 'ERROR']),
+  reasonCode: z.string(),
+  summary: z.string(),
+  iterations: z.number(),
+  checks: z.array(loopResultCheckSchema),
+  blockers: z.array(loopResultBlockerSchema),
+  role: z.string().optional(),
+}) satisfies z.ZodType<LoopResult>;
+
 export const goalBudgetReportSchema = z.object({
   tokenBudget: z.number().nullable(),
   turnBudget: z.number().nullable(),
@@ -830,7 +889,7 @@ export const goalSnapshotSchema = z.object({
   goalId: z.string(),
   objective: z.string(),
   completionCriterion: z.string().optional(),
-  stopCondition: z.enum(['verify-pass', 'scan-clean', 'judge-pass']).optional(),
+  stopCondition: z.enum(['proof-pass', 'verify-pass', 'scan-clean', 'judge-pass']).optional(),
   maxIterations: z.number().optional(),
   minIntervalMs: z.number().optional(),
   iteration: z.number(),
@@ -840,6 +899,7 @@ export const goalSnapshotSchema = z.object({
   wallClockMs: z.number(),
   budget: goalBudgetReportSchema,
   terminalReason: z.string().optional(),
+  loopResult: loopResultSchema.optional(),
 }) satisfies z.ZodType<GoalSnapshot>;
 
 export const goalToolResultSchema = z.object({

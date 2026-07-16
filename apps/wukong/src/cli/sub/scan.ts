@@ -62,8 +62,8 @@ export async function handleScan(deps: ScanDeps, options: ScanCliOptions): Promi
 
 export function registerScanCommand(parent: Command, deps?: Partial<ScanDeps>): void {
   parent
-    .command('scan')
-    .description('Scan the current workspace for delivery risks without running project commands.')
+    .command('scan', { hidden: true })
+    .description('Advanced diagnostic: run the risk rules used by Loop.')
     .option('--diff', 'Scan git diff risks. This is the default P0 behavior.')
     .option('--secrets', 'Include secret-looking file risk checks. This is enabled by default in P0.')
     .option('--report [path]', 'Write a markdown scan report. Defaults to wukong-scan-report.md when no path is given.')

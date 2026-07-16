@@ -137,6 +137,13 @@ describe('buildProofUploadPayload', () => {
       scan: makeScanResult(),
       summary: 'blocked',
       recommendation: 'fix it',
+      reasonCode: 'check_failed',
+      snapshotId: 'snapshot-id',
+      workspaceFingerprint: {
+        inputDigest: 'input-digest',
+        configDigest: 'config-digest',
+      },
+      blockers: [],
     };
 
     const payload = buildProofUploadPayload(proof, '# Proof\n\nToken: ghp_aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');

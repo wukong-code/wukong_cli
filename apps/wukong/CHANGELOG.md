@@ -1,5 +1,18 @@
 # @wukong.today/code
 
+## 0.0.12
+
+### Patch Changes
+
+- Make Loop the primary product workflow. Interactive `/loop` and headless `wukong loop` now iterate through work, real project checks, risk scanning, and a fresh-context read-only reviewer.
+- Return a durable `LoopResult` with `PASS`, `NEEDS_WORK`, or `ERROR`, structured blockers, actionable next steps, and stable process exit codes.
+- Run proof checks against one workspace snapshot, discover checks in nested npm/pnpm/yarn/bun packages, and reject conclusions when the workspace changes during the gate.
+- Add the Free Loop layer: one two-iteration Guest trial; 10 signed-in Free sessions per month with five iterations each; internal verify/scan/proof checks do not consume quota.
+- Add experimental Role Profiles for task-specific writer prompts, model aliases, and tool allowlist narrowing. The independent reviewer stays read-only.
+- Enable Role Profiles through `experimental.role_profiles`, then use `wukong roles list`, `wukong --role <name>`, or `/transform <name>`.
+- Preserve 0.0.11 Goal records and legacy `verify-pass`, `scan-clean`, and `judge-pass` flags by migrating them to the unified `proof-pass` gate.
+- Keep reports optional. Loop does not persist or upload evidence unless the user explicitly requests it; Hosted Evidence v2 remains planned for 0.0.13.
+
 ## 0.0.11
 
 ### Patch Changes

@@ -146,6 +146,17 @@ describe('ChromeStateAggregator', () => {
     expect(agg.getState().loopPhase?.nextAction).toBe('/goal resume or /loop stop');
   });
 
+  it('decodes Loop terminal reasons for chrome state', () => {
+    const agg = new ChromeStateAggregator({ cwd: '/repo' });
+    agg.setGoal(goal({
+      status: 'blocked',
+      terminalReason: 'loop:ERROR:workspace_changed:Workspace changed during checks.',
+    }));
+
+    expect(agg.getState().loopPhase?.blockedReason).toBe('Workspace changed during checks.');
+    expect(agg.getState().loopPhase?.nextAction).toBe('Stop other workspace writers, then rerun the Loop.');
+  });
+
   it('makes paused goals visually distinct from waiting work', () => {
     const agg = new ChromeStateAggregator({ cwd: '/repo' });
     agg.setGoal(goal({ status: 'paused' }));

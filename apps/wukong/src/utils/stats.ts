@@ -287,19 +287,19 @@ interface NextInputs {
 function buildNext(inputs: NextInputs): string[] {
   const next: string[] = [];
   if (inputs.lastProof?.status === 'blocked' || inputs.today.proof.lastStatus === 'blocked') {
-    next.push('wukong proof');
+    next.push('/loop fix the blocked change');
   }
   if (inputs.today.verify.failed > 0) {
-    next.push('wukong verify');
+    next.push('/loop fix the failing checks');
   }
   if (next.length === 0 && inputs.changedFiles > 0) {
-    next.push('wukong proof');
+    next.push('/loop finish the current change');
   }
   if (next.length === 0 && inputs.focus !== undefined && inputs.focus.length > 0) {
-    next.push(`/goal "${inputs.focus}" --until verify-pass`);
+    next.push(`/loop ${inputs.focus}`);
   }
   if (next.length === 0) {
-    next.push('wukong scan');
+    next.push('/loop <goal>');
   }
   return next.slice(0, 2);
 }

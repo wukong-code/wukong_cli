@@ -30,6 +30,9 @@ import type {
   WarningEvent,
 } from '@wukong/wukong-sdk';
 
+import { parseLoopTerminalReason } from '#/utils/loop-result';
+import { completeTrackedTuiLoop } from '#/cli/lib/loop-quota';
+
 import { MoonLoader } from '../components/chrome/moon-loader';
 import { buildGoalMarker } from '../components/messages/goal-markers';
 import { StatusMessageComponent } from '../components/messages/status-message';
@@ -606,7 +609,9 @@ export class SessionEventHandler {
     const iteration = goal?.iteration ?? 0;
     const stopCondition = goal?.stopCondition;
 
-    if (stopCondition === 'verify-pass' || failed.kind === 'verify') {
+    if (stopCondition === 'proof-pass' || failed.kind === 'proof') {
+      this.host.state.chromeState.recordProof('blocked', failed.reason);
+    } else if (stopCondition === 'verify-pass' || failed.kind === 'verify') {
       this.host.state.chromeState.recordVerify('failed', failed.reason);
     } else if (stopCondition === 'scan-clean' || failed.kind === 'scan') {
       this.host.state.chromeState.recordScan('failed');
@@ -666,6 +671,13 @@ export class SessionEventHandler {
     // Resume renders the same text from the durable goal completion replay
     // record, so live and replayed completion cards stay identical.
     if (change.kind === 'completion' && event.snapshot !== null) {
+      if (event.snapshot.loopResult !== undefined) {
+        void completeTrackedTuiLoop(
+          event.snapshot.goalId,
+          event.snapshot.loopResult.status,
+          event.snapshot.loopResult.iterations,
+        );
+      }
       this.pendingModelBlockedFallback = undefined;
       this.goalCompletionAwaitingClear = true;
       this.goalCompletionTurnEnded = false;
@@ -685,6 +697,13 @@ export class SessionEventHandler {
     // model self-report) is not a verification gate failure. Gate failures keep
     // the goal active and are handled via UpdateGoal tool results.
     if (change.kind === 'lifecycle' && change.status === 'blocked') {
+      if (event.snapshot?.loopResult !== undefined) {
+        void completeTrackedTuiLoop(
+          event.snapshot.goalId,
+          event.snapshot.loopResult.status,
+          event.snapshot.loopResult.iterations,
+        );
+      }
       const reason = typeof change.reason === 'string' ? change.reason : undefined;
       this.host.state.chromeState.recordGoal('blocked');
       this.appendBlockedTranscriptEntry(event.snapshot?.iteration ?? 0, reason);
@@ -881,12 +900,15 @@ export class SessionEventHandler {
   }
 
   private appendBlockedTranscriptEntry(iteration: number, reason?: string): void {
-    const reasonPart = reason !== undefined && reason.length > 0 ? ` — ${reason}` : '';
+    const loop = parseLoopTerminalReason(reason);
+    const reasonText = loop?.summary ?? reason;
+    const reasonPart = reasonText !== undefined && reasonText.length > 0 ? ` — ${reasonText}` : '';
+    const headline = loop === null ? 'goal blocked' : `Loop ${loop.status}`;
     this.host.appendTranscriptEntry({
       id: nextTranscriptId(),
       kind: 'status',
       renderMode: 'plain',
-      content: `⛔ iter ${iteration} goal blocked${reasonPart}`,
+      content: `⛔ iter ${iteration} ${headline}${reasonPart}`,
     });
   }
 
@@ -1161,7 +1183,7 @@ export class SessionEventHandler {
 
 function parseGoalGateFailure(
   output: string,
-): { readonly kind: 'verify' | 'scan' | 'judge'; readonly reason: string } | null {
+): { readonly kind: 'proof' | 'verify' | 'scan' | 'judge'; readonly reason: string } | null {
   const match = /Goal gate failed:\s*(.+?)(?:\s+(?:Continuing goal|A retry is scheduled)\.?|$)/i.exec(
     output,
   );
@@ -1170,7 +1192,7 @@ function parseGoalGateFailure(
   if (reason.length === 0) return null;
 
   const lower = reason.toLowerCase();
-  let kind: 'verify' | 'scan' | 'judge' = 'verify';
+  let kind: 'proof' | 'verify' | 'scan' | 'judge' = 'proof';
   if (lower.includes('risk scan') || lower.includes('scan')) {
     kind = 'scan';
   } else if (lower.includes('judge')) {
