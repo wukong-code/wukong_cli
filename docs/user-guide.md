@@ -5,6 +5,19 @@
 > 定位: 给 Wukong 一个目标，通过 Goal → Write → Check → Review → Fix 循环直到没有 blocking finding。
 > 原则: 本文只写当前可执行的能力。Loop、结构化 review findings、项目 review policy、本地 feedback、独立 reviewer model 和高级诊断命令已实现；完整订阅管理、Hosted Evidence v2、团队规则和 PR gate 仍未完成。
 
+## 安装正式版
+
+macOS 和 Linux：
+
+```bash
+curl -fsSL https://wukong.today/install.sh | sh
+wukong --version
+```
+
+安装器从公开 Release 下载对应平台的 native binary，并校验配套 SHA-256。0.0.12 native binary 升级到 0.0.13 时需要执行一次上述安装命令；从 0.0.13 开始，macOS 和 Linux native 安装可直接运行 `wukong upgrade`。
+
+Windows 请从 [下载页](https://wukong.today/download) 获取对应的 x64 或 ARM64 压缩包。
+
 ## 从源码运行
 
 ```bash
@@ -20,7 +33,7 @@ pnpm dev:cli
 pnpm -C apps/wukong run dev:cli-only --help
 ```
 
-当前没有经过验证的 `https://wukong.today/install.sh`、Homebrew formula 或旧 `@wukong.today/wukong-cli` 安装路径。package metadata 当前发布包名为 `@wukong.today/code`。
+公开下载仓库是 `mutnpc/wukong-code`。当前没有 Homebrew formula，也不发布旧的 `@wukong.today/wukong-cli` 包名。
 
 ## 5 分钟快速开始
 
