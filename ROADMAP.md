@@ -253,7 +253,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 ## Milestone 2: 0.0.13 Review Learning Loop
 
-状态：开发中。Review Contract、项目 policy、本地 feedback、独立 reviewer model、Loop-first TUI/Web 文案、真实临时 monorepo E2E、受保护的生产统计接口和发布预览文案已实现；正式发布、部署验证与公告启用仍待 release 阶段完成。设计 contract 见 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。本版本只验证 Reviewer 学习价值，保持免费/BYOK，支付与完整 Billing 生命周期明确延后到 0.1.0。
+状态：已发布。Review Contract、项目 policy、本地 feedback、独立 reviewer model、Loop-first TUI/Web 文案、真实临时 monorepo E2E、受保护的生产统计接口和预览公告均已实现。设计 contract 见 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。本版本只验证 Reviewer 学习价值，保持免费/BYOK，支付与完整 Billing 生命周期明确延后到 0.1.0。
 
 目标：在不扩大 reviewer 权限的前提下，让本地 Reviewer 输出可操作的多 findings，并收集真实反馈验证 reviewer 是否有价值。
 

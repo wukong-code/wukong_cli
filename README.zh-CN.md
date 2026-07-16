@@ -8,7 +8,7 @@
 
 Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal → Write → Check → Review → Fix**。给 `/loop` 一个目标，它会持续修改，直到独立 reviewer 不再返回 blocking finding，或达到迭代上限。
 
-`0.0.13` 正在开发。第一阶段增加结构化多 findings、`.wukong/review-policy.md` 项目规则、本地 finding feedback，以及可选的独立 reviewer model。本版本继续免费并由用户提供模型 API，不做支付；真实 Pro 权益延后到 `0.1.0`。
+`0.0.13` 增加结构化多 findings、`.wukong/review-policy.md` 项目规则、本地 finding feedback 与诊断统计，以及可选的独立 reviewer model。本版本继续免费并由用户提供模型 API，不做支付；真实 Pro 权益延后到 `0.1.0`。
 
 `0.0.12` 建立了 Loop-first runtime。`verify`、`scan`、`proof` 仍保留为高级诊断命令，但只是 Loop 的内部层，不再各自形成产品或额度。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md) 和 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。
 
@@ -95,7 +95,7 @@ pnpm build      # 构建所有包
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [技术实现方案](docs/tech/commercial-refactor-implementation.md)
 
-第一批 `0.0.13` 已实现 Loop runtime、独立 reviewer、结构化 findings、项目 review policy、本地 feedback store 和 reviewer-model override。发布前还需要真实仓库 E2E、最终公告与 CHANGELOG 同步，以及生产 activated Loop / feedback 统计验收。
+`0.0.13` 发布第一版 Review Learning Loop：结构化 findings、项目 review policy、本地 feedback、reviewer 诊断统计和 reviewer-model override。真实仓库 E2E、发布文案、Web 预览公告，以及区分注册用户与 activated Loop users 的生产统计已经同步。
 
 ## 致谢
 

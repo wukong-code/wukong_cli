@@ -8,7 +8,7 @@
 
 Wukong Code is a terminal AI coding agent built around one primary workflow: **Goal → Write → Check → Review → Fix**. Give `/loop` a goal and Wukong keeps working until an independent reviewer has no blocking findings or the iteration limit is reached.
 
-Version `0.0.13` is under development. Its first phase adds structured multi-finding reviews, project-specific rules in `.wukong/review-policy.md`, local finding feedback, and an optional independent reviewer model. It remains free and bring-your-own-key; payments and real Pro entitlements are deferred to `0.1.0`.
+Version `0.0.13` adds structured multi-finding reviews, project-specific rules in `.wukong/review-policy.md`, local finding feedback and diagnostics, plus an optional independent reviewer model. It remains free and bring-your-own-key; payments and real Pro entitlements are deferred to `0.1.0`.
 
 Version `0.0.12` established the Loop-first runtime. `verify`, `scan`, and `proof` remain available as advanced diagnostics, but they are internal Loop layers rather than separate products or quotas. See the [0.0.12 design contract](docs/design/verification-loop-v2.md) and the [0.0.13 review design](docs/design/review-learning-loop.md).
 
@@ -95,7 +95,7 @@ The current product direction is to make Wukong Code the **review-driven control
 - [Commercial refactor plan](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [Technical implementation plan](docs/tech/commercial-refactor-implementation.md)
 
-The Loop runtime, independent reviewer, structured findings, project review policy, local feedback store, and reviewer-model override are implemented for the first `0.0.13` development tranche. Real-repository E2E validation, release copy, announcements, and production activation metrics remain before release.
+Version `0.0.13` ships the first Review Learning Loop: structured findings, project review policy, local feedback, reviewer diagnostics, and a reviewer-model override. Real-repository E2E coverage, release copy, the Web preview announcement, and separated registered/activated Loop metrics are included.
 
 ## Acknowledgments
 
