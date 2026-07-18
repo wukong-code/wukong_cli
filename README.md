@@ -10,7 +10,7 @@ Wukong Code is a terminal AI coding agent built around one primary workflow: **G
 
 Version `0.0.13` adds structured multi-finding reviews, project-specific rules in `.wukong/review-policy.md`, local finding feedback and diagnostics, plus an optional independent reviewer model. It remains free and bring-your-own-key; payments and real Pro entitlements are deferred to `0.1.0`.
 
-Version `0.0.14` is now in development. Its scope is Cross-Agent Resume, an explicit Resume → Loop handoff, clearer TUI Gate results, and broader real-project check discovery. It remains free and BYOK; see the [0.0.14 design](docs/design/0.0.14-resume-loop-polish.md).
+Version `0.0.14` adds Cross-Agent Resume, an explicit Resume → Loop handoff, clearer TUI Gate results, and broader real-project check discovery. It remains free and BYOK; see the [0.0.14 design](docs/design/0.0.14-resume-loop-polish.md).
 
 Version `0.0.12` established the Loop-first runtime. `verify`, `scan`, and `proof` remain available as advanced diagnostics, but they are internal Loop layers rather than separate products or quotas. See the [0.0.12 design contract](docs/design/verification-loop-v2.md) and the [0.0.13 review design](docs/design/review-learning-loop.md).
 

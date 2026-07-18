@@ -10,7 +10,7 @@ Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal →
 
 `0.0.13` 增加结构化多 findings、`.wukong/review-policy.md` 项目规则、本地 finding feedback 与诊断统计，以及可选的独立 reviewer model。本版本继续免费并由用户提供模型 API，不做支付；真实 Pro 权益延后到 `0.1.0`。
 
-`0.0.14` 已进入开发，范围包括跨 Agent Resume、明确的 Resume → Loop 衔接、更清晰的 TUI Gate 结论和更多真实项目检查发现。本版本继续免费/BYOK，完整范围见 [0.0.14 设计](docs/design/0.0.14-resume-loop-polish.md)。
+`0.0.14` 增加跨 Agent Resume、明确的 Resume → Loop 衔接、更清晰的 TUI Gate 结论和更多真实项目检查发现。本版本继续免费/BYOK，完整范围见 [0.0.14 设计](docs/design/0.0.14-resume-loop-polish.md)。
 
 `0.0.12` 建立了 Loop-first runtime。`verify`、`scan`、`proof` 仍保留为高级诊断命令，但只是 Loop 的内部层，不再各自形成产品或额度。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md) 和 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。
 

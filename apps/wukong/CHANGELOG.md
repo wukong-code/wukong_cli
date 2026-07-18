@@ -2,7 +2,7 @@
 
 ## 0.0.14
 
-### Development Changes
+### Patch Changes
 
 - Extend `/resume` with explicit Codex, Claude Code, and Cursor sources while keeping bare `/resume` focused on Wukong sessions, with safe read-only context import.
 - Add an explicit Continue / Start Loop handoff before importing an external session. Start Loop pre-fills an editable objective and does not run until the user confirms it.
@@ -11,6 +11,7 @@
 - Keep legacy `verify-pass`, `scan-clean`, and `judge-pass` inputs compatible and deprecated; do not remove them in this release.
 - Keep the release free and BYOK. Payments, GitHub PR integration, Team policy, cloud scheduling, and automatic policy improvement remain deferred.
 - Remove the retired cloud report upload, history, and public sharing workflow from the CLI and Web product.
+- Release the six-platform native build as Wukong Code v0.0.14.
 
 ## 0.0.13
 

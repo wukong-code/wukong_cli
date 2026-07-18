@@ -41,6 +41,8 @@
   定义多 finding Review Contract、项目 review policy、人工反馈和独立 reviewer model；自动 improver 与支付不在本版本。
 - [0.0.14 Cross-Agent Resume 与 Loop UX 收尾](design/0.0.14-resume-loop-polish.md)
   定义跨 Agent 本地会话导入、Resume → Loop、TUI Gate/Footer 简化、真实项目检查发现、兼容边界和发布门槛。
+- [0.0.14 Release Notes](releases/0.0.14.md)
+  正式版本安装、升级、功能与商业边界。
 - [跨 Agent Session Resume](design/cross-agent-resume.md)
   `/resume` 恢复 Wukong 会话；`/resume codex|claude|cursor` 显式发现对应 Agent 的本地会话，并通过内置 Skill 只读导入后在 Wukong 中继续。
 - [执行层 TODO](../TODO.md)
