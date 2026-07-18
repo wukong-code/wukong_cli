@@ -10,31 +10,31 @@
 
 ### P0：Cross-Agent Resume
 
-- [x] 裸 `/resume` 保持 Wukong-only；删除重复的 `/resume wukong`（2026-07-18，待提交）
-- [x] 增加 `/resume codex|claude|cursor` 和隐藏兼容入口（2026-07-18，待提交）
-- [x] 实现 Codex、Claude Code、Cursor 本地 session summary discovery（2026-07-18，待提交）
-- [x] picker 显示来源标签和原生 ID，并支持当前目录/全部目录和搜索（2026-07-18，待提交）
-- [x] 增加 realpath/symlink 边界、损坏 JSONL 隔离和脱敏 fixture（2026-07-18，待提交）
-- [x] 增加 `resume-codex`、`resume-claude`、`resume-cursor` 内置只读 Skill（2026-07-18，待提交）
-- [x] 增加 `Continue in Wukong` / `Start /loop` 选择面板（2026-07-18，待提交）
-- [x] `Start /loop` 预填最后请求并要求用户编辑确认；Loop 进入后重新读取 workspace、Git 和项目检查（2026-07-18，待提交）
-- [x] Codex、Claude Code、Cursor 真实本机会话格式 discovery smoke；fixture 覆盖 session → handoff → workspace re-check 指令链（2026-07-18，真实模型 turn 待发布前 smoke）
-- [x] 增加超大 transcript、Cursor 移动工作目录和格式变化回归（2026-07-18，待提交）
+- [x] 裸 `/resume` 保持 Wukong-only；删除重复的 `/resume wukong`（2026-07-18，已发布）
+- [x] 增加 `/resume codex|claude|cursor` 和隐藏兼容入口（2026-07-18，已发布）
+- [x] 实现 Codex、Claude Code、Cursor 本地 session summary discovery（2026-07-18，已发布）
+- [x] picker 显示来源标签和原生 ID，并支持当前目录/全部目录和搜索（2026-07-18，已发布）
+- [x] 增加 realpath/symlink 边界、损坏 JSONL 隔离和脱敏 fixture（2026-07-18，已发布）
+- [x] 增加 `resume-codex`、`resume-claude`、`resume-cursor` 内置只读 Skill（2026-07-18，已发布）
+- [x] 增加 `Continue in Wukong` / `Start /loop` 选择面板（2026-07-18，已发布）
+- [x] `Start /loop` 预填最后请求并要求用户编辑确认；Loop 进入后重新读取 workspace、Git 和项目检查（2026-07-18，已发布）
+- [x] Codex、Claude Code、Cursor 真实本机会话格式 discovery smoke；fixture 覆盖 session → handoff → workspace re-check 指令链（2026-07-18，fixture E2E 已通过；真实模型 turn 未纳入 release gate）
+- [x] 增加超大 transcript、Cursor 移动工作目录和格式变化回归（2026-07-18，已发布）
 
 ### P0：TUI Gate 与 Footer
 
-- [x] 修正 `Verify ✗ · Proof BLOCKED` 误导语义，收敛为可解释 Gate 状态（2026-07-18，待提交）
-- [x] 区分检查未执行、检查失败、无项目检查、高风险复核和 reviewer blocker（2026-07-18，待提交）
-- [x] 保持 Footer 窄终端对齐与截断测试（2026-07-18，待提交）
+- [x] 修正 `Verify ✗ · Proof BLOCKED` 误导语义，收敛为可解释 Gate 状态（2026-07-18，已发布）
+- [x] 区分检查未执行、检查失败、无项目检查、高风险复核和 reviewer blocker（2026-07-18，已发布）
+- [x] 保持 Footer 窄终端对齐与截断测试（2026-07-18，已发布）
 - [ ] 补一次真实 TUI `/loop` 人工 smoke，确认 transcript 仍保留高级诊断细节
 
 ### P1：真实项目检查
 
-- [x] Python：只在项目显式配置 pytest、ruff、mypy 时发现对应命令（2026-07-18，待提交）
-- [x] Rust：识别 Cargo test 与项目显式 Clippy 配置（2026-07-18，待提交）
-- [x] Go：识别 module test 与项目显式 golangci-lint 配置（2026-07-18，待提交）
-- [x] 工具缺失、超时和无检查分别返回稳定可解释状态（2026-07-18，待提交）
-- [x] Node/Python/Rust/Go 真实临时仓库 E2E（2026-07-18，待提交）
+- [x] Python：只在项目显式配置 pytest、ruff、mypy 时发现对应命令（2026-07-18，已发布）
+- [x] Rust：识别 Cargo test 与项目显式 Clippy 配置（2026-07-18，已发布）
+- [x] Go：识别 module test 与项目显式 golangci-lint 配置（2026-07-18，已发布）
+- [x] 工具缺失、超时和无检查分别返回稳定可解释状态（2026-07-18，已发布）
+- [x] Node/Python/Rust/Go 真实临时仓库 E2E（2026-07-18，已发布）
 
 ### 兼容与发布
 
@@ -42,7 +42,7 @@
 - [x] 建立 0.0.14 设计、ROADMAP、TODO 与 CHANGELOG 口径（2026-07-18）
 - [x] 同步中英文 README、用户指南、CLI help 和官网首页/下载/Pricing/Dashboard/Today/Changelog 文案（2026-07-18，公告正式启用与 release assets 同步）
 - [x] 完成全量测试、typecheck、lint、bundle build/smoke 与 macOS arm64 native SEA build/smoke（2026-07-18）
-- [ ] 创建 `0.0.14` tag、六平台 release assets、公开 CHANGELOG 和升级 manifest
+- [x] 创建 `v0.0.14` tag、六平台 release assets、公开 CHANGELOG、升级 manifest 和正式公告（2026-07-18）
 
 ### 明确不做
 
