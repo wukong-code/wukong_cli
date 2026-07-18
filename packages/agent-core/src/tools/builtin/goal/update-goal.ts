@@ -417,7 +417,10 @@ async function runFreshReviewer(
 function proofChecks(proof: ProofResult): LoopResult['checks'] {
   return proof.verification.commandResults.map((result) => ({
     command: result.command,
-    status: result.status,
+    // Keep the persisted/wire LoopResult compatibility union stable. The
+    // accompanying blocker retains `check_unavailable` and the actionable
+    // install/configure guidance for newer clients.
+    status: result.status === 'unavailable' ? 'failed' : result.status,
     exitCode: result.exitCode,
     durationMs: result.durationMs,
   }));

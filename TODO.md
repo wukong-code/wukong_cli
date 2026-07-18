@@ -1,10 +1,54 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.13 以 [Review Learning Loop 设计](docs/design/review-learning-loop.md) 为准，共享验证基础以 [技术实现方案](docs/tech/commercial-refactor-implementation.md) 为准，现有测试基线以 [测试计划](docs/test/verification-cli-test-plan.md) 为准；本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.14 以 [Cross-Agent Resume 与 Loop UX 收尾](docs/design/0.0.14-resume-loop-polish.md) 为准，共享验证基础以 [技术实现方案](docs/tech/commercial-refactor-implementation.md) 为准，现有测试基线以 [测试计划](docs/test/verification-cli-test-plan.md) 为准；本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
-## 📋 当前重点: 0.0.13 — Review Learning Loop
+## 📋 当前重点: 0.0.14 — Cross-Agent Resume + Loop UX
+
+> 方案: [docs/design/0.0.14-resume-loop-polish.md](docs/design/0.0.14-resume-loop-polish.md)。本版继续免费/BYOK，不做支付或 GitHub PR 集成。
+
+### P0：Cross-Agent Resume
+
+- [x] 裸 `/resume` 保持 Wukong-only；删除重复的 `/resume wukong`（2026-07-18，待提交）
+- [x] 增加 `/resume codex|claude|cursor` 和隐藏兼容入口（2026-07-18，待提交）
+- [x] 实现 Codex、Claude Code、Cursor 本地 session summary discovery（2026-07-18，待提交）
+- [x] picker 显示来源标签和原生 ID，并支持当前目录/全部目录和搜索（2026-07-18，待提交）
+- [x] 增加 realpath/symlink 边界、损坏 JSONL 隔离和脱敏 fixture（2026-07-18，待提交）
+- [x] 增加 `resume-codex`、`resume-claude`、`resume-cursor` 内置只读 Skill（2026-07-18，待提交）
+- [x] 增加 `Continue in Wukong` / `Start /loop` 选择面板（2026-07-18，待提交）
+- [x] `Start /loop` 预填最后请求并要求用户编辑确认；Loop 进入后重新读取 workspace、Git 和项目检查（2026-07-18，待提交）
+- [x] Codex、Claude Code、Cursor 真实本机会话格式 discovery smoke；fixture 覆盖 session → handoff → workspace re-check 指令链（2026-07-18，真实模型 turn 待发布前 smoke）
+- [x] 增加超大 transcript、Cursor 移动工作目录和格式变化回归（2026-07-18，待提交）
+
+### P0：TUI Gate 与 Footer
+
+- [x] 修正 `Verify ✗ · Proof BLOCKED` 误导语义，收敛为可解释 Gate 状态（2026-07-18，待提交）
+- [x] 区分检查未执行、检查失败、无项目检查、高风险复核和 reviewer blocker（2026-07-18，待提交）
+- [x] 保持 Footer 窄终端对齐与截断测试（2026-07-18，待提交）
+- [ ] 补一次真实 TUI `/loop` 人工 smoke，确认 transcript 仍保留高级诊断细节
+
+### P1：真实项目检查
+
+- [x] Python：只在项目显式配置 pytest、ruff、mypy 时发现对应命令（2026-07-18，待提交）
+- [x] Rust：识别 Cargo test 与项目显式 Clippy 配置（2026-07-18，待提交）
+- [x] Go：识别 module test 与项目显式 golangci-lint 配置（2026-07-18，待提交）
+- [x] 工具缺失、超时和无检查分别返回稳定可解释状态（2026-07-18，待提交）
+- [x] Node/Python/Rust/Go 真实临时仓库 E2E（2026-07-18，待提交）
+
+### 兼容与发布
+
+- [x] legacy `verify-pass`、`scan-clean`、`judge-pass` 在 0.0.14 继续兼容，不提前删除
+- [x] 建立 0.0.14 设计、ROADMAP、TODO 与 CHANGELOG 口径（2026-07-18）
+- [x] 同步中英文 README、用户指南、CLI help 和官网首页/下载/Pricing/Dashboard/Today/Changelog 文案（2026-07-18，公告正式启用与 release assets 同步）
+- [x] 完成全量测试、typecheck、lint、bundle build/smoke 与 macOS arm64 native SEA build/smoke（2026-07-18）
+- [ ] 创建 `0.0.14` tag、六平台 release assets、公开 CHANGELOG 和升级 manifest
+
+### 明确不做
+
+- Stripe/Pro 支付、GitHub PR、Team policy、云端 `/schedule`、自动 policy improver 均不进入 0.0.14。
+
+## ✅ 0.0.13 — Review Learning Loop
 
 > 方案: [docs/design/review-learning-loop.md](docs/design/review-learning-loop.md)。本版是 Review Learning Loop 第一阶段：结构化 findings → 人工反馈 → 后续 Loop。自动 policy proposal、固定 eval improver 和支付不在 0.0.13 实现。
 
@@ -66,7 +110,7 @@
 - [x] 只有顶层 Loop session 计额度；内部 verify/scan/proof 不重复计数（2026-07-16）
 - [x] Guest：1 个 Loop session、最多2轮；Free：10个 Loop sessions/月、每个最多5轮；第3次开始软提示 Pro，第10次后硬限制（2026-07-16）
 - [x] 实现幂等 trust-runs start/complete + trust-usage；不实现 Checks、reservation、lease 或 AI credits（2026-07-16）
-- [x] 默认不生成 report/evidence；只有显式 `--save`/`--upload` 才持久化（2026-07-16）
+- [x] 默认不生成 report/evidence；只有显式本地 `--save`/`--report` 才持久化（2026-07-16）
 
 ### Loop 执行与交付 Gate
 
@@ -99,24 +143,20 @@
 ### 端到端同步与发布门槛
 
 - [x] CLI、TUI、agent tool 使用同一 Loop 三态；Dashboard 只展示 Loop 用量、重置时间和最近最终状态（2026-07-16）
-- [x] 旧 Goal record migration 和旧 CLI flags compatibility matrix（Hosted Report v1 保持兼容，不做 v2 migration）（2026-07-16）
+- [x] 旧 Goal record migration 和旧 CLI flags compatibility matrix（2026-07-16）
 - [x] 真实 monorepo、无测试项目、snapshot stale、fresh reviewer、角色权限、usage start 幂等、Loop 收敛 E2E（2026-07-16）
 - [x] 更新中英文 README、help、公告、CHANGELOG 和 release notes（2026-07-16；公开仓发布时同步生成物）
 
 ### 0.0.13+ Backlog
 
-- [ ] Hosted Report v2、Loop evidence `--save`/`--upload`、双版本 ingestion 和 Dashboard evidence 迁移（不是 0.0.13 Review Learning Loop 发布 blocker）
 - [x] `--review-model`、role 独立 reviewer model（2026-07-16；保持 BYOK，managed model credits 延后）
 - [ ] 全语言自动检查推断、后台/云端 Loop、PR gate 和 Team Role Profiles
 
-## ✅ 0.0.11 — Hosted Evidence UX 与发布闭环
+## ✅ 0.0.11 — TUI、公告与发布闭环
 
 - [x] TUI welcome/footer/loop/proof 文案与终端宽度对齐，窄终端安全降级（2026-07-13）
-- [x] Proof 完成后提示私有 history 与显式公开分享命令；`--public` 必须与 `--upload` 同用（2026-07-13）
-- [x] `wukong today` 登录态显示 hosted report 用量和 Dashboard 链接；网络失败不阻塞本地简报（2026-07-13）
 - [x] TUI 公告协议、版本/时间/频控过滤、安全链接白名单和非阻塞拉取（2026-07-13）
 - [x] 生产验收：公告端点 200 且 5 分钟缓存；0.0.10→0.0.11 更新 manifest（2026-07-13）
-- [ ] 已登录真实账号验收：proof upload/private history/public share/dashboard 全链路（当前开发机无 CLI 登录态，不制造测试用户）
 - [x] 发布 `0.0.11` 六平台资产并同步 `wukong-code` CHANGELOG、文档和安装 manifest（2026-07-13）
 
 ## ✅ Milestone 0.5 — Loop 控制层 + Merge Proof
@@ -177,7 +217,6 @@
 - [x] `~/.wukong/today/focus.json` 读写；`wukong today "..."` 设 focus，`--clear-focus` 清除
 - [x] `apps/wukong/src/cli/sub/today.ts` + TUI `/today`（无参=简报，参数=设 focus，`/today clear`）
 - [x] 人类可读输出 + `--json`；Next 1–2 条由规则映射（如 BLOCKED proof → 建议 `wukong proof`）
-- [x] 登录态可选：hosted report 当月计数 + `https://wukong.today/dashboard` 链接（失败不阻塞本地简报）（2026-07-13）
 - [x] 测试：离线简报、设/清 focus、JSON schema、不触发 verify 执行
 
 ### 不做
@@ -219,13 +258,6 @@
 - [ ] 像素 mascot 帧按 loop phase 切换（`mascot.ts`）
 - [x] Dashboard 模式布局、状态文案、窄终端截断与 footer 列对齐（2026-07-13）
 
-## 📋 下一批: Hosted Reports 前置（对应 ROADMAP Milestone 1）
-
-- [x] `verify` / `scan` / `proof` 增加登录态 report upload（opt-in；上传失败不影响本地报告）
-- [x] redacted report metadata 上传 schema（默认不上传完整源码 diff）
-- [x] 本地 Markdown report 上传命令和 Web report API 字段
-- [x] redaction 测试: secret-like string、env 文件、token、private key、超大 diff
-
 ## ⏸ 暂缓（先不做，防止提前开工）
 
 - [ ] `/schedule` 云端例程 — 归 hosted（Milestone 3+）；本机定时巡检用已实现的 cron 工具
@@ -249,4 +281,4 @@
 
 ---
 
-**最后更新**: 2026-07-16（0.0.13 Review Learning Loop 规划；支付延后到 0.1.0）
+**最后更新**: 2026-07-18（0.0.14 Cross-Agent Resume + Loop UX；支付仍延后到 0.1.0）

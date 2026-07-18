@@ -1,12 +1,12 @@
 # 跨 Agent Session Resume 设计
 
-> 状态：方向已确认，尚未实现
-> 排期：未排期，不绑定 `0.0.13`、`0.1.0` 或其他版本
-> 最后更新：2026-07-16
+> 状态：本地 discovery、来源 picker 和只读继续已实现
+> 版本：当前主干能力，不绑定支付版本
+> 最后更新：2026-07-18
 
 ## 结论
 
-Wukong 应扩展现有 `/resume`，让用户在同一个 session picker 中查看并继续 Wukong、Codex、Claude Code 和 Cursor 的本地会话。
+Wukong 扩展现有 `/resume`，但保留最简单的默认语义：裸 `/resume` 恢复 Wukong 会话；只有显式指定来源时，才在同一套 picker UI 中查看并继续 Codex、Claude Code 或 Cursor 的本地会话。
 
 主入口保持一个：
 
@@ -17,7 +17,6 @@ Wukong 应扩展现有 `/resume`，让用户在同一个 session picker 中查�
 可选来源筛选：
 
 ```text
-/resume wukong
 /resume codex
 /resume claude
 /resume cursor
@@ -39,16 +38,22 @@ Grok Build `0.2.100` 已在统一 session picker 中加入最近 Claude Code、C
 
 这个设计的核心价值不是复制三个命令，而是降低跨工具继续工作的成本。
 
-## 当前 Wukong 基线
+## 当前实现
 
-Wukong 已具备自己的 session 恢复能力：
+Wukong 当前具备：
 
 - TUI `/resume` 是 `/sessions` 的别名，打开现有 session picker。
 - CLI 支持 `wukong --session [id]`，并兼容隐藏参数 `--resume [id]`。
 - `wukong --continue` 可以继续当前工作目录最近的 Wukong session。
 - agent-core 已有 session store、事件 replay、按工作目录索引和 legacy session migration。
+- `/resume` 保持原语义，只显示 Wukong session。
+- `/resume codex|claude|cursor` 显式打开对应外部来源的 picker。
+- `/resume-codex`、`/resume-claude`、`/resume-cursor` 已作为隐藏兼容入口。
+- picker 明确显示 `[Codex]`、`[Claude]`、`[Cursor]` 来源标签。
+- 外部 session 被选中后，调用对应内置 resume Skill，只读提取对话上下文并在当前 Wukong session 中继续。
+- 损坏或无法识别的单个 transcript 会被跳过，不影响 Wukong 原生 session。
 
-当前缺口是：session picker 只读取 Wukong session store，没有 Claude Code、Codex、Cursor 的只读 discovery 和导入 adapter。
+当前实现不把整份外部 transcript 复制进 Wukong session store，也不建立增量同步。Wukong session 原生 replay；外部 session 采用一次性、只读上下文导入。
 
 ## Resume 的语义边界
 
@@ -57,9 +62,9 @@ Wukong 已具备自己的 session 恢复能力：
 | 来源 | 行为 | 语义 |
 |---|---|---|
 | Wukong | 直接打开原 session 并 replay | 原生恢复 |
-| Codex | 读取落盘历史，创建 Wukong session 后继续 | 导入并继续 |
-| Claude Code | 读取落盘历史，创建 Wukong session 后继续 | 导入并继续 |
-| Cursor | 读取可识别 transcript，创建 Wukong session 后继续 | 导入并继续 |
+| Codex | 读取落盘历史，在当前 Wukong session 中继续 | 导入并继续 |
+| Claude Code | 读取落盘历史，在当前 Wukong session 中继续 | 导入并继续 |
+| Cursor | 读取可识别 transcript，在当前 Wukong session 中继续 | 导入并继续 |
 
 外部 session 可以导入：
 
@@ -88,15 +93,20 @@ Import and continue in Wukong
 
 ## 目标交互
 
-统一 picker 默认把当前仓库、最近活动的 session 排在前面：
+各来源 picker 默认把当前仓库、最近活动的 session 排在前面。裸 `/resume`：
 
 ```text
-RESUME SESSION
+SESSIONS
 
-[Wukong]  Fix authentication flow        5m ago
-[Codex]   Review dashboard layout        18m ago
-[Claude]  Refactor payment API           2h ago
-[Cursor]  Debug build failure            yesterday
+Fix authentication flow                  5m ago
+```
+
+显式 `/resume codex`：
+
+```text
+SESSIONS
+
+[Codex] Review dashboard layout          18m ago
 ```
 
 选择 Wukong session：
@@ -113,7 +123,7 @@ Import and start /loop
 Cancel
 ```
 
-导入成功后进入新的 Wukong session，并显示一次性来源提示：
+导入成功后在当前 Wukong session 中显示一次性来源提示：
 
 ```text
 Imported from Codex · original session abc123 · local only
@@ -131,6 +141,8 @@ interface ExternalSessionAdapter {
   read(ref: ExternalSessionRef): Promise<NormalizedExternalSession>;
 }
 ```
+
+当前代码先实现 summary discovery，并由三个内置 resume Skill 承担选中后的 transcript 投影。完整 importer adapter、fingerprint 和增量导入仍属于后续增强，不是当前命令可用性的前置条件。
 
 已知本地来源：
 
@@ -157,7 +169,7 @@ interface NormalizedExternalSession {
 }
 ```
 
-adapter 只负责 discovery、解析和标准化。写入 Wukong session、去重、replay 和 UI 排序由共享 importer 负责。
+adapter 只负责 discovery、解析和标准化。当前由内置 Skill 将选中历史投影到本轮上下文；未来若落盘完整导入，再由共享 importer 负责写入、去重和 replay。
 
 ## 导入流程
 
@@ -166,11 +178,11 @@ adapter 只负责 discovery、解析和标准化。写入 Wukong session、去�
 3. 当前 Git 仓库和工作目录匹配项优先，其次按最后活动时间排序。
 4. 用户显式选择外部 session 后才读取完整 transcript。
 5. 标准化消息，限制单条工具输出和总导入体积。
-6. 创建新的 Wukong session，写入来源 metadata 和 import fingerprint。
-7. replay 可显示历史，但不重新执行旧工具调用。
-8. 用户选择普通继续或进入 `/loop`。
+6. 将来源 metadata 作为内置 resume Skill 参数，在当前 Wukong session 中生成一次性上下文。
+7. 历史只用于总结，不重新执行旧工具调用。
+8. 重新检查 workspace 后继续；用户仍可显式进入 `/loop`。
 
-重复导入使用以下键去重：
+未来完整落盘导入使用以下键去重：
 
 ```text
 (source, external_session_id, source_fingerprint)
@@ -215,11 +227,11 @@ Codex / Claude / Cursor unfinished session
 - 不承诺转换隐藏 reasoning。
 - 不导入或继承外部工具的权限。
 - 不把外部 session 数量纳入 Loop quota。
-- 不把这项能力写入任何版本的发布承诺，直到完成格式 spike、隐私审计和真实 E2E。
+- 不把完整 transcript 持久化、增量同步或自动进入 `/loop` 宣传为已实现。
 
-## 进入排期前的验证条件
+## 后续增强的验证条件
 
-这份设计进入具体版本计划前，至少完成：
+若增加完整 importer、增量同步或自动进入 `/loop`，至少完成：
 
 1. 用真实 Codex、Claude Code、Cursor session 样本验证格式和版本差异。
 2. 为三种来源建立脱敏 fixture，并确认不会包含凭证。
@@ -228,4 +240,4 @@ Codex / Claude / Cursor unfinished session
 5. 验证当前仓库优先排序、损坏 JSONL、超大 transcript、移动工作目录和 symlink 边界。
 6. 完成“外部 session → Wukong session → `/loop` → 当前 workspace 重新验证”的真实 E2E。
 
-在这些条件满足前，本能力保持“已确认方向、未排期”。
+当前 MVP 已满足本地发现、来源筛选、失败隔离和不重放工具调用。以上条件约束的是后续的完整持久化与自动化增强。

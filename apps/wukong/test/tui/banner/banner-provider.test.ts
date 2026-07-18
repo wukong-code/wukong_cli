@@ -400,8 +400,8 @@ describe('selectBannerState', () => {
         enabled: true,
         level: 'info',
         title: 'HOSTED PROOF',
-        message: 'Keep proof history private, or create a reviewer-ready public link.',
-        details: 'Run wukong proof --upload for private history. Add --public only when you want to share.',
+        message: 'Run a Loop with real checks and structured results.',
+        details: 'Run wukong loop with real checks and structured results.',
         action: {
           label: 'View v0.0.11 release',
           url: 'https://github.com/mutnpc/wukong-code/releases/tag/v0.0.11',
@@ -425,7 +425,7 @@ describe('selectBannerState', () => {
 
     expect(current).toMatchObject({
       key: 'hosted-proof-sharing-0.0.11',
-      mainText: 'Keep proof history private, or create a reviewer-ready public link.',
+      mainText: 'Run a Loop with real checks and structured results.',
       display: 'once',
       action: {
         label: 'View v0.0.11 release',

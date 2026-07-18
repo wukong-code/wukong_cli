@@ -3,7 +3,7 @@
 > 适用范围: 当前 `wukong_cli` 新 Kimi-code base
 > 更新时间: 2026-07-16
 > 定位: 给 Wukong 一个目标，通过 Goal → Write → Check → Review → Fix 循环直到没有 blocking finding。
-> 原则: 本文只写当前可执行的能力。Loop、结构化 review findings、项目 review policy、本地 feedback、独立 reviewer model 和高级诊断命令已实现；完整订阅管理、Hosted Evidence v2、团队规则和 PR gate 仍未完成。
+> 原则: 本文只写当前可执行的能力。Loop、结构化 review findings、项目 review policy、本地 feedback、独立 reviewer model 和高级诊断命令已实现；完整订阅管理、团队规则和 PR gate 仍未完成。
 
 ## 安装正式版
 
@@ -112,6 +112,21 @@ wukong loop "完成 API 改动" --review-model reviewer
 
 Loop 的最终三态和退出码为 `PASS=0`、`NEEDS_WORK=1`、`ERROR=2`；登录或额度明确拒绝为 `3`，中断为 `130`。Guest 有 1 次最多 2 轮的本地试用；Free 登录用户每月 10 次、每次最多 5 轮。`verify`、`scan`、`proof` 是内部检查层，不单独计数。
 
+### 11. 继续其他 Agent 的本地会话
+
+TUI 内使用统一入口：
+
+```text
+/resume
+/resume codex
+/resume claude
+/resume cursor
+```
+
+`/resume` 默认只显示 Wukong 会话。只有显式使用 `codex`、`claude` 或 `cursor` 参数时，才扫描对应 Agent 的本地会话。`/resume-codex`、`/resume-claude`、`/resume-cursor` 是兼容入口，不进入主命令列表。
+
+Wukong session 会原生恢复；外部 session 会通过内置 Skill 读取本地 transcript，提取目标、已完成工作、未完成工作和最后请求，然后在 Wukong 中继续。该过程不会重启原 Agent、继承其权限或重放旧工具调用；继续前必须重新读取当前 workspace 与 Git 状态。
+
 ## 当前 top-level commands
 
 | 命令 | 状态 | 用途 |
@@ -164,17 +179,7 @@ Loop 的最终三态和退出码为 `PASS=0`、`NEEDS_WORK=1`、`ERROR=2`；登�
 | `wukong_verify` agent tool | 让 agent 在完成前调用验证 | 已实现，作为 builtin tool 接入 agent-core |
 | `/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop` | TUI 内验证、扫描、guard 状态、查看报告、goal/loop 驱动 | 已实现 |
 | `wukong sync` | 云同步 | 等待新 base API 与本地数据模型对齐 |
-| `wukong today` / `/today` | Daily Proof Briefing：本地统计 + focus；登录时附 hosted report 当月用量和 Dashboard 链接，网络失败不阻塞 | 已实现，见 [today 设计](design/today.md) |
-
-## Hosted Report：默认私有，公开需显式确认
-
-```bash
-wukong login
-wukong proof --upload           # 私有，进入 Dashboard history
-wukong proof --upload --public  # 公开，返回可分享链接
-```
-
-`verify`、`scan` 和 `wukong report upload <path>` 同样支持 `--public`。单独使用 `--public` 会报错；本地报告始终可离线生成，上传失败不会改变验证退出状态。
+| `wukong today` / `/today` | Daily Proof Briefing：本地统计 + focus，不依赖网络 | 已实现，见 [today 设计](design/today.md) |
 
 详见 [商业化重构技术实现方案](tech/commercial-refactor-implementation.md)。
 

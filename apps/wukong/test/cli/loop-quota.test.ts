@@ -8,7 +8,7 @@ const mocks = vi.hoisted(() => ({
   resolveWukongHome: vi.fn<() => string>(),
 }));
 
-vi.mock('#/cli/lib/report-upload', () => ({ getCliAccessToken: mocks.getCliAccessToken }));
+vi.mock('#/cli/lib/auth-token', () => ({ getCliAccessToken: mocks.getCliAccessToken }));
 vi.mock('@wukong/wukong-sdk', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@wukong/wukong-sdk')>()),
   resolveWukongHome: mocks.resolveWukongHome,

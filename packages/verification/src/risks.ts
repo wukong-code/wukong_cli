@@ -66,7 +66,10 @@ function risksForAddedLine(added: AddedLine): VerificationRisk[] {
   if (/\b(todo|fixme|placeholder|not implemented|coming soon)\b/i.test(text)) {
     risks.push(makeLineRisk('diff.placeholder_added', 'high', 'Placeholder or unfinished marker added.', added));
   }
-  if (/\b(mock|fake|dummy|hardcoded|sample data)\b/i.test(text)) {
+  // Test doubles and fixture data are normal inside tests. Treating words such
+  // as `mock` as a delivery blocker there creates noisy false positives and
+  // can keep an otherwise healthy Loop running forever.
+  if (!TEST_PATH.test(added.file) && /\b(mock|fake|dummy|hardcoded|sample data)\b/i.test(text)) {
     risks.push(makeLineRisk('diff.mock_or_fake_added', 'high', 'Mock/fake/hardcoded implementation marker added.', added));
   }
   if (/\b(describe|it|test)\.only\b/.test(lower)) {

@@ -125,4 +125,21 @@ describe('FooterComponent — goal and evidence tracks', () => {
     const footer = new FooterComponent(baseState({ goal: gatedGoal }), makeChromeState(gatedGoal));
     expect(strip(footer.render(160).join('\n'))).toContain('Gate verify-pass');
   });
+
+  it('uses Loop language and keeps checks separate from review', () => {
+    const gatedGoal = goal({ stopCondition: 'proof-pass' });
+    const chromeState = makeChromeState(gatedGoal);
+    chromeState.recordVerify('passed');
+    chromeState.recordProof('blocked', 'High-risk finding: unfinished marker (src/app.ts:4).');
+
+    const out = strip(new FooterComponent(baseState({ goal: gatedGoal }), chromeState).render(200).join('\n'));
+
+    expect(out).toContain('Loop gate');
+    expect(out).toContain('Checks PASS');
+    expect(out).toContain('Review BLOCKED');
+    expect(out).toContain('src/app.ts:4');
+    expect(out).not.toContain('Gate proof-pass');
+    expect(out).not.toContain('Verify');
+    expect(out).not.toContain('Proof');
+  });
 });

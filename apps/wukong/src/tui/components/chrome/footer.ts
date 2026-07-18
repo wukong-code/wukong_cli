@@ -93,22 +93,22 @@ function formatVerifyStatus(
   summary: import('#/tui/utils/chrome-state').VerifySummary | null,
   colors: ColorPalette,
 ): string {
-  if (summary === null) return chalk.hex(colors.textMuted)('Verify —');
-  const icon = summary.status === 'passed' ? '✓' : '✗';
+  if (summary === null) return chalk.hex(colors.textMuted)('Checks —');
+  const status = summary.status === 'passed' ? 'PASS' : 'FAIL';
   const detail = summary.detail ? ` ${summary.detail}` : '';
   const paint = chalk.hex(summary.status === 'passed' ? colors.success : colors.error);
-  return paint(`Verify ${icon}${detail}`);
+  return paint(`Checks ${status}${detail}`);
 }
 
 function formatProofStatus(
   summary: import('#/tui/utils/chrome-state').ProofSummary | null,
   colors: ColorPalette,
 ): string {
-  if (summary === null) return chalk.hex(colors.textMuted)('Proof —');
+  if (summary === null) return chalk.hex(colors.textMuted)('Review —');
   const status = summary.status.toUpperCase();
   const detail = summary.summary ? ` · ${summary.summary}` : '';
   const paint = chalk.hex(summary.status === 'pass' ? colors.success : colors.error);
-  return paint(`Proof ${status}${detail}`);
+  return paint(`Review ${status}${detail}`);
 }
 
 function buildConclusionLines(
@@ -123,9 +123,10 @@ function buildConclusionLines(
   }
 
   const gate = goal?.stopCondition ?? 'self';
+  const gateLabel = gate === 'proof-pass' ? 'Loop gate' : `Gate ${gate}`;
   const gatePaint = chalk.hex(uiMode === 'blocked' ? colors.warning : colors.textDim);
   const evidence = [
-    gatePaint(`Gate ${gate}`),
+    gatePaint(gateLabel),
     formatVerifyStatus(lastVerify, colors),
     formatProofStatus(lastProof, colors),
   ];

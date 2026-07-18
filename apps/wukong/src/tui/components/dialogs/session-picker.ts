@@ -15,6 +15,8 @@ import { CURRENT_MARK, SELECT_POINTER } from '#/tui/constant/symbols';
 import { currentTheme } from '#/tui/theme';
 import { SearchableList } from '#/tui/utils/searchable-list';
 
+export type SessionSource = 'wukong' | 'codex' | 'claude' | 'cursor';
+
 export interface SessionRow {
   readonly id: string;
   readonly title: string | null;
@@ -22,6 +24,11 @@ export interface SessionRow {
   readonly work_dir: string;
   readonly updated_at: number;
   readonly metadata?: Readonly<Record<string, unknown>> | undefined;
+  readonly source?: SessionSource;
+  readonly external?: {
+    readonly id: string;
+    readonly sourcePath: string;
+  };
 }
 
 const ELLIPSIS = '…';
@@ -75,7 +82,8 @@ function singleLine(text: string): string {
 }
 
 function sessionSearchText(session: SessionRow): string {
-  return singleLine((session.title ?? session.id).trim() || session.id);
+  const title = (session.title ?? session.id).trim() || session.id;
+  return singleLine(`${session.source ?? 'wukong'} ${title} ${session.external?.id ?? session.id}`);
 }
 
 export class SessionPickerComponent extends Container implements Focusable {
@@ -320,6 +328,10 @@ export class SessionPickerComponent extends Container implements Focusable {
     const badge = isCurrent ? CURRENT_MARK : '';
     const rawTitle = (session.title ?? session.id).trim() || session.id;
     const titleSource = formatSessionLabel({ title: rawTitle, metadata: session.metadata });
+    const source = session.source ?? 'wukong';
+    const sourceLabel =
+      source === 'claude' ? 'Claude' : source === 'codex' ? 'Codex' : 'Cursor';
+    const sourceBadge = source === 'wukong' ? '' : `[${sourceLabel}] `;
 
     // Inline trailing parts after the title: "<title>  <time>  ← current".
     const trailingParts = [time, badge].filter((p) => p.length > 0);
@@ -327,7 +339,11 @@ export class SessionPickerComponent extends Container implements Focusable {
     const trailingWidth = visibleWidth(trailingText);
     const headerPrefixWidth = visibleWidth(pointer) + 1; // pointer + space
     const titleBudget = Math.max(8, width - headerPrefixWidth - trailingWidth);
-    const shownTitle = truncateToWidth(singleLine(titleSource), titleBudget, ELLIPSIS);
+    const shownTitle = truncateToWidth(
+      sourceBadge + singleLine(titleSource),
+      titleBudget,
+      ELLIPSIS,
+    );
 
     let header = currentTheme.fg(isSelected ? 'primary' : 'textDim', pointer + ' ');
     header += titleStyle(shownTitle);
@@ -338,7 +354,7 @@ export class SessionPickerComponent extends Container implements Focusable {
     // Session id is rendered in full at normal widths (the final clamp in
     // `render()` truncates it only when the terminal is narrower than the id).
     // The directory wraps to its own line if it would push past the edge.
-    const fullId = session.id;
+    const fullId = session.external?.id ?? session.id;
     const idWidth = visibleWidth(fullId);
     const metaGap = '   ';
     const metaGapWidth = visibleWidth(metaGap);

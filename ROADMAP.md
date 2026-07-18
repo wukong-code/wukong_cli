@@ -1,6 +1,6 @@
 # Wukong Code Roadmap
 
-> 最后更新: 2026-07-14
+> 最后更新: 2026-07-18
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 
 这份 ROADMAP 是当前商业化方向的执行层文档。更细的商业模型和技术方案仍以这些文档为准：
@@ -13,17 +13,17 @@
 
 ## 产品判断
 
-Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI 写完代码后最薄弱的一环：**这段代码能不能合并**。
+Wukong Code 不要求用户放弃 Cursor / Claude Code / Codex。0.0.14 的入口是恢复这些工具里未完成的任务，再用 Loop 把它推进到清晰的 Gate 结论。
 
 定位是：
 
-> **The proof layer for AI-written code.**
-> AI 写代码，Wukong 负责判断能不能合并。
+> **Resume the task. Loop until the Gate passes.**
+> 从其他 Agent 接着做，在 Wukong 里持续修改、检查和审查，直到 Gate 通过。
 
 当前楔子是：
 
 ```text
-本地 AI coding agent + 确定性验证 + 可合并证据（Merge Proof）
+Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 ```
 
 差异化叙事不再以"又一个 coding agent"为主，而是围绕 Loop Engineering：Wukong 是 AI Coding Loop 的控制层与验证层。
@@ -43,11 +43,11 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - 定时巡检型任务（"每小时 check PR"）不属于 `/loop`：本机由已实现的 agent-core cron 工具承载，云端归 `/schedule`（hosted，Milestone 3+）。
 - `/loop` 不新写引擎：时间触发复用 agent-core 已有的 cron scheduler，执行核复用 `/goal`。
 - 停止判断不由写代码的 agent 自评。v1 `/goal` verification gate 已实现；0.0.12 将它收敛到统一 Proof gate 和 PASS/NEEDS_WORK/ERROR。
-- 0.0.12 的 Wow Moment 是 Loop 自己收敛并给出可信交付结论；独立 proof/evidence 只是高级调试和显式分享能力。
+- 0.0.12 之后的 Wow Moment 是 Loop 自己收敛并给出可信 Gate 结论；独立 verify/scan/proof 只是高级本地诊断能力。
 - `/judge` 只审不写：M0.5 默认是 deterministic 对抗性判定（复用 proof 引擎，BLOCK 倾向）；fresh-context 第二 agent 审查（`--agent`）落地前，不对外宣传"第二 agent reviewer"。
-- 托管报告闭环已经实现；PR gates、team rules、audit log 是下一阶段真正能扩大团队付费意愿的能力。
+- Hosted Report 与报告上传已经退出产品；PR gates、team rules、audit log 仍是更后续的团队付费候选能力。
 
-免费版负责让开发者形成重复 Loop 习惯；付费版提供更多 Loop sessions、deep reviewer、团队角色、PR gate、共享策略和审计。Evidence history 是辅助能力，不是所有用户的主流程。
+免费版负责让开发者形成重复 Loop 习惯；付费版提供更多 Loop sessions、deep reviewer、团队角色、PR gate、共享策略和审计。
 
 ## 当前基线
 
@@ -61,12 +61,12 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 | 本地验证 | 已实现 | `wukong verify` |
 | 本地风险扫描 | 已实现 | `wukong scan` |
 | 命令 guard | 已实现 | `wukong guard`，best-effort 本地命令风险控制 |
-| TUI slash commands | 已实现 | `/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop` |
+| TUI slash commands | 已实现 | 普通入口以 `/resume`、`/loop` 为主；verify/scan/proof 保留为高级诊断 |
 | Agent verification tool | 已实现 | `wukong_verify` builtin tool |
 | `/goal` 持续修复 | 已实现 | 让 agent 多轮迭代直到验证条件满足，含队列管理 |
 | `/goal` verification gate | 已实现 | agent 宣布完成时运行 deterministic gate，未过打回 |
 | `/loop` 本机迭代 loop | v1 已实现 | 0.0.12 改为统一 `proof-pass` gate、结构化反馈和受限轮次 |
-| `/proof` Merge Verdict / Evidence | v1 已实现 | 0.0.12 重写为共享 snapshot、三态结论；默认不写报告，显式保存/上传 |
+| `/proof` 本地高级诊断 | v1 已实现 | 共享 snapshot、三态结论；默认不写报告，仅支持显式本地保存 |
 | `/judge` evaluator-only 判定 | 已实现 | deterministic 判定先行；`--agent` 第二-agent 审查后置 |
 | 公开官网 | 已实现 | `wukong.today`、download、docs、pricing、changelog |
 | Auth / billing 基础 | 部分实现 | Web auth、Stripe checkout、subscription 表已存在 |
@@ -77,10 +77,6 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 |---|---|---|
 | `/schedule` 云端例程 | 未实现 | 机器关了也跑的例程，归 hosted（Milestone 3+）；本机定时巡检先用已实现的 cron 工具 |
 | `/ship` 发布 gate | 未实现 | proof + 版本/changelog/dry-run，更靠后的发布前 gate |
-| Hosted report upload | 已实现 | `verify` / `scan` / `proof` 和本地 Markdown 都可 opt-in 上传；失败不影响本地报告 |
-| Report history | 已实现 | Dashboard 使用真实 report API，不再展示 demo 数据 |
-| Shareable report page | 已实现 | 私有为默认；显式 `--upload --public` 才返回公开分享链接 |
-| Hosted report entitlement | 已实现 | 服务端按 Free / Founder / Pro 校验月度 quota，并在 CLI Today/Dashboard 展示 |
 | Stripe portal + 完整 webhook 状态 | 未完成 | 用户需要管理订阅、取消和失败付款 |
 | GitHub PR comment / gate | 未实现 | 把个人工具变成团队工作流 |
 | Team rules | 未实现 | 团队愿意付费的核心原因之一 |
@@ -91,9 +87,9 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 ## 路线图原则
 
 1. 只有顶层 `loop` session 受额度限制；`verify`、`scan`、`proof` 是内部层和不计额度的高级诊断命令。
-2. 免费额度用于让用户完成真实 Loop 并验证重复使用意愿；后续 Pro 提供更多 sessions、deep review、更长迭代、hosted history、PR 协作和团队策略。
-3. 用户自带 API Key 时，模型成本归用户；Wukong 收 workflow、storage、evidence、policy 和 collaboration 的钱。
-4. 默认不写文件、不上传；用户显式保存/分享时只处理 redacted metadata 和 evidence artifacts，不上传完整源码 diff。
+2. 免费额度用于让用户完成真实 Loop 并验证重复使用意愿；后续 Pro 提供更多 sessions、deep review、更长迭代、PR 协作和团队策略。
+3. 用户自带 API Key 时，模型成本归用户；Wukong 收 workflow、policy 和 collaboration 的钱。
+4. 默认不写文件、不上传；用户需要留档时显式保存到本地。
 5. 在 guard、redaction、audit、private runner 真正完成前，不宣传安全合规能力。
 6. 每个 milestone 必须有可见用户路径和验收方式，不能只完成路由或表结构。
 7. 优先做 Loop 自动收敛这一 Wow Moment；独立 `/proof`、`/judge` 不再占据普通用户心智。
@@ -107,9 +103,10 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 | 版本 | 目标 | 发布门槛 |
 |---|---|---|
-| `0.0.11` | 把当前产品做成可理解、可发现、可运维的 Hosted Evidence 闭环 | TUI 文案与对齐完成；Dashboard 证据优先布局上线；公告端点 200；`proof → private history / public share → dashboard` 真实链路通过；文档与实现一致 |
+| `0.0.11` | 改善 TUI 可理解性、公告与升级链路 | TUI 文案与对齐完成；公告端点 200；文档与实现一致 |
 | `0.0.12` | Loop-first v2 | Loop 状态机；fresh-context reviewer；仅 Loop session 额度；BYOK model alias；轻量 Role Profiles；高级命令兼容；真实 E2E 通过 |
 | `0.0.13` | Smarter Review Loop | 结构化多 findings、项目 review policy、独立 reviewer model、本地反馈、Loop-first TUI 与 Web 文案；保持免费/BYOK，不上线支付 |
+| `0.0.14` | Cross-Agent Resume + Loop UX | `/resume codex|claude|cursor`、安全只读上下文导入、Resume → Loop 确认、Gate/Footer 清晰结论、更多真实项目检查发现；保持免费/BYOK |
 | `0.1.0` | 真实 PR 工作流 + 支付 | GitHub PR comment/status check 与 Pro 支付生命周期可用；visibility/redaction 和 checkout→entitlement→cancel/failure E2E 通过；至少 1 个真实付费 Team Pilot 或 3 个非关联个人付费用户 |
 
 `0.1.0` 的条件式目标是 **2026 年 8 月上旬，最早 8 月 3 日当周**。日期不是发布承诺；上表的 PR Evidence 和真实试点门槛未满足时不升 `0.1.0`。
@@ -134,7 +131,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - `wukong --help` 展示预期命令面。
 - `wukong verify --no-report`、`wukong scan --json`、`wukong guard --status` 可本地运行。
 - 官网 download command 和真实 installer 一致。
-- 页面不把 hosted report history、PR gates、team rules 写成已完成能力。
+- 页面不把 PR gates、team rules 写成已完成能力。
 
 ## Milestone 0.5: Loop Control Plane + Merge Proof
 
@@ -177,7 +174,6 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 - 不做 `/ship` 发布 gate（更靠后，依赖 proof 先稳定）。
 - 不做 `/schedule` 云端例程（归 hosted，Milestone 3+）。
-- 不在此 milestone 接 hosted upload。
 - 不为 `/loop` 新写定时引擎（复用 cron scheduler）。
 
 验收：
@@ -225,31 +221,6 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - deterministic 失败不能被模型改为 PASS；AI finding 必须标注来源、模型和置信度。
 - built-in/user/project role 与权限收缩、project trust 有自动化覆盖。
 - Loop session quota、幂等 start、月度重置、超限和内部不重复计数有自动化覆盖。
-- 旧 Goal records 和 0.0.11 flags 有兼容覆盖；Hosted Report v1 保持可读，v2 延后到 0.0.13+，且不是 Review Learning Loop 发布 blocker。
-
-## Milestone 1: Hosted Reports MVP
-
-状态：代码闭环已完成；`0.0.11` 负责生产部署与真实账号验收。
-
-目标：把本地 verification report 变成第一个真实付费 Web 工作流。
-
-交付项：
-
-- `verify` / `scan` 的 report upload command 或 flag。
-- redacted report metadata 的上传 schema。
-- 服务端 report ingestion API。
-- D1 schema：reports、artifacts、visibility、retention、owner。
-- Dashboard report history 使用真实数据，不再是 placeholder。
-- Shareable report route，例如 `/r/[id]`。
-- 上传失败不能影响本地 report 生成。
-
-验收：
-
-- 未登录用户仍可完整使用本地 report。
-- 登录用户可以上传 redacted report 并得到 share URL。
-- Dashboard 显示真实上传的 report。
-- reviewer 打开 share page 时看不到 secrets 或完整源码 diff。
-- redaction 测试覆盖 secret-like string、env 文件、token、private key 和超大 diff。
 
 ## Milestone 2: 0.0.13 Review Learning Loop
 
@@ -284,6 +255,35 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - 不从单条 PR comment、源码注释或模型输出学习永久规则。
 - 不做支付、Stripe portal、付费 entitlement、GitHub PR 自动评论、团队 policy 同步或云端定时 improver；这些仍是 0.1.0+。
 
+## Milestone 2.5: 0.0.14 Cross-Agent Resume + Loop UX
+
+状态：开发中。完整 contract 见 [0.0.14 Cross-Agent Resume 与 Loop UX 收尾](docs/design/0.0.14-resume-loop-polish.md)。
+
+目标：让用户把 Codex、Claude Code 或 Cursor 中未完成的任务安全带进 Wukong，并用清晰的 Gate 结论和 `/loop` 完成收尾。
+
+交付项：
+
+- 裸 `/resume` 保持 Wukong-only；`/resume codex|claude|cursor` 显式发现外部本地 session。
+- 外部 transcript 只读导入，不重放旧工具、不继承权限、不上传历史。
+- picker 支持来源标签、原生 ID 搜索、当前目录/全部目录和失败隔离。
+- 外部上下文导入后提供 `Continue in Wukong` 与确认后的 `Start /loop`。
+- TUI Footer 收敛为一个 Gate 结论，区分未检查、检查失败、风险复核、review blocker 和 runtime error。
+- 补充 Python、Rust、Go 的基础项目检查发现，并保留现有 Node/monorepo 行为。
+- legacy stop flags 和旧 Goal records 在本版本继续兼容。
+
+验收：
+
+- 三种外部工具使用真实本地 session 完成 discovery → import → workspace re-check E2E。
+- symlink 越界、损坏/超大 JSONL、未知格式和移动工作目录不会导致 TUI 崩溃。
+- 外部 transcript 的历史声明不能替代当前 Git、测试和 review evidence。
+- 用户选择外部 session 后不会自动发生写操作；启动 `/loop` 前有明确确认。
+- Gate/Footer 文案不再用 `Verify ✗` 表示未执行或无检查，也不把风险规则命中直接描述为代码失败。
+- 全量测试、typecheck、lint、native smoke 和中英文发布面同步通过。
+
+不做：
+
+- 不做支付、GitHub PR 自动评论、Team policy、云端 `/schedule` 或自动 policy improver；这些继续归 `0.1.0+`。
+
 ## Milestone 3: 0.1.0 GitHub PR Evidence + Payment
 
 目标：让 Wukong 进入真实 code review 流程，并在已经验证 Review Learning Loop 使用价值后开放第一条真实付费路径。
@@ -291,9 +291,9 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 交付项：
 
 - GitHub App 或 token-based integration。
-- PR comment：写入 report summary 和 share link。
+- PR comment：直接写入精简的 gate summary 和 blockers。
 - PR status check：基于 `verify` / `scan` 结果。
-- GitHub Actions / CI 模式上传 reports。
+- GitHub Actions / CI 模式运行 checks。
 - GitHub org/repo 和 Wukong team/workspace 的映射。
 - Free / Pro / Team entitlement model 和服务端强制限制。
 - Stripe Checkout、customer portal，以及 subscription create/update/cancel/payment failure webhook。
@@ -302,11 +302,10 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 验收：
 
-- 测试 PR 能收到 Wukong report comment。
+- 测试 PR 能收到 Wukong gate comment。
 - scan 通过和失败会产生不同的 GitHub status check。
-- Report link 使用正确的 visibility rule。
 - GitHub comment 中不出现 secrets。
-- 上传失败不能把 verification 标记为 passed。
+- GitHub API 失败不能把 verification 标记为 passed。
 - checkout → entitlement → quota → portal → cancel/payment failure → grace 全链路通过。
 - 至少 3 个非关联真实个人付费用户，或 1 个持续使用真实 repo 的付费 Team Pilot。
 
@@ -320,14 +319,14 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - Repo/path-level rules。
 - Required checks 和 risk thresholds。
 - Override flow，必须填写 reason。
-- Team audit log：记录 upload、PR gate、policy change、override。
+- Team audit log：记录 Loop、PR gate、policy change、override。
 - Shared templates：团队统一 verification commands。
 
 验收：
 
 - Team admin 可以为 repo 定义 required checks。
 - PR gate 使用 team rules，不使用硬编码默认规则。
-- Override 必须记录 actor、reason、timestamp 和 linked report。
+- Override 必须记录 actor、reason、timestamp 和 linked run。
 - Audit log 可以回答：谁验证、什么失败、谁 override、最后交付了什么。
 
 ## Milestone 5: Deep Review And Managed Credits
@@ -340,14 +339,14 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - BYOK review mode。
 - Managed credit review mode。
 - Job queue 和结果持久化。
-- Deep review output 附着在 report 上。
+- Deep review output 附着在对应 PR check 或 audit event 上。
 - Managed credits usage metering。
 
 验收：
 
-- BYOK 用户为 workflow/reporting 付费，不为自己的 token 额外加价。
+- BYOK 用户为 workflow 付费，不为自己的 token 额外加价。
 - Managed model 用户消耗 Wukong review credits。
-- Deep review 结果可以挂到 report 并分享。
+- Deep review 结果可以回写到对应 PR check。
 - 模型调用失败可见，且计费状态正确。
 - 产品文案不把第三方 API 转售包装成核心价值。
 
@@ -358,7 +357,7 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 交付项：
 
 - Private runner design。
-- Self-hosted 或 customer-cloud report processing path。
+- Self-hosted 或 customer-cloud runner path。
 - SSO plan。
 - Data retention controls。
 - Export/delete workflows。
@@ -367,8 +366,8 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 验收：
 
 - 团队可以把源码和 secrets 保留在自己的环境内。
-- Hosted Wukong 只接收被允许的 redacted metadata。
-- Admin 可以配置 retention 并导出 reports。
+- Hosted Wukong 只接收被允许的运行状态和审计 metadata。
+- Admin 可以配置 retention 并导出 audit events。
 - Security docs 与实际实现一致。
 
 ## Website Roadmap
@@ -380,8 +379,8 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 - 首页继续聚焦 local AI coding + verification evidence。
 - `/download` 保持短、准、可安装。
 - `/pricing` 必须绑定真实 entitlement。
-- 使用真实上传 report 作为 docs / pricing 演示素材，不制作 placeholder。
-- Dashboard 围绕真实状态、quota 和下一步动作优化；用户主动上传的 evidence history 是次级区域，不把 reports 当主流程。
+- 使用真实本地 Loop 输出作为 docs / pricing 演示素材，不制作 placeholder。
+- Dashboard 围绕真实账号、平台和 Loop 状态优化。
 - changelog 保持和公开 release 同步。
 
 不要做：
@@ -395,8 +394,6 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 近期工作：
 
 - 按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序实现 Milestone 0.5（`/loop` 为本机迭代 loop，复用 cron scheduler 与 goal gate）。
-- 保持 `verify` / `scan` / `proof` 登录态上传为 opt-in，默认私有；公开分享必须显式 `--public`。
-- 在 Proof 结果后提示 hosted history / public share，在 Today 中显示登录用户的 hosted quota 与 Dashboard 链接。
 - 公告与更新通道分离：公告 JSON 由 Web 静态文件维护，失败不阻塞 CLI。
 - 本地 report 保持 offline 可用。
 - 登录命令保持简单：OAuth first，不展示重复 platform choices。
@@ -404,7 +401,6 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 不要做：
 
-- 在 report upload 闭环完成前，不把本地 agent 强行搬到 hosted web app。
 - 付费 evidence 工作流未成立前，不继续堆游戏化功能。
 - 不把本地 deterministic verification 放到付费墙后。
 - 不把 `/schedule`（云端例程）在本机做；`/loop`（本机迭代，关机即停）与定时巡检（本机 cron 工具 / 云端 `/schedule`）拆开，跨机器持续性归 hosted。
@@ -414,18 +410,16 @@ Wukong Code 不和 Cursor / Claude Code / Codex 拼写代码，而是补上 AI �
 
 Pro Preview 可以公开收费的最低条件：
 
-- 用户可以上传真实 redacted verification report。
-- Dashboard 可以看到 report history。
-- Report 可以安全分享。
-- Stripe entitlement 至少控制一个 hosted feature。
+- Loop 的重复使用价值通过真实用户验证。
+- Stripe entitlement 至少控制一个真实 Loop 或 review workflow 权益。
 - Pricing copy 和真实 entitlement logic 一致。
-- 新用户可以完成 install -> verify -> upload -> share，无需人工介入。
+- 新用户可以完成 install -> loop -> review -> converge，无需人工介入。
 
 Team Pilot 可以开始试点的最低条件：
 
 - GitHub PR comment 或 status check 可用。
 - Team rules 会影响 PR gate 行为。
-- Audit log 捕获 report、gate 和 override events。
+- Audit log 捕获 loop、gate 和 override events。
 - 至少一个 design partner 能在真实 repo 上跑完整流程。
 
 ## Metrics
@@ -434,11 +428,9 @@ Team Pilot 可以开始试点的最低条件：
 
 - Install completion rate。
 - 24 小时内首次成功 `wukong verify`。
-- 每个活跃开发者每周完成 Trust Run 数；保存/分享 evidence 的比例只作次级指标。
-- Hosted report upload conversion。
-- Share link open rate。
+- 每个活跃开发者每周完成 Trust Run 数。
 - PR gate pass/fail rate。
-- Hosted report 使用后的付费转化。
+- Loop 达到免费额度后的付费转化。
 - Team pilot 两周留存。
 
 ## Explicit Non-Goals
@@ -448,4 +440,3 @@ Team Pilot 可以开始试点的最低条件：
 - 不对基础本地 verification 收费。
 - 不把 mascot 工作变成主路线图。
 - 不在实现前宣传 enterprise security。
-- 不在 report upload 闭环成立前做泛 SaaS dashboard。

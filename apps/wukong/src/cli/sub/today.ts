@@ -1,6 +1,5 @@
 import type { Command } from 'commander';
 
-import { loadHostedReportUsage, type HostedReportUsage } from '#/cli/lib/hosted-report-usage';
 import { formatTodayFull } from '#/tui/utils/today-format';
 
 import {
@@ -33,7 +32,6 @@ export interface TodayDeps {
   readonly readFocus: () => ReturnType<typeof readTodayFocus>;
   readonly writeFocus: (focus: { readonly text: string; readonly setAt: string; readonly workspace: string }) => void;
   readonly clearFocus: () => void;
-  readonly loadHostedUsage?: () => Promise<HostedReportUsage | null>;
 }
 
 export async function handleToday(deps: TodayDeps, options: TodayCliOptions): Promise<number> {
@@ -51,11 +49,10 @@ export async function handleToday(deps: TodayDeps, options: TodayCliOptions): Pr
     }
 
     const briefing = await deps.buildBriefing({ cwd, date: deps.localDate() });
-    const hosted = await (deps.loadHostedUsage ?? loadHostedReportUsage)().catch(() => null);
     deps.stdout.write(
       options.json === true
-        ? `${JSON.stringify({ ...briefing, hosted }, null, 2)}\n`
-        : formatTodayFull(briefing, hosted),
+        ? `${JSON.stringify(briefing, null, 2)}\n`
+        : formatTodayFull(briefing),
     );
     return 0;
   } catch (error) {
@@ -99,7 +96,6 @@ function resolveDeps(deps: Partial<TodayDeps> | undefined): TodayDeps {
     readFocus: deps?.readFocus ?? readTodayFocus,
     writeFocus: deps?.writeFocus ?? writeTodayFocus,
     clearFocus: deps?.clearFocus ?? clearTodayFocus,
-    loadHostedUsage: deps?.loadHostedUsage ?? loadHostedReportUsage,
   };
 }
 

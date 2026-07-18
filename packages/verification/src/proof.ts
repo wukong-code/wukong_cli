@@ -4,7 +4,7 @@ import { renderMergeProofReport, writeReport } from './report';
 import { runScan } from './scan';
 import { selectVerificationCommands } from './scripts';
 import { createWorkspaceSnapshot, workspaceSnapshotMatches } from './snapshot';
-import type { ScanResult, VerificationResult, WorkspaceSnapshot } from './types';
+import type { ScanResult, VerificationResult, VerificationRisk, WorkspaceSnapshot } from './types';
 import { runVerification } from './verify';
 
 export type ProofStatus = 'passed' | 'blocked';
@@ -185,14 +185,18 @@ function buildRecommendation(
     reasons.push('source code changed but no project checks were discovered; add or configure a verification command');
   }
 
-  const highRisks = [...verification.risks, ...scan.risks].filter((risk) => risk.severity === 'high');
+  const risks = combineRisks(verification, scan);
+  const highRisks = risks.filter((risk) => risk.severity === 'high');
   if (highRisks.length > 0) {
-    reasons.push('high-risk changes detected; review before merging');
+    const first = highRisks[0]!;
+    const location = first.file === undefined
+      ? ''
+      : ` (${first.file}${first.line === undefined ? '' : `:${String(first.line)}`})`;
+    const remaining = highRisks.length > 1 ? `; ${String(highRisks.length - 1)} more` : '';
+    reasons.push(`high-risk finding: ${first.message}${location}${remaining}; review before merging`);
   }
 
-  const mediumRisks = [...verification.risks, ...scan.risks].filter(
-    (risk) => risk.severity === 'medium',
-  );
+  const mediumRisks = risks.filter((risk) => risk.severity === 'medium');
   if (mediumRisks.length > 0 && reasons.length === 0) {
     reasons.push('medium-risk changes detected; review warnings before merging');
   }
@@ -214,13 +218,17 @@ function buildBlockers(
   const blockers: ProofBlocker[] = [];
   for (const result of verification.commandResults) {
     if (result.status === 'passed') continue;
+    const timedOut = result.status === 'timed_out';
+    const unavailable = result.status === 'unavailable';
     blockers.push({
-      id: result.status === 'timed_out' ? 'check_timed_out' : 'check_failed',
+      id: timedOut ? 'check_timed_out' : unavailable ? 'check_unavailable' : 'check_failed',
       kind: 'check',
-      summary: `${result.command} ${result.status === 'timed_out' ? 'timed out' : 'failed'}.`,
+      summary: `${result.command} ${timedOut ? 'timed out' : unavailable ? 'is unavailable' : 'failed'}.`,
       command: result.command,
       evidence: truncateEvidence(result.stderr || result.stdout),
-      nextAction: `Run ${result.command} and fix the reported failure.`,
+      nextAction: unavailable
+        ? `Install the required tool for ${result.command}, or configure .wukong/checks.json with an available command.`
+        : `Run ${result.command} and fix the reported failure.`,
     });
   }
   if (hasUnverifiedSourceChanges(verification)) {
@@ -233,7 +241,7 @@ function buildBlockers(
       nextAction: 'Add a project test/typecheck script or configure .wukong/checks.json.',
     });
   }
-  const risks = [...verification.risks, ...scan.risks]
+  const risks = combineRisks(verification, scan)
     .filter((risk) => risk.severity === 'high' || strict)
     .slice(0, 20 - blockers.length);
   for (const risk of risks) {
@@ -258,6 +266,19 @@ function buildBlockers(
     });
   }
   return blockers.slice(0, 20);
+}
+
+function combineRisks(
+  verification: VerificationResult,
+  scan: ScanResult,
+): VerificationRisk[] {
+  const seen = new Set<string>();
+  return [...verification.risks, ...scan.risks].filter((risk) => {
+    const key = `${risk.id}:${risk.file ?? ''}:${risk.line ?? ''}:${risk.evidence ?? ''}`;
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
 }
 
 function reasonCodeFrom(status: ProofStatus, blockers: readonly ProofBlocker[]): string {

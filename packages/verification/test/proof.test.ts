@@ -43,11 +43,35 @@ describe('runProof', () => {
     await writeRepoFile(cwd, 'src/feature.ts', '// TODO: implement feature\n');
     await gitAdd(cwd);
 
-    const result = await runProof({ cwd, writeReport: false });
+    const result = await runProof({
+      cwd,
+      commands: ['node -e "process.exit(0)"'],
+      writeReport: false,
+    });
 
     expect(result.status).toBe('blocked');
     expect(result.scan.status).toBe('failed');
     expect(result.recommendation.toLowerCase()).toContain('high-risk');
+    expect(result.recommendation).toContain('Placeholder or unfinished marker added.');
+    expect(result.recommendation).toContain('src/feature.ts:1');
+    expect(result.recommendation).not.toContain('more');
+    expect(result.blockers).toHaveLength(1);
+  });
+
+  it('does not block passing checks because a test uses mocks', async () => {
+    const cwd = await makeTempRepo('wukong-proof-test-mock-');
+    await writeRepoFile(cwd, 'src/feature.test.ts', 'const mockValue = { ok: true };\nvoid mockValue;\n');
+    await gitAdd(cwd);
+
+    const result = await runProof({
+      cwd,
+      commands: ['node -e "process.exit(0)"'],
+      writeReport: false,
+    });
+
+    expect(result.status).toBe('passed');
+    expect(result.verification.status).toBe('passed');
+    expect(result.scan.status).toBe('passed');
   });
 
   it('blocks when a verification command fails', async () => {

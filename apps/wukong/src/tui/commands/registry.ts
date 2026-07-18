@@ -36,6 +36,12 @@ const REVIEW_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
   { value: 'stats', description: 'Show local review counts' },
 ];
 
+const RESUME_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
+  { value: 'codex', description: 'Show local Codex sessions' },
+  { value: 'claude', description: 'Show local Claude Code sessions' },
+  { value: 'cursor', description: 'Show local Cursor sessions' },
+];
+
 /** Argument autocompletion for the `/goal` command (subcommands). */
 export function goalArgumentCompletions(argumentPrefix: string): AutocompleteItem[] | null {
   const nextMatch = argumentPrefix.match(/^next\s+(\S*)$/i);
@@ -65,6 +71,10 @@ export function addDirArgumentCompletions(argumentPrefix: string): AutocompleteI
 
 export function reviewArgumentCompletions(argumentPrefix: string): AutocompleteItem[] | null {
   return completeLeadingArg(REVIEW_ARG_COMPLETIONS, argumentPrefix);
+}
+
+export function resumeArgumentCompletions(argumentPrefix: string): AutocompleteItem[] | null {
+  return completeLeadingArg(RESUME_ARG_COMPLETIONS, argumentPrefix);
 }
 
 function isPathLikeAddDirArgument(argumentPrefix: string): boolean {
@@ -291,7 +301,30 @@ export const BUILTIN_SLASH_COMMANDS = [
   {
     name: 'sessions',
     aliases: ['resume'],
-    description: 'Browse and resume sessions',
+    description: 'Resume Wukong, Codex, Claude Code, or Cursor sessions',
+    priority: 80,
+    argumentHint: '[codex|claude|cursor]',
+    completeArgs: resumeArgumentCompletions,
+  },
+  {
+    name: 'resume-codex',
+    aliases: [],
+    description: 'Resume a local Codex session in Wukong',
+    hidden: true,
+    priority: 80,
+  },
+  {
+    name: 'resume-claude',
+    aliases: [],
+    description: 'Resume a local Claude Code session in Wukong',
+    hidden: true,
+    priority: 80,
+  },
+  {
+    name: 'resume-cursor',
+    aliases: [],
+    description: 'Resume a local Cursor session in Wukong',
+    hidden: true,
     priority: 80,
   },
   {

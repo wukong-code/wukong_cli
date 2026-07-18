@@ -4,7 +4,7 @@ import { randomUUID } from 'node:crypto';
 
 import { resolveWukongHome } from '@wukong/wukong-sdk';
 
-import { getCliAccessToken } from '#/cli/lib/report-upload';
+import { getCliAccessToken } from '#/cli/lib/auth-token';
 import type { LoopStatus } from '#/utils/loop-result';
 
 export interface LoopQuotaGrant {

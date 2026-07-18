@@ -5,8 +5,13 @@ import { renderVerificationReport, writeReport } from './report';
 import { runVerificationCommands } from './runner';
 import { scanRisks } from './risks';
 import { selectVerificationCommands } from './scripts';
-import { statusFrom } from './status';
-import type { VerificationOptions, VerificationResult } from './types';
+import type {
+  VerificationCommandResult,
+  VerificationOptions,
+  VerificationResult,
+  VerificationRisk,
+  VerificationStatus,
+} from './types';
 
 export async function runVerification(options: VerificationOptions = {}): Promise<VerificationResult> {
   const cwd = resolve(options.cwd ?? process.cwd());
@@ -27,7 +32,7 @@ export async function runVerification(options: VerificationOptions = {}): Promis
     includeCommandRisks: true,
   });
   const base = {
-    status: statusFrom(risks, commandResults, options.strict === true),
+    status: verificationStatusFrom(risks, commandResults, options.strict === true),
     cwd,
     generatedAt: new Date().toISOString(),
     changedFiles: git.changedFiles,
@@ -43,4 +48,21 @@ export async function runVerification(options: VerificationOptions = {}): Promis
   const report = renderVerificationReport(base);
   const reportPath = await writeReport(options.reportPath ?? 'wukong-verification-report.md', report, cwd);
   return { ...base, reportPath, report };
+}
+
+/**
+ * Verify answers whether project checks ran successfully. Diff risks remain
+ * visible as warnings, while Scan owns risk-based blocking. Missing commands
+ * still fail Verify because no project check was actually executed.
+ */
+function verificationStatusFrom(
+  risks: readonly VerificationRisk[],
+  commandResults: readonly VerificationCommandResult[],
+  strict: boolean,
+): VerificationStatus {
+  if (commandResults.some((result) => result.status !== 'passed')) return 'failed';
+  if (risks.some((risk) => risk.id === 'commands.none_detected')) return 'failed';
+  if (strict && risks.length > 0) return 'failed';
+  if (risks.length > 0) return 'warning';
+  return 'passed';
 }

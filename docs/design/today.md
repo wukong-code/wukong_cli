@@ -13,7 +13,7 @@
 
 - 与域名 `wukong.today` 天然对齐：开发者每天开工第一眼。
 - 与 Wukong proof-layer 定位一致：读状态，不替代 `verify` / `proof` / `goal` / `loop` 的执行。
-- 默认离线可用；登录后可增强（hosted report 计数、dashboard 链接），不阻塞本地。
+- 默认离线可用，不依赖网络或登录态。
 
 **不做：** XP / mood / 喂养 / pomodoro / 随机 quote 当主功能；不重新跑 verify；不上传源码 diff；不对齐 web legacy `/api/today` 的 companion quests 模型。
 
@@ -83,7 +83,6 @@ Focus: (not set) — wukong today "<your goal>"
 
 登录态可选增强：
 
-- hosted report 今日上传数 / quota（`wukong.today` API）
 - Dashboard 链接：`https://wukong.today/dashboard`
 
 ## 5. Focus 存储
@@ -123,7 +122,6 @@ interface TodayBriefing {
   lastProof?: { status: 'pass' | 'blocked'; summary: string };
   streak: number;
   next: string[];                  // 1–2 条建议，基于规则映射
-  hosted?: { reportsToday: number; quota?: number; dashboardUrl: string };
 }
 ```
 

@@ -51,6 +51,22 @@ describe('scanRisks added-line rules', () => {
     expect(risks.map((risk) => risk.id)).toContain('diff.mock_or_fake_added');
   });
 
+  it('does not flag normal mocks and fixture data inside test files', () => {
+    for (const file of ['src/data.test.ts', 'test/data.ts', 'tests/fixtures/user.ts', 'src/__tests__/api.ts']) {
+      const risks = scanRisks({
+        git: inspection({
+          diffText: diffFor(file, [
+            'const mockUser = { id: 1 };',
+            'const fakeClock = createClock();',
+            "const sampleData = 'fixture';",
+          ]),
+        }),
+      });
+
+      expect(risks.map((risk) => risk.id), file).not.toContain('diff.mock_or_fake_added');
+    }
+  });
+
   it('flags focused and skipped tests as medium risk', () => {
     const risks = scanRisks({
       git: inspection({

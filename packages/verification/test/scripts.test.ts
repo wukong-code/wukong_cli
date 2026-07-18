@@ -105,4 +105,66 @@ describe('selectVerificationCommands', () => {
       { command: 'pnpm typecheck', source: 'project-config' },
     ]);
   });
+
+  it('discovers only configured Python checks', async () => {
+    const cwd = await makeTempDir('wukong-scripts-python-');
+    await writeRepoFile(cwd, 'pyproject.toml', [
+      '[project]',
+      'name = "example"',
+      '',
+      '[tool.pytest.ini_options]',
+      'testpaths = ["tests"]',
+      '',
+      '[tool.ruff]',
+      'line-length = 100',
+      '',
+      '[tool.mypy]',
+      'strict = true',
+    ].join('\n'));
+
+    await expect(selectVerificationCommands({ cwd })).resolves.toEqual([
+      { command: 'python3 -m pytest', source: 'project-inferred' },
+      { command: 'ruff check .', source: 'project-inferred' },
+      { command: 'mypy .', source: 'project-inferred' },
+    ]);
+  });
+
+  it('does not infer Python tools from pyproject.toml alone', async () => {
+    const cwd = await makeTempDir('wukong-scripts-python-unconfigured-');
+    await writeRepoFile(cwd, 'pyproject.toml', '[project]\nname = "example"\n');
+
+    await expect(selectVerificationCommands({ cwd })).resolves.toEqual([]);
+  });
+
+  it('discovers Rust and Go project checks and configured linters', async () => {
+    const rust = await makeTempDir('wukong-scripts-rust-');
+    await writeRepoFile(rust, 'Cargo.toml', '[package]\nname = "example"\nversion = "0.1.0"\n');
+    await writeRepoFile(rust, 'clippy.toml', 'msrv = "1.80"\n');
+    await expect(selectVerificationCommands({ cwd: rust })).resolves.toEqual([
+      { command: 'cargo test', source: 'project-inferred' },
+      {
+        command: 'cargo clippy --all-targets --all-features -- -D warnings',
+        source: 'project-inferred',
+      },
+    ]);
+
+    const go = await makeTempDir('wukong-scripts-go-');
+    await writeRepoFile(go, 'go.mod', 'module example.test/project\n\ngo 1.24\n');
+    await writeRepoFile(go, '.golangci.yml', 'run:\n  timeout: 2m\n');
+    await expect(selectVerificationCommands({ cwd: go })).resolves.toEqual([
+      { command: 'go test ./...', source: 'project-inferred' },
+      { command: 'golangci-lint run', source: 'project-inferred' },
+    ]);
+  });
+
+  it('combines Node and configured non-Node checks without duplicates', async () => {
+    const cwd = await makeTempDir('wukong-scripts-polyglot-');
+    await writeJson(join(cwd, 'package.json'), { scripts: { test: 'vitest run' } });
+    await writeRepoFile(cwd, 'go.mod', 'module example.test/project\n\ngo 1.24\n');
+
+    await expect(selectVerificationCommands({ cwd })).resolves.toEqual([
+      { command: 'npm run test', source: 'package-script' },
+      { command: 'go test ./...', source: 'project-inferred' },
+    ]);
+  });
 });

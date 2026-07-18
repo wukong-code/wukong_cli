@@ -59,6 +59,25 @@ describe('runVerification', () => {
     );
   });
 
+  it('keeps diff risks visible without reporting passing project checks as failed', async () => {
+    const cwd = await makeTempRepo('wukong-verify-risk-warning-');
+    await writeRepoFile(cwd, 'src/feature.ts', '// TODO: replace before delivery\n');
+    await gitAdd(cwd);
+
+    const result = await runVerification({
+      cwd,
+      commands: ['node -e "process.exit(0)"'],
+      writeReport: false,
+    });
+
+    expect(result.status).toBe('warning');
+    expect(result.commandResults[0]?.status).toBe('passed');
+    expect(result.risks).toContainEqual(expect.objectContaining({
+      id: 'diff.placeholder_added',
+      severity: 'high',
+    }));
+  });
+
   it('marks slow commands as timed_out and fails the run', async () => {
     const cwd = await makeTempRepo('wukong-verify-timeout-');
 
@@ -71,6 +90,19 @@ describe('runVerification', () => {
 
     expect(result.status).toBe('failed');
     expect(result.commandResults[0]?.status).toBe('timed_out');
+  });
+
+  it('distinguishes a missing project tool from a failed check', async () => {
+    const cwd = await makeTempRepo('wukong-verify-unavailable-');
+
+    const result = await runVerification({
+      cwd,
+      commands: ['wukong-tool-that-does-not-exist --check'],
+      writeReport: false,
+    });
+
+    expect(result.status).toBe('failed');
+    expect(result.commandResults[0]?.status).toBe('unavailable');
   });
 
   it('escalates warnings to failed in strict mode', async () => {

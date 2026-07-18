@@ -31,7 +31,7 @@ wukong upgrade
 
 其中 `acp`、`server`、`migrate` 当前为 hidden 命令，不出现在 `wukong --help` 默认输出中；对外命令面以 `wukong --help` 为准。
 
-已实现的 TUI slash commands 包括 `/verify`、`/scan`、`/guard`、`/report`、`/goal`（含 verification gate 和队列）、`/proof`、`/judge`、`/loop`、`/today`。agent-core 另已实现会话内 cron 调度工具（CronCreate/CronList/CronDelete，支持 recurring/one-shot、持久化与 resume 恢复），是 `/loop` 时间触发的复用基础。Hosted Report 的登录上传、配额、历史和分享预览也已实现。
+已实现的 TUI slash commands 包括 `/verify`、`/scan`、`/guard`、`/report`、`/goal`（含 verification gate 和队列）、`/proof`、`/judge`、`/loop`、`/today`。agent-core 另已实现会话内 cron 调度工具（CronCreate/CronList/CronDelete，支持 recurring/one-shot、持久化与 resume 恢复），是 `/loop` 时间触发的复用基础。
 
 当前仍未实现的 top-level CLI 扩展是：
 
@@ -129,7 +129,6 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 
 | 能力 | 状态 | 目标 |
 |---|---|---|
-| hosted reports v1 | 已实现 | 登录上传、配额、历史和分享预览；Evidence v2/redaction contract 后续完善 |
 | team rules | 待实现 | 团队共享验证规则和 guard policy |
 | audit log | 待实现 | 记录验证、拦截和发布证据 |
 | `/schedule` 云端例程 | 待实现 | 机器关了也跑的 time-based loop，归 hosted（Milestone 3+） |
@@ -170,10 +169,10 @@ Wukong 托管模型调用 = 作为可选 credits / add-on 收费
 | 层级 | 建议权益 |
 |---|---|
 | Free | BYOK、10 Loop sessions/月、每次最多 5 轮、基础 roles/guard；第 3 次起提示 Pro |
-| Pro | BYOK、更多/更长 Loop、deep reviewer、更多角色、可选 evidence history/share |
+| Pro | BYOK、更多/更长 Loop、deep reviewer、更多角色 |
 | Team | org-level BYOK、共享 Role Profiles、GitHub PR gate、团队规则和审计日志 |
 | Enterprise | 私有部署、合规、SSO、SLA、私有 runner |
-| Credits / Add-on | Wukong 托管模型调用、深度 review、批量验证、托管报告额度 |
+| Credits / Add-on | Wukong 托管模型调用、深度 review、批量验证 |
 
 ### 4.1 API Key 与 API 服务收费边界
 
@@ -181,20 +180,17 @@ Wukong 支持用户自带 API Key，但 BYOK 不代表所有功能都应免费�
 
 | 模式 | 谁承担模型成本 | Wukong 可以收什么钱 | 推荐收费方式 |
 |---|---|---|---|
-| BYOK：用户自带 OpenAI/Anthropic/Gemini/DeepSeek 等 key | 用户 | 编排、redaction、hosted report、report history、PR comment/gate、team rules、audit log | Free 入口 + Pro/Team subscription |
+| BYOK：用户自带 OpenAI/Anthropic/Gemini/DeepSeek 等 key | 用户 | 编排、review policy、PR comment/gate、team rules、audit log | Free 入口 + Pro/Team subscription |
 | Wukong Managed Model：Wukong 提供托管模型调用 | Wukong | 深度 review、风险解释、修复建议、批量审查 | credits / usage add-on |
-| Wukong Product APIs：Wukong 自有 API 服务 | Wukong | report upload/share、rules evaluate、PR gate、audit events、redaction、Slack/GitHub integration | subscription + quota + overage |
+| Wukong Product APIs：Wukong 自有 API 服务 | Wukong | Loop quota、rules evaluate、PR gate、audit events、Slack/GitHub integration | subscription + quota + overage |
 
 推荐的 API 服务边界：
 
 | API 服务 | 是否适合收费 | 收费理由 |
 |---|---|---|
-| `/api/report/upload` | 是 | 托管 redacted report、存储、权限和分享链接 |
-| `/api/report/share` | 是 | 对外展示、访问控制和长期留存 |
 | `/api/pr/comment` | 是 | GitHub App 集成、PR 协作和自动评论 |
 | `/api/pr/gate` | 是 | 合并前策略判断和状态检查 |
 | `/api/rules/evaluate` | 是 | 团队规则、路径策略和风险阈值 |
-| `/api/redact` | 是 | 上传前脱敏、敏感片段过滤和安全边界 |
 | `/api/audit/events` | 是 | 团队审计、override 留痕和责任链 |
 | 纯模型 proxy / 原样转发第三方 API | 不建议 | 容易变成低价值 API 转售，合规和信任风险高 |
 
@@ -206,14 +202,14 @@ Free
 - 10 Loop sessions/month, max 5 iterations/session; show a Pro prompt from session 3
 - Advanced verify/scan/proof diagnostics remain available without a separate quota
 - Fresh-context reviewer with a configured alias
-- Evidence is saved/uploaded only when requested
+- Evidence is saved locally only when requested
 
 Pro $8-12/user/month
 - BYOK
 - More and longer Loop sessions
 - Deep reviewer workflows
 - More custom roles
-- Optional evidence history and share links
+- More custom roles and reviewer controls
 
 Team $99-299/team/month or $15-29/user/month
 - Org-level BYOK
@@ -250,22 +246,21 @@ Loop 必须提供真实免费体验，但额度只作用于顶层 session，不�
 | 基础 `wukong guard` / `guard --status` | 暂不限制 | P0 guard 是 best-effort，不能作为强安全付费承诺 |
 | provider/login/doctor/export | 暂不限制 | 属于基础 CLI 使用、诊断和迁移能力 |
 
-未登录用户可运行 1 个最多 2 轮的 Loop。免费额度必须足以产生第一次真实结果，但不能长期替代 Pro。参数校验和 plan 建立在 usage start 前完成；start 成功后即计数，取消或崩溃不回退。默认不生成报告，只有显式 `--save`/`--upload` 才产生 evidence。
+未登录用户可运行 1 个最多 2 轮的 Loop。免费额度必须足以产生第一次真实结果，但不能长期替代 Pro。参数校验和 plan 建立在 usage start 前完成；start 成功后即计数，取消或崩溃不回退。默认不生成报告，只有显式 `--save`/`--report` 才在本地保存 evidence。
 
 ### 4.3 适合收费的功能
 
-付费点建立在“更高 Trust Loop 用量、团队协作、云端证据、模型能力和审计责任”上。四个命令不分别售卖，Pro 解锁整条 Trust Loop。
+付费点建立在“更高 Trust Loop 用量、团队协作、模型能力和审计责任”上。四个命令不分别售卖，Pro 解锁整条 Trust Loop。
 
 | 收费功能 | 推荐层级 | 价值 | 当前状态 |
 |---|---|---|---|
-| Hosted Reports / 分享链接 | Pro / Team | 上传 redacted report，生成可分享链接，保留历史记录 | v1 基础闭环已实现；v2 属于 0.0.13+ backlog |
 | 更多 Loop + Deep Reviewer | Pro | 更长迭代、fresh-context 深度审查和更具体的修复反馈 | 0.0.12 BYOK 基础版已实现；0.0.13 验证 Pro 价值 |
 | Review Improver + 长期 Evals | Pro | 从人工反馈中生成可追溯 policy proposal，对比调整前后质量；不自动应用 | 0.0.13 设计完成，待实现 |
 | Shared Review Policy + Feedback Learning | Team | 团队共享审查偏好、误报处理、审批和质量趋势 | 0.1.0+，待实现 |
-| Wukong Product APIs | Pro / Team | report upload/share、PR comment/gate、rules evaluate、redaction、audit events | 部分实现：report upload/share 已有，其余待实现 |
+| Wukong Product APIs | Pro / Team | Loop quota、PR comment/gate、rules evaluate、audit events | Loop quota 已实现，其余待实现 |
 | Managed Model Add-on | Pro / Team / Credits | Wukong 提供托管模型调用，解决用户不想配置 key 的场景 | 待实现 |
 | Team Rules | Team | 团队统一验证命令、风险阈值、路径策略和 guard policy | 待实现 |
-| GitHub PR Gate / CI Gate | Team | PR 自动跑 verify/scan，发布检查状态和 report link | 待实现 |
+| GitHub PR Gate / CI Gate | Team | PR 自动跑 verify/scan 并发布检查状态 | 待实现 |
 | Audit Log | Team / Enterprise | 记录谁验证、谁 override、失败原因和最终交付证据 | 待实现 |
 | Agent Enforcement | Team | 要求 agent 完成前必须调用 `wukong_verify`，否则标记未完成 | 部分实现：tool 已有，策略层待实现 |
 | Enhanced Guard Policy | Pro / Team | shell hook、PATH shim、集中规则、危险命令审计 | 待实现 |
@@ -280,9 +275,9 @@ Loop 必须提供真实免费体验，但额度只作用于顶层 session，不�
 
 1. 更多/更长 Loop + Review Learning Loop + deep reviewer：最接近日常重复价值，也能用人工反馈证明 reviewer 是否值得付费。
 2. Team Role Profiles + Shared Review Policy + PR Gate：把个人 Trust Loop 变成团队流程。
-3. Wukong Product APIs：提供 PR gate、rules、feedback、audit 和显式 evidence sharing 的服务边界。
+3. Wukong Product APIs：提供 PR gate、rules、feedback 和 audit 的服务边界。
 4. Managed Model Add-on：Wukong 承担模型成本时再引入独立 credits。
-5. Saved/Shared Evidence 与 Audit Log：只服务明确的协作和审计需求，不作为所有用户的前置流程。
+5. Audit Log：只服务明确的团队协作和审计需求，不作为个人用户的前置流程。
 
 当前阶段以 0.0.12 免费 Trust Loop 的真实使用为基线，0.0.13 只验证 **Reviewer 是否能从反馈中持续变准**，保持免费/BYOK，不实现支付。完整 contract 见 [0.0.13 Review Learning Loop](../design/review-learning-loop.md)。0.1.0 才开放真实价格、Checkout、付费 entitlement 和 Team Pilot 支付路径。
 
@@ -333,19 +328,13 @@ Loop 必须提供真实免费体验，但额度只作用于顶层 session，不�
 4. `/loop` 本机迭代 loop：驱动 agent + 验证 + 修复直到停止条件满足，复用 cron scheduler 与 goal gate，关机即停（第 4 步，产品核心）。
 5. 文档与官网 hero 切换到 loop control plane / proof-layer 叙事。
 
-### Hosted Evidence 基线已完成
-
-1. report history / redaction metadata。
-2. cloud report metadata upload 与显式公开分享。
-3. hosted report quota 基础边界。
-
 ### 当前重点：0.0.12 Free Trust Loop v2
 
 1. 重写 Loop 的 snapshot、状态与错误 contract；verify/scan/proof 变成内部检查层。
 2. 只实现 Loop session 额度，以及幂等 start/complete/usage；不引入 Checks、reservation/lease。
 3. Loop 支持用户指定 writer model/role，并使用 fresh-context reviewer；reviewer 不能覆盖真实失败。
 4. 增加轻量 Role Profiles（内置、本地自定义、`--role`、`/transform`），不建立第二套 agent。
-5. 旧 verify/scan/proof 命令兼容但从主入口隐藏；evidence history 保持次级。
+5. 旧 verify/scan/proof 命令兼容但从主入口隐藏；本地 evidence 仅在显式请求时写入。
 
 ### P0 不做
 
@@ -404,6 +393,6 @@ P1 之后再评估：
 
 ## 9. 结论
 
-Wukong 的 0.0.12 内核已经形成本地 CLI/TUI/agent 闭环：deterministic verification、risk scan、best-effort guard、Merge Proof、fresh-context reviewer、Role Profiles、配额与三态 Loop。P0.5 的 proof → judge → goal gate → loop 已完成。下一阶段重点是 Hosted Evidence v2、redaction/report history、团队规则、跨会话 loop（hosted/CI）和完整计费边界，把本地 Loop 价值转成可收费的协作与审计能力。
+Wukong 的 0.0.12 内核已经形成本地 CLI/TUI/agent 闭环：deterministic verification、risk scan、best-effort guard、Merge Proof、fresh-context reviewer、Role Profiles、配额与三态 Loop。P0.5 的 proof → judge → goal gate → loop 已完成。下一阶段重点是团队规则、跨会话 loop（hosted/CI）和完整计费边界，把本地 Loop 价值转成可收费的协作与审计能力。
 
 一句话：**AI 负责写代码，Wukong 负责判断能不能合并，并用 loop 持续驱动这件事直到成立。**

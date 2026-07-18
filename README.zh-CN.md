@@ -10,11 +10,15 @@ Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal →
 
 `0.0.13` 增加结构化多 findings、`.wukong/review-policy.md` 项目规则、本地 finding feedback 与诊断统计，以及可选的独立 reviewer model。本版本继续免费并由用户提供模型 API，不做支付；真实 Pro 权益延后到 `0.1.0`。
 
+`0.0.14` 已进入开发，范围包括跨 Agent Resume、明确的 Resume → Loop 衔接、更清晰的 TUI Gate 结论和更多真实项目检查发现。本版本继续免费/BYOK，完整范围见 [0.0.14 设计](docs/design/0.0.14-resume-loop-polish.md)。
+
 `0.0.12` 建立了 Loop-first runtime。`verify`、`scan`、`proof` 仍保留为高级诊断命令，但只是 Loop 的内部层，不再各自形成产品或额度。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md) 和 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。
 
 Loop 只返回一个持久化结果：`PASS`（退出码 `0`）、`NEEDS_WORK`（退出码 `1`）或 `ERROR`（退出码 `2`）。未登录用户有 1 次、最多 2 轮的本地试用；登录后的 Free 用户每月 10 个 Loop session，每次最多 5 轮，内部检查不重复计数。额度服务暂时不可用时，CLI 会警告并按本地 5 轮安全上限继续。旧 `verify-pass`、`scan-clean`、`judge-pass` Goal records 和 flags 仍可读取，并迁移到统一 proof gate；详见 [兼容矩阵](docs/design/0.0.12-compatibility.md)。
 
 Role Profiles 基础能力已经实现并处于实验阶段。在 `~/.wukong/config.toml` 启用 `experimental.role_profiles` 后，可运行 `wukong roles list`，用 `wukong --role security` 启动，或在 TUI 中通过 `/transform security` 与 `/transform off` 切换和恢复。
+
+TUI 内的 `/resume` 用于恢复 Wukong 会话；需要继续其他 Agent 的本地会话时，使用 `/resume codex`、`/resume claude` 或 `/resume cursor`。外部历史只作为只读上下文导入 Wukong，不重放旧工具调用，并在继续前重新检查当前 workspace。
 
 ## 当前命令面
 

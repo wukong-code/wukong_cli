@@ -15,7 +15,7 @@ export async function runVerificationCommands(
     const durationMs = Date.now() - started;
     results.push({
       command: command.command,
-      status: result.timedOut ? 'timed_out' : result.exitCode === 0 ? 'passed' : 'failed',
+      status: commandStatus(result),
       exitCode: result.exitCode,
       durationMs,
       stdout: result.stdout,
@@ -23,4 +23,24 @@ export async function runVerificationCommands(
     });
   }
   return results;
+}
+
+function commandStatus(result: {
+  readonly timedOut: boolean;
+  readonly exitCode: number | null;
+  readonly stdout: string;
+  readonly stderr: string;
+}): VerificationCommandResult['status'] {
+  if (result.timedOut) return 'timed_out';
+  if (result.exitCode === 0) return 'passed';
+  const output = `${result.stderr}\n${result.stdout}`;
+  if (
+    result.exitCode === 127 ||
+    /(?:command not found|not recognized as an internal or external command|no module named)\b/iu.test(
+      output,
+    )
+  ) {
+    return 'unavailable';
+  }
+  return 'failed';
 }

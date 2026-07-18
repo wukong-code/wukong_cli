@@ -8,7 +8,7 @@
 
 当前 `wukong_cli` 新 base 已经提供交互式终端 AI agent 能力。商业化设计的目标是在这个底座上加入验证、风险扫描、命令防护、交付证据，并用 `/loop`（本机）和 `/schedule`（云端）把它们编排成 AI Coding Loop 的控制层。
 
-当前已实现的 top-level command 以 `wukong --help` 为准。`verify`、`scan`、`guard`、`proof`、`judge`、`loop` 已实现；TUI 也已实现 `/goal`、`/proof`、`/judge`、`/loop`、`/today`。Hosted report v1 已可登录上传、查看历史和分享；`journey`、云端 `/schedule`、Hosted Evidence v2 与团队能力仍是目标体验。
+当前已实现的 top-level command 以 `wukong --help` 为准。`verify`、`scan`、`guard`、`proof`、`judge`、`loop` 已实现；TUI 也已实现 `/goal`、`/proof`、`/judge`、`/loop`、`/today`。`journey`、云端 `/schedule` 与团队能力仍是目标体验。
 
 ## 2. 产品定位
 
@@ -42,7 +42,7 @@
 | Verification | `verify`、report、命令检测、风险扫描 |
 | Guard | shell hook、policy、确认/拦截、事件日志 |
 | Agent Tool | `wukong_verify` structured result |
-| Stats | verification streak、guard events、report history |
+| Stats | verification streak、guard events、Loop outcomes |
 | Team | shared rules、audit log、dashboard，P2 |
 
 ## 4. 命令体验

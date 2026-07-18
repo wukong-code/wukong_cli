@@ -72,19 +72,11 @@ export interface TodayBriefing {
   readonly lastProof?: { readonly status: 'pass' | 'blocked'; readonly summary: string };
   readonly streak: number;
   readonly next: string[];
-  readonly hosted?: {
-    readonly reportsToday: number;
-    readonly dashboardUrl: string;
-  };
 }
 
 export interface BuildTodayBriefingOptions {
   readonly cwd: string;
   readonly date?: string;
-  /**
-   * Optional hosted metadata. If omitted, the `hosted` field is left out.
-   */
-  readonly hosted?: { readonly reportsToday: number };
 }
 
 /**
@@ -191,16 +183,6 @@ export async function buildTodayBriefing(options: BuildTodayBriefingOptions): Pr
     streak: computeStreak(events),
     next: buildNext({ today, lastProof: lastProofEvent, changedFiles: git.changedFiles.length, focus: focus?.text }),
   };
-
-  if (options.hosted !== undefined) {
-    return {
-      ...briefing,
-      hosted: {
-        reportsToday: options.hosted.reportsToday,
-        dashboardUrl: 'https://wukong.today/dashboard',
-      },
-    };
-  }
 
   return briefing;
 }

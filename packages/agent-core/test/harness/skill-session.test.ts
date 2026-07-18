@@ -96,6 +96,7 @@ describe('HarnessAPI session skills', () => {
     const skills = await rpc.listSkills({ sessionId: created.id });
     const mcpConfig = skills.find((skill) => skill.name === 'mcp-config');
     const importer = skills.find((skill) => skill.name === 'import-from-cc-codex');
+    const resumeSkills = skills.filter((skill) => skill.name.startsWith('resume-'));
 
     expect(mcpConfig).toMatchObject({
       name: 'mcp-config',
@@ -110,6 +111,12 @@ describe('HarnessAPI session skills', () => {
       disableModelInvocation: true,
     });
     expect(importer?.path).toBe('builtin://import-from-cc-codex');
+    expect(resumeSkills.map((skill) => skill.name).toSorted()).toEqual([
+      'resume-claude',
+      'resume-codex',
+      'resume-cursor',
+    ]);
+    expect(resumeSkills.every((skill) => skill.disableModelInvocation === true)).toBe(true);
     expect(JSON.stringify(skills)).not.toContain('Your tool list contains one synthetic tool');
     expect(JSON.stringify(skills)).not.toContain('Do not migrate Claude custom commands');
   });

@@ -101,6 +101,27 @@ describe('SessionPickerComponent', () => {
     expect(output).toContain('please redesign the picker UI');
   });
 
+  it('labels foreign sessions by source', () => {
+    const component = new SessionPickerComponent({
+      sessions: [
+        {
+          id: 'external:codex:abc',
+          title: 'Continue the review',
+          work_dir: '/tmp/project',
+          updated_at: Date.now(),
+          source: 'codex',
+          external: { id: 'abc', sourcePath: '/tmp/rollout.jsonl' },
+        },
+      ],
+      loading: false,
+      currentSessionId: 'ses_other',
+      onSelect: vi.fn(),
+      onCancel: vi.fn(),
+    });
+
+    expect(renderPlain(component)).toContain('[Codex] Continue the review');
+  });
+
   it('omits the last-prompt row when last_prompt is missing', () => {
     const now = new Date('2026-05-11T12:00:00.000Z').getTime();
     vi.spyOn(Date, 'now').mockReturnValue(now);

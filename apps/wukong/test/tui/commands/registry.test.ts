@@ -4,6 +4,7 @@ import {
   parseSlashInput,
   resolveSlashCommandAvailability,
   addDirArgumentCompletions,
+  resumeArgumentCompletions,
   sortSlashCommands,
   swarmArgumentCompletions,
   type WukongSlashCommand,
@@ -37,8 +38,22 @@ describe('built-in slash command registry', () => {
     expect(findBuiltInSlashCommand('btw')?.name).toBe('btw');
     expect(findBuiltInSlashCommand('mcp')?.name).toBe('mcp');
     expect(findBuiltInSlashCommand('status')?.name).toBe('status');
+    expect(findBuiltInSlashCommand('resume')?.name).toBe('sessions');
+    expect((findBuiltInSlashCommand('resume-codex') as WukongSlashCommand).hidden).toBe(true);
+    expect((findBuiltInSlashCommand('resume-claude') as WukongSlashCommand).hidden).toBe(true);
+    expect((findBuiltInSlashCommand('resume-cursor') as WukongSlashCommand).hidden).toBe(true);
     expect(findBuiltInSlashCommand('usage')?.aliases).not.toContain('status');
     expect(findBuiltInSlashCommand('unknown')).toBeUndefined();
+  });
+
+  it('offers resume source argument completions', () => {
+    expect(resumeArgumentCompletions('')?.map((item) => item.value)).toEqual([
+      'codex',
+      'claude',
+      'cursor',
+    ]);
+    expect(resumeArgumentCompletions('co')?.map((item) => item.value)).toEqual(['codex']);
+    expect(resumeArgumentCompletions('wu')).toBeNull();
   });
 
   it('marks plan clear as idle-only while normal plan toggles are always available', () => {

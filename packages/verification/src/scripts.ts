@@ -25,6 +25,7 @@ const SKIPPED_DIRECTORIES = new Set([
 ]);
 
 const MAX_PACKAGE_DEPTH = 4;
+const MAX_DISCOVERED_COMMANDS = 12;
 
 export async function selectVerificationCommands(options: {
   readonly cwd: string;
@@ -61,7 +62,92 @@ export async function selectVerificationCommands(options: {
       });
     }
   }
+  selected.push(...await discoverConfiguredLanguageChecks(options.cwd));
+  return deduplicateCommands(selected).slice(0, MAX_DISCOVERED_COMMANDS);
+}
+
+async function discoverConfiguredLanguageChecks(cwd: string): Promise<VerificationCommand[]> {
+  const selected: VerificationCommand[] = [];
+  const pyproject = await readOptionalText(join(cwd, 'pyproject.toml'));
+  const setupCfg = await readOptionalText(join(cwd, 'setup.cfg'));
+  const toxIni = await readOptionalText(join(cwd, 'tox.ini'));
+
+  if (
+    hasFile(cwd, 'pytest.ini') ||
+    hasSection(pyproject, 'tool.pytest') ||
+    hasSection(setupCfg, 'tool:pytest') ||
+    hasSection(toxIni, 'pytest')
+  ) {
+    selected.push(inferred('python3 -m pytest'));
+  }
+  if (
+    hasFile(cwd, 'ruff.toml') ||
+    hasFile(cwd, '.ruff.toml') ||
+    hasSection(pyproject, 'tool.ruff')
+  ) {
+    selected.push(inferred('ruff check .'));
+  }
+  if (
+    hasFile(cwd, 'mypy.ini') ||
+    hasFile(cwd, '.mypy.ini') ||
+    hasSection(pyproject, 'tool.mypy') ||
+    hasSection(setupCfg, 'mypy')
+  ) {
+    selected.push(inferred('mypy .'));
+  }
+
+  if (hasFile(cwd, 'Cargo.toml')) {
+    selected.push(inferred('cargo test'));
+    if (hasFile(cwd, 'clippy.toml') || hasFile(cwd, '.clippy.toml')) {
+      selected.push(inferred('cargo clippy --all-targets --all-features -- -D warnings'));
+    }
+  }
+
+  if (hasFile(cwd, 'go.mod')) {
+    selected.push(inferred('go test ./...'));
+    if (
+      hasFile(cwd, '.golangci.yml') ||
+      hasFile(cwd, '.golangci.yaml') ||
+      hasFile(cwd, '.golangci.toml') ||
+      hasFile(cwd, '.golangci.json')
+    ) {
+      selected.push(inferred('golangci-lint run'));
+    }
+  }
+
   return selected;
+}
+
+function inferred(command: string): VerificationCommand {
+  return { command, source: 'project-inferred' };
+}
+
+function hasFile(cwd: string, name: string): boolean {
+  return existsSync(join(cwd, name));
+}
+
+function hasSection(text: string | undefined, section: string): boolean {
+  if (text === undefined) return false;
+  const escaped = section.replaceAll(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  return new RegExp(`^\\s*\\[${escaped}(?:[.:-][^\\]]+)?\\]`, 'mu').test(text);
+}
+
+async function readOptionalText(path: string): Promise<string | undefined> {
+  if (!existsSync(path)) return undefined;
+  try {
+    return await readFile(path, 'utf8');
+  } catch {
+    return undefined;
+  }
+}
+
+function deduplicateCommands(commands: readonly VerificationCommand[]): VerificationCommand[] {
+  const seen = new Set<string>();
+  return commands.filter((command) => {
+    if (seen.has(command.command)) return false;
+    seen.add(command.command);
+    return true;
+  });
 }
 
 async function readProjectChecks(cwd: string): Promise<VerificationCommand[]> {

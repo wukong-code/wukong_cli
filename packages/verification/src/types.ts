@@ -37,12 +37,17 @@ export interface VerificationRisk {
 
 export interface VerificationCommand {
   readonly command: string;
-  readonly source: 'explicit' | 'package-script' | 'workspace-script' | 'project-config';
+  readonly source:
+    | 'explicit'
+    | 'package-script'
+    | 'workspace-script'
+    | 'project-config'
+    | 'project-inferred';
 }
 
 export interface VerificationCommandResult {
   readonly command: string;
-  readonly status: 'passed' | 'failed' | 'timed_out';
+  readonly status: 'passed' | 'failed' | 'timed_out' | 'unavailable';
   readonly exitCode: number | null;
   readonly durationMs: number;
   readonly stdout: string;

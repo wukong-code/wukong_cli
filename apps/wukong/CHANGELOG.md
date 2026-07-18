@@ -1,5 +1,17 @@
 # @wukong.today/code
 
+## 0.0.14
+
+### Development Changes
+
+- Extend `/resume` with explicit Codex, Claude Code, and Cursor sources while keeping bare `/resume` focused on Wukong sessions, with safe read-only context import.
+- Add an explicit Continue / Start Loop handoff before importing an external session. Start Loop pre-fills an editable objective and does not run until the user confirms it.
+- Replace ambiguous `Verify ✗ · Proof BLOCKED` footer combinations with one actionable Gate result that distinguishes unchecked, failed checks, review-required risk, reviewer blockers, and runtime errors.
+- Expand project-check discovery for explicitly configured Python checks, Cargo projects, and Go modules; distinguish missing tools from failed checks and add real Rust/Go repository E2E coverage.
+- Keep legacy `verify-pass`, `scan-clean`, and `judge-pass` inputs compatible and deprecated; do not remove them in this release.
+- Keep the release free and BYOK. Payments, GitHub PR integration, Team policy, cloud scheduling, and automatic policy improvement remain deferred.
+- Remove the retired cloud report upload, history, and public sharing workflow from the CLI and Web product.
+
 ## 0.0.13
 
 ### Patch Changes
@@ -21,7 +33,7 @@
 - Add experimental Role Profiles for task-specific writer prompts, model aliases, and tool allowlist narrowing. The independent reviewer stays read-only.
 - Enable Role Profiles through `experimental.role_profiles`, then use `wukong roles list`, `wukong --role <name>`, or `/transform <name>`.
 - Preserve 0.0.11 Goal records and legacy `verify-pass`, `scan-clean`, and `judge-pass` flags by migrating them to the unified `proof-pass` gate.
-- Keep reports optional. Loop does not persist or upload evidence unless the user explicitly requests it; Hosted Evidence v2 remains deferred beyond 0.0.13.
+- Keep evidence local and optional. Loop writes it only when the user explicitly requests a local path.
 
 ## 0.0.11
 
@@ -29,11 +41,9 @@
 
 - Add non-blocking TUI announcements with client-version and UTC-window targeting, display frequency, terminal sanitization, and safe action links. Announcement fetch failures never block startup.
 
-- Add explicit public hosted-report sharing across verify, scan, proof, and local report upload. Uploads stay private by default; pass `--upload --public` to create a reviewer link.
+- Improve local proof output and diagnostic command ergonomics.
 
-- Show hosted plan, usage, quota, and the Dashboard destination in logged-in `wukong today` output while keeping the local briefing fail-open.
-
-- Add hosted-history and public-share next actions after proof completion.
+- Keep `wukong today` local and fail-open.
 
 - Align the TUI welcome, loop status, proof tracks, and footer across terminal widths, including narrow-terminal truncation.
 
@@ -51,7 +61,7 @@
 ### Minor Changes
 
 - Add `wukong today` Daily Proof Briefing with local stats, streak, and focus. Run `wukong today` or `/today`.
-- Add M1 hosted reports upload for redacted verify/scan/proof evidence. Pass `--upload` or run `wukong report upload <path>`.
+- Add structured local verify/scan/proof evidence output.
 - Ship loop-driven TUI chrome: borderless editor, heartbeat phase line, and verify/proof conclusion tracks.
 
 ### Patch Changes

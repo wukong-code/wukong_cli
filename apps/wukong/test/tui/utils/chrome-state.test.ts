@@ -122,6 +122,18 @@ describe('ChromeStateAggregator', () => {
     expect(agg.getState().lastProof?.status).toBe('blocked');
   });
 
+  it('clears evidence when a different Loop starts', () => {
+    const agg = new ChromeStateAggregator({ cwd: '/repo' });
+    agg.setGoal(goal({ goalId: 'old-goal' }));
+    agg.recordVerify('failed', 'old failure');
+    agg.recordProof('blocked', 'old blocker');
+
+    agg.setGoal(goal({ goalId: 'new-goal', iteration: 1 }));
+
+    expect(agg.getState().lastVerify).toBeNull();
+    expect(agg.getState().lastProof).toBeNull();
+  });
+
   it('swallows stats read failures during hydrate', async () => {
     const agg = new ChromeStateAggregator({
       cwd: '/repo',

@@ -3,6 +3,7 @@ import type { DeviceAuthorization } from '@wukong/wukong-oauth';
 import type { WukongHarness, Session } from '@wukong/wukong-sdk';
 
 import type { ColorToken, ThemeName } from '#/tui/theme';
+import type { SessionSource } from '#/tui/components/dialogs/session-picker';
 
 import { LLM_NOT_SET_MESSAGE } from '../constant/wukong-tui';
 import type { AuthFlowController } from '../controllers/auth-flow';
@@ -145,7 +146,7 @@ export interface SlashCommandHost {
   setExitOpenUrl(url: string): void;
   showHelpPanel(): void;
   createNewSession(): Promise<void>;
-  showSessionPicker(): Promise<void>;
+  showSessionPicker(source?: SessionSource): Promise<void>;
   sendNormalUserInput(text: string): void;
   sendSkillActivation(session: Session, skillName: string, skillArgs: string): void;
   readonly skillCommandMap: Map<string, string>;
@@ -247,8 +248,23 @@ async function handleBuiltInSlashCommand(
       await host.createNewSession();
       host.state.ui.requestRender();
       return;
-    case 'sessions':
-      void host.showSessionPicker();
+    case 'sessions': {
+      const source = parseResumeSource(args);
+      if (source === null) {
+        host.showError('Usage: /resume [codex|claude|cursor]');
+        return;
+      }
+      void host.showSessionPicker(source);
+      return;
+    }
+    case 'resume-codex':
+      void host.showSessionPicker('codex');
+      return;
+    case 'resume-claude':
+      void host.showSessionPicker('claude');
+      return;
+    case 'resume-cursor':
+      void host.showSessionPicker('cursor');
       return;
     case 'tasks':
       void host.tasksBrowserController.show();
@@ -377,4 +393,13 @@ async function handleBuiltInSlashCommand(
       host.showError(`Unknown slash command: /${String(name)}`);
       return;
   }
+}
+
+function parseResumeSource(args: string): SessionSource | null {
+  const value = args.trim().toLowerCase();
+  if (value.length === 0) return 'wukong';
+  if (value === 'codex' || value === 'claude' || value === 'cursor') {
+    return value;
+  }
+  return null;
 }

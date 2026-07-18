@@ -1,3 +1,4 @@
+import { spawnSync } from 'node:child_process';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -51,6 +52,74 @@ describe('real monorepo proof E2E', () => {
     expect(result.blockers).toEqual([]);
   });
 
+  it.skipIf(!toolAvailable('cargo'))(
+    'discovers and executes a real Rust project test',
+    { timeout: 30_000 },
+    async () => {
+      const cwd = await makeTempRepo('wukong-rust-e2e-');
+      await writeRepoFile(
+        cwd,
+        'Cargo.toml',
+        '[package]\nname = "wukong_fixture"\nversion = "0.1.0"\nedition = "2021"\n',
+      );
+      await writeRepoFile(
+        cwd,
+        'src/lib.rs',
+        'pub fn ready() -> bool { true }\n\n#[test]\nfn fixture_is_ready() { assert!(ready()); }\n',
+      );
+      await gitAdd(cwd);
+
+      const result = await runProof({ cwd, writeReport: false });
+
+      expect(result.status).toBe('passed');
+      expect(result.verification.selectedCommands).toEqual(['cargo test']);
+      expect(result.verification.commandResults[0]?.status).toBe('passed');
+    },
+  );
+
+  it.skipIf(!toolAvailable('ruff'))(
+    'discovers and executes a real configured Python lint check',
+    { timeout: 15_000 },
+    async () => {
+      const cwd = await makeTempRepo('wukong-python-e2e-');
+      await writeRepoFile(
+        cwd,
+        'pyproject.toml',
+        '[project]\nname = "wukong-fixture"\nversion = "0.1.0"\n\n[tool.ruff]\nline-length = 100\n',
+      );
+      await writeRepoFile(cwd, 'src/ready.py', 'def ready() -> bool:\n    return True\n');
+      await gitAdd(cwd);
+
+      const result = await runProof({ cwd, writeReport: false });
+
+      expect(result.status).toBe('passed');
+      expect(result.verification.selectedCommands).toEqual(['ruff check .']);
+      expect(result.verification.commandResults[0]?.status).toBe('passed');
+    },
+  );
+
+  it.skipIf(!toolAvailable('go'))(
+    'discovers and executes a real Go project test',
+    { timeout: 30_000 },
+    async () => {
+      const cwd = await makeTempRepo('wukong-go-e2e-');
+      await writeRepoFile(cwd, 'go.mod', 'module example.test/wukongfixture\n\ngo 1.24\n');
+      await writeRepoFile(cwd, 'ready.go', 'package wukongfixture\n\nfunc Ready() bool { return true }\n');
+      await writeRepoFile(
+        cwd,
+        'ready_test.go',
+        'package wukongfixture\n\nimport "testing"\n\nfunc TestReady(t *testing.T) { if !Ready() { t.Fatal("not ready") } }\n',
+      );
+      await gitAdd(cwd);
+
+      const result = await runProof({ cwd, writeReport: false });
+
+      expect(result.status).toBe('passed');
+      expect(result.verification.selectedCommands).toEqual(['go test ./...']);
+      expect(result.verification.commandResults[0]?.status).toBe('passed');
+    },
+  );
+
   it('returns a stable actionable blocker from a nested package failure', { timeout: 15_000 }, async () => {
     const cwd = await makeTempRepo('wukong-monorepo-fail-e2e-');
     await writeJson(join(cwd, 'package.json'), { private: true, workspaces: ['packages/*'] });
@@ -73,3 +142,8 @@ describe('real monorepo proof E2E', () => {
     expect(result.blockers[0]?.evidence).toContain('nested failure');
   });
 });
+
+function toolAvailable(command: string): boolean {
+  const args = command === 'go' ? ['version'] : ['--version'];
+  return spawnSync(command, args, { stdio: 'ignore' }).status === 0;
+}

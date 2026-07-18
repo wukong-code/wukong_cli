@@ -394,7 +394,6 @@ flowchart LR
 1. **Prompt 符号**：`❯` 还是保留 `>`？建议 v1 用 `❯` 对齐 Claude Code，bash 仍用 `!`。
 2. **心跳行动画**：保留 moon 动画还是 `↻` 静态符号 + 文字刷新？建议 loop active 用 `↻`（语义明确），普通 turn 保留 moon。
 3. **Dashboard 默认**：新用户默认 `auto`（有 focus 则 compact）还是始终 compact？建议 **auto**。
-4. **hosted 增强**：登录后 footer 是否显示 `wukong.today` 链接？放结论轨右侧，失败静默。
 
 ---
 

@@ -3,7 +3,7 @@
 > 版本: v2.1
 > 日期: 2026-07-07
 > 适用范围: `wukong_cli` 新 Kimi-code base
-> 状态: 当前架构 + P0 本地验证闭环 + 0.0.12 Loop-first gate 已实现；Hosted Evidence v2、完整 billing、PR/Team 能力后续实现
+> 状态: 当前架构 + P0 本地验证闭环 + 0.0.12 Loop-first gate 已实现；完整 billing、PR/Team 能力后续实现
 > 产品定位: AI Coding Loop 的控制层与验证层（proof layer for AI-written code）
 
 ## 1. 当前事实
@@ -279,12 +279,12 @@ P0 本地文件：
 
 P1:
 
-- report history。
+- Loop outcome history。
 - `review --deep`。
 
 P2:
 
 - team rules。
 - audit log。
-- hosted reports。
+- hosted Loop execution。
 - sandbox runner。

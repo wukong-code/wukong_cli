@@ -2,7 +2,7 @@
 
 > 日期: 2026-07-14
 > 范围: 现有 verification v1 兼容回归，以及 0.0.12 Loop-first 状态机、fresh reviewer、session 额度和角色集成
-> 状态: v1 已实现；0.0.12 v2 主流程、Role Profiles 基础运行时、Loop quota 与真实 monorepo E2E 已实现。Hosted Evidence v2 延后至 0.0.13+，且不是 Review Learning Loop 发布 blocker。contract 以 [0.0.12 Trust Loop v2](../design/verification-loop-v2.md) 为准
+> 状态: v1 已实现；0.0.12 v2 主流程、Role Profiles 基础运行时、Loop quota 与真实 monorepo E2E 已实现。contract 以 [0.0.12 Trust Loop v2](../design/verification-loop-v2.md) 为准
 
 ## 0. 0.0.12 v2 发布测试门槛
 
@@ -56,14 +56,8 @@
 - 角色切换不写入 replay；`/transform off` 恢复切换前的 model、默认 prompt 与工具集合。
 - 未知 frontmatter 字段和超出基础 profile 的工具被拒绝。
 
-### Hosted 与兼容
+### 兼容
 
-- Web ingestion 同时接受 Hosted Report v1 和 `schema_version=2`。
-- v2 `trust_status`/`decision` 经 adapter 映射到 Dashboard 三态 view model。
-- 0.0.11 CLI 仍可上传 v1 report；0.0.12 CLI 上传 v2 report。
-- v2 接受 `type=loop`，v1 validator 仍只接受 verify/scan/proof；两者不能互相误判。
-- D1 旧行保持 `schema_version=1`/`legacy_status`；v2 trust status、model/role metadata、legacy projection 与 dual reader 正确。
-- 发布顺序测试/预演保证 Web dual reader 先于 CLI v2 writer 上线。
 - v1 `verify-pass`、`scan-clean`、`judge-pass` 的持久化 Goal 能迁移并恢复。
 - v1 公开 flags 全部保留或输出明确 warning，不能静默忽略。
 

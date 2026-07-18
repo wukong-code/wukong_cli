@@ -7,13 +7,6 @@
 
 import type { TodayBriefing } from '#/utils/stats';
 
-export interface HostedReportUsageSummary {
-  readonly tier: string;
-  readonly used: number;
-  readonly limit: number | 'unlimited';
-  readonly dashboardUrl: string;
-}
-
 export interface FormatTodayCompactOptions {
   readonly briefing: TodayBriefing;
   readonly includeFocus?: boolean;
@@ -32,10 +25,7 @@ export function formatTodayCompact(options: FormatTodayCompactOptions): string {
   return parts.join(' · ');
 }
 
-export function formatTodayFull(
-  briefing: TodayBriefing,
-  hosted: HostedReportUsageSummary | null = null,
-): string {
+export function formatTodayFull(briefing: TodayBriefing): string {
   const lines = [
     `Wukong Today — ${briefing.date}`,
     '',
@@ -48,14 +38,6 @@ export function formatTodayFull(
 
   if (briefing.lastProof !== undefined) {
     lines.push(`Last proof: ${briefing.lastProof.status.toUpperCase()} — ${briefing.lastProof.summary}`);
-  }
-
-  if (hosted !== null) {
-    const limit = hosted.limit === 'unlimited' ? 'unlimited' : String(hosted.limit);
-    lines.push(
-      `Hosted reports: ${String(hosted.used)} / ${limit} (${hosted.tier})`,
-      `Dashboard: ${hosted.dashboardUrl}`,
-    );
   }
 
   if (briefing.next.length > 0) {

@@ -931,19 +931,17 @@ P0 本地:
 ~/.wukong/guard/events.jsonl
 ```
 
-P1 之后可以由外部服务接入:
+账号服务只记录 Loop quota 和最终 outcome:
 
 ```mermaid
 sequenceDiagram
   participant CLI as CLI
-  participant API as Report API
-  participant DB as Report Database
-  participant Storage as Report Storage
+  participant API as Loop API
+  participant DB as Usage Database
 
-  CLI->>API: upload report metadata + auth token
-  API->>DB: insert verification_reports
-  API->>Storage: store redacted markdown/html report
-  API-->>CLI: share URL
+  CLI->>API: reserve Loop usage + auth token
+  API->>DB: store reservation and outcome
+  API-->>CLI: quota status
 ```
 
 ### 9.2 建议外部数据实体
@@ -1005,7 +1003,7 @@ team_rules(
 
 0.0.12 只保留 Loop sessions 一类用户额度。verify/scan/proof 无论由 Loop 内部调用还是高级用户直接调用，都不产生独立 usage。BYOK reviewer 包含在 Loop run 中，不增加 AI credits。完整 contract 见 [0.0.12 Trust Loop v2](../design/verification-loop-v2.md)。
 
-现有 Hosted Evidence 上传/retention 限制继续作为次级存储策略，不出现在 Trust Run 主额度中，也不阻塞默认本地 verdict。
+本地 evidence 文件不进入 Trust Run 主额度，也不阻塞默认 verdict。
 
 ### 9.4 Trust Run 编排与 usage
 
@@ -1056,40 +1054,7 @@ trust_runs(
 - 用户交互式运行顶层 verify/proof，视为授权执行已展示的标准 package scripts；`.wukong/config.toml` 自定义 command 首次执行仍需确认。
 - 自动 Loop、agent tool 与非交互模式必须信任当前 repo identity + plan digest；`--trust-project` 只信任当前 plan。
 - Role Profile 只允许 prompt、model alias、tool allowlist 与 verify profile，不能内嵌任意 shell command 或扩大权限。
-- 默认只返回 ephemeral verdict，不写文件。显式 `--save` 写入 `~/.wukong/workspaces/<repo-id>/evidence/`；`--report <path>` 才写用户指定路径，`--upload` 可直接上传 redacted payload。0.0.12 不提供隐式读取旧报告的 `--from-latest`；复用必须显式传入当前 run 的 snapshot/evidence id 并校验 digest。
-
-### 9.6 Hosted Evidence v2 与兼容
-
-0.0.12 使用一个用户状态与一个 decision：
-
-```ts
-type TrustStatus = 'PASS' | 'NEEDS_WORK' | 'ERROR';
-type TrustDecision = 'pass' | 'needs_work' | 'none';
-```
-
-wire payload 延续 snake_case，写入 `schema_version`、`type`、`trust_status`、`decision`、`reason_code`、`snapshot_id`，以及可选 model/role metadata。v2 `type` 增加 `loop`；只有用户显式 upload 时构建 payload，中间 gate 不上传。Dashboard、公开 evidence page 和 API validator 使用同一个 adapter。
-
-D1 migration 采用增量字段，不删除现有 `status`：
-
-```sql
-ALTER TABLE verification_reports ADD COLUMN schema_version INTEGER NOT NULL DEFAULT 1;
-ALTER TABLE verification_reports ADD COLUMN snapshot_id TEXT;
-ALTER TABLE verification_reports ADD COLUMN trust_status TEXT;
-ALTER TABLE verification_reports ADD COLUMN decision TEXT;
-ALTER TABLE verification_reports ADD COLUMN reason_code TEXT;
-ALTER TABLE verification_reports ADD COLUMN model_alias TEXT;
-ALTER TABLE verification_reports ADD COLUMN role_name TEXT;
-ALTER TABLE verification_reports ADD COLUMN legacy_status TEXT;
-ALTER TABLE verification_reports ADD COLUMN redacted_payload_json TEXT;
-```
-
-- migration 后所有已有行保持 `schema_version=1`，并把当前 `status` 复制到 `legacy_status`；不为旧行伪造 snapshot 或 v2 execution fields。
-- v1 ingestion 原样保存 legacy status，并通过 adapter 读取；v2 ingestion 校验 wire schema 后写 v2 columns 与 redacted payload。
-- 由于当前 `status` 非空，兼容期内 v2 同时写 legacy projection：PASS→passed，NEEDS_WORK→blocked，ERROR→warning；该列只供旧页面读取，不再是 v2 truth source。
-- v1 passed→PASS；warning→PASS + legacy warning；failed/blocked→NEEDS_WORK。v1 无法反推 ERROR，页面必须标注 legacy result。
-- migration 必须覆盖旧行、v2 insert/read、`type=loop`、model/role metadata、Dashboard 和 public evidence projection。
-
-部署顺序固定为：先部署 D1 migration + Web v1/v2 dual reader/validator，再发布 0.0.12 CLI v2 writer，最后观察 v1/v2 ingest 与 projection 指标。CLI v2 不能先于 Web contract 上线；兼容窗口结束也必须单独发布公告，不能在 0.0.12 内移除 v1。
+- 默认只返回 ephemeral verdict，不写文件。显式 `--save` 写入 `~/.wukong/workspaces/<repo-id>/evidence/`；`--report <path>` 才写用户指定路径。0.0.12 不提供隐式读取旧报告的 `--from-latest`；复用必须显式传入当前 run 的 snapshot/evidence id 并校验 digest。
 
 Loop 默认使用 Proof gate。旧 `--until verify-pass`、`--until scan-clean`、`--until judge-pass` 以及对应持久化 Goal records 在 0.0.12 继续解析并输出 deprecation 提示，不能静默改变含义。
 
@@ -1206,18 +1171,16 @@ pnpm -C apps/wukong run dev:cli-only -- loop "fix failing tests" --until verify-
 - `loop` 达到 max-iterations 时明确返回 `max-iterations` 状态，不假装成功。
 - `loop --every` 的轮间等待由 cron scheduler 驱动，代码中无第二套 timer 实现。
 
-### Milestone 5: 云端报告与商业化接口
+### Milestone 5: 商业化接口
 
-- CLI 登录状态下可选择上传 report metadata。
-- CLI 默认不上传源码 diff 或敏感片段。
-- 支持外部服务返回 report share link。
-- 预留 hosted report quota 和 guard usage quota 字段。
+- CLI 登录状态下使用服务端 Loop quota。
+- CLI 默认不上传源码 diff 或本地 evidence。
+- 预留 Loop quota 和 guard usage quota 字段。
 
 验收:
 
 - 未登录时本地 verify 完整可用。
-- 登录上传失败不影响本地报告生成。
-- 上传 payload 通过 redaction 测试。
+- quota 服务失败不影响本地安全降级。
 
 ---
 
@@ -1309,11 +1272,10 @@ packages/verification/test/fixtures/
 8. `wukong judge`（已完成，deterministic evaluator）
 9. `/goal` verification gate（已完成，proof + fresh-context reviewer）
 10. `wukong loop`（已完成，本机迭代 Loop，配额与三态结果）
-11. report history / share link
-12. Hosted Evidence v2 与更深的 reviewer policy
-13. team rules / audit log interface
-14. 跨会话 loop（hosted/CI daemon）
-15. sandbox / external cloud execution
+11. 更深的 reviewer policy
+12. team rules / audit log interface
+13. 跨会话 loop（hosted/CI daemon）
+14. sandbox / external cloud execution
 
-前十项已完成，Wukong 的验证内核与 **AI Coding Loop 控制层** 已真实成立。下一阶段重点是 Hosted Evidence v2、团队规则和跨会话执行：
+前十项已完成，Wukong 的验证内核与 **AI Coding Loop 控制层** 已真实成立。下一阶段重点是团队规则和跨会话执行：
 **AI agent 写完代码后，Wukong 持续驱动验证、产出合并证据，并判断能不能合并。**

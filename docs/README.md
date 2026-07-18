@@ -1,6 +1,6 @@
 # Wukong Code 文档索引
 
-> 最后更新: 2026-07-16
+> 最后更新: 2026-07-18
 > 当前事实基线: `wukong_cli` 内部实现仓库，产品名称为 **Wukong Code**
 > 状态说明: 本目录区分 **当前已实现** 与 **商业化后续待实现**。
 
@@ -32,15 +32,19 @@
 - [根 README](../README.md) / [中文 README](../README.zh-CN.md)
   面向仓库入口的当前能力说明。
 - [产品路线图](../ROADMAP.md)
-  记录从本地验证闭环到 loop 控制层、hosted reports、Pro Preview、PR gate、Team Pilot 的交付顺序和验收标准。
+  记录从本地验证闭环到 loop 控制层、Pro Preview、PR gate、Team Pilot 的交付顺序和验收标准。
 - [0.0.12 Trust Loop v2](design/verification-loop-v2.md)
 - [0.0.12 Goal 与 flags 兼容矩阵](design/0.0.12-compatibility.md)
 - [0.0.12 release notes / What's Changed](releases/0.0.12.md)
   定义 Loop-first 状态机、独立 reviewer、Loop session 额度、Role Profiles，以及 verify/scan/proof 的内部层与兼容边界。
 - [0.0.13 Review Learning Loop](design/review-learning-loop.md)
   定义多 finding Review Contract、项目 review policy、人工反馈和独立 reviewer model；自动 improver 与支付不在本版本。
+- [0.0.14 Cross-Agent Resume 与 Loop UX 收尾](design/0.0.14-resume-loop-polish.md)
+  定义跨 Agent 本地会话导入、Resume → Loop、TUI Gate/Footer 简化、真实项目检查发现、兼容边界和发布门槛。
+- [跨 Agent Session Resume](design/cross-agent-resume.md)
+  `/resume` 恢复 Wukong 会话；`/resume codex|claude|cursor` 显式发现对应 Agent 的本地会话，并通过内置 Skill 只读导入后在 Wukong 中继续。
 - [执行层 TODO](../TODO.md)
-  按 ROADMAP milestone 拆解的任务清单，记录当前重点（0.0.13 Review Learning Loop）、暂缓项和已完成基线。
+  按 ROADMAP milestone 拆解的任务清单，记录当前重点（0.0.14 Cross-Agent Resume + Loop UX）、暂缓项和已完成基线。
 
 当前可用 top-level commands 以 `wukong --help` 为准，主要包括：
 
@@ -70,7 +74,7 @@ wukong upgrade
 
 ## 商业化文档
 
-这些文档记录当前 P0/P0.5 实现和后续计划。`verify`、`scan`、`guard`、`proof`、`judge`、`loop` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop`、`/today` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。Milestone 0.5 已按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序完整落地，`/loop --every` 复用 agent-core cron scheduler 实现轮间 pacing。Hosted report v1 已支持登录上传、历史和分享；后续工作是 `/schedule`、sync、Hosted Evidence v2、完整计费与团队能力：
+这些文档记录当前 P0/P0.5 实现和后续计划。`verify`、`scan`、`guard`、`proof`、`judge`、`loop` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop`、`/today` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。Milestone 0.5 已按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序完整落地，`/loop --every` 复用 agent-core cron scheduler 实现轮间 pacing。后续工作是 `/schedule`、sync、完整计费与团队能力：
 
 - [商业化与产品重构方案](business/COMMERCIAL_REFACTOR_PLAN.md)
   定义产品定位、商业模型、目标命令结构（含 loop/proof/judge/schedule）和路线图。
@@ -92,9 +96,6 @@ wukong upgrade
 ## 已确认但未排期的方向
 
 以下文档只记录已经确认的产品方向和实现边界，不属于任何已排版本，也不代表当前已经实现：
-
-- [跨 Agent Session Resume](design/cross-agent-resume.md)
-  扩展现有 `/resume`，在统一 picker 中发现 Wukong、Codex、Claude Code、Cursor 的本地 session；Wukong session 原生恢复，外部 session 明确定义为“导入并在 Wukong 中继续”，可进一步进入 `/loop`。
 
 ## 当前最高优先级 TODO
 

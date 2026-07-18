@@ -162,7 +162,13 @@ function buildProofReportLines(result: ProofResult): string[] {
     }
   }
 
-  const allRisks = [...result.verification.risks, ...result.scan.risks];
+  const seenRisks = new Set<string>();
+  const allRisks = [...result.verification.risks, ...result.scan.risks].filter((risk) => {
+    const key = `${risk.id}:${risk.file ?? ''}:${risk.line ?? ''}:${risk.evidence ?? ''}`;
+    if (seenRisks.has(key)) return false;
+    seenRisks.add(key);
+    return true;
+  });
   if (allRisks.length > 0) {
     lines.push('', 'Risks:');
     for (const risk of allRisks) {
@@ -177,8 +183,6 @@ function buildProofReportLines(result: ProofResult): string[] {
 
   lines.push(
     '',
-    'Hosted history: wukong proof --upload',
-    'Public share:  wukong proof --upload --public',
   );
 
   return lines;
@@ -217,6 +221,10 @@ function buildVerificationReportLines(result: VerificationResult): string[] {
 function summarizeVerification(result: VerificationResult): string | undefined {
   const failedCommands = result.commandResults.filter((c) => c.status !== 'passed');
   if (failedCommands.length > 0) {
+    const unavailable = failedCommands.filter((command) => command.status === 'unavailable').length;
+    if (unavailable > 0) {
+      return `${String(unavailable)} required tool${unavailable === 1 ? '' : 's'} unavailable`;
+    }
     return `${String(failedCommands.length)} command${failedCommands.length === 1 ? '' : 's'} failed`;
   }
   if (result.risks.length > 0) {

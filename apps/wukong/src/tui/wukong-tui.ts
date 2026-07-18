@@ -39,6 +39,7 @@ import { readBannerDisplayState, writeBannerDisplayState } from './banner/state'
 import {
   BUILTIN_SLASH_COMMANDS,
   buildSkillSlashCommands,
+  findBuiltInSlashCommand,
   isExperimentalFlagEnabled,
   setExperimentalFeatures,
   sortSlashCommands,
@@ -63,7 +64,16 @@ import {
 import { CompactionComponent } from './components/dialogs/compaction';
 import { HelpPanelComponent } from './components/dialogs/help-panel';
 import { QuestionDialogComponent } from './components/dialogs/question-dialog';
-import { SessionPickerComponent, type SessionRow } from './components/dialogs/session-picker';
+import {
+  foreignLoopDraft,
+  ResumeHandoffComponent,
+  type ResumeHandoffAction,
+} from './components/dialogs/resume-handoff';
+import {
+  SessionPickerComponent,
+  type SessionRow,
+  type SessionSource,
+} from './components/dialogs/session-picker';
 import {
   FileMentionProvider,
   type SlashAutocompleteCommand,
@@ -129,6 +139,7 @@ import {
 import { hasDispose, isExpandable } from './utils/component-capabilities';
 import { isDeadTerminalError } from './utils/dead-terminal';
 import { formatErrorMessage } from './utils/event-payload';
+import { discoverForeignSessionRows } from './utils/foreign-sessions';
 import { pickForegroundTasks } from './utils/foreground-task';
 import { ImageAttachmentStore, type ImageAttachment } from './utils/image-attachment-store';
 import { extractMediaAttachments } from './utils/image-placeholder';
@@ -355,7 +366,10 @@ export class WukongTUI {
     const builtins = sortSlashCommands(BUILTIN_SLASH_COMMANDS).filter(
       (command) => command.hidden !== true && isExperimentalFlagEnabled(command.experimentalFlag),
     );
-    return [...builtins, ...this.skillCommands];
+    const skills = this.skillCommands.filter(
+      (command) => findBuiltInSlashCommand(command.name) === undefined,
+    );
+    return [...builtins, ...skills];
   }
 
   private setupAutocomplete(): void {
@@ -1484,18 +1498,36 @@ export class WukongTUI {
     session.setQuestionHandler(createQuestionAskHandler(this.questionController));
   }
 
-  async fetchSessions(scope: 'cwd' | 'all' = this.state.sessionsScope): Promise<void> {
+  async fetchSessions(
+    scope: 'cwd' | 'all' = this.state.sessionsScope,
+    source: SessionSource | undefined = 'wukong',
+  ): Promise<void> {
     this.state.loadingSessions = true;
     this.state.sessionsScope = scope;
     try {
-      const sessions =
-        scope === 'all'
-          ? await this.harness.listSessions({})
-          : await this.harness.listSessions({ workDir: this.state.appState.workDir });
-      this.state.sessions = sessionRowsForPicker(
-        sessions,
-        this.state.appState.sessionId,
-        this.hasSessionContent(),
+      const workDir = scope === 'cwd' ? this.state.appState.workDir : undefined;
+      const [nativeResult, foreignResult] = await Promise.allSettled([
+        source === undefined || source === 'wukong'
+          ? this.harness.listSessions(workDir === undefined ? {} : { workDir })
+          : Promise.resolve([]),
+        source === 'wukong'
+          ? Promise.resolve([])
+          : discoverForeignSessionRows({
+              ...(source === undefined ? {} : { source }),
+              ...(workDir === undefined ? {} : { workDir }),
+            }),
+      ]);
+      const nativeRows =
+        nativeResult.status === 'fulfilled'
+          ? sessionRowsForPicker(
+              nativeResult.value,
+              this.state.appState.sessionId,
+              this.hasSessionContent(),
+            )
+          : [];
+      const foreignRows = foreignResult.status === 'fulfilled' ? foreignResult.value : [];
+      this.state.sessions = [...nativeRows, ...foreignRows].toSorted(
+        (left, right) => right.updated_at - left.updated_at,
       );
     } catch {
       /* silently ignore */
@@ -2478,6 +2510,7 @@ export class WukongTUI {
     readonly applyStartupModes: boolean;
     readonly closeOnCancel: boolean;
     readonly forwardEditorExit: boolean;
+    readonly source?: SessionSource;
   } = {
     applyStartupModes: false,
     closeOnCancel: false,
@@ -2485,11 +2518,12 @@ export class WukongTUI {
   };
   private sessionPickerScopeRequestToken = 0;
 
-  async showSessionPicker(): Promise<void> {
+  async showSessionPicker(source?: SessionSource): Promise<void> {
     await this.openSessionPicker({
       applyStartupModes: false,
       closeOnCancel: false,
       forwardEditorExit: false,
+      ...(source === undefined ? {} : { source }),
     });
   }
 
@@ -2505,9 +2539,10 @@ export class WukongTUI {
     readonly applyStartupModes: boolean;
     readonly closeOnCancel: boolean;
     readonly forwardEditorExit: boolean;
+    readonly source?: SessionSource;
   }): Promise<void> {
     this.sessionPickerOptions = options;
-    await this.fetchSessions('cwd');
+    await this.fetchSessions('cwd', options.source);
     this.mountSessionPicker({
       applyStartupModes: options.applyStartupModes,
       onCancel: () => {
@@ -2530,7 +2565,7 @@ export class WukongTUI {
   private async toggleSessionPickerScope(selectedSessionId: string): Promise<void> {
     const requestToken = ++this.sessionPickerScopeRequestToken;
     const nextScope = this.state.sessionsScope === 'cwd' ? 'all' : 'cwd';
-    await this.fetchSessions(nextScope);
+    await this.fetchSessions(nextScope, this.sessionPickerOptions.source);
     if (requestToken !== this.sessionPickerScopeRequestToken) return;
     if (this.state.activeDialog !== 'session-picker') return;
     this.mountSessionPicker({
@@ -2600,6 +2635,24 @@ export class WukongTUI {
     session: SessionRow,
     applyStartupModes: boolean,
   ): Promise<void> {
+    if (
+      session.external !== undefined &&
+      session.source !== undefined &&
+      session.source !== 'wukong'
+    ) {
+      const activeSession = this.session;
+      if (this.state.appState.model.trim().length === 0 || activeSession === undefined) {
+        this.showError(LLM_NOT_SET_MESSAGE);
+        return;
+      }
+      if (this.state.appState.streamingPhase !== 'idle') {
+        this.showError('Cannot import a session while streaming — press Esc or Ctrl-C first.');
+        return;
+      }
+      this.showResumeHandoff(session, session.source);
+      return;
+    }
+
     if (resolve(session.work_dir) !== resolve(this.state.appState.workDir)) {
       await this.showResumeOtherWorkDirHint(session);
       if (applyStartupModes) await this.stop(0);
@@ -2613,6 +2666,51 @@ export class WukongTUI {
       this.applyStartupPermissionAndPlanToAppState();
     }
     this.hideSessionPicker();
+  }
+
+  private showResumeHandoff(
+    session: SessionRow,
+    source: Exclude<SessionSource, 'wukong'>,
+  ): void {
+    this.state.activeDialog = 'session-picker';
+    this.mountEditorReplacement(
+      new ResumeHandoffComponent({
+        session,
+        source,
+        onSelect: (action: ResumeHandoffAction) => {
+          this.handleResumeHandoff(session, source, action);
+        },
+        onCancel: () => {
+          this.hideSessionPicker();
+        },
+      }),
+    );
+  }
+
+  private handleResumeHandoff(
+    session: SessionRow,
+    source: Exclude<SessionSource, 'wukong'>,
+    action: ResumeHandoffAction,
+  ): void {
+    if (action === 'loop') {
+      this.state.activeDialog = null;
+      this.restoreInputText(foreignLoopDraft(session, source));
+      this.showStatus('Review the /loop objective, then press Enter to start.');
+      return;
+    }
+
+    const activeSession = this.requireSession();
+    this.hideSessionPicker();
+    this.sendSkillActivation(
+      activeSession,
+      `resume-${source}`,
+      JSON.stringify({
+        source,
+        sessionId: session.external?.id,
+        sourcePath: session.external?.sourcePath,
+        workDir: session.work_dir,
+      }),
+    );
   }
 
   private showApprovalPanel(payload: ApprovalPanelData): void {

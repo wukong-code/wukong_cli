@@ -264,9 +264,9 @@ interface WorkspaceSnapshot {
 |---|---|
 | 默认 | 只输出最终 LoopResult |
 | `--json` | JSON stdout，不落盘 |
-| 旧高级命令显式 report/upload | 继续使用0.0.11 Hosted Report v1兼容链路 |
+| 旧高级命令显式 report | 继续写本地 Markdown 文件 |
 
-中间 CHECK/REVIEW 不上传。0.0.12 Dashboard 只新增 Loop 用量、重置时间和最近最终状态，不上传 diff 或 evidence。Loop `--save`/`--upload`、Hosted Report v2 和 Loop 历史详情延后到 0.0.13+，且不是 0.0.13 Review Learning Loop 的发布 blocker；现有 Hosted Report v1 保持兼容但不作为 Loop 的完成步骤。
+中间 CHECK/REVIEW 不上传。Dashboard 只展示 Loop 用量、重置时间和最近最终状态，不上传 diff 或 evidence。Loop 的完成步骤只依赖当前 workspace 的本地 gate。
 
 ## 12. 旧命令兼容与降级
 
@@ -274,9 +274,8 @@ interface WorkspaceSnapshot {
 |---|---|
 | `wukong verify/scan/proof` | 保留为 advanced/CI/debug 命令，不在主 onboarding、TUI 主 palette 或产品额度中突出 |
 | TUI `/verify`、`/scan`、`/proof` | 从默认 palette 隐藏；旧输入仍可执行并提示它们是 Loop 内部阶段 |
-| `--report`、`--upload`、`--public` | 兼容旧脚本，仅显式调用才产生 evidence |
+| `--report` | 兼容旧脚本，仅显式调用才写本地 evidence |
 | `verify-pass`、`scan-clean`、`judge-pass` | 旧 Goal records 继续解析；新 Loop 默认统一为 `proof-pass` |
-| Hosted v1 report | 继续读取，不要求0.0.12用户使用 Report 流程 |
 
 不在0.0.12直接删除公开命令或 flag；真正删除属于单独的 breaking change。
 
@@ -301,7 +300,7 @@ interface WorkspaceSnapshot {
 - 不做 GitHub PR comment/status check。
 - 不做云端后台 Loop；本机 Loop 关机即停。
 - 不把 Report management 做成主产品。
-- 不做 Hosted Report v2、Loop evidence 上传或 Dashboard evidence 迁移。
+- 不做 Loop evidence 上传或 Dashboard evidence 迁移。
 - 不做独立 reviewer model；reviewer 在 fresh context 中继承 writer model。
 
 ## 14. 发布门槛

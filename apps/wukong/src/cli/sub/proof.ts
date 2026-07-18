@@ -1,7 +1,6 @@
 import { runProof, type ProofOptions, type ProofResult } from '@wukong/verification';
 import type { Command } from 'commander';
 
-import { getCliAccessToken, uploadReport } from '#/cli/lib/report-upload';
 import { localDateString, recordStatEvent } from '#/utils/stats';
 import type { ProofStatEvent } from '#/utils/stats';
 
@@ -15,8 +14,6 @@ export interface ProofCliOptions {
   readonly report?: string | false;
   readonly json?: boolean;
   readonly strict?: boolean;
-  readonly upload?: boolean;
-  readonly public?: boolean;
 }
 
 export interface ProofDeps {
@@ -25,15 +22,9 @@ export interface ProofDeps {
   readonly stderr: WritableLike;
   readonly runProof: (options: ProofOptions) => Promise<ProofResult>;
   readonly onResult?: (result: ProofResult) => void;
-  readonly getAccessToken?: () => Promise<string | null>;
 }
 
 export async function handleProof(deps: ProofDeps, options: ProofCliOptions): Promise<number> {
-  if (options.public === true && options.upload !== true) {
-    deps.stderr.write('wukong proof: --public requires --upload.\n');
-    return 2;
-  }
-
   try {
     const result = await deps.runProof({
       cwd: options.cwd ?? deps.cwd(),
@@ -44,22 +35,6 @@ export async function handleProof(deps: ProofDeps, options: ProofCliOptions): Pr
 
     deps.onResult?.(result);
     deps.stdout.write(options.json === true ? `${JSON.stringify(result, null, 2)}\n` : formatProof(result));
-
-    if (options.upload === true) {
-      const markdown = result.report ?? '';
-      const outcome = await uploadReport(
-        { kind: 'proof', result, markdown },
-        { visibility: options.public === true ? 'public' : 'private' },
-      );
-      if (outcome.ok) {
-        deps.stdout.write(`\n${outcome.shareUrl ? `Uploaded: ${outcome.shareUrl}` : `Uploaded privately: ${outcome.id}`}\n`);
-      } else {
-        deps.stderr.write(`\nUpload skipped: ${outcome.reason}\n`);
-      }
-    } else if (options.json !== true) {
-      const token = await (deps.getAccessToken ?? getCliAccessToken)().catch(() => null);
-      deps.stdout.write(formatHostedProofCta(token !== null));
-    }
 
     return result.status === 'blocked' ? 1 : 0;
   } catch (error) {
@@ -77,8 +52,6 @@ export function registerProofCommand(parent: Command, deps?: Partial<ProofDeps>)
     .option('--no-report', 'Do not write a markdown merge proof report.')
     .option('--json', 'Print the structured proof result as JSON.')
     .option('--strict', 'Treat any risk as a blocked proof.')
-    .option('--upload', 'Upload the redacted report to wukong.today (requires login).')
-    .option('--public', 'Create a public share link when used with --upload.')
     .action(async (raw: RawProofOptions) => {
       const resolved = resolveDeps(deps);
       const code = await handleProof(
@@ -101,8 +74,6 @@ export function registerProofCommand(parent: Command, deps?: Partial<ProofDeps>)
           report: raw.report,
           json: raw.json === true,
           strict: raw.strict === true,
-          upload: raw.upload === true,
-          public: raw.public === true,
         },
       );
 
@@ -115,24 +86,6 @@ interface RawProofOptions {
   readonly report?: string | false;
   readonly json?: boolean;
   readonly strict?: boolean;
-  readonly upload?: boolean;
-  readonly public?: boolean;
-}
-
-function formatHostedProofCta(isLoggedIn: boolean): string {
-  if (isLoggedIn) {
-    return [
-      '',
-      'Hosted history: wukong proof --upload',
-      'Public share:  wukong proof --upload --public',
-      '',
-    ].join('\n');
-  }
-  return [
-    '',
-    'Need hosted history? Run `wukong login`, then `wukong proof --upload`.',
-    '',
-  ].join('\n');
 }
 
 function collect(value: string, previous: string[]): string[] {
@@ -145,7 +98,6 @@ function resolveDeps(deps: Partial<ProofDeps> | undefined): ProofDeps {
     stdout: deps?.stdout ?? process.stdout,
     stderr: deps?.stderr ?? process.stderr,
     runProof: deps?.runProof ?? runProof,
-    getAccessToken: deps?.getAccessToken ?? getCliAccessToken,
   };
 }
 

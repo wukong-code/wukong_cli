@@ -118,6 +118,14 @@ export class ChromeStateAggregator {
   }
 
   setGoal(goal: GoalSnapshot | null): void {
+    const previousGoalId = this.goal?.goalId;
+    const nextGoalId = goal?.goalId;
+    if (nextGoalId !== undefined && nextGoalId !== previousGoalId) {
+      // Evidence belongs to a single Loop. Do not present yesterday's or a
+      // previous goal's failure as the status of a newly started goal.
+      this.lastVerify = null;
+      this.lastProof = null;
+    }
     this.goal = goal ?? null;
   }
 

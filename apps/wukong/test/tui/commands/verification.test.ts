@@ -275,8 +275,6 @@ describe('verification slash commands', () => {
     expect(latestPanelText(host)).toContain('Status: blocked');
     expect(latestPanelText(host)).toContain('High-risk changes detected');
     expect(latestPanelText(host)).toContain('Placeholder text in changed code.');
-    expect(latestPanelText(host)).toContain('wukong proof --upload');
-    expect(latestPanelText(host)).toContain('wukong proof --upload --public');
   });
 
   it('runs /judge and renders the judge panel', async () => {

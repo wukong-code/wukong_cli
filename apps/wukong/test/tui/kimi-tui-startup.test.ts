@@ -15,6 +15,7 @@ import { WelcomeComponent } from '#/tui/components/chrome/welcome';
 import { WukongTUI, type WukongTUIStartupInput, type TUIState } from '#/tui/wukong-tui';
 import { copyTextToClipboard } from '#/utils/clipboard/clipboard-text';
 import { quoteShellArg } from '#/utils/shell-quote';
+import { discoverForeignSessionRows } from '#/tui/utils/foreign-sessions';
 import {
   DISABLE_TERMINAL_THEME_REPORTING,
   ENABLE_TERMINAL_THEME_REPORTING,
@@ -30,8 +31,12 @@ vi.mock('#/tui/commands/prompts', async (importOriginal) => {
 vi.mock('#/utils/clipboard/clipboard-text', () => ({
   copyTextToClipboard: vi.fn(async () => {}),
 }));
+vi.mock('#/tui/utils/foreign-sessions', () => ({
+  discoverForeignSessionRows: vi.fn(async () => []),
+}));
 
 const copyTextToClipboardMock = vi.mocked(copyTextToClipboard);
+const discoverForeignSessionRowsMock = vi.mocked(discoverForeignSessionRows);
 
 interface StartupDriver {
   state: TUIState;
@@ -740,6 +745,113 @@ describe('WukongTUI startup', () => {
       'ses-cwd',
       'ses-other-cwd',
     ]);
+  });
+
+  it('imports a selected Codex session through the bundled resume skill', async () => {
+    discoverForeignSessionRowsMock.mockResolvedValueOnce([
+      {
+        id: 'external:codex:codex-1',
+        title: 'Continue Codex work',
+        work_dir: '/tmp/proj-a',
+        updated_at: Date.now(),
+        source: 'codex',
+        external: {
+          id: 'codex-1',
+          sourcePath: '/tmp/home/.codex/sessions/rollout-codex-1.jsonl',
+        },
+      },
+    ]);
+    const session = makeSession({ id: 'ses-current' });
+    const harness = makeHarness(session);
+    const driver = makeDriver(harness, makeStartupInput());
+    const skillHost = driver as unknown as {
+      sendSkillActivation(session: unknown, skillName: string, skillArgs: string): void;
+    };
+    const sendSkillActivation = vi
+      .spyOn(skillHost, 'sendSkillActivation')
+      .mockImplementation(() => {});
+    await expect(driver.init()).resolves.toBe(false);
+
+    await (driver as unknown as { showSessionPicker(source?: 'codex'): Promise<void> }).showSessionPicker('codex');
+    const picker = driver.state.editorContainer.children[0] as { handleInput(data: string): void };
+    picker.handleInput('\r');
+    expect(sendSkillActivation).not.toHaveBeenCalled();
+    const handoff = driver.state.editorContainer.children[0] as { handleInput(data: string): void };
+    handoff.handleInput('\r');
+    await new Promise((resolve) => setImmediate(resolve));
+
+    expect(discoverForeignSessionRowsMock).toHaveBeenCalledWith({
+      source: 'codex',
+      workDir: '/tmp/proj-a',
+    });
+    expect(sendSkillActivation).toHaveBeenCalledWith(
+      session,
+      'resume-codex',
+      JSON.stringify({
+        source: 'codex',
+        sessionId: 'codex-1',
+        sourcePath: '/tmp/home/.codex/sessions/rollout-codex-1.jsonl',
+        workDir: '/tmp/proj-a',
+      }),
+    );
+    expect(driver.state.activeDialog).toBeNull();
+  });
+
+  it('pre-fills an editable Loop objective for a selected external session', async () => {
+    discoverForeignSessionRowsMock.mockResolvedValueOnce([
+      {
+        id: 'external:claude:claude-1',
+        title: 'Fix the release',
+        last_prompt: 'Run the final checks and publish',
+        work_dir: '/tmp/proj-a',
+        updated_at: Date.now(),
+        source: 'claude',
+        external: {
+          id: 'claude-1',
+          sourcePath: '/tmp/home/.claude/projects/proj/claude-1.jsonl',
+        },
+      },
+    ]);
+    const session = makeSession({ id: 'ses-current' });
+    const driver = makeDriver(makeHarness(session), makeStartupInput());
+    const skillHost = driver as unknown as {
+      sendSkillActivation(session: unknown, skillName: string, skillArgs: string): void;
+    };
+    const sendSkillActivation = vi.spyOn(skillHost, 'sendSkillActivation');
+    await expect(driver.init()).resolves.toBe(false);
+
+    await (driver as unknown as { showSessionPicker(source?: 'claude'): Promise<void> }).showSessionPicker('claude');
+    const picker = driver.state.editorContainer.children[0] as { handleInput(data: string): void };
+    picker.handleInput('\r');
+    const handoff = driver.state.editorContainer.children[0] as { handleInput(data: string): void };
+    handoff.handleInput('\u001B[B');
+    handoff.handleInput('\r');
+
+    expect(driver.state.editor.getText()).toBe(
+      '/loop Continue the Claude Code task: Run the final checks and publish',
+    );
+    expect(sendSkillActivation).not.toHaveBeenCalled();
+    expect(driver.state.activeDialog).toBeNull();
+  });
+
+  it('keeps bare /resume focused on Wukong sessions', async () => {
+    const nativeSession = {
+      id: 'ses-native',
+      title: 'Wukong session',
+      workDir: '/tmp/proj-a',
+      updatedAt: Date.now(),
+    };
+    const harness = makeHarness(makeSession({ id: 'ses-current' }), {
+      listSessions: vi.fn(async () => [nativeSession]),
+    });
+    const driver = makeDriver(harness, makeStartupInput());
+    await expect(driver.init()).resolves.toBe(false);
+    discoverForeignSessionRowsMock.mockClear();
+
+    await (driver as unknown as { showSessionPicker(): Promise<void> }).showSessionPicker();
+
+    expect(discoverForeignSessionRowsMock).not.toHaveBeenCalled();
+    expect(driver.state.sessions.map((session) => session.id)).toEqual(['ses-native']);
   });
 
   it('toggles the sessions picker from all sessions back to current cwd with Ctrl+A', async () => {
