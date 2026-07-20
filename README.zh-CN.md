@@ -14,6 +14,8 @@ Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal →
 
 `0.0.15` 把这条 Loop 做成可恢复闭环：持久化 run record、completion outbox、重启后的 active Loop 恢复、额度预留前 preflight、精简首次入口，以及 Dashboard 真实生命周期状态。本版本继续免费/BYOK，现已作为六平台公开版本发布；完整范围见 [0.0.15 设计](docs/design/0.0.15-loop-reliability.md)。
 
+`0.1.0` 已开始规划一个收窄的商业实验：完整的本地 BYOK Loop 继续免费，Pro 计划只新增把脱敏 Gate summary 和 commit status 发布到 GitHub Pull Request 的能力。真实 Loop 完成和工程门槛达到后才允许 invite-only RC；真实付款和重复发布门槛未达到前，公开 Checkout 继续关闭。完整范围见 [0.1.0 设计](docs/design/0.1.0-pro-pr-gate.md)。
+
 `0.0.12` 建立了 Loop-first runtime。`verify`、`scan`、`proof` 仍保留为高级诊断命令，但只是 Loop 的内部层，不再各自形成产品或额度。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md) 和 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。
 
 Loop 只返回一个持久化结果：`PASS`（退出码 `0`）、`NEEDS_WORK`（退出码 `1`）或 `ERROR`（退出码 `2`）。未登录用户有 1 次、最多 2 轮的本地试用；登录后的 Free 用户每月 10 个 Loop session，每次最多 5 轮，内部检查不重复计数。额度服务暂时不可用时，CLI 会警告并按本地 5 轮安全上限继续。旧 `verify-pass`、`scan-clean`、`judge-pass` Goal records 和 flags 仍可读取，并迁移到统一 proof gate；详见 [兼容矩阵](docs/design/0.0.12-compatibility.md)。
@@ -22,7 +24,7 @@ Role Profiles 基础能力已经实现并处于实验阶段。在 `~/.wukong/con
 
 TUI 内的 `/resume` 用于恢复 Wukong 会话；需要继续其他 Agent 的本地会话时，使用 `/resume codex`、`/resume claude` 或 `/resume cursor`。外部历史只作为只读上下文导入 Wukong，不重放旧工具调用，并在继续前重新检查当前 workspace。
 
-安装器和 CLI 的匿名产品指标只记录安装、首次运行和 Loop 生命周期，不包含源码、prompt、transcript、仓库名或文件路径。设置 `WUKONG_TELEMETRY=0` 即可关闭，且不会影响本地 Loop。
+安装器和 CLI 的匿名产品指标只记录安装、首次运行、Device Login 结果和 Loop 生命周期，不包含源码、prompt、transcript、仓库名或文件路径。设置 `WUKONG_TELEMETRY=0` 即可关闭，且不会影响本地 Loop。
 
 ## 当前命令面
 
@@ -52,7 +54,7 @@ wukong upgrade                 # 升级 Wukong Code
 
 高级诊断命令仍可直接用于 CI 和调试：`wukong verify`、`wukong scan`、`wukong proof`。Loop 会自动运行这些内部层，因此它们不再出现在主帮助入口。
 
-待实现命令：`wukong ship`、`wukong schedule`（云端例程）。
+待实现命令：`wukong account`、`wukong pr gate`、`wukong ship`、`wukong schedule`（云端例程）。
 
 完整参数以 `wukong --help` 为准。
 

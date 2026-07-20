@@ -688,7 +688,11 @@ export class SessionEventHandler {
           event.snapshot.goalId,
           event.snapshot.loopResult.status,
           event.snapshot.loopResult.iterations,
-        );
+        ).then((completion) => {
+          if (completion?.repeatedCompletedWithin7d) {
+            this.host.track('loop_repeat_completed_7d');
+          }
+        });
         this.trackLoopTerminal(event.snapshot.goalId, event.snapshot.loopResult);
       }
       this.pendingModelBlockedFallback = undefined;
@@ -715,7 +719,11 @@ export class SessionEventHandler {
           event.snapshot.goalId,
           event.snapshot.loopResult.status,
           event.snapshot.loopResult.iterations,
-        );
+        ).then((completion) => {
+          if (completion?.repeatedCompletedWithin7d) {
+            this.host.track('loop_repeat_completed_7d');
+          }
+        });
         this.trackLoopTerminal(event.snapshot.goalId, event.snapshot.loopResult);
       }
       const reason = typeof change.reason === 'string' ? change.reason : undefined;

@@ -46,6 +46,8 @@
   正式版本安装、升级、功能与商业边界。
 - [0.0.15 Loop Reliability 与 First Success](design/0.0.15-loop-reliability.md)
   定义 durable Loop lifecycle、completion outbox、重启恢复、preflight、首次成功 UX、隐私指标与 0.1.0 商业决策门槛。
+- [0.1.0 Pro PR Gate 与 Billing](design/0.1.0-pro-pr-gate.md)
+  定义 Free 本地 BYOK 边界、Pro PR comment/status、capability entitlement、Stripe lifecycle、邀请制价格实验和正式发布门槛；当前仍是规划，公开 Checkout 保持关闭。
 - [跨 Agent Session Resume](design/cross-agent-resume.md)
   `/resume` 恢复 Wukong 会话；`/resume codex|claude|cursor` 显式发现对应 Agent 的本地会话，并通过内置 Skill 只读导入后在 Wukong 中继续。
 - [执行层 TODO](../TODO.md)
@@ -109,4 +111,4 @@ wukong upgrade
 1. 0.0.12 Loop-first 已发布；继续保持 PASS/NEEDS_WORK/ERROR 和 deterministic checks + fresh reviewer 的内层交付闭环。
 2. 0.0.13 第一批实现结构化 findings、项目 policy、人工 feedback 和独立 reviewer model。
 3. Reviewer 不直接获得任意 Bash；额外检查只作为 next action 建议，不动态执行。
-4. 0.0.13 不做支付，Pro/Team 保持 `Coming Soon`；真实价格、Checkout、Billing 生命周期、GitHub PR adapter 和团队 policy 统一延后到 0.1.0+。
+4. 0.1.0 已收窄为 Pro PR Gate + Billing：本地 Loop 继续免费，Team policy 和 managed reviewer 后移；真实价格、Checkout 和 PR publish 在发布门槛前保持关闭。

@@ -264,7 +264,7 @@ async function runHeadlessGoal(
   if (loopGrant !== undefined) {
     await registerTrackedTuiLoop(createdGoal.goalId, loopGrant, session.id, process.cwd());
     track('loop_started');
-    if (loopGrant.repeatedWithin7d === true) track('loop_repeated_7d');
+    if (loopGrant.repeatedWithin7d === true) track('loop_repeat_started_7d');
   }
   let completedSnapshot: GoalSnapshot | null = null;
   let firstIterationTracked = false;
@@ -308,7 +308,8 @@ async function runHeadlessGoal(
     if (goal.kind === 'loop') {
       if (loopGrant !== undefined) {
         const result = loopSummaryJson(snapshot);
-        await completeLoopQuota(loopGrant, result.status, result.iterations);
+        const completion = await completeLoopQuota(loopGrant, result.status, result.iterations);
+        if (completion?.repeatedCompletedWithin7d) track('loop_repeat_completed_7d');
         track('loop_terminal', {
           outcome: result.status,
           iterations: result.iterations,

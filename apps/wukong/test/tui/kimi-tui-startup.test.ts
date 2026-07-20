@@ -1948,7 +1948,7 @@ describe('WukongTUI active Loop recovery', () => {
   beforeEach(() => {
     listActiveLoopRunsMock.mockReset().mockResolvedValue([]);
     cancelTrackedLoopRecordMock.mockReset().mockResolvedValue(undefined);
-    completeTrackedTuiLoopMock.mockReset().mockResolvedValue(undefined);
+    completeTrackedTuiLoopMock.mockReset().mockResolvedValue({ repeatedCompletedWithin7d: false });
   });
 
   it('offers resume, explicit cancellation, and details for a matching active Loop', async () => {

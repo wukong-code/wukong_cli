@@ -5,6 +5,7 @@ import { runLoginFlow } from '#/cli/sub/login-flow';
 const mocks = vi.hoisted(() => ({
   login: vi.fn(),
   openUrl: vi.fn(),
+  track: vi.fn(),
 }));
 
 vi.mock('@wukong/wukong-sdk', () => ({
@@ -12,6 +13,7 @@ vi.mock('@wukong/wukong-sdk', () => ({
     auth: {
       login: mocks.login,
     },
+    track: mocks.track,
   })),
 }));
 
@@ -34,6 +36,7 @@ describe('runLoginFlow', () => {
     sigintHandler = undefined;
     mocks.login.mockReset();
     mocks.openUrl.mockReset();
+    mocks.track.mockReset();
     vi.spyOn(process, 'once').mockImplementation((event: string | symbol, listener: (...args: any[]) => void) => {
       if (event === 'SIGINT') {
         sigintHandler = listener as () => void;
@@ -59,6 +62,10 @@ describe('runLoginFlow', () => {
     await runLoginFlow();
     expect(exitCode).toBe(0);
     expect(stderrChunks.join('')).toContain('Logged in to wukong');
+    expect(mocks.track.mock.calls).toEqual([
+      ['device_login_started'],
+      ['device_login_terminal', { outcome: 'approved' }],
+    ]);
   });
 
   it('exits 1 and prints cancellation message when aborted', async () => {
@@ -74,6 +81,10 @@ describe('runLoginFlow', () => {
     await runLoginFlow();
     expect(exitCode).toBe(1);
     expect(stderrChunks.join('')).toContain('Login cancelled');
+    expect(mocks.track).toHaveBeenLastCalledWith('device_login_terminal', {
+      outcome: 'cancelled',
+      reason_code: 'user_cancelled',
+    });
   });
 
   it('exits 1 and prints error message on login failure', async () => {
@@ -82,5 +93,9 @@ describe('runLoginFlow', () => {
     await runLoginFlow();
     expect(exitCode).toBe(1);
     expect(stderrChunks.join('')).toContain('Login failed: network error');
+    expect(mocks.track).toHaveBeenLastCalledWith('device_login_terminal', {
+      outcome: 'error',
+      reason_code: 'network',
+    });
   });
 });

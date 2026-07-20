@@ -18,6 +18,8 @@ preflight before quota reservation, a shorter first-run surface, and real
 lifecycle states in the Dashboard. It remains free and BYOK; see the
 [0.0.15 design](docs/design/0.0.15-loop-reliability.md).
 
+Version `0.1.0` is planned around one narrow commercial experiment: the local BYOK Loop remains complete and free, while Pro is planned to unlock publishing a redacted Gate summary and commit status to a GitHub pull request. Public Checkout remains closed; an invite-only RC can start only after activation and engineering gates are met. See the [0.1.0 design](docs/design/0.1.0-pro-pr-gate.md).
+
 Version `0.0.12` established the Loop-first runtime. `verify`, `scan`, and `proof` remain available as advanced diagnostics, but they are internal Loop layers rather than separate products or quotas. See the [0.0.12 design contract](docs/design/verification-loop-v2.md) and the [0.0.13 review design](docs/design/review-learning-loop.md).
 
 Loop returns one durable result: `PASS` (exit `0`), `NEEDS_WORK` (exit `1`), or `ERROR` (exit `2`). Guests receive one two-iteration local trial; signed-in Free users receive 10 Loop sessions per month with up to five iterations each. Internal checks never consume additional quota. Temporary quota-service failures warn and continue locally with the five-iteration safety cap. Legacy `verify-pass`, `scan-clean`, and `judge-pass` Goal records and flags remain readable and migrate to the unified proof gate; see the [compatibility matrix](docs/design/0.0.12-compatibility.md).
@@ -27,7 +29,7 @@ The experimental Role Profiles foundation is now implemented. Enable `experiment
 Inside the TUI, `/resume` opens Wukong sessions. Use `/resume codex`, `/resume claude`, or `/resume cursor` to continue a local session from another agent. Foreign history is imported into Wukong as read-only context; old tool calls are never replayed and the current workspace is checked again before work continues.
 
 Anonymous installer and CLI product telemetry is limited to install, first-run,
-and Loop lifecycle events; it excludes source, prompts, transcripts, repository
+Device Login outcome, and Loop lifecycle events; it excludes source, prompts, transcripts, repository
 names, and file paths. Set `WUKONG_TELEMETRY=0` to opt out without changing local
 Loop behavior.
 
@@ -59,7 +61,7 @@ wukong upgrade                 # upgrade Wukong Code
 
 Advanced diagnostics remain directly executable for CI and debugging: `wukong verify`, `wukong scan`, and `wukong proof`. Loop runs these layers automatically, so they are intentionally omitted from the primary help surface.
 
-Planned commands (not yet implemented): `wukong ship`, `wukong schedule` (cloud routine).
+Planned commands (not yet implemented): `wukong account`, `wukong pr gate`, `wukong ship`, and `wukong schedule` (cloud routine).
 
 Run `wukong --help` for the complete option list.
 

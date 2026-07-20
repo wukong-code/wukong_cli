@@ -8,6 +8,7 @@
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [商业化重构技术实现方案](docs/tech/commercial-refactor-implementation.md)
 - [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md)
+- [0.1.0 Pro PR Gate 与 Billing](docs/design/0.1.0-pro-pr-gate.md)
 - [TODO.md](TODO.md)：本仓库执行层任务清单，按本 ROADMAP 的 milestone 拆解
 - `wukong_web/TODO.md`：官网与托管产品 TODO，位于 sibling web 仓库中
 
@@ -47,7 +48,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 - `/judge` 只审不写：M0.5 默认是 deterministic 对抗性判定（复用 proof 引擎，BLOCK 倾向）；fresh-context 第二 agent 审查（`--agent`）落地前，不对外宣传"第二 agent reviewer"。
 - Hosted Report 与报告上传已经退出产品；PR gates、team rules、audit log 仍是更后续的团队付费候选能力。
 
-免费版负责让开发者形成重复 Loop 习惯；付费版提供更多 Loop sessions、deep reviewer、团队角色、PR gate、共享策略和审计。
+免费版负责提供完整的本地 BYOK Loop；0.1.0 的首个付费假设只验证把 Gate 结论发布回 GitHub PR。更多 Loop 只是次要 entitlement，托管 reviewer、团队角色、共享策略和审计继续后移。
 
 ## 当前基线
 
@@ -69,7 +70,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 | `/proof` 本地高级诊断 | v1 已实现 | 共享 snapshot、三态结论；默认不写报告，仅支持显式本地保存 |
 | `/judge` evaluator-only 判定 | 已实现 | deterministic 判定先行；`--agent` 第二-agent 审查后置 |
 | 公开官网 | 已实现 | `wukong.today`、download、docs、pricing、changelog |
-| Auth / billing 基础 | 部分实现 | Web auth、Stripe checkout、subscription 表已存在 |
+| Auth / billing 基础 | 部分实现 | Web auth 与 subscription 表已存在；Checkout 当前固定关闭，webhook 尚不满足生产 lifecycle |
 
 ### 未完成
 
@@ -81,13 +82,13 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 | GitHub PR comment / gate | 未实现 | 把个人工具变成团队工作流 |
 | Team rules | 未实现 | 团队愿意付费的核心原因之一 |
 | Audit log | 未实现 | 管理者、安全团队和企业采购需要 |
-| Model-assisted review | 0.0.12 待实现 | BYOK 基础版使用用户 model alias；managed credits 后移 |
+| Model-assisted review | BYOK 已实现 | 独立 reviewer model 已可用；managed credits 后移 |
 | Private runner / self-hosted path | 未实现 | 企业级承诺前必须具备的边界 |
 
 ## 路线图原则
 
 1. 只有顶层 `loop` session 受额度限制；`verify`、`scan`、`proof` 是内部层和不计额度的高级诊断命令。
-2. 免费额度用于让用户完成真实 Loop 并验证重复使用意愿；后续 Pro 提供更多 sessions、deep review、更长迭代、PR 协作和团队策略。
+2. 免费额度用于让用户完成真实 Loop 并验证重复使用意愿；0.1.0 不把本地 Loop 限额作为核心付费点，首个 Pro 权益是 PR Gate 发布。
 3. 用户自带 API Key 时，模型成本归用户；Wukong 收 workflow、policy 和 collaboration 的钱。
 4. 默认不写文件、不上传；用户需要留档时显式保存到本地。
 5. 在 guard、redaction、audit、private runner 真正完成前，不宣传安全合规能力。
@@ -108,9 +109,9 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 | `0.0.13` | Smarter Review Loop | 结构化多 findings、项目 review policy、独立 reviewer model、本地反馈、Loop-first TUI 与 Web 文案；保持免费/BYOK，不上线支付 |
 | `0.0.14` | Cross-Agent Resume + Loop UX | `/resume codex|claude|cursor`、安全只读上下文导入、Resume → Loop 确认、Gate/Footer 清晰结论、更多真实项目检查发现；保持免费/BYOK |
 | `0.0.15` | Loop Reliability + First Success | durable run lifecycle、completion outbox、重启恢复、preflight、简洁终态和隐私受限激活指标；保持免费/BYOK |
-| `0.1.0` | 真实 PR 工作流 + 支付 | GitHub PR comment/status check 与 Pro 支付生命周期可用；visibility/redaction 和 checkout→entitlement→cancel/failure E2E 通过；至少 1 个真实付费 Team Pilot 或 3 个非关联个人付费用户 |
+| `0.1.0` | Pro PR Gate + Billing | Free dry-run、Pro GitHub PR comment/status、capability entitlement 与支付生命周期可用；真实 Stripe+D1/GitHub E2E 通过；邀请制实验取得至少 3 个非关联付款用户和 1 个续费信号 |
 
-`0.1.0` 的条件式目标是 **2026 年 8 月上旬，最早 8 月 3 日当周**。日期不是发布承诺；上表的 PR Evidence 和真实试点门槛未满足时不升 `0.1.0`。
+`0.1.0` 不设日期承诺。当前生产基线只有 1 位 activated Loop user、0 位 completed users，不满足商业决策门槛；代码可以先进入 `0.1.0-rc.N` + feature-flagged invite-only pilot，但使用、支付和真实 E2E 门槛未满足时不开放**公开 Checkout**，也不升正式 `0.1.0`。
 
 ## Milestone 0: Public Install And Local Proof
 
@@ -316,30 +317,37 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 - 不把 reviewer-only 结果默认包装成 PASS。
 - 不用 started、注册数或 GitHub 下载量冒充完成和重复使用。
 
-## Milestone 3: 0.1.0 GitHub PR Evidence + Payment
+## Milestone 3: 0.1.0 Pro PR Gate + Billing
 
-目标：让 Wukong 进入真实 code review 流程，并在已经验证 Review Learning Loop 使用价值后开放第一条真实付费路径。
+完整 contract 见 [0.1.0 Pro PR Gate 与 Billing](docs/design/0.1.0-pro-pr-gate.md)。
+
+目标：保留完整的本地 BYOK Loop，并用一个可验证的付费能力——把 Gate 结论安全、幂等地发布回 GitHub PR——测试个人开发者付费意愿。
 
 交付项：
 
-- GitHub App 或 token-based integration。
-- PR comment：直接写入精简的 gate summary 和 blockers。
-- PR status check：基于 `verify` / `scan` 结果。
-- GitHub Actions / CI 模式运行 checks。
-- GitHub org/repo 和 Wukong team/workspace 的映射。
-- Free / Pro / Team entitlement model 和服务端强制限制。
-- Stripe Checkout、customer portal，以及 subscription create/update/cancel/payment failure webhook。
-- grace、renewal、failed payment 状态与 Dashboard Billing UI 一致。
-- Pricing 页面显示经过验证的真实价格和权益，不再只显示 `Coming Soon`。
+- capability-based entitlement API；CLI、Dashboard、quota 和 Billing 共用同一 resolver，不再根据 tier 名称猜权限。
+- `wukong account`：显示 plan、billing 状态、Loop 用量/重置时间和管理入口。
+- `wukong pr gate --dry-run`：Free 可预览待发布 comment/status，不写 GitHub。
+- Pro `wukong pr gate`：使用现有 `gh` 登录或 token，更新一条稳定 marker comment，并写入 `wukong/gate` commit status。
+- 本地 redaction、stale snapshot/SHA 拒绝、首次确认和 CI `--yes`。
+- 单一月付 Checkout、Customer Portal、完整 subscription lifecycle、event 去重与乱序安全 webhook。
+- success page 轮询真实 entitlement；Dashboard 不使用长生命周期 JWT tier 作为 Billing 真相源。
+- `PRO_CHECKOUT_ENABLED=false` 默认关闭；候选 `$9/月` 只在邀请制实验中验证，不提前写入公开 Pricing。
 
 验收：
 
-- 测试 PR 能收到 Wukong gate comment。
-- scan 通过和失败会产生不同的 GitHub status check。
-- GitHub comment 中不出现 secrets。
-- GitHub API 失败不能把 verification 标记为 passed。
-- checkout → entitlement → quota → portal → cancel/payment failure → grace 全链路通过。
-- 至少 3 个非关联真实个人付费用户，或 1 个持续使用真实 repo 的付费 Team Pilot。
+- Free 用户能完成完整本地 Loop 和 PR dry-run；未付费只阻止 GitHub 写入。
+- 真实测试 PR 能收到一次幂等更新的 summary comment 和正确 commit status。
+- GitHub comment 不含 secrets、绝对路径、prompt、transcript 或未预览内容。
+- stale Gate、GitHub API/权限/partial write 失败返回 ERROR，绝不能发布错误 PASS。
+- Stripe Test Mode + D1 跑通 checkout → entitlement → portal → renewal/failure/grace/cancel/recovery。
+- 邀请制实验至少取得 3 个非关联真实付款用户和 1 个续费或连续 30 天活跃付费信号。
+
+不做：
+
+- GitHub App、org/workspace 映射、inline review comment、自动 merge 和完整 Team CI 产品。
+- Hosted Report、managed reviewer/credits、Team rules、audit log、SSO、private runner 或云端 `/schedule`。
+- 年付、终身版、多个付费 tier、seat billing 或复杂 overage。
 
 ## Milestone 4: Team Rules And Audit Log
 
@@ -408,9 +416,9 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 
 近期工作：
 
-- 首页继续聚焦 local AI coding + verification evidence。
+- 首页继续聚焦 Resume → Loop → Gate 和 CLI 下载，不把 BYOK 写成本地模型。
 - `/download` 保持短、准、可安装。
-- `/pricing` 必须绑定真实 entitlement。
+- `/pricing` 必须绑定真实 capability entitlement；发布门槛前继续 `Coming soon`，不展示候选实验价格。
 - 使用真实本地 Loop 输出作为 docs / pricing 演示素材，不制作 placeholder。
 - Dashboard 围绕真实账号、平台和 Loop 状态优化。
 - changelog 保持和公开 release 同步。
@@ -440,16 +448,26 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 
 ## Commercial Readiness Gates
 
-Pro Preview 可以公开收费的最低条件：
+Pro invite-only pilot 可以开始收费的最低条件：
 
-- Loop 的重复使用价值通过真实用户验证。
-- Stripe entitlement 至少控制一个真实 Loop 或 review workflow 权益。
-- Pricing copy 和真实 entitlement logic 一致。
-- 新用户可以完成 install -> loop -> review -> converge，无需人工介入。
+- 至少 5 个真实 activated Loop users、3 个 completed users，terminal completion reporting rate ≥ 90%。
+- 至少 2 个用户在 7 天内重复完成 Loop，并取得 3 条可归因的真实用户反馈。
+- Stripe entitlement 控制真实 `prGatePublish` capability，Free 本地 Loop 不被错误阻断。
+- 新用户可以完成 install → Loop → Gate → PR dry-run，无需人工修数据库。
+- Stripe Test Mode + D1 和真实 GitHub 测试 PR 的端到端路径通过。
+- 至少 5 位目标用户在真实 PR 上完成 dry-run，并明确表示发布结果能减少手工 review 工作。
 
-Team Pilot 可以开始试点的最低条件：
+Pro 可以公开收费的最低条件：
 
-- GitHub PR comment 或 status check 可用。
+- 至少 20 个用户完成首个 Loop，累计至少 50 次 completed Loops。
+- 邀请制实验取得至少 3 个非关联真实付款用户，且每人至少成功发布一次 PR Gate。
+- 至少 2 位付费用户在 30 天内对不同 PR 重复发布，并出现至少 1 个续费信号。
+- 更高 Loop allowance 的使用单独统计，不能替代 PR publish 的付费证据。
+- Pricing copy、CLI account、Dashboard 和真实 entitlement logic 完全一致。
+
+Team design pilot 可以开始试点的最低条件：
+
+- GitHub App/org-installed gate 可用，不复用个人 token 方案冒充团队集成。
 - Team rules 会影响 PR gate 行为。
 - Audit log 捕获 loop、gate 和 override events。
 - 至少一个 design partner 能在真实 repo 上跑完整流程。
@@ -459,10 +477,11 @@ Team Pilot 可以开始试点的最低条件：
 先追踪这些指标，再优化增长：
 
 - Install completion rate。
-- 24 小时内首次成功 `wukong verify`。
-- 每个活跃开发者每周完成 Trust Run 数。
+- 24 小时内首次 completed Loop。
+- 每个活跃开发者每周 completed Loop 数。
 - PR gate pass/fail rate。
-- Loop 达到免费额度后的付费转化。
+- PR gate dry-run 到 publish 的转化率。
+- 邀请制 Checkout 到 active entitlement 和首次续费的转化率。
 - Team pilot 两周留存。
 
 ## Explicit Non-Goals

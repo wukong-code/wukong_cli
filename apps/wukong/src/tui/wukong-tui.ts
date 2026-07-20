@@ -670,7 +670,10 @@ export class WukongTUI {
       ) {
         const outcome = goal.loopResult?.status ?? loopOutcomeFromGoal(goal).status;
         const iterations = goal.loopResult?.iterations ?? goal.iteration;
-        await completeTrackedTuiLoop(goal.goalId, outcome, iterations);
+        const completion = await completeTrackedTuiLoop(goal.goalId, outcome, iterations);
+        if (completion?.repeatedCompletedWithin7d) {
+          this.track('loop_repeat_completed_7d');
+        }
         this.showStatus(`Recovered Loop terminal · Gate ${outcome}.`);
         return;
       }

@@ -156,23 +156,23 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 
 ## 4. 商业模型
 
-0.0.12 只用受额度限制的免费 Loop 验证重复使用和升级意愿。`verify`、`scan`、`proof` 是 Loop 内部能力和高级诊断入口，不分别售卖、不单独计费；未来付费边界包括更多 Loop sessions、更长迭代、深度模型审查、团队策略、PR gate、审计和 Wukong 自有 API 服务。
+Free 用受额度跟踪的完整本地 BYOK Loop 验证完成和重复使用。`verify`、`scan`、`proof` 是 Loop 内部能力和高级诊断入口，不分别售卖、不单独计费。0.1.0 的第一个收费假设是 PR Gate publish；更高 Loop allowance 只是次要 capability，团队策略、审计和 managed model 继续后移。
 
 核心收费原则：
 
 ```text
 用户自带 API Key = 模型成本归用户
-Wukong 收费 = 更多 Loop sessions、更强 reviewer、团队角色、PR 协作、策略和审计
-Wukong 托管模型调用 = 作为可选 credits / add-on 收费
+0.1.0 Wukong 收费 = PR Gate comment/status publish
+以后才验证 = 团队角色、共享策略、审计和 managed model
 ```
 
 | 层级 | 建议权益 |
 |---|---|
 | Free | BYOK、10 Loop sessions/月、每次最多 5 轮、基础 roles/guard；第 3 次起提示 Pro |
-| Pro | BYOK、更多/更长 Loop、deep reviewer、更多角色 |
-| Team | org-level BYOK、共享 Role Profiles、GitHub PR gate、团队规则和审计日志 |
+| Pro | BYOK、PR Gate publish；更高 Loop allowance 为次要权益 |
+| Team（后续） | org-level BYOK、共享 Role Profiles、组织 PR gate、团队规则和审计日志 |
 | Enterprise | 私有部署、合规、SSO、SLA、私有 runner |
-| Credits / Add-on | Wukong 托管模型调用、深度 review、批量验证 |
+| Credits / Add-on（后续候选） | Wukong 托管模型调用、深度 review、批量验证 |
 
 ### 4.1 API Key 与 API 服务收费边界
 
@@ -206,10 +206,10 @@ Free
 
 Pro $8-12/user/month
 - BYOK
-- More and longer Loop sessions
-- Deep reviewer workflows
-- More custom roles
-- More custom roles and reviewer controls
+- 0.1.0 candidate: $9/month invite-only experiment
+- Publish/update redacted Gate summary and commit status on GitHub PR
+- Higher server-configured Loop allowance is secondary, not the purchase reason
+- No managed reviewer credits in 0.1.0
 
 Team $99-299/team/month or $15-29/user/month
 - Org-level BYOK
@@ -250,21 +250,22 @@ Loop 必须提供真实免费体验，但额度只作用于顶层 session，不�
 
 ### 4.3 适合收费的功能
 
-付费点建立在“更高 Trust Loop 用量、团队协作、模型能力和审计责任”上。四个命令不分别售卖，Pro 解锁整条 Trust Loop。
+付费点建立在本地 Loop 之外的工作流结果上。基础 BYOK Loop、reviewer 和高级诊断保持 Free；0.1.0 不把已发布的本地能力重新包装成付费功能。
 
 | 收费功能 | 推荐层级 | 价值 | 当前状态 |
 |---|---|---|---|
-| 更多 Loop + Deep Reviewer | Pro | 更长迭代、fresh-context 深度审查和更具体的修复反馈 | 0.0.12 BYOK 基础版已实现；0.0.13 验证 Pro 价值 |
-| Review Improver + 长期 Evals | Pro | 从人工反馈中生成可追溯 policy proposal，对比调整前后质量；不自动应用 | 0.0.13 设计完成，待实现 |
-| Shared Review Policy + Feedback Learning | Team | 团队共享审查偏好、误报处理、审批和质量趋势 | 0.1.0+，待实现 |
-| Wukong Product APIs | Pro / Team | Loop quota、PR comment/gate、rules evaluate、audit events | Loop quota 已实现，其余待实现 |
+| GitHub PR Gate publish | Pro | 将本地 Gate summary/comment 和 commit status 写回现有 PR，减少手工整理和同步 | 0.1.0 计划，首个付费假设 |
+| 更多 Loop iterations | Pro 次要权益 | 给重度用户更高的服务端 tracked allowance；不是主要购买理由 | 0.1.0 可配置 entitlement |
+| Review Improver + 长期 Evals | 后续 | 从人工反馈中生成可追溯 policy proposal，对比调整前后质量；不自动应用 | 设计完成，未排入 0.1.0 |
+| Shared Review Policy + Feedback Learning | Team | 团队共享审查偏好、误报处理、审批和质量趋势 | 0.2.0+ 候选，待验证 |
+| Wukong Product APIs | Pro / Team | capability、PR comment/gate、rules evaluate、audit events | Loop quota 已实现；0.1.0 只做 capability + PR gate |
 | Managed Model Add-on | Pro / Team / Credits | Wukong 提供托管模型调用，解决用户不想配置 key 的场景 | 待实现 |
 | Team Rules | Team | 团队统一验证命令、风险阈值、路径策略和 guard policy | 待实现 |
-| GitHub PR Gate / CI Gate | Team | PR 自动跑 verify/scan 并发布检查状态 | 待实现 |
+| GitHub PR Gate / CI Gate | Pro 起步、Team 后续 | 0.1.0 先发布本地 Gate；团队规则与组织 CI 后移 | 待实现 |
 | Audit Log | Team / Enterprise | 记录谁验证、谁 override、失败原因和最终交付证据 | 待实现 |
 | Agent Enforcement | Team | 要求 agent 完成前必须调用 `wukong_verify`，否则标记未完成 | 部分实现：tool 已有，策略层待实现 |
 | Enhanced Guard Policy | Pro / Team | shell hook、PATH shim、集中规则、危险命令审计 | 待实现 |
-| Saved/Shared Evidence | Pro / Team | 用户明确需要协作或审计时保存、分享 | 已实现基础闭环；不是默认工作流 |
+| Saved/Shared Evidence | 不再规划 | Hosted Report 和公开分享已退出产品；本地显式保存只作为 Free 诊断 | 已移除线上产品面 |
 | Quality Trend | Pro / Team | 失败率、风险类型、skipped test、mock/placeholder 趋势 | 待实现 |
 | Private Runner / 私有部署 | Enterprise | 私有网络内运行验证、保留源码不出域 | 待实现 |
 | SSO / 合规 / SLA | Enterprise | 企业采购和合规要求 | 待实现 |
@@ -273,13 +274,12 @@ Loop 必须提供真实免费体验，但额度只作用于顶层 session，不�
 
 建议按以下顺序推进：
 
-1. 更多/更长 Loop + Review Learning Loop + deep reviewer：最接近日常重复价值，也能用人工反馈证明 reviewer 是否值得付费。
-2. Team Role Profiles + Shared Review Policy + PR Gate：把个人 Trust Loop 变成团队流程。
-3. Wukong Product APIs：提供 PR gate、rules、feedback 和 audit 的服务边界。
-4. Managed Model Add-on：Wukong 承担模型成本时再引入独立 credits。
-5. Audit Log：只服务明确的团队协作和审计需求，不作为个人用户的前置流程。
+1. Free 本地 Loop 先形成可靠完成与重复使用。
+2. 0.1.0 用 PR Gate publish + 单一 Billing lifecycle 验证个人付费，不同时上线 Team。
+3. Team Role Profiles、Shared Policy、org CI 和 Audit 只有在个人 PR 工作流成立后再验证。
+4. Managed Model Add-on 只有在用户明确不愿 BYOK 且数据/成本边界成立后再引入。
 
-当前阶段以 0.0.12 免费 Trust Loop 的真实使用为基线，0.0.13 只验证 **Reviewer 是否能从反馈中持续变准**，保持免费/BYOK，不实现支付。完整 contract 见 [0.0.13 Review Learning Loop](../design/review-learning-loop.md)。0.1.0 才开放真实价格、Checkout、付费 entitlement 和 Team Pilot 支付路径。
+0.1.0 的完整商业和工程 contract 见 [0.1.0 Pro PR Gate 与 Billing](../design/0.1.0-pro-pr-gate.md)。候选 `$9/月` 只用于邀请制实验，真实完成和付款门槛未满足时不公开价格或 Checkout。
 
 ### 4.5 商业验证门槛
 
@@ -302,10 +302,10 @@ Loop 必须提供真实免费体验，但额度只作用于顶层 session，不�
 0.1.0 才验证真实付费：
 
 - 使用真实价格和 Checkout，观察付款完成、退款/取消与次月续费；
-- checkout → entitlement → quota → portal → cancel/payment failure → grace 全链路通过；
-- 至少 3 个非关联真实付款用户或 1 个付费 Team Pilot，并出现至少 1 个续费/持续付费信号。
+- checkout → capability entitlement → PR publish → portal → cancel/payment failure → grace 全链路通过；
+- 至少 3 个非关联真实付款用户，并出现至少 1 个续费/持续 30 天付费使用信号。
 
-未满足 0.0.13 的使用门槛时不开放 0.1.0 支付；继续免费验证，不用虚假 Free 订阅记录、注册数或模型自评替代真实使用和付费证据。
+2026-07-20 生产基线是 8 个注册用户、1 个 activated Loop user、0 个 completed users；尚未满足门槛。继续免费验证，不用默认 Free subscription rows、started/abandoned runs、注册数或模型自评替代真实完成和付费证据。
 
 ## 5. 实现优先级
 

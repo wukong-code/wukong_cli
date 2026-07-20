@@ -8,6 +8,7 @@ import { getCliAccessToken } from '#/cli/lib/auth-token';
 import {
   bindTrackedLoopGoal,
   findTrackedLoopByGoalId,
+  hasPriorCompletedLoopWithin7d,
   listPendingLoopTerminals,
   markLoopTerminalPending,
   markLoopTerminalSynced,
@@ -25,6 +26,10 @@ export interface LoopQuotaGrant {
   readonly tracked: boolean;
   readonly repeatedWithin7d?: boolean;
   readonly message?: string;
+}
+
+export interface LoopCompletionResult {
+  readonly repeatedCompletedWithin7d: boolean;
 }
 
 interface StartResponse {
@@ -138,8 +143,11 @@ export async function completeLoopQuota(
   iterations: number,
   fetchImpl: typeof fetch = fetch,
   lifecycle: LoopRunLifecycle = 'completed',
-): Promise<void> {
-  if (!grant.tracked) return;
+): Promise<LoopCompletionResult> {
+  if (!grant.tracked) return { repeatedCompletedWithin7d: false };
+  const repeatedCompletedWithin7d = lifecycle === 'completed'
+    && (outcome === 'PASS' || outcome === 'NEEDS_WORK')
+    && await hasPriorCompletedLoopWithin7d(grant.requestId).catch(() => false);
   const record = await stageLoopTerminal(
     grant.requestId,
     lifecycle,
@@ -147,24 +155,26 @@ export async function completeLoopQuota(
     iterations,
   ).catch(() => undefined);
   const token = await getCliAccessToken();
-  if (token === null) return;
-  await sendLoopTerminal(
-    record ?? {
-      version: 1,
-      requestId: grant.requestId,
-      state: 'pending_terminal',
-      startedAt: new Date().toISOString(),
-      terminal: {
-        status: lifecycle,
-        ...(lifecycle === 'completed' ? { outcome } : {}),
-        iterations: Math.max(0, Math.trunc(iterations)),
-        finishedAt: new Date().toISOString(),
+  if (token !== null) {
+    await sendLoopTerminal(
+      record ?? {
+        version: 1,
+        requestId: grant.requestId,
+        state: 'pending_terminal',
+        startedAt: new Date().toISOString(),
+        terminal: {
+          status: lifecycle,
+          ...(lifecycle === 'completed' ? { outcome } : {}),
+          iterations: Math.max(0, Math.trunc(iterations)),
+          finishedAt: new Date().toISOString(),
+        },
+        sync: { attempts: 0 },
       },
-      sync: { attempts: 0 },
-    },
-    token,
-    fetchImpl,
-  );
+      token,
+      fetchImpl,
+    );
+  }
+  return { repeatedCompletedWithin7d };
 }
 
 async function sendLoopTerminal(
@@ -246,7 +256,7 @@ export async function completeTrackedTuiLoop(
   outcome: LoopStatus,
   iterations: number,
   lifecycle: LoopRunLifecycle = 'completed',
-): Promise<void> {
+): Promise<LoopCompletionResult> {
   let grant = trackedTuiLoops.get(goalId);
   if (grant === undefined) {
     const record = await findTrackedLoopByGoalId(goalId);
@@ -259,7 +269,7 @@ export async function completeTrackedTuiLoop(
       };
     }
   }
-  if (grant === undefined) return;
+  if (grant === undefined) return { repeatedCompletedWithin7d: false };
   trackedTuiLoops.delete(goalId);
-  await completeLoopQuota(grant, outcome, iterations, fetch, lifecycle);
+  return completeLoopQuota(grant, outcome, iterations, fetch, lifecycle);
 }

@@ -995,7 +995,7 @@ team_rules(
 
 | Feature | Free | Pro | Team |
 |---|---|---|---|
-| Loop sessions | 3/month, max 5 iterations/session | higher cap | pooled/org policy |
+| Loop sessions | 10/month, max 5 iterations/session | server-configured higher cap | pooled/org policy（后续） |
 | local guard | unlimited | unlimited | team policy 可加强 |
 | advanced verify/scan/proof | unlimited | unlimited | CI/org policy |
 | BYOK reviewer | included in Loop | included | org policy |
@@ -1013,9 +1013,11 @@ team_rules(
 
 | Endpoint | 作用 |
 |---|---|
-| `POST /api/v1/trust-runs/start` | 幂等、原子地创建 Loop run 并增加 session used |
-| `POST /api/v1/trust-runs/:id/complete` | 幂等记录最终状态、耗时、model/role 与实际迭代数 |
-| `GET /api/v1/trust-usage` | 返回 Loop sessions 的 limit、used、remaining 和 reset timestamp |
+| `POST /api/v1/loops/start` | 幂等、原子地创建 Loop run 并增加 session used |
+| `POST /api/v1/loops/complete` | 按 `requestId` 幂等记录 terminal lifecycle、outcome 与实际迭代数 |
+| `GET /api/v1/usages` | 返回 Loop sessions 的 limit、used、recent lifecycle 和 reset timestamp |
+
+以上为当前已部署 contract。0.1.0 新增的 account/capability contract 以 [0.1.0 Pro PR Gate 与 Billing](../design/0.1.0-pro-pr-gate.md) 为准，不重新引入 trust-runs 命名。
 
 服务端新增：
 

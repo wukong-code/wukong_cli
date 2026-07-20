@@ -86,6 +86,25 @@ describe('Loop quota client', () => {
     expect(second.repeatedWithin7d).toBe(true);
   });
 
+  it('counts retention only after a Loop completes on a later day', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-18T08:00:00.000Z'));
+    mocks.getCliAccessToken.mockResolvedValue('token');
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockImplementation(async () => new Response(JSON.stringify({
+        quota: { tier: 'free', used: 1, limit: 10 },
+      }), { status: 200 }));
+
+    const first = await beginLoopQuota(fetchMock);
+    const firstCompletion = await completeLoopQuota(first, 'PASS', 2, fetchMock);
+    expect(firstCompletion.repeatedCompletedWithin7d).toBe(false);
+
+    vi.setSystemTime(new Date('2026-07-19T08:00:00.000Z'));
+    const second = await beginLoopQuota(fetchMock);
+    const secondCompletion = await completeLoopQuota(second, 'NEEDS_WORK', 3, fetchMock);
+    expect(secondCompletion.repeatedCompletedWithin7d).toBe(true);
+  });
+
   it('keeps a failed completion in the outbox and retries before the next reservation', async () => {
     vi.useFakeTimers();
     vi.setSystemTime(new Date('2026-07-20T08:00:00.000Z'));

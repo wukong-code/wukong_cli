@@ -4,6 +4,65 @@
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
+## 🚧 0.1.0 — Pro PR Gate + Billing
+
+> 方案: [docs/design/0.1.0-pro-pr-gate.md](docs/design/0.1.0-pro-pr-gate.md)。本版保留完整的本地 BYOK Loop，首个付费权益是把 Gate summary/comment 和 `wukong/gate` status 发布回 GitHub PR。候选 `$9/月` 只用于邀请制实验，不是公开价格承诺。
+>
+> 2026-07-20 生产基线：8 个注册用户、1 个 activated Loop user、0 个 completed users。支付决策门槛尚未满足；公开 Checkout 默认关闭。
+
+### Phase 0：先证明完成价值
+
+- [ ] 至少 5 个真实 activated Loop users、3 个 completed users
+- [ ] terminal completion reporting rate ≥ 90%
+- [ ] 至少 2 个用户在 7 天内重复完成 Loop
+- [ ] 至少取得 3 条可归因反馈，解释继续使用或放弃原因
+- [ ] 完成 0.0.14 遗留的真实 TUI `/loop` 人工 smoke
+
+### P0：Entitlement 单点真相源
+
+- [ ] 增加 capability-based `/api/v1/account` contract：Loop limits、`prGatePublish`、billing、usage 和 links
+- [ ] Web 实现统一 `resolveEntitlement()` 状态表；unknown fail-closed，Dashboard、quota、Checkout 和 webhook 不再各自解释 tier
+- [ ] 清理 `pro = Team Pilot`、Founder 无限权益和假 `teamPolicyPacks/deepReviewCredits` 等当前语义漂移
+- [ ] CLI 实现 `wukong account` 与 `--json`；API 故障只保留 Free 本地能力，不离线授予 GitHub 写权限
+- [ ] 数据 migration：current subscription projection + append-only billing event ledger；user/customer/subscription/event 分别唯一，event 去重与 projection 更新原子
+
+### P0：Free Preview + Pro PR Publish
+
+- [ ] 实现 `wukong pr gate --dry-run`，Free 可查看 PR、SHA、redaction 后 comment/status，不写 GitHub
+- [ ] 实现 Pro `wukong pr gate`、`--pr`、`--yes` 和 `--json`
+- [ ] 复用现有 `gh` 登录或显式 token；0.1.0 不引入 GitHub App/org mapping
+- [ ] 用 `pending status → neutral marker comment → terminal status → final comment` 两阶段协议幂等发布，并实现 partial-write 补偿/重试
+- [ ] stale Gate/SHA、权限不足、rate limit、partial write 返回 ERROR；marker 查找覆盖分页、actor 归属与同 PR 校验
+- [ ] credential 只读自 `gh` store/env，不落盘或进日志；fork PR 默认 dry-run，禁止危险 `pull_request_target` 执行
+- [ ] redaction 禁止 secret、绝对路径、prompt、transcript、diff 和 model key；首次发布必须预览确认
+
+### P0：Stripe Billing Lifecycle
+
+- [ ] `PRO_PUBLIC_CHECKOUT_ENABLED=false` 默认关闭公开购买；服务端按 public flag 或 invite allowlist 准入
+- [ ] 单一月付 Price allowlist、登录用户/Stripe customer 绑定和 Checkout
+- [ ] 防止重复 subscription：active/grace 用户转 Portal，Checkout 使用幂等键与每用户唯一约束
+- [ ] Customer Portal：付款方式、invoice、周期末取消和恢复
+- [ ] webhook signature、event ID 去重、乱序安全和 Stripe object 回读；Checkout completed 本身不得直接授权
+- [ ] 处理 subscription create/update/delete、invoice paid/payment failed、refund/dispute reconciliation、7 天 grace 和 recovery
+- [ ] success page 轮询真实 entitlement；Dashboard 从数据库读取 billing，不信任旧 JWT tier
+- [ ] 邀请制试验前同步退款、取消、数据处理和支持说明，并测试退款/争议后的 entitlement
+
+### E2E 与发布门槛
+
+- [ ] Stripe Test Mode + D1：购买、重复/乱序事件、续费、失败、grace、取消、恢复
+- [ ] 真实 GitHub 测试 repo：PASS、NEEDS_WORK、stale SHA、重复发布、权限失败和 partial write
+- [ ] 用明确标记的 `0.1.0-rc.N` native assets + 服务端 allowlist 运行邀请制 pilot，不回填到 0.0.15
+- [ ] CLI/Web contract、redaction fixture、中英文文案、Pricing/Terms/Privacy/公告一致性通过
+- [ ] 清理内部 CHANGELOG 遗留的旧 `0.1.0/0.1.1` 条目，并核验 registry/tag/release/manifest 没有正式版本冲突
+- [ ] 至少 20 个用户完成首个 Loop，累计 50 次 completed Loops
+- [ ] 至少 5 位目标用户在真实 PR 完成 dry-run，并确认 publish 能减少手工 review 工作
+- [ ] 邀请制 `$9/月` 实验取得 3 个非关联真实付款用户，且每人至少发布一次 PR Gate
+- [ ] 至少 2 位付费用户在 30 天内对不同 PR 重复发布，并取得 1 个续费或连续 30 天活跃重复发布信号
+
+### 明确不做
+
+- Hosted Report、managed reviewer/credits、GitHub App、inline review、Team rules/audit、SSO/private runner、云端 `/schedule`、年付/终身版/多付费 tier 均不进入 0.1.0。
+
 ## ✅ 0.0.15 — Loop Reliability + First Success
 
 > 方案: [docs/design/0.0.15-loop-reliability.md](docs/design/0.0.15-loop-reliability.md)。本版继续免费/BYOK，先解决 Loop 可靠结束、重启恢复和首次成功，不做支付或 GitHub PR。
@@ -130,14 +189,9 @@
 - [x] TUI 移除常驻 Today/verify/scan/proof 零值统计，空闲态突出 `/loop`（2026-07-16）
 - [x] Web 首页、下载、定价、Dashboard、SEO、邮件和公告统一为 Goal → Write → Check → Review → Fix（2026-07-16；0.0.13 公告发布前保持 disabled）
 
-### 明确延后到 0.1.0：支付与真实 Pro
+### 已迁移到 0.1.0
 
-- [ ] Stripe Checkout、customer portal、subscription cancel/payment failure、grace 状态和 webhook E2E
-- [ ] Free / Pro / Team entitlement 与 reviewer/Loop/hosted/PR 权益统一
-- [ ] Billing UI 展示 plan、usage、quota、renewal、failed payment 和 portal 入口
-- [ ] Pricing、Dashboard、CLI upgrade 提示与真实价格、entitlement 对齐
-- [ ] 验证 quota warning → checkout → entitlement → cancel/failure/grace 全链路
-- [ ] 达到 3 个非关联真实个人付费用户，或 1 个持续使用真实 repo 的付费 Team Pilot
+支付、真实 Pro entitlement 和 GitHub PR 发布任务已收敛到本文件顶部的 0.1.0 清单；不再沿用 Free / Pro / Team 同时上线的旧范围。
 
 ### 0.0.13 发布门槛
 
@@ -158,7 +212,7 @@
 - [x] 默认停止条件统一为 `proof-pass`；旧停止条件进入时统一归一化（2026-07-15）
 - [x] 只有顶层 Loop session 计额度；内部 verify/scan/proof 不重复计数（2026-07-16）
 - [x] Guest：1 个 Loop session、最多2轮；Free：10个 Loop sessions/月、每个最多5轮；第3次开始软提示 Pro，第10次后硬限制（2026-07-16）
-- [x] 实现幂等 trust-runs start/complete + trust-usage；不实现 Checks、reservation、lease 或 AI credits（2026-07-16）
+- [x] 实现幂等 `/api/v1/loops/start`、`/api/v1/loops/complete` 与 `/api/v1/usages`；不实现 Checks、reservation、lease 或 AI credits（2026-07-16）
 - [x] 默认不生成 report/evidence；只有显式本地 `--save`/`--report` 才持久化（2026-07-16）
 
 ### Loop 执行与交付 Gate
@@ -330,4 +384,4 @@
 
 ---
 
-**最后更新**: 2026-07-18（0.0.14 Cross-Agent Resume + Loop UX；支付仍延后到 0.1.0）
+**最后更新**: 2026-07-20（0.1.0 Pro PR Gate + Billing 规划；公开 Checkout 继续关闭）

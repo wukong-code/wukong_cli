@@ -703,7 +703,7 @@ export async function handleLoopSlashCommand(host: SlashCommandHost, args: strin
                 preflight?.workspace,
               );
               host.track('loop_started');
-              if (grant.repeatedWithin7d === true) host.track('loop_repeated_7d');
+              if (grant.repeatedWithin7d === true) host.track('loop_repeat_started_7d');
             }
           },
           onCreateError: async () => {

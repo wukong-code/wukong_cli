@@ -70,6 +70,24 @@ export async function recordTrackedLoopStart(requestId: string): Promise<boolean
   return repeatedWithin7d;
 }
 
+export async function hasPriorCompletedLoopWithin7d(
+  requestId: string,
+  now: Date = new Date(),
+): Promise<boolean> {
+  const currentDayStart = Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  );
+  const repeatThreshold = currentDayStart - 7 * 24 * 60 * 60 * 1000;
+  return (await listLoopRuns()).some((record) => {
+    if (record.requestId === requestId || record.terminal?.status !== 'completed') return false;
+    if (record.terminal.outcome !== 'PASS' && record.terminal.outcome !== 'NEEDS_WORK') return false;
+    const finishedAt = Date.parse(record.terminal.finishedAt);
+    return finishedAt >= repeatThreshold && finishedAt < currentDayStart;
+  });
+}
+
 export async function bindTrackedLoopGoal(
   requestId: string,
   goalId: string,

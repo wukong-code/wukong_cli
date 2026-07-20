@@ -10,6 +10,14 @@ import { createWukongHarness } from '@wukong/wukong-sdk';
 import { createWukongCodeHostIdentity } from '#/cli/version';
 import { openUrl } from '#/utils/open-url';
 
+function loginFailureReason(error: unknown): 'expired' | 'denied' | 'network' | 'unknown' {
+  const message = error instanceof Error ? error.message.toLowerCase() : String(error).toLowerCase();
+  if (message.includes('expired')) return 'expired';
+  if (message.includes('denied') || message.includes('declined')) return 'denied';
+  if (message.includes('network') || message.includes('fetch') || message.includes('timeout')) return 'network';
+  return 'unknown';
+}
+
 export async function runLoginFlow(): Promise<never> {
   const identity = createWukongCodeHostIdentity();
   const harness = createWukongHarness({
@@ -20,6 +28,7 @@ export async function runLoginFlow(): Promise<never> {
   process.once('SIGINT', () => {
     controller.abort();
   });
+  harness.track('device_login_started');
   try {
     const result = await harness.auth.login(undefined, {
       signal: controller.signal,
@@ -49,12 +58,18 @@ export async function runLoginFlow(): Promise<never> {
         }
       },
     });
+    harness.track('device_login_terminal', { outcome: 'approved' });
     process.stderr.write(`Logged in to ${result.providerName}.\n`);
     process.exit(0);
   } catch (error) {
     if (controller.signal.aborted) {
+      harness.track('device_login_terminal', { outcome: 'cancelled', reason_code: 'user_cancelled' });
       process.stderr.write('Login cancelled.\n');
     } else {
+      harness.track('device_login_terminal', {
+        outcome: 'error',
+        reason_code: loginFailureReason(error),
+      });
       const message = error instanceof Error ? error.message : String(error);
       process.stderr.write(`Login failed: ${message}\n`);
     }
