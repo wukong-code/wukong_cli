@@ -4,7 +4,7 @@
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
-## 🚧 0.0.16 — Loop Convergence
+## ✅ 0.0.16 — Loop Convergence
 
 > 方案: [docs/design/0.0.16-loop-convergence.md](docs/design/0.0.16-loop-convergence.md)。本版继续免费/BYOK，重点是让 Loop 围绕固定目标收敛；不做支付、PR Gate 写入或默认多 reviewer。
 
@@ -63,9 +63,9 @@
 - [x] Codex/Claude Code/Cursor suggestion → resume → edit objective → Loop terminal PASS TUI E2E（2026-07-21）
 - [x] 0.0.15 Goal/session/Role compatibility、durable lifecycle、outbox 和 completion API 全量回归（2026-07-20）
 - [x] Core/CLI/全仓 test、typecheck、lint、docs/bundle build、macOS arm64 SEA/native smoke 通过（2026-07-21；全仓并发 fs-watch burst 超时已单文件串行 7/7 复验）
-- [ ] 正式 tag 后六平台 ZIP/SHA assets、0.0.15 → 0.0.16 upgrade 与 fresh install 通过
+- [x] 正式 tag 后六平台 ZIP/SHA assets、0.0.15 → 0.0.16 upgrade 与 fresh install 通过（2026-07-21）
 - [x] 内部中英文 README、用户指南、CHANGELOG、release notes 与设计文档同步（2026-07-21）
-- [ ] 正式发布时同步公告、公开 repo、Web 当前版本/下载/Changelog 文案
+- [x] 正式发布时同步公告、公开 repo、Web 当前版本/下载/Changelog 文案（2026-07-21）
 
 ### 明确不做
 
