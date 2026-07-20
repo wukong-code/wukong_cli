@@ -5,7 +5,14 @@ import { load as loadYaml } from 'js-yaml';
 
 import { resolveWukongHome } from '../config/path';
 import { BUILTIN_ROLES } from './builtins';
-import type { RoleCatalogOptions, RoleDefinition, RoleSource, RoleSummary } from './types';
+import type {
+  RoleCapabilityMode,
+  RoleCatalogOptions,
+  RoleContractField,
+  RoleDefinition,
+  RoleSource,
+  RoleSummary,
+} from './types';
 
 const ROLE_NAME_PATTERN = /^[a-z0-9][a-z0-9_-]*$/;
 
@@ -15,6 +22,9 @@ interface RoleFrontmatter {
   readonly model?: unknown;
   readonly tools?: unknown;
   readonly verify_profile?: unknown;
+  readonly capabilityMode?: unknown;
+  readonly inputs?: unknown;
+  readonly outputs?: unknown;
 }
 
 export async function listRoles(options: RoleCatalogOptions): Promise<readonly RoleSummary[]> {
@@ -60,7 +70,7 @@ export async function resolveRole(
 
 export function roleTemplate(name: string): string {
   assertRoleName(name);
-  return `---\ndescription: Describe when this role should be used\n# model: provider/model-alias\n# tools:\n#   - Read\n#   - Grep\n# verify_profile: default\n---\n\nDescribe how the agent should behave while this role is active.\n`;
+  return `---\ndescription: Describe when this role should be used\n# model: provider/model-alias\ncapabilityMode: read-only\n# tools:\n#   - Read\n#   - Grep\n# inputs:\n#   - name: task_context\n#     type: json\n#     required: true\n# outputs:\n#   - name: result\n#     schema: text-v1\n#     required: true\n# verify_profile: default\n---\n\nDescribe how the agent should behave while this role is active.\n`;
 }
 
 export function assertRoleName(name: string): void {
@@ -103,6 +113,9 @@ async function loadRoleFile(path: string, source: RoleSource): Promise<RoleDefin
   }
   const description = optionalString(frontmatter.description) ?? firstBodyLine(body) ?? `Custom ${source} role`;
   const tools = optionalStringArray(frontmatter.tools, path);
+  const capabilityMode = optionalCapabilityMode(frontmatter.capabilityMode, path);
+  const inputs = optionalContractFields(frontmatter.inputs, path, 'inputs');
+  const outputs = optionalContractFields(frontmatter.outputs, path, 'outputs');
   return {
     name,
     selection: source === 'project' ? `project:${name}` : name,
@@ -112,6 +125,9 @@ async function loadRoleFile(path: string, source: RoleSource): Promise<RoleDefin
     model: optionalString(frontmatter.model),
     tools,
     verifyProfile: optionalString(frontmatter.verify_profile),
+    capabilityMode,
+    inputs,
+    outputs,
     path,
   };
 }
@@ -135,7 +151,16 @@ function parseRoleMarkdown(content: string, path: string): { frontmatter: RoleFr
   }
   if (!isRecord(parsed) && parsed !== undefined) throw new Error(`Role frontmatter must be an object: ${path}`);
   if (isRecord(parsed)) {
-    const allowed = new Set(['name', 'description', 'model', 'tools', 'verify_profile']);
+    const allowed = new Set([
+      'name',
+      'description',
+      'model',
+      'tools',
+      'verify_profile',
+      'capabilityMode',
+      'inputs',
+      'outputs',
+    ]);
     const unknown = Object.keys(parsed).filter((key) => !allowed.has(key));
     if (unknown.length > 0) throw new Error(`Unsupported role field at ${path}: ${unknown.join(', ')}`);
   }
@@ -156,6 +181,47 @@ function optionalStringArray(value: unknown, path: string): readonly string[] | 
     throw new Error(`Role tools must be a list of tool names: ${path}`);
   }
   return value.map((entry) => (entry as string).trim());
+}
+
+function optionalCapabilityMode(value: unknown, path: string): RoleCapabilityMode | undefined {
+  if (value === undefined) return undefined;
+  if (value === 'read-only' || value === 'read-write' || value === 'execute' || value === 'all') {
+    return value;
+  }
+  throw new Error(`Role capabilityMode must be read-only, read-write, execute, or all: ${path}`);
+}
+
+function optionalContractFields(
+  value: unknown,
+  path: string,
+  fieldName: 'inputs' | 'outputs',
+): readonly RoleContractField[] | undefined {
+  if (value === undefined) return undefined;
+  if (!Array.isArray(value)) throw new Error(`Role ${fieldName} must be a list: ${path}`);
+  return value.map((entry, index) => {
+    if (!isRecord(entry)) {
+      throw new Error(`Role ${fieldName}[${String(index)}] must be an object: ${path}`);
+    }
+    const allowed = new Set(['name', 'type', 'schema', 'required']);
+    const unknown = Object.keys(entry).filter((key) => !allowed.has(key));
+    if (unknown.length > 0) {
+      throw new Error(`Unsupported Role ${fieldName} field at ${path}: ${unknown.join(', ')}`);
+    }
+    const name = optionalString(entry['name']);
+    if (name === undefined || !/^[a-z][a-z0-9_-]*$/.test(name)) {
+      throw new Error(`Role ${fieldName}[${String(index)}].name is invalid: ${path}`);
+    }
+    const type = optionalString(entry['type']);
+    const schema = optionalString(entry['schema']);
+    if (type === undefined && schema === undefined) {
+      throw new Error(`Role ${fieldName}[${String(index)}] requires type or schema: ${path}`);
+    }
+    const required = entry['required'] ?? false;
+    if (typeof required !== 'boolean') {
+      throw new TypeError(`Role ${fieldName}[${String(index)}].required must be boolean: ${path}`);
+    }
+    return { name, type, schema, required };
+  });
 }
 
 function firstBodyLine(body: string): string | undefined {

@@ -23,7 +23,10 @@ import { WelcomeComponent } from '#/tui/components/chrome/welcome';
 import { WukongTUI, type WukongTUIStartupInput, type TUIState } from '#/tui/wukong-tui';
 import { copyTextToClipboard } from '#/utils/clipboard/clipboard-text';
 import { quoteShellArg } from '#/utils/shell-quote';
-import { discoverForeignSessionRows } from '#/tui/utils/foreign-sessions';
+import {
+  discoverForeignSessionRows,
+  discoverForeignSessionSuggestion,
+} from '#/tui/utils/foreign-sessions';
 import {
   DISABLE_TERMINAL_THEME_REPORTING,
   ENABLE_TERMINAL_THEME_REPORTING,
@@ -41,11 +44,30 @@ vi.mock('#/utils/clipboard/clipboard-text', () => ({
 }));
 vi.mock('#/tui/utils/foreign-sessions', () => ({
   discoverForeignSessionRows: vi.fn(async () => []),
+  discoverForeignSessionSuggestion: vi.fn(async () => undefined),
 }));
 vi.mock('#/cli/lib/loop-quota', () => ({
+  beginLoopQuota: vi.fn(async () => ({
+    allowed: true,
+    requestId: 'resume-loop-request',
+    maxIterations: 10,
+    tracked: false,
+  })),
+  registerTrackedTuiLoop: vi.fn(async () => {}),
+  completeLoopQuota: vi.fn(async () => {}),
   cancelTrackedLoopRecord: vi.fn(async () => {}),
   completeTrackedTuiLoop: vi.fn(async () => {}),
   flushLoopCompletionOutbox: vi.fn(async () => {}),
+}));
+vi.mock('#/cli/lib/loop-preflight', () => ({
+  runLoopPreflight: vi.fn(async (input: { objective: string; model: string; workspace: string }) => ({
+    ready: true,
+    model: input.model,
+    workspace: input.workspace,
+    checks: ['pnpm test'],
+  })),
+  formatLoopPreflightReady: () => 'Ready to start Loop',
+  formatLoopPreflightBlocked: () => 'Loop not started',
 }));
 vi.mock('#/cli/lib/loop-run-store', () => ({
   listActiveLoopRuns: vi.fn(async () => []),
@@ -53,6 +75,7 @@ vi.mock('#/cli/lib/loop-run-store', () => ({
 
 const copyTextToClipboardMock = vi.mocked(copyTextToClipboard);
 const discoverForeignSessionRowsMock = vi.mocked(discoverForeignSessionRows);
+const discoverForeignSessionSuggestionMock = vi.mocked(discoverForeignSessionSuggestion);
 const listActiveLoopRunsMock = vi.mocked(listActiveLoopRuns);
 const cancelTrackedLoopRecordMock = vi.mocked(cancelTrackedLoopRecord);
 const completeTrackedTuiLoopMock = vi.mocked(completeTrackedTuiLoop);
@@ -861,6 +884,140 @@ describe('WukongTUI startup', () => {
     });
     expect(driver.state.activeDialog).toBeNull();
   });
+
+  it.each([
+    ['codex', 'Codex'],
+    ['claude', 'Claude Code'],
+    ['cursor', 'Cursor'],
+  ] as const)(
+    'continues a %s suggestion through edited Loop objective to terminal PASS',
+    async (source, sourceLabel) => {
+      const externalId = `${source}-loop-1`;
+      const row = {
+        id: `external:${source}:${externalId}`,
+        title: `Continue ${sourceLabel} work`,
+        last_prompt: 'Finish the pending implementation',
+        work_dir: '/tmp/proj-a',
+        updated_at: Date.now(),
+        source,
+        external: {
+          id: externalId,
+          sourcePath: `/tmp/home/.${source}/sessions/${externalId}.jsonl`,
+        },
+      } as const;
+      discoverForeignSessionSuggestionMock.mockResolvedValueOnce(row);
+      discoverForeignSessionRowsMock.mockResolvedValueOnce([row]);
+
+      let emitSessionEvent: ((event: never) => void) | undefined;
+      const createGoal = vi.fn(async (input: { objective: string }) =>
+        goalSnapshot({
+          goalId: `${source}-goal`,
+          objective: input.objective,
+          status: 'active',
+          stopCondition: 'proof-pass',
+        }),
+      );
+      const prompt = vi.fn(async () => {});
+      const session = makeSession({
+        id: 'ses-current',
+        getStatus: vi.fn(async () => ({
+          model: 'k2',
+          thinkingLevel: 'off',
+          permission: 'auto',
+          planMode: false,
+          contextTokens: 10,
+          maxContextTokens: 100,
+          contextUsage: 0.1,
+        })),
+        getGoal: vi.fn(async () => ({ goal: null })),
+        createGoal,
+        prompt,
+        listMcpServers: vi.fn(async () => []),
+        onEvent: vi.fn((listener: (event: never) => void) => {
+          emitSessionEvent = listener;
+          return () => {};
+        }),
+      });
+      const harness = makeHarness(session);
+      const driver = makeDriver(harness, makeStartupInput());
+      const tui = driver as unknown as {
+        loadResumeSuggestion(): Promise<void>;
+        finishStartup(shouldReplayHistory: boolean): Promise<void>;
+        handleUserInput(text: string): void;
+      };
+      await expect(driver.init()).resolves.toBe(false);
+      await tui.finishStartup(false);
+
+      await tui.loadResumeSuggestion();
+      expect(driver.state.appState.resumeSuggestionSource).toBe(source);
+      expect(harness.track).toHaveBeenCalledWith('resume_suggestion_shown', { source });
+
+      tui.handleUserInput(`/resume ${source}`);
+      await vi.waitFor(() => {
+        expect(driver.state.activeDialog).toBe('session-picker');
+      });
+      const picker = driver.state.editorContainer.children[0] as { handleInput(data: string): void };
+      picker.handleInput('\r');
+      const handoff = driver.state.editorContainer.children[0] as { handleInput(data: string): void };
+      handoff.handleInput('\u001B[B');
+      handoff.handleInput('\r');
+
+      expect(driver.state.editor.getText()).toBe(
+        `/loop Continue the ${sourceLabel} task: Finish the pending implementation`,
+      );
+      const editedObjective = `Finish the ${sourceLabel} task and pass the project gate`;
+      driver.state.editor.setText(`/loop ${editedObjective}`);
+      tui.handleUserInput(driver.state.editor.getText());
+
+      await vi.waitFor(() => {
+        expect(createGoal).toHaveBeenCalledWith(expect.objectContaining({
+          objective: editedObjective,
+          stopCondition: 'proof-pass',
+        }));
+        expect(prompt).toHaveBeenCalledWith(editedObjective);
+      });
+      expect(harness.track).toHaveBeenCalledWith('resume_suggestion_selected', { source });
+      expect(harness.track).toHaveBeenCalledWith('loop_started', undefined);
+
+      expect(emitSessionEvent).toBeDefined();
+      emitSessionEvent?.({
+        type: 'goal.updated',
+        sessionId: 'ses-current',
+        agentId: 'main',
+        snapshot: goalSnapshot({
+          goalId: `${source}-goal`,
+          objective: editedObjective,
+          status: 'complete',
+          stopCondition: 'proof-pass',
+          iteration: 2,
+          terminalReason: 'loop:PASS:passed:Delivery gate passed.',
+          loopResult: {
+            schemaVersion: 2,
+            status: 'PASS',
+            reasonCode: 'passed',
+            summary: 'Delivery gate passed.',
+            iterations: 2,
+            checks: [],
+            blockers: [],
+          },
+        }),
+        change: {
+          kind: 'completion',
+          status: 'complete',
+          stats: { turnsUsed: 2, tokensUsed: 100, wallClockMs: 1000 },
+        },
+      } as never);
+
+      const transcript = driver.state.transcriptContainer.render(160).join('\n');
+      expect(transcript).toContain('Gate        PASS');
+      expect(transcript).toContain('Next        Ready to ship.');
+      expect(harness.track).toHaveBeenCalledWith('loop_terminal', {
+        outcome: 'PASS',
+        iterations: 2,
+        reason_code: 'passed',
+      });
+    },
+  );
 
   it('keeps bare /resume focused on Wukong sessions', async () => {
     const nativeSession = {

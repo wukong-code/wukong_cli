@@ -225,12 +225,35 @@ export class ToolManager {
   inheritUserTools(parent: ToolManager): void {
     for (const tool of parent.userTools.values()) {
       if (!parent.enabledTools.has(tool.name)) continue;
-      this.registerUserTool({
+      const activeUnderChildProfile = this.enabledTools.has(tool.name);
+      this.installUserTool({
         name: tool.name,
         description: tool.description,
         parameters: tool.parameters,
-      });
+      }, activeUnderChildProfile);
     }
+  }
+
+  private installUserTool(input: UserToolRegistration, active: boolean): void {
+    const { name, description, parameters } = input;
+    const tool: ExecutableTool = {
+      name,
+      description,
+      parameters,
+      resolveExecution: (args) => ({
+        approvalRule: name,
+        execute: async (context) => this.agent.rpc!.toolCall!(
+          {
+            turnId: Number(context.turnId),
+            toolCallId: context.toolCallId,
+            args,
+          },
+          { signal: context.signal },
+        ),
+      }),
+    };
+    this.userTools.set(name, tool);
+    if (active) this.enabledTools.add(name);
   }
 
   registerMcpServer(

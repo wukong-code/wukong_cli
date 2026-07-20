@@ -8,7 +8,7 @@ import type {
   ToolInputDisplay,
 } from '@wukong/wukong-sdk';
 
-import type { NotificationsConfig, UpgradePreferences } from './config';
+import type { NotificationsConfig, ResumePreferences, UpgradePreferences } from './config';
 import type { PendingApproval, PendingQuestion } from './reverse-rpc/types';
 import type { ColorToken, ThemeName } from './theme';
 import type { VerifySummary, ProofSummary } from './utils/chrome-state';
@@ -57,6 +57,7 @@ export interface AppState {
   editorCommand: string | null;
   notifications: NotificationsConfig;
   upgrade: UpgradePreferences;
+  resume?: ResumePreferences;
   availableModels: Record<string, ModelAlias>;
   availableProviders: Record<string, ProviderConfig>;
   sessionTitle: string | null;
@@ -71,6 +72,8 @@ export interface AppState {
   mcpServersSummary: string | null;
   /** Optional banner shown below the welcome panel; null means no banner to render. */
   banner?: BannerState | null;
+  /** One bounded, workspace-matching external continuation suggestion. */
+  resumeSuggestionSource?: 'codex' | 'claude' | 'cursor';
 }
 
 export interface ToolCallBlockData {

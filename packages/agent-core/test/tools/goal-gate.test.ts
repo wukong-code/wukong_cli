@@ -284,6 +284,7 @@ describe('UpdateGoalTool verification gate', () => {
       findings: [
         {
           id: 'auth-refresh',
+          criterionId: 'objective',
           severity: 'blocking',
           category: 'correctness',
           summary: 'Refresh tokens remain valid after logout.',
@@ -340,6 +341,7 @@ VERDICT_JSON: ${JSON.stringify({
             summary: 'Logout still leaves the token valid.',
             findings: [{
               id: 'auth-refresh',
+              criterionId: 'objective',
               severity: 'blocking',
               category: 'security',
               summary: 'Refresh tokens remain valid after logout.',
@@ -355,7 +357,7 @@ VERDICT_JSON: ${JSON.stringify({
       })
       .mockResolvedValueOnce({
         completion: Promise.resolve({
-          result: 'Review complete.\nVERDICT_JSON: {"schemaVersion":1,"status":"PASS","summary":"Logout now revokes the token.","findings":[]}',
+          result: 'Review complete.\nVERDICT_JSON: {"schemaVersion":1,"status":"PASS","summary":"Logout now revokes the token.","findings":[],"priorBlockerDispositions":[{"key":"review:objective:security:src/auth.ts","status":"resolved"}]}',
         }),
       });
     const agent = makeAgent(store);
@@ -369,6 +371,272 @@ VERDICT_JSON: ${JSON.stringify({
     expect(second.stopTurn).toBe(true);
     expect(store.getGoal().goal).toBeNull();
     expect(spawn).toHaveBeenCalledTimes(2);
+    const secondPrompt = (spawn.mock.calls[1]?.[0] as { readonly prompt: string }).prompt;
+    expect(secondPrompt).toContain('Immutable Loop contract');
+    expect(secondPrompt).toContain('Prior blocking findings');
+    expect(secondPrompt).toContain('auth-refresh');
+  });
+
+  it('falls back from an invalid configured reviewer model to the writer model', async () => {
+    const store = makeStore();
+    await store.createGoal({
+      objective: 'ship the change',
+      stopCondition: 'proof-pass',
+      reviewModel: 'reviewer-model',
+    });
+    mocks.runProof.mockResolvedValue(proof('passed'));
+    const spawn = vi.fn()
+      .mockResolvedValueOnce({ completion: Promise.resolve({ result: 'not structured' }) })
+      .mockResolvedValueOnce({ completion: Promise.resolve({ result: 'still not structured' }) })
+      .mockResolvedValueOnce({
+        completion: Promise.resolve({
+          result: 'Review complete.\nVERDICT_JSON: {"schemaVersion":1,"status":"PASS","summary":"Ready.","findings":[]}',
+        }),
+      });
+    const agent = makeAgent(store);
+    (agent.config as { modelAlias?: string }).modelAlias = 'writer-model';
+    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+
+    expect(spawn.mock.calls.map((call) => call[0].modelAlias)).toEqual([
+      'reviewer-model',
+      'reviewer-model',
+      'writer-model',
+    ]);
+  });
+
+  it('separates invalid reviewer output from runtime unavailability', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });
+    mocks.runProof.mockResolvedValue(proof('passed'));
+    const spawn = vi.fn().mockResolvedValue({
+      completion: Promise.resolve({ result: 'not structured' }),
+    });
+    const agent = makeAgent(store);
+    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(store.getGoal().goal?.loopResult).toMatchObject({
+      status: 'ERROR',
+      reasonCode: 'reviewer_invalid_output',
+    });
+  });
+
+  it('rejects a blocking finding that invents a criterion outside the frozen contract', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });
+    mocks.runProof.mockResolvedValue(proof('passed'));
+    const result = `Review complete.\nVERDICT_JSON: ${JSON.stringify({
+      schemaVersion: 1,
+      status: 'NEEDS_WORK',
+      summary: 'Add an unrelated refactor.',
+      findings: [{
+        id: 'invented-scope',
+        criterionId: 'reviewer-preference',
+        severity: 'blocking',
+        category: 'maintainability',
+        summary: 'Refactor another module.',
+        evidence: 'The reviewer prefers a different abstraction.',
+        nextAction: 'Rewrite the unrelated module.',
+        confidence: 'medium',
+        validationStatus: 'unverified',
+      }],
+      priorBlockerDispositions: [],
+    })}`;
+    const spawn = vi.fn().mockResolvedValue({ completion: Promise.resolve({ result }) });
+    const agent = makeAgent(store);
+    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(store.getGoal().goal?.loopResult).toMatchObject({
+      status: 'ERROR',
+      reasonCode: 'reviewer_invalid_output',
+    });
+  });
+
+  it('falls back after the configured reviewer model is unavailable', async () => {
+    const store = makeStore();
+    await store.createGoal({
+      objective: 'ship the change',
+      stopCondition: 'proof-pass',
+      reviewModel: 'reviewer-model',
+    });
+    mocks.runProof.mockResolvedValue(proof('passed'));
+    const spawn = vi.fn()
+      .mockRejectedValueOnce(new Error('reviewer provider unavailable'))
+      .mockResolvedValueOnce({
+        completion: Promise.resolve({
+          result: 'Review complete.\nVERDICT_JSON: {"schemaVersion":1,"status":"PASS","summary":"Ready.","findings":[]}',
+        }),
+      });
+    const agent = makeAgent(store);
+    (agent.config as { modelAlias?: string }).modelAlias = 'writer-model';
+    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+
+    expect(spawn.mock.calls.map((call) => call[0].modelAlias)).toEqual([
+      'reviewer-model',
+      'writer-model',
+    ]);
+    expect(store.getGoal().goal).toBeNull();
+  });
+
+  it('returns reviewer_unavailable after both configured and writer models fail', async () => {
+    const store = makeStore();
+    await store.createGoal({
+      objective: 'ship the change',
+      stopCondition: 'proof-pass',
+      reviewModel: 'reviewer-model',
+    });
+    mocks.runProof.mockResolvedValue(proof('passed'));
+    const spawn = vi.fn()
+      .mockRejectedValueOnce(new Error('reviewer provider unavailable'))
+      .mockRejectedValueOnce(new Error('writer provider unavailable'));
+    const agent = makeAgent(store);
+    (agent.config as { modelAlias?: string }).modelAlias = 'writer-model';
+    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+
+    expect(spawn).toHaveBeenCalledTimes(2);
+    expect(store.getGoal().goal?.loopResult).toMatchObject({
+      status: 'ERROR',
+      reasonCode: 'reviewer_unavailable',
+    });
+  });
+
+  it('does not fall back after cancellation', async () => {
+    const store = makeStore();
+    await store.createGoal({
+      objective: 'ship the change',
+      stopCondition: 'proof-pass',
+      reviewModel: 'reviewer-model',
+    });
+    mocks.runProof.mockResolvedValue(proof('passed'));
+    const controller = new AbortController();
+    const spawn = vi.fn().mockImplementation(async () => {
+      controller.abort();
+      throw new DOMException('This operation was aborted', 'AbortError');
+    });
+    const agent = makeAgent(store);
+    (agent.config as { modelAlias?: string }).modelAlias = 'writer-model';
+    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+    await expect(executeTool(new UpdateGoalTool(agent), {
+      ...ctx({ status: 'complete' }),
+      signal: controller.signal,
+    })).rejects.toMatchObject({ name: 'AbortError' });
+
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(store.getGoal().goal?.status).toBe('active');
+  });
+
+  it('changes strategy once for a repeated blocker, then stops with no_progress', async () => {
+    const store = makeStore();
+    const reminders: Array<{ readonly content: string; readonly origin: unknown }> = [];
+    await store.createGoal({
+      objective: 'make the check pass',
+      stopCondition: 'proof-pass',
+      maxIterations: 5,
+    });
+    const blockedProof = {
+      ...proof('blocked'),
+      blockers: [{
+        id: 'tests',
+        kind: 'check' as const,
+        summary: 'Tests fail.',
+        command: 'pnpm test',
+        nextAction: 'Fix the failing test.',
+      }],
+    };
+    mocks.runProof.mockResolvedValue(blockedProof);
+    const spawn = vi.fn().mockResolvedValue({
+      completion: Promise.resolve({
+        result: 'Strategy ready.\nSTRATEGY_JSON: {"diagnosis":"The edit did not address the failing assertion.","recommendedApproach":"Trace the first failing assertion before editing again.","risks":["Avoid broad rewrites."]}',
+      }),
+    });
+    const agent = makeAgent(store, reminders);
+    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+    const first = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+    const second = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+    expect(first.stopTurn).toBe(false);
+    expect(second.stopTurn).toBe(false);
+    expect(store.getGoal().goal?.convergence).toMatchObject({
+      reviewAttempts: 2,
+      strategyAttempts: 1,
+    });
+    expect(reminders.some((reminder) => reminder.origin === undefined
+      || (reminder.origin as { name?: string }).name === 'goal_loop_strategy')).toBe(true);
+
+    const third = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+    expect(third.stopTurn).toBe(true);
+    expect(store.getGoal().goal).toMatchObject({
+      status: 'blocked',
+      loopResult: { status: 'NEEDS_WORK', reasonCode: 'no_progress' },
+    });
+    expect(spawn).toHaveBeenCalledTimes(1);
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ profileName: 'strategist' }));
+  });
+
+  it('continues and completes when the blocker clears after the strategy change', async () => {
+    const store = makeStore();
+    await store.createGoal({
+      objective: 'make the check pass',
+      stopCondition: 'proof-pass',
+      maxIterations: 5,
+    });
+    const blockedProof = {
+      ...proof('blocked'),
+      blockers: [{
+        id: 'tests',
+        kind: 'check' as const,
+        summary: 'Tests fail.',
+        command: 'pnpm test',
+        nextAction: 'Fix the failing test.',
+      }],
+    };
+    mocks.runProof.mockResolvedValue(blockedProof);
+    const spawn = vi.fn().mockResolvedValueOnce({
+      completion: Promise.resolve({
+        result: 'Strategy ready.\nSTRATEGY_JSON: {"diagnosis":"The same assertion is still failing.","recommendedApproach":"Trace the assertion input before editing.","risks":["Keep the fix scoped."]}',
+      }),
+    });
+    const agent = makeAgent(store);
+    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+    const priorKey = store.getReviewHistory().at(-1)?.blockerKeys[0];
+    if (priorKey === undefined) throw new Error('expected a prior blocker key');
+
+    mocks.runProof.mockResolvedValueOnce(proof('passed'));
+    spawn.mockResolvedValueOnce({
+      completion: Promise.resolve({
+        result: `Review complete.\nVERDICT_JSON: ${JSON.stringify({
+          schemaVersion: 1,
+          status: 'PASS',
+          summary: 'The failing check is fixed.',
+          findings: [],
+          priorBlockerDispositions: [{ key: priorKey, status: 'resolved' }],
+        })}`,
+      }),
+    });
+
+    const result = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+
+    expect(result.stopTurn).toBe(true);
+    expect(store.getGoal().goal).toBeNull();
+    expect(spawn.mock.calls.map((call) => call[0].profileName)).toEqual([
+      'strategist',
+      'reviewer',
+    ]);
   });
 
   it('uses the Loop reviewer model without changing the writer model', async () => {

@@ -16,7 +16,42 @@ const ESC = String.fromCodePoint(27);
 
 describe('SessionPickerComponent', () => {
   afterEach(() => {
+    vi.useRealTimers();
     vi.restoreAllMocks();
+  });
+
+  it('debounces content search and cancels stale scans', async () => {
+    vi.useFakeTimers();
+    const signals: AbortSignal[] = [];
+    const loadSearchContent = vi.fn((signal: AbortSignal) => {
+      signals.push(signal);
+      return new Promise<ReadonlyMap<string, string>>(() => {});
+    });
+    const component = new SessionPickerComponent({
+      sessions: [{
+        id: 'ses_search',
+        title: 'Search me',
+        work_dir: '/tmp/project',
+        updated_at: 1,
+      }],
+      loading: false,
+      currentSessionId: '',
+      onSelect: vi.fn(),
+      onCancel: vi.fn(),
+      loadSearchContent,
+    });
+
+    component.handleInput('a');
+    await vi.advanceTimersByTimeAsync(300);
+    expect(loadSearchContent).not.toHaveBeenCalled();
+
+    component.handleInput('b');
+    await vi.advanceTimersByTimeAsync(250);
+    expect(loadSearchContent).toHaveBeenCalledOnce();
+    expect(signals[0]?.aborted).toBe(false);
+
+    component.handleInput('c');
+    expect(signals[0]?.aborted).toBe(true);
   });
 
   it('forwards Ctrl-C and Ctrl-D to optional host shortcuts', () => {
@@ -528,13 +563,13 @@ describe('SessionPickerComponent', () => {
     expect(searchOutput).not.toContain('Sessions  (type to search)');
   });
 
-  it('fuzzy-filters by session name only when typing', () => {
+  it('fuzzy-filters by title and user prompt content when typing', () => {
     const component = new SessionPickerComponent({
       sessions: [
         {
           id: 'ses_alpha',
           title: 'Alpha session',
-          last_prompt: 'needleprompt do not match',
+          last_prompt: 'needleprompt from the user',
           work_dir: '/tmp/needleprompt',
           updated_at: 1,
         },
@@ -570,7 +605,7 @@ describe('SessionPickerComponent', () => {
 
     expect(output).toContain('Search: needle');
     expect(output).toContain('N1e2e3d4l5e session');
-    expect(output).not.toContain('Alpha session');
+    expect(output).toContain('Alpha session');
     expect(output).not.toContain('Beta session');
   });
 

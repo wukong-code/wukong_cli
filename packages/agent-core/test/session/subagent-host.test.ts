@@ -303,7 +303,6 @@ describe('SessionSubagentHost', () => {
     expect(child.agent.permission.data().rules).toEqual(parent.agent.permission.rules);
     expect(child.llmCalls[0]?.systemPrompt).toContain('codebase exploration specialist');
     expect(child.llmCalls[0]?.tools.map((tool) => tool.name).toSorted()).toEqual([
-      'Bash',
       'Glob',
       'Grep',
       'Read',
@@ -316,7 +315,7 @@ describe('SessionSubagentHost', () => {
     ]);
   });
 
-  it('inherits active parent user tools when spawning a subagent', async () => {
+  it('inherits user-tool registration without bypassing the child profile ceiling', async () => {
     const parent = testAgent();
     parent.configure();
     await parent.rpc.registerTool(lookupToolRegistration());
@@ -346,33 +345,16 @@ describe('SessionSubagentHost', () => {
     await expect(handle.completion).resolves.toMatchObject({
       result: summary.trim(),
     });
-    expect(child.llmCalls[0]?.tools.map((tool) => tool.name)).toContain('Lookup');
+    expect(child.llmCalls[0]?.tools.map((tool) => tool.name)).not.toContain('Lookup');
     expect(child.agent.tools.data()).toContainEqual({
       name: 'Lookup',
       description: 'Look up a short test value.',
-      active: true,
+      active: false,
       source: 'user',
     });
 
     const lookupTool = child.agent.tools.loopTools.find((tool) => tool.name === 'Lookup');
-    expect(lookupTool).toBeDefined();
-
-    const execution = executeTool(lookupTool!, {
-      turnId: '0',
-      toolCallId: 'call_lookup',
-      args: { query: 'moon' },
-      signal,
-    });
-    const routedTo = await Promise.race([
-      child.untilToolCall({ output: 'moon-result' }).then(() => 'child'),
-      parent.untilToolCall({ output: 'moon-result' }).then(() => 'parent'),
-      new Promise<'timeout'>((resolve) => setTimeout(() => {
-        resolve('timeout');
-      }, 50)),
-    ]);
-
-    expect(routedTo).toBe('child');
-    await expect(execution).resolves.toMatchObject({ output: 'moon-result' });
+    expect(lookupTool).toBeUndefined();
   });
 
   it('falls back to bundled subagent profiles when the parent profile is missing', async () => {
@@ -480,7 +462,7 @@ describe('SessionSubagentHost', () => {
     const host = new SessionSubagentHost(session, 'main');
 
     const handle = await host.spawn({
-      profileName: 'explore',
+      profileName: 'coder',
       parentToolCallId: 'call_agent',
       prompt: 'Keep working',
       description: 'Long task',
@@ -522,7 +504,7 @@ describe('SessionSubagentHost', () => {
     const host = new SessionSubagentHost(session, 'main');
 
     const handle = await host.spawn({
-      profileName: 'explore',
+      profileName: 'coder',
       parentToolCallId: 'call_agent',
       prompt: 'Keep working',
       description: 'Long task',
@@ -555,7 +537,7 @@ describe('SessionSubagentHost', () => {
     const host = new SessionSubagentHost(session, 'main');
 
     const handle = await host.spawn({
-      profileName: 'explore',
+      profileName: 'coder',
       parentToolCallId: 'call_agent',
       prompt: 'Keep working',
       description: 'Long task',
@@ -587,7 +569,7 @@ describe('SessionSubagentHost', () => {
     const host = new SessionSubagentHost(session, 'main');
 
     const handle = await host.spawn({
-      profileName: 'explore',
+      profileName: 'coder',
       parentToolCallId: 'call_agent',
       prompt: 'Keep working',
       description: 'Long task',
@@ -620,7 +602,7 @@ describe('SessionSubagentHost', () => {
     const host = new SessionSubagentHost(session, 'main');
 
     const handle = await host.spawn({
-      profileName: 'explore',
+      profileName: 'coder',
       parentToolCallId: 'call_agent',
       prompt: 'Keep working',
       description: 'Long task',

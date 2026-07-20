@@ -134,6 +134,83 @@ export interface LoopResultFinding {
   readonly nextAction: string;
   readonly confidence: 'high' | 'medium' | 'low';
   readonly validationStatus: 'verified' | 'unverified' | 'failed';
+  /** Acceptance criterion this finding blocks, when the reviewer can identify one. */
+  readonly criterionId?: string;
+}
+
+export interface LoopAcceptanceCriterion {
+  readonly id: string;
+  readonly text: string;
+  readonly source: 'objective' | 'completion_criterion' | 'derived';
+}
+
+export interface LoopVerificationStep {
+  readonly id: string;
+  readonly kind: 'project_check' | 'review';
+  readonly description: string;
+  readonly blocking: boolean;
+}
+
+/** Immutable acceptance contract used by every reviewer cycle of a Goal. */
+export interface LoopContract {
+  readonly schemaVersion: 1;
+  readonly goalId: string;
+  readonly objective: string;
+  readonly completionCriterion?: string;
+  readonly acceptanceCriteria: readonly LoopAcceptanceCriterion[];
+  readonly verificationPlan: readonly LoopVerificationStep[];
+  readonly source: 'user' | 'planner' | 'fallback';
+  readonly createdAt: number;
+}
+
+export type PriorBlockerDispositionStatus = 'resolved' | 'still_open' | 'replaced_by';
+
+export interface PriorBlockerDisposition {
+  readonly key: string;
+  readonly status: PriorBlockerDispositionStatus;
+  readonly replacedBy?: string;
+}
+
+export interface LoopReviewBlocker {
+  readonly key: string;
+  readonly findingId: string;
+  readonly criterionId?: string;
+  readonly category: LoopResultFinding['category'] | 'check' | 'workspace';
+  readonly file?: string;
+  readonly summary: string;
+  readonly evidence?: string;
+  readonly nextAction: string;
+}
+
+export interface LoopReviewAttempt {
+  readonly schemaVersion: 1;
+  readonly iteration: number;
+  readonly status: 'PASS' | 'NEEDS_WORK' | 'ERROR';
+  readonly blockers: readonly LoopReviewBlocker[];
+  readonly blockerKeys: readonly string[];
+  readonly blockerFingerprint?: string;
+  readonly workspaceFingerprint?: string;
+  readonly model?: string;
+  readonly usedModelFallback: boolean;
+  readonly priorBlockerDispositions: readonly PriorBlockerDisposition[];
+}
+
+export interface LoopStrategyAttempt {
+  readonly schemaVersion: 1;
+  readonly triggeredAtIteration: number;
+  readonly blockerFingerprint: string;
+  readonly status: 'advised' | 'failed';
+  readonly diagnosis?: string;
+  readonly recommendedApproach?: string;
+  readonly risks?: readonly string[];
+  readonly model?: string;
+  readonly usedModelFallback: boolean;
+}
+
+export interface LoopConvergenceSummary {
+  readonly reviewAttempts: number;
+  readonly lastBlockerFingerprint?: string;
+  readonly strategyAttempts: number;
 }
 
 export interface LoopResult {
@@ -174,6 +251,9 @@ interface GoalState {
   /** Human-readable reason for a stopped or completed goal. */
   terminalReason?: string;
   loopResult?: LoopResult;
+  loopContract?: LoopContract;
+  reviewHistory: LoopReviewAttempt[];
+  strategyHistory: LoopStrategyAttempt[];
 }
 
 /** Computed budget view exposed through snapshots and tools. */
@@ -207,6 +287,8 @@ export interface GoalSnapshot {
   readonly budget: GoalBudgetReport;
   readonly terminalReason?: string;
   readonly loopResult?: LoopResult;
+  readonly loopContract?: LoopContract;
+  readonly convergence?: LoopConvergenceSummary;
 }
 
 /** Wrapper returned by goal read operations and tools. */
@@ -331,6 +413,8 @@ export class GoalMode {
       tokensUsed: 0,
       wallClockMs: 0,
       budgetLimits: {},
+      reviewHistory: [],
+      strategyHistory: [],
     };
     this.state = state;
     this.agent.replayBuilder.push({
@@ -381,6 +465,26 @@ export class GoalMode {
     });
   }
 
+  restoreContractCreate(record: AgentRecordOf<'goal.contract.create'>): void {
+    const state = this.state;
+    if (state === undefined || state.goalId !== record.goalId || state.loopContract !== undefined) {
+      return;
+    }
+    state.loopContract = record.contract;
+  }
+
+  restoreReviewRecord(record: AgentRecordOf<'goal.review.record'>): void {
+    const state = this.state;
+    if (state === undefined || state.goalId !== record.goalId) return;
+    state.reviewHistory.push(record.attempt);
+  }
+
+  restoreStrategyRecord(record: AgentRecordOf<'goal.strategy.record'>): void {
+    const state = this.state;
+    if (state === undefined || state.goalId !== record.goalId) return;
+    state.strategyHistory.push(normalizeStrategyAttempt(record.attempt));
+  }
+
   restoreClear(_record: AgentRecordOf<'goal.clear'>): void {
     this.state = undefined;
   }
@@ -406,6 +510,14 @@ export class GoalMode {
     const state = this.state;
     if (state === undefined || state.status !== 'active') return null;
     return this.toSnapshot(state);
+  }
+
+  getReviewHistory(): readonly LoopReviewAttempt[] {
+    return this.state?.reviewHistory ?? [];
+  }
+
+  getStrategyHistory(): readonly LoopStrategyAttempt[] {
+    return this.state?.strategyHistory ?? [];
   }
 
   // --- Creation ----------------------------------------------------------
@@ -459,6 +571,8 @@ export class GoalMode {
       wallClockMs: 0,
       wallClockResumedAt: Date.now(),
       budgetLimits: {},
+      reviewHistory: [],
+      strategyHistory: [],
     };
 
     this.persistState(state);
@@ -473,7 +587,101 @@ export class GoalMode {
       minIntervalMs: state.minIntervalMs,
     });
     this.trackGoalCreated(actor, input.replace === true);
+    if (state.stopCondition !== undefined) this.ensureLoopContract('user');
     return this.toSnapshot(state);
+  }
+
+  /**
+   * Creates the immutable acceptance contract once. Old Goal records receive a
+   * deterministic fallback contract only when their 0.0.16 gate first runs.
+   */
+  ensureLoopContract(source: LoopContract['source'] = 'fallback'): LoopContract | null {
+    const state = this.state;
+    if (state === undefined) return null;
+    if (state.loopContract !== undefined) return state.loopContract;
+
+    const criteria: LoopAcceptanceCriterion[] = [
+      { id: 'objective', text: state.objective, source: 'objective' },
+    ];
+    if (state.completionCriterion !== undefined) {
+      criteria.push({
+        id: 'completion-criterion',
+        text: state.completionCriterion,
+        source: 'completion_criterion',
+      });
+    }
+    const contract: LoopContract = {
+      schemaVersion: 1,
+      goalId: state.goalId,
+      objective: state.objective,
+      completionCriterion: state.completionCriterion,
+      acceptanceCriteria: criteria,
+      verificationPlan: [
+        {
+          id: 'project-checks',
+          kind: 'project_check',
+          description: 'Run the repository-selected deterministic checks.',
+          blocking: true,
+        },
+        {
+          id: 'fresh-review',
+          kind: 'review',
+          description: 'Use a fresh read-only reviewer against every acceptance criterion.',
+          blocking: true,
+        },
+      ],
+      source,
+      createdAt: Date.now(),
+    };
+    state.loopContract = contract;
+    this.agent.records.logRecord({
+      type: 'goal.contract.create',
+      goalId: state.goalId,
+      contract,
+    });
+    this.track('loop_contract_created', {
+      contract_source: contract.source,
+      criteria_count: contract.acceptanceCriteria.length,
+    });
+    this.persistState(state);
+    return contract;
+  }
+
+  recordReviewAttempt(attempt: LoopReviewAttempt): void {
+    const state = this.requireState();
+    const previous = state.reviewHistory.at(-1);
+    state.reviewHistory.push(attempt);
+    this.agent.records.logRecord({
+      type: 'goal.review.record',
+      goalId: state.goalId,
+      attempt,
+    });
+    if (
+      attempt.blockerFingerprint !== undefined
+      && attempt.blockerFingerprint === previous?.blockerFingerprint
+    ) {
+      this.track('loop_blocker_repeated', {
+        iteration: attempt.iteration,
+        blocker_count: attempt.blockerKeys.length,
+        repeated: true,
+      });
+    }
+    this.persistState(state);
+  }
+
+  recordStrategyAttempt(attempt: LoopStrategyAttempt): void {
+    const state = this.requireState();
+    state.strategyHistory.push(attempt);
+    this.agent.records.logRecord({
+      type: 'goal.strategy.record',
+      goalId: state.goalId,
+      attempt,
+    });
+    this.track('loop_strategist_terminal', {
+      iteration: attempt.triggeredAtIteration,
+      strategist_outcome: attempt.status,
+    });
+    this.persistState(state);
   }
 
   // --- User-owned lifecycle ---------------------------------------------
@@ -815,6 +1023,14 @@ export class GoalMode {
       budget: computeBudgetReport(state, Date.now()),
       terminalReason: state.terminalReason,
       loopResult: state.loopResult,
+      loopContract: state.loopContract,
+      convergence: state.reviewHistory.length === 0 && state.strategyHistory.length === 0
+        ? undefined
+        : {
+            reviewAttempts: state.reviewHistory.length,
+            lastBlockerFingerprint: state.reviewHistory.at(-1)?.blockerFingerprint,
+            strategyAttempts: state.strategyHistory.length,
+          },
     };
   }
 }
@@ -898,4 +1114,36 @@ function normalizeStopCondition(value: string | undefined): GoalStopCondition | 
 function normalizeReviewModel(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed?.length ? trimmed : undefined;
+}
+
+function normalizeStrategyAttempt(attempt: LoopStrategyAttempt): LoopStrategyAttempt {
+  const stored = attempt as unknown as {
+    readonly triggeredAtIteration?: number;
+    readonly afterIteration?: number;
+    readonly blockerFingerprint?: string;
+    readonly status?: 'advised' | 'failed';
+    readonly outcome?: 'advice' | 'invalid_output' | 'error';
+    readonly diagnosis?: string;
+    readonly recommendedApproach?: string;
+    readonly advice?: string;
+    readonly risks?: readonly string[];
+    readonly model?: string;
+    readonly usedModelFallback?: boolean;
+  };
+  if (stored.triggeredAtIteration !== undefined && stored.status !== undefined) {
+    return attempt;
+  }
+
+  const advised = stored.outcome === 'advice' && stored.advice !== undefined;
+  return {
+    schemaVersion: 1,
+    triggeredAtIteration: stored.afterIteration ?? 0,
+    blockerFingerprint: stored.blockerFingerprint ?? 'legacy-strategy',
+    status: advised ? 'advised' : 'failed',
+    diagnosis: advised ? 'Restored strategy advice from an earlier Wukong session.' : undefined,
+    recommendedApproach: advised ? stored.advice : undefined,
+    risks: advised ? [] : undefined,
+    model: stored.model,
+    usedModelFallback: stored.usedModelFallback ?? false,
+  };
 }

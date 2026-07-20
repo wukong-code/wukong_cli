@@ -71,7 +71,10 @@ export class BlobStore {
       case "full_compaction.cancel":
       case "full_compaction.complete":
       case "goal.clear":
+      case "goal.contract.create":
       case "goal.create":
+      case "goal.review.record":
+      case "goal.strategy.record":
       case "goal.update":
       case "metadata":
       case "micro_compaction.apply":
@@ -130,7 +133,10 @@ export class BlobStore {
       case "full_compaction.cancel":
       case "full_compaction.complete":
       case "goal.clear":
+      case "goal.contract.create":
       case "goal.create":
+      case "goal.review.record":
+      case "goal.strategy.record":
       case "goal.update":
       case "metadata":
       case "micro_compaction.apply":

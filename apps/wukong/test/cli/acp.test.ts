@@ -141,6 +141,7 @@ describe('wukong acp', () => {
         ...actual,
         createWukongHarness: () =>
           ({
+            track: vi.fn(),
             auth: { login: loginStub },
           }) as unknown as ReturnType<typeof actual.createWukongHarness>,
       };

@@ -79,6 +79,16 @@ describe('WelcomeComponent', () => {
     expect(output).toContain('/provider');
   });
 
+  it('shows one workspace-matching foreign continuation suggestion', () => {
+    const output = new WelcomeComponent({
+      ...appState,
+      resumeSuggestionSource: 'codex',
+    }).render(80).join('\n');
+
+    expect(output).toContain('Continue recent task from Codex');
+    expect(output).toContain('/resume codex');
+  });
+
   it('keeps every line within the requested width on narrow terminals', () => {
     for (const width of [0, 1, 2, 4, 10, 39, 80]) {
       for (const line of new WelcomeComponent(appState).render(width)) {

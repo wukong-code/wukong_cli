@@ -1,5 +1,32 @@
 # @wukong.today/code
 
+## 0.0.16
+
+### Patch Changes
+
+- Freeze a user-owned Loop acceptance contract and persist prior blockers,
+  stable blocker keys, review dispositions, and convergence history across
+  restart and resume.
+- Detect repeated no-progress blocker sets, invoke one fresh-context read-only
+  strategist, and stop with actionable `NEEDS_WORK/no_progress` when the same
+  blocker survives the strategy change.
+- Retry invalid structured reviewer output once, fall back from an unavailable
+  explicit reviewer model to the writer model once, and keep cancellation,
+  invalid output, and runtime unavailability as distinct outcomes.
+- Add Permission Mode v2: guarded non-interactive Auto, explicit dangerous YOLO,
+  `--yolo --yes` confirmation for headless bypass, and a warning compatibility
+  path for `--auto-approve`.
+- Enforce read-only capability ceilings for planner, reviewer, strategist, and
+  read-only explore children, including custom and MCP tool inheritance.
+- Add bounded current-workspace Resume suggestions and cancellable local prompt
+  search for recent Wukong sessions without storing a new search index.
+- Extend Role Profiles with input/output/capability contracts, and consolidate
+  background activity into one compact Task Plane footer status with `/tasks`
+  retaining detailed control.
+- Keep the release free and BYOK. Payments, managed model credits, PR Gate
+  publishing, Team features, hosted execution, and multi-reviewer quorum remain
+  out of scope.
+
 ## 0.0.15
 
 ### Patch Changes

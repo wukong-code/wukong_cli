@@ -1,10 +1,77 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.15 以 [Loop Reliability 与 First Success](docs/design/0.0.15-loop-reliability.md) 为准，共享验证基础以 [技术实现方案](docs/tech/commercial-refactor-implementation.md) 为准，现有测试基线以 [测试计划](docs/test/verification-cli-test-plan.md) 为准；本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；当前 0.0.16 以 [Loop Convergence](docs/design/0.0.16-loop-convergence.md) 为准，共享验证基础以 [技术实现方案](docs/tech/commercial-refactor-implementation.md) 为准，现有测试基线以 [测试计划](docs/test/verification-cli-test-plan.md) 为准；本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
-## 🚧 0.1.0 — Pro PR Gate + Billing
+## 🚧 0.0.16 — Loop Convergence
+
+> 方案: [docs/design/0.0.16-loop-convergence.md](docs/design/0.0.16-loop-convergence.md)。本版继续免费/BYOK，重点是让 Loop 围绕固定目标收敛；不做支付、PR Gate 写入或默认多 reviewer。
+
+### P0：Acceptance Contract 与持久化
+
+- [x] 定义 `LoopContract`：冻结 objective、可选 completion criterion 和 verification plan；0.0.16 不让模型生成额外 criteria（2026-07-20）
+- [x] objective 原文保持权威，不允许 writer/reviewer/strategist 覆盖或静默修改（2026-07-20）
+- [x] 增加 `goal.contract.create`、`goal.review.record`、`goal.strategy.record` append-only records 与 restore（2026-07-20）
+- [x] restart/resume/compaction 后恢复合同、prior blockers 和 strategy 状态（2026-07-20）
+- [x] 旧 Goal 第一次进入 0.0.16 Gate 时生成 fallback contract，不伪造旧 review history；旧 strategy record 自动归一化（2026-07-20）
+
+### P0：Prior Gaps 与 Reviewer Anti-ratchet
+
+- [x] Reviewer 输入增加冻结合同和 prior blockers，逐项返回 resolved/still-open/replaced-by（2026-07-20）
+- [x] blocking finding 必须关联有效 `criterionId`，由 harness 生成 stable blocker key（2026-07-20）
+- [x] 对排序去重后的 blocking keys 生成 fingerprint，不使用自然语言、绝对路径或 line number（2026-07-20）
+- [x] 新 blocking finding 必须关联固定 criterion；风格偏好保持 important/note（2026-07-20）
+- [x] deterministic blocker 不可被 reviewer 覆盖，review 后继续校验 workspace freshness（2026-07-20）
+
+### P0：Stall Strategist 与 Model Fallback
+
+- [x] 连续两轮相同 fingerprint 触发一次 read-only strategist；每个 Goal 最多尝试一次（2026-07-20）
+- [x] strategist 输出固定 diagnosis/recommendedApproach/risks schema，不能修改 workspace、policy、Role 或合同（2026-07-20）
+- [x] strategist fail-open、不增加 quota/maxIterations；仍相同则 `NEEDS_WORK/no_progress`（2026-07-20）
+- [x] 显式 reviewer model 不可用时回退当前 writer model 一次；invalid output 同模型重试一次，用户取消不回退（2026-07-20）
+- [x] invalid output、model unavailable、fallback failure 和 check infrastructure error 使用稳定独立 reason code（2026-07-20）
+
+### P0：Permission Mode v2 与分身权限上限
+
+- [x] 重排 permission policy，保证 hard deny/profile ceiling/Plan guard/用户 deny 先于 Auto/YOLO 决策（2026-07-20）
+- [x] Auto 改为不提问的受限自主模式：workspace 外写入、敏感目标、高风险 Bash 和未分类 MCP/custom tool 阻断并暂停（2026-07-20）
+- [x] YOLO 明确为危险 approval bypass，但不能绕过用户 deny、安全 hook、Plan guard、profile allowlist 或只读 capability（2026-07-20）
+- [x] Headless `-p` 默认使用受限 Auto；危险执行要求 `--yolo --yes`，单独 `--yes` 不再启用 YOLO（2026-07-20）
+- [x] 旧 `--auto-approve` 增加弃用/危险警告，旧 permission records 与 `default_permission_mode` 保持可恢复（2026-07-20）
+- [x] 修复 child custom-tool 继承：只注册工具，不绕过 child profile 激活；reviewer/planner/strategist/read-only explore 强制只读（2026-07-20）
+- [x] footer 与 `/status` 显示当前 permission mode，`/tasks` 显示实际任务，YOLO 使用持续危险提示（2026-07-20）
+
+### P1：Resume、Role、TUI 与 Session Search
+
+- [x] Welcome suggestion 仅扫描当前 workspace、最近 30 天、每来源最多 50 条，并支持 opt-out（2026-07-20）
+- [x] suggestion 只显示一条；选择后仍需只读 import、workspace re-check 和 objective 编辑确认（2026-07-20）
+- [x] Role schema 增加可选 inputs/outputs/capabilityMode；与 tools/base profile 取交集，不能扩权（2026-07-20）
+- [x] planner/reviewer/strategist 使用明确 Role contract，均固定 read-only（2026-07-20）
+- [x] footer 只显示一条紧凑后台任务状态，详细状态与输出统一留在 `/tasks`，不向 transcript 重复写状态说明（2026-07-20）
+- [x] session picker 搜索最近 100 个 session 的有界本地 prompt 摘要，支持 debounce/cancel，不增加 native SQLite 依赖（2026-07-20）
+
+### 指标、E2E 与发布
+
+- [x] 增加不含 objective、criterion、blocker、路径、session id 或 transcript 的 convergence metrics（2026-07-20）
+- [x] 增加只含 mode、阻断类别和 capability 类别的 permission metrics，不上传命令、参数、路径或自定义工具名（2026-07-20）
+- [x] 真实 Node/Python/Rust/Go 项目覆盖 check blocker → fix → PASS（2026-07-20）
+- [x] 覆盖 repeated blocker → strategist → unblock/no-progress 两条 contract 路径（2026-07-20）
+- [x] 覆盖 invalid/unavailable reviewer model → retry/fallback 和两模型失败（2026-07-20）
+- [x] 覆盖 TUI/Headless Manual、Auto、YOLO、`--yes`、`--auto-approve` 和旧 config/record 兼容矩阵（2026-07-20）
+- [x] 覆盖 Auto/YOLO 父 Agent 下 reviewer/strategist 仍保持只读，以及 coder 只继承合法工具交集（2026-07-20）
+- [x] Codex/Claude Code/Cursor suggestion → resume → edit objective → Loop terminal PASS TUI E2E（2026-07-21）
+- [x] 0.0.15 Goal/session/Role compatibility、durable lifecycle、outbox 和 completion API 全量回归（2026-07-20）
+- [x] Core/CLI/全仓 test、typecheck、lint、docs/bundle build、macOS arm64 SEA/native smoke 通过（2026-07-21；全仓并发 fs-watch burst 超时已单文件串行 7/7 复验）
+- [ ] 正式 tag 后六平台 ZIP/SHA assets、0.0.15 → 0.0.16 upgrade 与 fresh install 通过
+- [x] 内部中英文 README、用户指南、CHANGELOG、release notes 与设计文档同步（2026-07-21）
+- [ ] 正式发布时同步公告、公开 repo、Web 当前版本/下载/Changelog 文案
+
+### 明确不做
+
+- 支付、GitHub PR 写入、Team、managed reviewer、默认多 reviewer、云端 `/schedule`、远程 session、Hosted Report、Agent/Persona 市场和自动 policy 修改均不进入 0.0.16。
+
+## ⏳ 0.1.0 — Pro PR Gate + Billing
 
 > 方案: [docs/design/0.1.0-pro-pr-gate.md](docs/design/0.1.0-pro-pr-gate.md)。本版保留完整的本地 BYOK Loop，首个付费权益是把 Gate summary/comment 和 `wukong/gate` status 发布回 GitHub PR。候选 `$9/月` 只用于邀请制实验，不是公开价格承诺。
 >

@@ -18,6 +18,17 @@ preflight before quota reservation, a shorter first-run surface, and real
 lifecycle states in the Dashboard. It remains free and BYOK; see the
 [0.0.15 design](docs/design/0.0.15-loop-reliability.md).
 
+Version `0.0.16` freezes an acceptance contract for each Loop, carries prior blockers across reviews,
+detects repeated no-progress cycles, invokes one read-only strategist when the
+same blocker persists, and falls back safely when an explicit reviewer model is
+unavailable. It also introduces Permission Mode v2: Auto becomes autonomous but
+guarded by workspace, risk, and capability boundaries; YOLO is an explicit
+dangerous approval bypass that still cannot expand read-only reviewer or
+strategist capabilities. Bounded Resume suggestions, Role contracts, a compact
+background-task count, and local session-content search are included without adding
+payment or managed model credits. See the
+[0.0.16 design](docs/design/0.0.16-loop-convergence.md).
+
 Version `0.1.0` is planned around one narrow commercial experiment: the local BYOK Loop remains complete and free, while Pro is planned to unlock publishing a redacted Gate summary and commit status to a GitHub pull request. Public Checkout remains closed; an invite-only RC can start only after activation and engineering gates are met. See the [0.1.0 design](docs/design/0.1.0-pro-pr-gate.md).
 
 Version `0.0.12` established the Loop-first runtime. `verify`, `scan`, and `proof` remain available as advanced diagnostics, but they are internal Loop layers rather than separate products or quotas. See the [0.0.12 design contract](docs/design/verification-loop-v2.md) and the [0.0.13 review design](docs/design/review-learning-loop.md).

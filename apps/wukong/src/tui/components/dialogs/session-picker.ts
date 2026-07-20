@@ -23,6 +23,8 @@ export interface SessionRow {
   readonly last_prompt?: string | null;
   readonly work_dir: string;
   readonly updated_at: number;
+  /** Local-only path used by bounded content search; never rendered or emitted. */
+  readonly session_dir?: string;
   readonly metadata?: Readonly<Record<string, unknown>> | undefined;
   readonly source?: SessionSource;
   readonly external?: {
@@ -81,9 +83,11 @@ function singleLine(text: string): string {
   return text.replaceAll(/\s+/g, ' ').trim();
 }
 
-function sessionSearchText(session: SessionRow): string {
+function sessionSearchText(session: SessionRow, content = ''): string {
   const title = (session.title ?? session.id).trim() || session.id;
-  return singleLine(`${session.source ?? 'wukong'} ${title} ${session.external?.id ?? session.id}`);
+  return singleLine(
+    `${session.source ?? 'wukong'} ${title} ${session.external?.id ?? session.id} ${session.last_prompt ?? ''} ${content}`,
+  );
 }
 
 export class SessionPickerComponent extends Container implements Focusable {
@@ -98,6 +102,15 @@ export class SessionPickerComponent extends Container implements Focusable {
   private scope: 'cwd' | 'all';
   private loading: boolean;
   private list: SearchableList<SessionRow>;
+  private readonly loadSearchContent?: (
+    signal: AbortSignal,
+  ) => Promise<ReadonlyMap<string, string>>;
+  private readonly onRequestRender?: () => void;
+  private searchContent = new Map<string, string>();
+  private searchContentLoaded = false;
+  private searchTimer: NodeJS.Timeout | undefined;
+  private searchAbort: AbortController | undefined;
+  private searchLoading = false;
 
   focused = false;
 
@@ -114,6 +127,8 @@ export class SessionPickerComponent extends Container implements Focusable {
     onCtrlD?: () => void;
     onToggleScope?: (selectedSessionId: string) => void;
     maxVisibleSessions?: number;
+    loadSearchContent?: (signal: AbortSignal) => Promise<ReadonlyMap<string, string>>;
+    onRequestRender?: () => void;
   }) {
     super();
     this.sessions = opts.sessions;
@@ -124,11 +139,13 @@ export class SessionPickerComponent extends Container implements Focusable {
     this.onCancel = opts.onCancel;
     this.onToggleScope = opts.onToggleScope;
     this.maxVisibleSessions = opts.maxVisibleSessions ?? 4;
+    this.loadSearchContent = opts.loadSearchContent;
+    this.onRequestRender = opts.onRequestRender;
     this.pageSize = Math.max(1, opts.pageSize ?? 50);
     const initialIndex = this.resolveInitialSelectedIndex(opts.initialSelectedSessionId);
     this.list = new SearchableList({
       items: this.sessions,
-      toSearchText: sessionSearchText,
+      toSearchText: (session) => sessionSearchText(session, this.searchContent.get(session.id)),
       pageSize: this.pageSize,
       initialIndex,
       searchable: true,
@@ -184,22 +201,68 @@ export class SessionPickerComponent extends Container implements Focusable {
     }
     if (matchesKey(data, Key.escape)) {
       if (this.list.clearQuery()) {
+        this.cancelContentSearch();
         this.visibleCount = Math.min(this.filteredSessions().length, this.pageSize);
         return;
       }
+      this.cancelContentSearch();
       this.onCancel();
       return;
     }
     if (matchesKey(data, Key.enter)) {
       const session = this.list.selected();
-      if (session) this.onSelect(session);
+      if (session) {
+        this.cancelContentSearch();
+        this.onSelect(session);
+      }
       return;
     }
 
     const previousQuery = this.list.view().query;
     if (this.list.handleKey(data)) {
       this.syncVisibleCount(previousQuery);
+      this.scheduleContentSearch(previousQuery);
     }
+  }
+
+  private scheduleContentSearch(previousQuery: string): void {
+    const query = this.list.view().query;
+    if (query === previousQuery) return;
+    this.cancelContentSearch();
+    if (query.length < 2 || this.loadSearchContent === undefined || this.searchContentLoaded) {
+      return;
+    }
+    this.searchLoading = true;
+    this.searchTimer = setTimeout(() => {
+      this.searchTimer = undefined;
+      const controller = new AbortController();
+      this.searchAbort = controller;
+      void this.loadSearchContent!(controller.signal)
+        .then((content) => {
+          if (controller.signal.aborted) return;
+          this.searchContent = new Map(content);
+          this.searchContentLoaded = true;
+          this.visibleCount = Math.min(this.filteredSessions().length, this.pageSize);
+        })
+        .catch(() => {
+          // Cancellation and unreadable session files are best-effort search misses.
+        })
+        .finally(() => {
+          if (this.searchAbort === controller) this.searchAbort = undefined;
+          if (!controller.signal.aborted) {
+            this.searchLoading = false;
+            this.onRequestRender?.();
+          }
+        });
+    }, 250);
+  }
+
+  private cancelContentSearch(): void {
+    if (this.searchTimer !== undefined) clearTimeout(this.searchTimer);
+    this.searchTimer = undefined;
+    this.searchAbort?.abort();
+    this.searchAbort = undefined;
+    this.searchLoading = false;
   }
 
   override render(width: number): string[] {
@@ -264,6 +327,9 @@ export class SessionPickerComponent extends Container implements Focusable {
 
     if (view.query.length > 0) {
       lines.push(currentTheme.fg('primary', 'Search: ') + currentTheme.fg('text', view.query));
+      if (this.searchLoading) {
+        lines.push(currentTheme.fg('textMuted', 'Searching recent session prompts…'));
+      }
     }
 
     const loadedSessions = this.loadedSessions(view.items);

@@ -124,8 +124,11 @@ export function computeIssues(
       case "context.clear":
       case "context.undo":
       case "forked":
+      case "goal.contract.create":
       case "goal.clear":
       case "goal.create":
+      case "goal.review.record":
+      case "goal.strategy.record":
       case "goal.update":
       case "metadata":
       case "micro_compaction.apply":

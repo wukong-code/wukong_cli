@@ -26,7 +26,7 @@ describe('role profiles', () => {
   it('loads built-in, user, and explicitly selected project roles', async () => {
     await writeFile(
       join(homeDir, 'roles', 'backend.md'),
-      '---\ndescription: Backend specialist\nmodel: fast\ntools:\n  - Read\n  - Bash\nverify_profile: api\n---\n\nFocus on API correctness.',
+      '---\ndescription: Backend specialist\nmodel: fast\ncapabilityMode: execute\ntools:\n  - Read\n  - Bash\ninputs:\n  - name: task_context\n    type: json\n    required: true\noutputs:\n  - name: result\n    schema: text-v1\n    required: true\nverify_profile: api\n---\n\nFocus on API correctness.',
     );
     await writeFile(
       join(workDir, '.wukong', 'roles', 'release.md'),
@@ -43,6 +43,9 @@ describe('role profiles', () => {
       model: 'fast',
       tools: ['Read', 'Bash'],
       verifyProfile: 'api',
+      capabilityMode: 'execute',
+      inputs: [{ name: 'task_context', type: 'json', required: true }],
+      outputs: [{ name: 'result', schema: 'text-v1', required: true }],
       prompt: 'Focus on API correctness.',
     });
     await expect(resolveRole('release', { cwd: workDir, wukongHomeDir: homeDir })).rejects.toThrow(/project:release/);
@@ -70,5 +73,23 @@ describe('role profiles', () => {
     await expect(resolveRole('unsafe', { cwd: workDir, wukongHomeDir: homeDir })).rejects.toThrow(
       /Unsupported role field/,
     );
+  });
+
+  it('rejects invalid capability and input/output contracts', async () => {
+    await writeFile(
+      join(homeDir, 'roles', 'unsafe-capability.md'),
+      '---\ncapabilityMode: root\n---\n\nUnsafe role.',
+    );
+    await expect(
+      resolveRole('unsafe-capability', { cwd: workDir, wukongHomeDir: homeDir }),
+    ).rejects.toThrow(/capabilityMode/);
+
+    await writeFile(
+      join(homeDir, 'roles', 'bad-contract.md'),
+      '---\ninputs:\n  - name: Task Context\n    required: yes\n---\n\nBad role.',
+    );
+    await expect(
+      resolveRole('bad-contract', { cwd: workDir, wukongHomeDir: homeDir }),
+    ).rejects.toThrow(/inputs/);
   });
 });

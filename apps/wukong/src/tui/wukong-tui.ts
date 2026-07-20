@@ -149,11 +149,15 @@ import {
 import { hasDispose, isExpandable } from './utils/component-capabilities';
 import { isDeadTerminalError } from './utils/dead-terminal';
 import { formatErrorMessage } from './utils/event-payload';
-import { discoverForeignSessionRows } from './utils/foreign-sessions';
+import {
+  discoverForeignSessionRows,
+  discoverForeignSessionSuggestion,
+} from './utils/foreign-sessions';
 import { pickForegroundTasks } from './utils/foreground-task';
 import { ImageAttachmentStore, type ImageAttachment } from './utils/image-attachment-store';
 import { extractMediaAttachments } from './utils/image-placeholder';
 import { hasPatchChanges } from './utils/object-patch';
+import { buildBoundedSessionSearchIndex } from './utils/session-content-search';
 import { sessionRowsForPicker } from './utils/session-picker-rows';
 import { combineStartupNotice, isOAuthLoginRequiredError } from './utils/startup';
 import { installTerminalFocusTracking } from './utils/terminal-focus';
@@ -231,6 +235,7 @@ function createInitialAppState(input: WukongTUIStartupInput): AppState {
     editorCommand: input.tuiConfig.editorCommand,
     notifications: input.tuiConfig.notifications,
     upgrade: input.tuiConfig.upgrade,
+    resume: input.tuiConfig.resume,
     availableModels: {},
     availableProviders: {},
     sessionTitle: null,
@@ -550,6 +555,7 @@ export class WukongTUI {
     // Mount only after init() succeeds; see mountFooter().
     this.mountFooter();
     this.renderWelcome();
+    void this.loadResumeSuggestion();
     void this.loadBanner();
     this.setupAutocomplete();
     void this.loadPersistedInputHistory();
@@ -564,6 +570,18 @@ export class WukongTUI {
     this.startClipboardImageHintController();
     this.terminalFocusTrackingDispose = installTerminalFocusTracking(this.state);
     this.refreshTerminalThemeTracking();
+  }
+
+  private async loadResumeSuggestion(): Promise<void> {
+    if (this.state.appState.resume?.foreignSuggestions === false) return;
+    const row = await discoverForeignSessionSuggestion({
+      workDir: this.state.appState.workDir,
+    });
+    if (row === undefined || row.source === 'wukong') return;
+    this.state.appState.resumeSuggestionSource = row.source;
+    this.track('resume_suggestion_shown', { source: row.source });
+    this.renderWelcome();
+    this.state.ui.requestRender();
   }
 
   private startClipboardImageHintController(): void {
@@ -1681,9 +1699,13 @@ export class WukongTUI {
             )
           : [];
       const foreignRows = foreignResult.status === 'fulfilled' ? foreignResult.value : [];
-      this.state.sessions = [...nativeRows, ...foreignRows].toSorted(
-        (left, right) => right.updated_at - left.updated_at,
-      );
+      const currentWorkDir = resolve(this.state.appState.workDir);
+      this.state.sessions = [...nativeRows, ...foreignRows].toSorted((left, right) => {
+        const leftCurrent = resolve(left.work_dir) === currentWorkDir;
+        const rightCurrent = resolve(right.work_dir) === currentWorkDir;
+        if (leftCurrent !== rightCurrent) return leftCurrent ? -1 : 1;
+        return right.updated_at - left.updated_at;
+      });
     } catch {
       /* silently ignore */
     } finally {
@@ -2769,6 +2791,10 @@ export class WukongTUI {
         scope: this.state.sessionsScope,
         initialSelectedSessionId: options.initialSelectedSessionId,
         pageSize: 50,
+        loadSearchContent: (signal) => buildBoundedSessionSearchIndex(this.state.sessions, signal),
+        onRequestRender: () => {
+          if (this.state.activeDialog === 'session-picker') this.state.ui.requestRender();
+        },
         onSelect: (session: SessionRow) => {
           void this.handleSessionPickerSelect(session, options.applyStartupModes === true).catch(
             (error) => {
@@ -2848,6 +2874,10 @@ export class WukongTUI {
     action: ResumeHandoffAction,
   ): void {
     this.track('resume_selected', { source, mode: action });
+    if (this.state.appState.resumeSuggestionSource === source) {
+      this.track('resume_suggestion_selected', { source });
+      this.state.appState.resumeSuggestionSource = undefined;
+    }
     if (action === 'loop') {
       this.state.activeDialog = null;
       this.restoreInputText(foreignLoopDraft(session, source));

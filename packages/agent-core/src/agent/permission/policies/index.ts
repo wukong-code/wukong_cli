@@ -2,6 +2,7 @@ import type { Agent } from '../..';
 import type { PermissionPolicy } from '../types';
 import { AgentSwarmExclusiveDenyPermissionPolicy } from './agent-swarm-exclusive-deny';
 import { AutoModeApprovePermissionPolicy } from './auto-mode-approve';
+import { AutoModeBoundaryDenyPermissionPolicy } from './auto-mode-boundary-deny';
 import { AutoModeAskUserQuestionDenyPermissionPolicy } from './auto-mode-ask-user-question-deny';
 import { DefaultToolApprovePermissionPolicy } from './default-tool-approve';
 import { ExitPlanModeReviewAskPermissionPolicy } from './exit-plan-mode-review-ask';
@@ -37,8 +38,12 @@ export function createPermissionDecisionPolicies(agent: Agent): PermissionPolicy
     new PlanModeGuardDenyPermissionPolicy(agent),
     // User-configured deny rule matches → deny.
     new UserConfiguredDenyPermissionPolicy(agent),
-    // auto mode → approve (any auto-mode block must be a deny rule above this).
-    new AutoModeApprovePermissionPolicy(agent),
+    // Auto is autonomous but guarded: it cannot cross workspace, destructive
+    // command, or unclassified external-capability boundaries.
+    new AutoModeBoundaryDenyPermissionPolicy(agent),
+    // YOLO skips ordinary approval/ask policies, but only after every hard
+    // deny, hook, plan guard, user deny, and capability boundary above it.
+    new YoloModeApprovePermissionPolicy(agent),
     // Approve-for-session memorized rule matches → approve. Runs before user-configured ask rules so an in-session grant beats a still-matching ask rule on later calls.
     new SessionApprovalHistoryPermissionPolicy(agent),
     // User-configured ask rule matches → ask.
@@ -57,8 +62,9 @@ export function createPermissionDecisionPolicies(agent: Agent): PermissionPolicy
     new SensitiveFileAccessAskPermissionPolicy(),
     // Access touches .git or a git control-dir path → ask.
     new GitControlPathAccessAskPermissionPolicy(agent),
-    // yolo mode → approve.
-    new YoloModeApprovePermissionPolicy(agent),
+    // Auto only approves after every normal ask boundary has had a chance to
+    // convert into a stable block in PermissionManager.
+    new AutoModeApprovePermissionPolicy(agent),
     // Swarm mode keeps AgentSwarm available without making it a globally default-approved tool.
     new SwarmModeAgentSwarmApprovePermissionPolicy(agent),
     // Tool is in the default-approve list (read-only / UI helpers) → approve.

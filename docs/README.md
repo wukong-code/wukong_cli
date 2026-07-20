@@ -9,6 +9,8 @@
 > **给 Wukong 一个目标，它会写、检查、审查并修复，直到没有 blocking finding。**
 > Wukong Code 是 review 驱动的 AI Coding Loop。
 
+长期品牌能力、产品术语、权限边界和 Free / Pro / Team 商业分层见 [Wukong 能力体系与商业化原则](business/WUKONG_CAPABILITY_MODEL.md)。核心关系是：Loop 是产品主流程，分身是执行结构，火眼金睛与 Gate 形成可信结论，Policy 与 Audit 形成团队付费价值。
+
 命令分层对应 loop engineering：
 
 | 层 | 命令 | 状态 |
@@ -46,12 +48,16 @@
   正式版本安装、升级、功能与商业边界。
 - [0.0.15 Loop Reliability 与 First Success](design/0.0.15-loop-reliability.md)
   定义 durable Loop lifecycle、completion outbox、重启恢复、preflight、首次成功 UX、隐私指标与 0.1.0 商业决策门槛。
+- [0.0.16 Loop Convergence](design/0.0.16-loop-convergence.md)
+  定义固定验收合同、prior blockers、anti-ratchet reviewer、无进展检测、一次性 strategist、reviewer model fallback、Permission Mode v2、只读分身 capability ceiling、Resume 建议、Role contract、统一任务状态与本地 session 内容搜索。
+- [0.0.16 Release Notes](releases/0.0.16.md)
+  记录正式版能力、兼容边界、验证结果和发布验收标准。
 - [0.1.0 Pro PR Gate 与 Billing](design/0.1.0-pro-pr-gate.md)
   定义 Free 本地 BYOK 边界、Pro PR comment/status、capability entitlement、Stripe lifecycle、邀请制价格实验和正式发布门槛；当前仍是规划，公开 Checkout 保持关闭。
 - [跨 Agent Session Resume](design/cross-agent-resume.md)
   `/resume` 恢复 Wukong 会话；`/resume codex|claude|cursor` 显式发现对应 Agent 的本地会话，并通过内置 Skill 只读导入后在 Wukong 中继续。
 - [执行层 TODO](../TODO.md)
-  按 ROADMAP milestone 拆解的任务清单，记录最新完成版本（0.0.15 Loop Reliability + First Success）、暂缓项和已完成基线。
+  按 ROADMAP milestone 拆解的任务清单，记录当前开发版本（0.0.16 Loop Convergence）、后续商业实验、暂缓项和已完成基线。
 
 当前可用 top-level commands 以 `wukong --help` 为准，主要包括：
 
@@ -85,6 +91,8 @@ wukong upgrade
 
 - [商业化与产品重构方案](business/COMMERCIAL_REFACTOR_PLAN.md)
   定义产品定位、商业模型、目标命令结构（含 loop/proof/judge/schedule）和路线图。
+- [Wukong 能力体系与商业化原则](business/WUKONG_CAPABILITY_MODEL.md)
+  定义斗战、七十二变、身外身、火眼金睛、筋斗云、定身、金刚不坏和金箍棒对应的产品能力，并约束 Role / Specialist / Managed Gate、权限不变量和未来商业分层。
 - [商业化重构技术实现方案](tech/commercial-refactor-implementation.md)
   定义 `@wukong/verification`、`wukong verify`、`wukong scan`、`wukong guard`、agent tool 以及 `/proof`、`/judge`、`/goal` verification gate、`/loop`、`/schedule` 的实现方案。
 - [最新技术架构](tech/architecture.md)

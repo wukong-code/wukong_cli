@@ -166,6 +166,37 @@ export interface LoopResultFinding {
   readonly nextAction: string;
   readonly confidence: 'high' | 'medium' | 'low';
   readonly validationStatus: 'verified' | 'unverified' | 'failed';
+  readonly criterionId?: string;
+}
+
+export interface LoopAcceptanceCriterion {
+  readonly id: string;
+  readonly text: string;
+  readonly source: 'objective' | 'completion_criterion' | 'derived';
+}
+
+export interface LoopVerificationStep {
+  readonly id: string;
+  readonly kind: 'project_check' | 'review';
+  readonly description: string;
+  readonly blocking: boolean;
+}
+
+export interface LoopContract {
+  readonly schemaVersion: 1;
+  readonly goalId: string;
+  readonly objective: string;
+  readonly completionCriterion?: string;
+  readonly acceptanceCriteria: readonly LoopAcceptanceCriterion[];
+  readonly verificationPlan: readonly LoopVerificationStep[];
+  readonly source: 'user' | 'planner' | 'fallback';
+  readonly createdAt: number;
+}
+
+export interface LoopConvergenceSummary {
+  readonly reviewAttempts: number;
+  readonly lastBlockerFingerprint?: string;
+  readonly strategyAttempts: number;
 }
 
 export interface LoopResult {
@@ -209,6 +240,8 @@ export interface GoalSnapshot {
   readonly budget: GoalBudgetReport;
   readonly terminalReason?: string;
   readonly loopResult?: LoopResult;
+  readonly loopContract?: LoopContract;
+  readonly convergence?: LoopConvergenceSummary;
 }
 
 export interface GoalToolResult {
@@ -887,7 +920,38 @@ export const loopResultFindingSchema = z.object({
   nextAction: z.string(),
   confidence: z.enum(['high', 'medium', 'low']),
   validationStatus: z.enum(['verified', 'unverified', 'failed']),
+  criterionId: z.string().optional(),
 }) satisfies z.ZodType<LoopResultFinding>;
+
+export const loopAcceptanceCriterionSchema = z.object({
+  id: z.string(),
+  text: z.string(),
+  source: z.enum(['objective', 'completion_criterion', 'derived']),
+}) satisfies z.ZodType<LoopAcceptanceCriterion>;
+
+export const loopVerificationStepSchema = z.object({
+  id: z.string(),
+  kind: z.enum(['project_check', 'review']),
+  description: z.string(),
+  blocking: z.boolean(),
+}) satisfies z.ZodType<LoopVerificationStep>;
+
+export const loopContractSchema = z.object({
+  schemaVersion: z.literal(1),
+  goalId: z.string(),
+  objective: z.string(),
+  completionCriterion: z.string().optional(),
+  acceptanceCriteria: z.array(loopAcceptanceCriterionSchema),
+  verificationPlan: z.array(loopVerificationStepSchema),
+  source: z.enum(['user', 'planner', 'fallback']),
+  createdAt: z.number(),
+}) satisfies z.ZodType<LoopContract>;
+
+export const loopConvergenceSummarySchema = z.object({
+  reviewAttempts: z.number(),
+  lastBlockerFingerprint: z.string().optional(),
+  strategyAttempts: z.number(),
+}) satisfies z.ZodType<LoopConvergenceSummary>;
 
 export const loopResultSchema = z.object({
   schemaVersion: z.literal(2),
@@ -930,6 +994,8 @@ export const goalSnapshotSchema = z.object({
   budget: goalBudgetReportSchema,
   terminalReason: z.string().optional(),
   loopResult: loopResultSchema.optional(),
+  loopContract: loopContractSchema.optional(),
+  convergence: loopConvergenceSummarySchema.optional(),
 }) satisfies z.ZodType<GoalSnapshot>;
 
 export const goalToolResultSchema = z.object({

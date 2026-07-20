@@ -411,6 +411,9 @@ export function projectContext(
       case 'turn.prompt':
       case 'turn.steer':
       case 'turn.cancel':
+      case 'goal.contract.create':
+      case 'goal.review.record':
+      case 'goal.strategy.record':
       case 'permission.record_approval_result':
       case 'full_compaction.begin':
       case 'full_compaction.cancel':

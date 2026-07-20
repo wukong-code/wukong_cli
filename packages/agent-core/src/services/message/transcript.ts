@@ -269,8 +269,11 @@ export function reduceWireRecords(records: Iterable<AgentRecord>): {
       case "full_compaction.begin":
       case "full_compaction.cancel":
       case "full_compaction.complete":
+      case "goal.contract.create":
       case "goal.clear":
       case "goal.create":
+      case "goal.review.record":
+      case "goal.strategy.record":
       case "goal.update":
       case "metadata":
       case "micro_compaction.apply":

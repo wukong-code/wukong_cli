@@ -80,14 +80,26 @@ export class WelcomeComponent implements Component {
     const title = chalk.bold.hex(currentTheme.palette.primary)('Wukong Code');
     const dim = chalk.hex(currentTheme.palette.textDim);
     const command = chalk.hex(currentTheme.palette.primary);
+    const suggestion = this.state.resumeSuggestionSource;
+    const sourceLabel = suggestion === 'codex'
+      ? 'Codex'
+      : suggestion === 'claude'
+        ? 'Claude Code'
+        : suggestion === 'cursor'
+          ? 'Cursor'
+          : undefined;
     return [
       '',
       title,
+      sourceLabel === undefined
+        ? undefined
+        : dim(`Continue recent task from ${sourceLabel}  · `) + command(`/resume ${suggestion}`),
       dim('Continue a task  · describe what remains'),
       dim('Start a Loop     · ') + command('/loop <goal>'),
       dim('Configure model · ') + command('/model') + dim(' or ') + command('/provider'),
       '',
-    ].map((line) => truncateToWidth(line, safeWidth, '…'));
+    ].filter((line): line is string => line !== undefined)
+      .map((line) => truncateToWidth(line, safeWidth, '…'));
   }
 
   private renderWelcomeCard(safeWidth: number): string[] {

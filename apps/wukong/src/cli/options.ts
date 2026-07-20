@@ -5,6 +5,8 @@ export interface CLIOptions {
   session: string | undefined;
   continue: boolean;
   yolo: boolean;
+  /** Explicit confirmation required for unrestricted headless execution. */
+  yes?: boolean;
   auto: boolean;
   plan: boolean;
   model: string | undefined;
@@ -42,11 +44,15 @@ export function validateOptions(opts: CLIOptions): ValidatedOptions {
   if (!promptMode && opts.outputFormat !== undefined) {
     throw new OptionConflictError('Output format is only supported in prompt mode.');
   }
-  if (promptMode && opts.yolo) {
-    throw new OptionConflictError('Cannot combine --prompt with --yolo.');
+  if (opts.yes === true && !opts.yolo) {
+    throw new OptionConflictError(
+      '--yes no longer enables YOLO. Use --yolo --yes for unrestricted headless execution.',
+    );
   }
-  if (promptMode && opts.auto) {
-    throw new OptionConflictError('Cannot combine --prompt with --auto.');
+  if (promptMode && opts.yolo && opts.yes !== true) {
+    throw new OptionConflictError(
+      'Headless YOLO requires explicit confirmation: use --yolo --yes.',
+    );
   }
   if (promptMode && opts.plan) {
     throw new OptionConflictError('Cannot combine --prompt with --plan.');

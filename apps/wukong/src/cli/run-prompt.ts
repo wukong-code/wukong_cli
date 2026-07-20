@@ -99,7 +99,7 @@ export async function runPrompt(
       }
       track('oauth_refresh', { outcome: 'error', reason: outcome.reason });
     },
-    sessionStartedProperties: { yolo: false, plan: false, afk: true },
+    sessionStartedProperties: { yolo: opts.yolo, plan: false, afk: true },
   });
   log.info('wukong starting', {
     version,
@@ -364,6 +364,7 @@ async function resolvePromptSession(
     const restorePermission = await forcePromptPermission(
       session,
       status.permission,
+      opts.yolo ? 'yolo' : 'auto',
       setRestorePermission,
     );
     if (opts.model !== undefined) {
@@ -391,6 +392,7 @@ async function resolvePromptSession(
       const restorePermission = await forcePromptPermission(
         session,
         status.permission,
+        opts.yolo ? 'yolo' : 'auto',
         setRestorePermission,
       );
       if (opts.model !== undefined) {
@@ -412,7 +414,7 @@ async function resolvePromptSession(
   const session = await harness.createSession({
     workDir,
     model,
-    permission: 'auto',
+    permission: opts.yolo ? 'yolo' : 'auto',
     additionalDirs: opts.addDirs?.length ? opts.addDirs : undefined,
   });
   installHeadlessHandlers(session);
@@ -428,18 +430,19 @@ async function resolvePromptSession(
 async function forcePromptPermission(
   session: Session,
   previousPermission: SessionStatus['permission'],
+  desiredPermission: SessionStatus['permission'],
   setRestorePermission: (restorePermission: () => Promise<void>) => void,
 ): Promise<() => Promise<void>> {
   let overridePermission: Promise<void> | undefined;
   const restorePermission = async () => {
     await overridePermission?.catch(() => {});
-    if (previousPermission !== 'auto') {
+    if (previousPermission !== desiredPermission) {
       await session.setPermission(previousPermission);
     }
   };
   setRestorePermission(restorePermission);
-  if (previousPermission !== 'auto') {
-    overridePermission = session.setPermission('auto');
+  if (previousPermission !== desiredPermission) {
+    overridePermission = session.setPermission(desiredPermission);
     await overridePermission;
   }
   return restorePermission;

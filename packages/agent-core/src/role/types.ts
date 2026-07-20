@@ -1,4 +1,12 @@
 export type RoleSource = 'builtin' | 'user' | 'project';
+export type RoleCapabilityMode = 'read-only' | 'read-write' | 'execute' | 'all';
+
+export interface RoleContractField {
+  readonly name: string;
+  readonly type?: string;
+  readonly schema?: string;
+  readonly required: boolean;
+}
 
 export interface RoleDefinition {
   readonly name: string;
@@ -9,6 +17,9 @@ export interface RoleDefinition {
   readonly model?: string | undefined;
   readonly tools?: readonly string[] | undefined;
   readonly verifyProfile?: string | undefined;
+  readonly capabilityMode?: RoleCapabilityMode | undefined;
+  readonly inputs?: readonly RoleContractField[] | undefined;
+  readonly outputs?: readonly RoleContractField[] | undefined;
   readonly path?: string | undefined;
 }
 

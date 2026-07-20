@@ -1,9 +1,9 @@
 # Wukong Code 用户指南
 
 > 适用范围: 当前 `wukong_cli` 新 Kimi-code base
-> 更新时间: 2026-07-16
+> 更新时间: 2026-07-20
 > 定位: 给 Wukong 一个目标，通过 Goal → Write → Check → Review → Fix 循环直到没有 blocking finding。
-> 原则: 本文只写当前可执行的能力。Loop、结构化 review findings、项目 review policy、本地 feedback、独立 reviewer model 和高级诊断命令已实现；完整订阅管理、团队规则和 PR gate 仍未完成。
+> 原则: 本文只写当前开发分支可执行的能力。Loop、冻结验收合同、prior blocker 复审、无进展 strategist、Permission Mode v2、结构化 review findings、项目 review policy、本地 feedback、独立 reviewer model 和高级诊断命令已实现；完整订阅管理、团队规则和 PR gate 仍未完成。
 
 ## 安装正式版
 
@@ -112,7 +112,23 @@ wukong loop "完成 API 改动" --review-model reviewer
 
 Loop 的最终三态和退出码为 `PASS=0`、`NEEDS_WORK=1`、`ERROR=2`；登录或额度明确拒绝为 `3`，中断为 `130`。Guest 有 1 次最多 2 轮的本地试用；Free 登录用户每月 10 次、每次最多 5 轮。`verify`、`scan`、`proof` 是内部检查层，不单独计数。
 
-### 11. 继续其他 Agent 的本地会话
+0.0.16 会在 Loop 创建时冻结用户 objective 和显式 completion criterion。Reviewer 每轮必须先处理上一轮 blocker；同一 blocker 连续两轮不变时只启动一次只读 strategist。策略后仍无进展会返回 `NEEDS_WORK/no_progress`，不会继续空转或偷偷增加迭代额度。
+
+### 11. 选择 Permission Mode
+
+- `manual`：需要时询问用户，适合交互式使用。
+- `auto`：不提问，但受 workspace、敏感目标、高风险 Bash 和 custom/MCP capability 边界约束；阻断发生在活动 Loop 内时会暂停为 `NEEDS_WORK/permission_required`。
+- `yolo`：跳过普通 approval 的危险模式，但仍不能绕过用户 deny、安全 Hook、Plan guard、Role/profile allowlist 或只读分身上限。
+
+Headless `-p` 默认使用受限 Auto。危险 headless 执行必须明确写出：
+
+```bash
+wukong -p "完成当前改动" --yolo --yes
+```
+
+单独 `--yes` 不再启用 YOLO。旧 `--auto-approve` 在一个兼容版本内仍映射到 YOLO，但会显示弃用和危险警告。
+
+### 12. 继续其他 Agent 的本地会话
 
 TUI 内使用统一入口：
 
@@ -126,6 +142,8 @@ TUI 内使用统一入口：
 `/resume` 默认只显示 Wukong 会话。只有显式使用 `codex`、`claude` 或 `cursor` 参数时，才扫描对应 Agent 的本地会话。`/resume-codex`、`/resume-claude`、`/resume-cursor` 是兼容入口，不进入主命令列表。
 
 Wukong session 会原生恢复；外部 session 会通过内置 Skill 读取本地 transcript，提取目标、已完成工作、未完成工作和最后请求，然后在 Wukong 中继续。该过程不会重启原 Agent、继承其权限或重放旧工具调用；继续前必须重新读取当前 workspace 与 Git 状态。
+
+Welcome 最多建议一条当前 workspace、30 天内的外部会话，可在 `~/.wukong/tui.toml` 的 `[resume] foreign_suggestions = false` 中关闭；显式 `/resume <source>` 不受此开关影响。Session picker 支持搜索最近 100 个 Wukong session 的用户 prompt 摘要，每个 session 最多读取 128 KiB，并忽略 system、tool 和 synthetic 内容。
 
 ## 当前 top-level commands
 

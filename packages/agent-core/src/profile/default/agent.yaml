@@ -41,5 +41,7 @@ subagents:
     description: Fast codebase exploration with prompt-enforced read-only behavior.
   reviewer:
     description: Fresh-context, read-only delivery reviewer for Loop gates.
+  strategist:
+    description: Read-only Loop strategist used only after an unchanged blocker set repeats.
   plan:
     description: Read-only implementation planning and architecture design.

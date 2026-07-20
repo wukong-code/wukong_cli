@@ -55,8 +55,8 @@ export function createProgram(
     )
     .option('-c, --continue', 'Continue the previous session for the working directory.', false)
     .addOption(new Option('-C').hideHelp().default(false))
-    .option('-y, --yolo', 'Automatically approve all actions.', false)
-    .option('--auto', 'Start in auto permission mode.', false)
+    .option('-y, --yolo', 'Skip ordinary approvals (dangerous; profile limits still apply).', false)
+    .option('--auto', 'Run autonomously with workspace and high-risk guardrails.', false)
     .addOption(
       new Option(
         '-m, --model <model>',
@@ -114,6 +114,7 @@ export function createProgram(
       session: undefined,
       continue: false,
       yolo: false,
+      yes: false,
       auto: false,
       plan: false,
       model: loop.model ?? raw['model'] as string | undefined,
@@ -158,19 +159,28 @@ export function createProgram(
 
     const rawSession = raw['session'] ?? raw['resume'];
     const sessionValue = rawSession === true ? '' : (rawSession as string | undefined);
-    const yoloValue = raw['yolo'] === true || raw['yes'] === true || raw['autoApprove'] === true;
-    const autoValue = raw['auto'] === true;
+    const legacyAutoApprove = raw['autoApprove'] === true;
+    const yoloValue = raw['yolo'] === true || legacyAutoApprove;
+    const yesValue = raw['yes'] === true || legacyAutoApprove;
+    const promptValue = raw['prompt'] as string | undefined;
+    const autoValue = raw['auto'] === true || (promptValue !== undefined && !yoloValue);
+    if (legacyAutoApprove) {
+      process.stderr.write(
+        'Warning: --auto-approve is deprecated and maps to dangerous YOLO mode. Use --yolo explicitly.\n',
+      );
+    }
 
     const opts: CLIOptions = {
       session: sessionValue,
       continue: raw['continue'] === true || raw['C'] === true,
       yolo: yoloValue,
+      yes: yesValue,
       auto: autoValue,
       plan: raw['plan'] as boolean,
       model: raw['model'] as string | undefined,
       role: raw['role'] as string | undefined,
       outputFormat: raw['outputFormat'] as CLIOptions['outputFormat'],
-      prompt: raw['prompt'] as string | undefined,
+      prompt: promptValue,
       skillsDirs: raw['skillsDir'] as string[],
       addDirs: raw['addDir'] as string[],
     };

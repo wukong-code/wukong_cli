@@ -377,6 +377,11 @@ export class SessionSubagentHost {
     );
     child.useProfile(profile, context);
     child.tools.inheritUserTools(parent.tools);
+    parent.telemetry.track('subagent_capability_ceiling_applied', {
+      profile_category: builtinProfileCategory(profile.name),
+      capability_mode: readOnlyProfile(profile.tools) ? 'read_only' : 'bounded',
+      allowed_tool_count: profile.tools.length,
+    });
   }
 
   private async triggerSubagentStart(
@@ -464,6 +469,19 @@ export class SessionSubagentHost {
       error: error instanceof Error ? error.message : String(error),
     });
   }
+}
+
+function builtinProfileCategory(name: string): string {
+  return name === 'reviewer' || name === 'strategist' || name === 'plan'
+    ? name
+    : name === 'coder' || name === 'explore'
+      ? 'worker'
+      : 'custom';
+}
+
+function readOnlyProfile(tools: readonly string[]): boolean {
+  const readOnlyTools = new Set(['Read', 'ReadMediaFile', 'Glob', 'Grep']);
+  return tools.every((tool) => readOnlyTools.has(tool));
 }
 
 async function runChildTurnToCompletion(child: Agent, signal: AbortSignal): Promise<void> {

@@ -34,6 +34,8 @@ describe('CLI options parsing', () => {
     it('returns defaults when no arguments are given', () => {
       const opts = parse([]);
       expect(opts.yolo).toBe(false);
+      expect(opts.yes).toBe(false);
+      expect(opts.auto).toBe(false);
       expect(opts.plan).toBe(false);
       expect(opts.continue).toBe(false);
       expect(opts.session).toBeUndefined();
@@ -125,12 +127,15 @@ describe('CLI options parsing', () => {
       expect(parse(['-y']).yolo).toBe(true);
     });
 
-    it('--yes sets yolo to true (hidden alias)', () => {
-      expect(parse(['--yes']).yolo).toBe(true);
+    it('--yes confirms but does not select yolo mode', () => {
+      const opts = parse(['--yes']);
+      expect(opts.yolo).toBe(false);
+      expect(opts.yes).toBe(true);
+      expect(() => validateOptions(opts)).toThrow(/--yes no longer enables YOLO/);
     });
 
     it('--auto-approve sets yolo to true (hidden alias)', () => {
-      expect(parse(['--auto-approve']).yolo).toBe(true);
+      expect(parse(['--auto-approve'])).toMatchObject({ yolo: true, yes: true });
     });
   });
 
@@ -248,6 +253,7 @@ describe('CLI options parsing', () => {
     it('parses -p as prompt mode', () => {
       const opts = parse(['-p', 'explain this repo']);
       expect(opts.prompt).toBe('explain this repo');
+      expect(opts.auto).toBe(true);
       expect(validateOptions(opts).uiMode).toBe('print');
     });
 
@@ -283,10 +289,16 @@ describe('CLI options parsing', () => {
       );
     });
 
-    it('rejects prompt mode with --yolo because prompt mode always uses auto permission', () => {
+    it('requires explicit --yes confirmation for prompt mode with --yolo', () => {
       const opts = parse(['-p', 'run this', '--yolo']);
       expect(() => validateOptions(opts)).toThrow(OptionConflictError);
-      expect(() => validateOptions(opts)).toThrow('Cannot combine --prompt with --yolo.');
+      expect(() => validateOptions(opts)).toThrow('Headless YOLO requires explicit confirmation');
+    });
+
+    it('allows explicit unrestricted headless mode with --yolo --yes', () => {
+      const opts = parse(['-p', 'run this', '--yolo', '--yes']);
+      expect(opts).toMatchObject({ yolo: true, yes: true, auto: false });
+      expect(validateOptions(opts).uiMode).toBe('print');
     });
 
     it('rejects prompt mode with --plan', () => {

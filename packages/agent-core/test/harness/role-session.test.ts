@@ -44,7 +44,7 @@ describe('role profile sessions', () => {
     await writeFile(configPath, CONFIG);
     await writeFile(
       join(homeDir, 'roles', 'backend.md'),
-      '---\ndescription: Backend role\nmodel: fast\ntools:\n  - Read\n  - Bash\n---\n\nFocus on backend invariants.',
+      '---\ndescription: Backend role\nmodel: fast\ncapabilityMode: execute\ntools:\n  - Read\n  - Bash\ninputs:\n  - name: task_context\n    type: json\n    required: true\noutputs:\n  - name: result\n    schema: text-v1\n    required: true\n---\n\nFocus on backend invariants.',
     );
   });
 
@@ -69,6 +69,8 @@ describe('role profile sessions', () => {
     const transformed = await rpc.getConfig({ sessionId: created.id, agentId: 'main' });
     const transformedTools = await rpc.getTools({ sessionId: created.id, agentId: 'main' });
     expect(transformed.systemPrompt).toContain('Focus on backend invariants.');
+    expect(transformed.systemPrompt).toContain('Capability mode: execute');
+    expect(transformed.systemPrompt).toContain('task_context');
     expect(transformed.modelAlias).toBe('fast');
     expect(transformedTools.find((tool) => tool.name === 'Read')?.active).toBe(true);
     expect(transformedTools.find((tool) => tool.name === 'Write')?.active).toBe(false);

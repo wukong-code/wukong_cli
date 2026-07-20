@@ -10,7 +10,37 @@ const BUILTIN_ROLE_INPUTS = [
     name: 'reviewer',
     description: 'Review code for correctness, regressions, and maintainability.',
     prompt: 'Act as a rigorous code reviewer. Prioritize concrete defects, regressions, missing tests, and operational risks. Cite exact files and lines when possible.',
-    tools: ['Read', 'Grep', 'Glob', 'Bash', 'ReadMediaFile', 'WebSearch', 'FetchURL', 'AskUserQuestion', 'mcp__*'],
+    capabilityMode: 'read-only',
+    tools: ['Read', 'Grep', 'Glob', 'ReadMediaFile'],
+    inputs: [
+      { name: 'loop_contract', type: 'json', required: true },
+      { name: 'prior_blockers', type: 'json', required: false },
+    ],
+    outputs: [{ name: 'verdict', schema: 'reviewer-verdict-v1', required: true }],
+  },
+  {
+    name: 'planner',
+    description: 'Create a read-only implementation plan against explicit constraints.',
+    prompt: 'Act as a read-only implementation planner. Inspect the codebase, preserve the stated constraints, and return a concrete ordered plan without modifying files.',
+    capabilityMode: 'read-only',
+    tools: ['Read', 'Grep', 'Glob', 'ReadMediaFile'],
+    inputs: [
+      { name: 'objective', type: 'text', required: true },
+      { name: 'constraints', type: 'json', required: false },
+    ],
+    outputs: [{ name: 'plan', schema: 'implementation-plan-v1', required: true }],
+  },
+  {
+    name: 'strategist',
+    description: 'Change strategy when a Loop repeats the same blockers.',
+    prompt: 'Act as a read-only Loop strategist. Preserve the immutable acceptance contract and propose one materially different way to resolve the repeated blocker set.',
+    capabilityMode: 'read-only',
+    tools: ['Read', 'Grep', 'Glob', 'ReadMediaFile'],
+    inputs: [
+      { name: 'loop_contract', type: 'json', required: true },
+      { name: 'repeated_blockers', type: 'json', required: true },
+    ],
+    outputs: [{ name: 'strategy', schema: 'loop-strategy-v1', required: true }],
   },
   {
     name: 'security',

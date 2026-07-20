@@ -15,5 +15,3 @@ tools:
   - ReadMediaFile
   - Glob
   - Grep
-  - WebSearch
-  - FetchURL

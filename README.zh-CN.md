@@ -14,6 +14,8 @@ Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal →
 
 `0.0.15` 把这条 Loop 做成可恢复闭环：持久化 run record、completion outbox、重启后的 active Loop 恢复、额度预留前 preflight、精简首次入口，以及 Dashboard 真实生命周期状态。本版本继续免费/BYOK，现已作为六平台公开版本发布；完整范围见 [0.0.15 设计](docs/design/0.0.15-loop-reliability.md)。
 
+`0.0.16` 为每个 Loop 冻结用户目标和显式完成标准，在复审中保留上轮 blocker，识别重复无进展循环，相同 blocker 持续时启动一次只读 strategist，并在显式 reviewer model 不可用时安全回退。本版也重构 Permission Mode：Auto 成为不提问但受 workspace/risk/capability 约束的自主模式，YOLO 明确为危险 approval bypass，且不能为 reviewer/strategist 等只读分身扩权。版本同时包含有界 Resume 建议、Role 任务契约、紧凑任务状态和本地 session 内容搜索，不增加支付或 managed model credits。完整范围见 [0.0.16 设计](docs/design/0.0.16-loop-convergence.md)。
+
 `0.1.0` 已开始规划一个收窄的商业实验：完整的本地 BYOK Loop 继续免费，Pro 计划只新增把脱敏 Gate summary 和 commit status 发布到 GitHub Pull Request 的能力。真实 Loop 完成和工程门槛达到后才允许 invite-only RC；真实付款和重复发布门槛未达到前，公开 Checkout 继续关闭。完整范围见 [0.1.0 设计](docs/design/0.1.0-pro-pr-gate.md)。
 
 `0.0.12` 建立了 Loop-first runtime。`verify`、`scan`、`proof` 仍保留为高级诊断命令，但只是 Loop 的内部层，不再各自形成产品或额度。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md) 和 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。

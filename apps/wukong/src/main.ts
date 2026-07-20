@@ -107,6 +107,7 @@ const MIGRATE_CLI_OPTIONS: CLIOptions = {
   session: undefined,
   continue: false,
   yolo: false,
+  yes: false,
   auto: false,
   plan: false,
   model: undefined,

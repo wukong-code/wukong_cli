@@ -8,6 +8,8 @@ const MAX_HEADER_LINES = 80;
 const MAX_LINE_BYTES = 256 * 1024;
 const MAX_FILES_PER_SOURCE = 500;
 const MAX_TAIL_BYTES = 512 * 1024;
+const MAX_SUGGESTION_FILES_PER_SOURCE = 50;
+const SUGGESTION_MAX_AGE_MS = 30 * 24 * 60 * 60 * 1000;
 
 interface ForeignSessionCandidate {
   readonly source: Exclude<SessionSource, 'wukong'>;
@@ -22,13 +24,49 @@ export async function discoverForeignSessionRows(options: {
   readonly workDir?: string;
   readonly homeDir?: string;
 }): Promise<SessionRow[]> {
+  return discoverForeignRowsInternal(options);
+}
+
+/** Bounded, workspace-only discovery used by the non-blocking welcome hint. */
+export async function discoverForeignSessionSuggestion(options: {
+  readonly workDir: string;
+  readonly homeDir?: string;
+  readonly now?: number;
+}): Promise<SessionRow | undefined> {
+  const rows = await discoverForeignRowsInternal({
+    workDir: options.workDir,
+    homeDir: options.homeDir,
+    maxFilesPerSource: MAX_SUGGESTION_FILES_PER_SOURCE,
+    updatedAfter: (options.now ?? Date.now()) - SUGGESTION_MAX_AGE_MS,
+    maxTitleLength: 200,
+  });
+  return rows[0];
+}
+
+async function discoverForeignRowsInternal(options: {
+  readonly source?: Exclude<SessionSource, 'wukong'>;
+  readonly workDir?: string;
+  readonly homeDir?: string;
+  readonly maxFilesPerSource?: number;
+  readonly updatedAfter?: number;
+  readonly maxTitleLength?: number;
+}): Promise<SessionRow[]> {
   const home = options.homeDir ?? homedir();
   const sources =
     options.source === undefined ? (['codex', 'claude', 'cursor'] as const) : [options.source];
   const groups = await Promise.all(
-    sources.map((source) => discoverSource(source, home, options.workDir)),
+    sources.map((source) => discoverSource(
+      source,
+      home,
+      options.workDir,
+      options.maxFilesPerSource ?? MAX_FILES_PER_SOURCE,
+    )),
   );
-  const rows = (await Promise.all(groups.flat().map(readCandidate))).filter(
+  const rows = (await Promise.all(groups.flat().map((candidate) => readCandidate(
+    candidate,
+    options.updatedAfter,
+    options.maxTitleLength,
+  )))).filter(
     (row): row is SessionRow => row !== undefined,
   );
   return rows.toSorted((left, right) => right.updated_at - left.updated_at);
@@ -38,22 +76,24 @@ async function discoverSource(
   source: Exclude<SessionSource, 'wukong'>,
   home: string,
   workDir: string | undefined,
+  maxFiles: number,
 ): Promise<ForeignSessionCandidate[]> {
   switch (source) {
     case 'codex':
-      return discoverCodex(home, workDir);
+      return discoverCodex(home, workDir, maxFiles);
     case 'claude':
-      return discoverClaude(home, workDir);
+      return discoverClaude(home, workDir, maxFiles);
     case 'cursor':
-      return discoverCursor(home, workDir);
+      return discoverCursor(home, workDir, maxFiles);
   }
 }
 
 async function discoverCodex(
   home: string,
   workDir: string | undefined,
+  maxFiles: number,
 ): Promise<ForeignSessionCandidate[]> {
-  const files = await collectGlob(join(home, '.codex/sessions/**/rollout-*.jsonl'));
+  const files = await collectGlob(join(home, '.codex/sessions/**/rollout-*.jsonl'), maxFiles);
   const sourceRoot = join(home, '.codex/sessions');
   const candidates = await Promise.all(
     files.map(async (sourcePath) => {
@@ -76,8 +116,9 @@ async function discoverCodex(
 async function discoverClaude(
   home: string,
   workDir: string | undefined,
+  maxFiles: number,
 ): Promise<ForeignSessionCandidate[]> {
-  const files = await collectGlob(join(home, '.claude/projects/*/*.jsonl'));
+  const files = await collectGlob(join(home, '.claude/projects/*/*.jsonl'), maxFiles);
   const sourceRoot = join(home, '.claude/projects');
   const candidates = await Promise.all(
     files.map(async (sourcePath) => {
@@ -100,8 +141,12 @@ async function discoverClaude(
 async function discoverCursor(
   home: string,
   workDir: string | undefined,
+  maxFiles: number,
 ): Promise<ForeignSessionCandidate[]> {
-  const files = await collectGlob(join(home, '.cursor/projects/*/agent-transcripts/*/*.jsonl'));
+  const files = await collectGlob(
+    join(home, '.cursor/projects/*/agent-transcripts/*/*.jsonl'),
+    maxFiles,
+  );
   const sourceRoot = join(home, '.cursor/projects');
   const wantedProject = workDir === undefined ? undefined : encodeCursorProject(workDir);
   const discovered = await Promise.all(files.map(async (sourcePath) => {
@@ -124,7 +169,11 @@ async function discoverCursor(
   );
 }
 
-async function readCandidate(candidate: ForeignSessionCandidate): Promise<SessionRow | undefined> {
+async function readCandidate(
+  candidate: ForeignSessionCandidate,
+  updatedAfter?: number,
+  maxTitleLength = 240,
+): Promise<SessionRow | undefined> {
   try {
     const [safeSourcePath, safeSourceRoot] = await Promise.all([
       realpath(candidate.sourcePath),
@@ -140,13 +189,15 @@ async function readCandidate(candidate: ForeignSessionCandidate): Promise<Sessio
       return undefined;
     }
     const fileStat = await stat(safeSourcePath);
+    if (updatedAfter !== undefined && fileStat.mtimeMs < updatedAfter) return undefined;
     const [headRecords, tailRecords] = await Promise.all([
       firstJsonObjects(safeSourcePath),
       lastJsonObjects(safeSourcePath, fileStat.size),
     ]);
     const records = [...headRecords, ...tailRecords];
     const title =
-      findTitle(candidate.source, records) ?? `${displaySource(candidate.source)} session`;
+      (findTitle(candidate.source, records) ?? `${displaySource(candidate.source)} session`)
+        .slice(0, maxTitleLength);
     return {
       id: `external:${candidate.source}:${candidate.id}`,
       title,
@@ -252,12 +303,12 @@ function isSyntheticPrompt(text: string): boolean {
   ].some((prefix) => lower.startsWith(prefix));
 }
 
-async function collectGlob(pattern: string): Promise<string[]> {
+async function collectGlob(pattern: string, limit = MAX_FILES_PER_SOURCE): Promise<string[]> {
   try {
     const files: string[] = [];
     for await (const file of glob(pattern)) {
       files.push(file);
-      if (files.length >= MAX_FILES_PER_SOURCE) break;
+      if (files.length >= limit) break;
     }
     return files;
   } catch {

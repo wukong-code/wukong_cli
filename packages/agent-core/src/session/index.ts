@@ -537,7 +537,17 @@ export class Session {
     });
     if (this.activeRole === undefined) this.roleBaseModel = agent.config.modelAlias;
     const roleAdditional = renderRoleAdditional(role);
-    const roleTools = role.tools === undefined ? [...base.tools] : restrictRoleTools(role.tools, base.tools);
+    const capabilityTools = toolsForCapabilityMode(role.capabilityMode, base.tools);
+    const baseRestricted = role.tools === undefined
+      ? [...base.tools]
+      : restrictRoleTools(role.tools, base.tools);
+    const capabilityDisallowed = baseRestricted.filter((tool) => !capabilityTools.includes(tool));
+    if (capabilityDisallowed.length > 0) {
+      throw new Error(
+        `Role capabilityMode "${role.capabilityMode ?? 'all'}" cannot enable: ${capabilityDisallowed.join(', ')}`,
+      );
+    }
+    const roleTools = role.tools === undefined ? capabilityTools : baseRestricted;
     const roleModel = role.model ?? this.roleBaseModel;
     agent.validateModel(roleModel);
     agent.useTransientProfile(
@@ -955,6 +965,9 @@ function renderRoleAdditional(role: RoleDefinition): string {
     `Name: ${role.name}`,
     `Source: ${role.source}`,
     role.verifyProfile === undefined ? undefined : `Verification profile: ${role.verifyProfile}`,
+    role.capabilityMode === undefined ? undefined : `Capability mode: ${role.capabilityMode}`,
+    role.inputs === undefined ? undefined : `Inputs: ${JSON.stringify(role.inputs)}`,
+    role.outputs === undefined ? undefined : `Outputs: ${JSON.stringify(role.outputs)}`,
     '',
     role.prompt,
     '</active_role_profile>',
@@ -973,4 +986,18 @@ function restrictRoleTools(requested: readonly string[], base: readonly string[]
     throw new Error(`Role cannot enable tools outside the base agent profile: ${disallowed.join(', ')}`);
   }
   return [...requested];
+}
+
+function toolsForCapabilityMode(
+  mode: RoleDefinition['capabilityMode'],
+  base: readonly string[],
+): string[] {
+  if (mode === undefined || mode === 'all') return [...base];
+  const readOnly = new Set(['Read', 'ReadMediaFile', 'Glob', 'Grep']);
+  const allowed = mode === 'read-only'
+    ? readOnly
+    : mode === 'read-write'
+      ? new Set([...readOnly, 'Write', 'Edit'])
+      : new Set([...readOnly, 'Bash']);
+  return base.filter((tool) => allowed.has(tool));
 }

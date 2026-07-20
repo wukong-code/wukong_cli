@@ -17,7 +17,7 @@ describe('real monorepo proof E2E', () => {
       name: 'api',
       scripts: {
         lint: 'node -e "process.exit(0)"',
-        test: 'node -e "process.exit(0)"',
+        test: 'node test.cjs',
       },
     }, null, 2)}\n`);
     await writeRepoFile(cwd, 'packages/web/package.json', `${JSON.stringify({
@@ -28,6 +28,12 @@ describe('real monorepo proof E2E', () => {
       },
     }, null, 2)}\n`);
     await writeRepoFile(cwd, 'packages/api/src/index.ts', 'export const api = true;\n');
+    await writeRepoFile(cwd, 'packages/api/src/ready.json', '{"ready":false}\n');
+    await writeRepoFile(
+      cwd,
+      'packages/api/test.cjs',
+      "process.exit(require('./src/ready.json').ready ? 0 : 1);\n",
+    );
     await writeRepoFile(cwd, 'packages/web/src/index.ts', 'export const web = true;\n');
     await writeRepoFile(
       cwd,
@@ -36,6 +42,11 @@ describe('real monorepo proof E2E', () => {
     );
     await gitAdd(cwd);
 
+    const blocked = await runProof({ cwd, writeReport: false });
+    expect(blocked.status).toBe('blocked');
+    expect(blocked.blockers[0]?.command).toBe("npm --prefix 'packages/api' run test");
+
+    await writeRepoFile(cwd, 'packages/api/src/ready.json', '{"ready":true}\n');
     const result = await runProof({ cwd, writeReport: false });
 
     expect(result.status).toBe('passed');
@@ -65,10 +76,19 @@ describe('real monorepo proof E2E', () => {
       await writeRepoFile(
         cwd,
         'src/lib.rs',
-        'pub fn ready() -> bool { true }\n\n#[test]\nfn fixture_is_ready() { assert!(ready()); }\n',
+        'pub fn ready() -> bool { false }\n\n#[test]\nfn fixture_is_ready() { assert!(ready()); }\n',
       );
       await gitAdd(cwd);
 
+      const blocked = await runProof({ cwd, writeReport: false });
+      expect(blocked.status).toBe('blocked');
+      expect(blocked.blockers[0]?.command).toBe('cargo test');
+
+      await writeRepoFile(
+        cwd,
+        'src/lib.rs',
+        'pub fn ready() -> bool { true }\n\n#[test]\nfn fixture_is_ready() { assert!(ready()); }\n',
+      );
       const result = await runProof({ cwd, writeReport: false });
 
       expect(result.status).toBe('passed');
@@ -106,7 +126,7 @@ describe('real monorepo proof E2E', () => {
       await writeRepoFile(cwd, '.wukong/checks.json', JSON.stringify({
         commands: ['python3 -m unittest discover -s tests'],
       }));
-      await writeRepoFile(cwd, 'ready.py', 'def ready() -> bool:\n    return True\n');
+      await writeRepoFile(cwd, 'ready.py', 'def ready() -> bool:\n    return False\n');
       await writeRepoFile(
         cwd,
         'tests/test_ready.py',
@@ -114,6 +134,11 @@ describe('real monorepo proof E2E', () => {
       );
       await gitAdd(cwd);
 
+      const blocked = await runProof({ cwd, writeReport: false });
+      expect(blocked.status).toBe('blocked');
+      expect(blocked.blockers[0]?.command).toBe('python3 -m unittest discover -s tests');
+
+      await writeRepoFile(cwd, 'ready.py', 'def ready() -> bool:\n    return True\n');
       const result = await runProof({ cwd, writeReport: false });
 
       expect(result.status).toBe('passed');
@@ -130,7 +155,7 @@ describe('real monorepo proof E2E', () => {
     async () => {
       const cwd = await makeTempRepo('wukong-go-e2e-');
       await writeRepoFile(cwd, 'go.mod', 'module example.test/wukongfixture\n\ngo 1.24\n');
-      await writeRepoFile(cwd, 'ready.go', 'package wukongfixture\n\nfunc Ready() bool { return true }\n');
+      await writeRepoFile(cwd, 'ready.go', 'package wukongfixture\n\nfunc Ready() bool { return false }\n');
       await writeRepoFile(
         cwd,
         'ready_test.go',
@@ -138,6 +163,11 @@ describe('real monorepo proof E2E', () => {
       );
       await gitAdd(cwd);
 
+      const blocked = await runProof({ cwd, writeReport: false });
+      expect(blocked.status).toBe('blocked');
+      expect(blocked.blockers[0]?.command).toBe('go test ./...');
+
+      await writeRepoFile(cwd, 'ready.go', 'package wukongfixture\n\nfunc Ready() bool { return true }\n');
       const result = await runProof({ cwd, writeReport: false });
 
       expect(result.status).toBe('passed');

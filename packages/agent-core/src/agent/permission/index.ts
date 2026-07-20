@@ -10,6 +10,7 @@ import type {
   PermissionPolicyContext,
   PermissionPolicyResolution,
   PermissionPolicyResult,
+  PermissionReasonValue,
   PermissionRule,
 } from './types';
 
@@ -66,6 +67,12 @@ export class PermissionManager {
       mode,
     });
     this.modeOverride = mode;
+    if (this.agent.records.restoring === null || this.agent.records.restoring === undefined) {
+      this.agent.telemetry.track('permission_mode_selected', { permission_mode: mode });
+      if (mode === 'yolo') {
+        this.agent.telemetry.track('yolo_session_started', { permission_mode: mode });
+      }
+    }
     this.agent.emitStatusUpdated();
   }
 
@@ -99,13 +106,30 @@ export class PermissionManager {
     const evaluation = await this.evaluatePolicies(context);
     if (evaluation === undefined) return undefined;
 
+    const toolName = context.toolCall.name;
+    const toolInfo = this.agent.tools?.data().find((tool) => tool.name === toolName);
+    const telemetryToolName = toolName.startsWith('mcp__')
+      ? 'mcp'
+      : toolInfo?.source === 'user'
+        ? 'custom'
+        : toolName;
     this.agent.telemetry.track('permission_policy_decision', {
       policy_name: evaluation.policyName,
-      tool_name: context.toolCall.name,
+      tool_name: telemetryToolName,
       permission_mode: this.mode,
       decision: evaluation.result.kind,
       ...evaluation.result.reason,
     });
+    if (
+      this.mode === 'auto'
+      && evaluation.result.kind === 'deny'
+      && evaluation.result.reason?.['reason_code'] === 'permission_required'
+    ) {
+      return this.blockAutoPermission(
+        evaluation.result.reason?.['category'],
+        evaluation.result.message,
+      );
+    }
     return this.permissionPolicyResolutionToPrepare(
       evaluation.result,
       context,
@@ -118,6 +142,9 @@ export class PermissionManager {
     result: Extract<PermissionPolicyResult, { kind: 'ask' }>,
     policyName: string | undefined,
   ): Promise<PrepareToolExecutionResult | undefined> {
+    if (this.mode === 'auto') {
+      return this.blockAutoPermission('approval_required');
+    }
     const { signal } = context;
     const id = context.toolCall.id;
     const name = context.toolCall.name;
@@ -244,6 +271,42 @@ export class PermissionManager {
     return {
       block: true,
       reason: this.formatApprovalRejectionMessage(name, response),
+    };
+  }
+
+  private async blockAutoPermission(
+    category: PermissionReasonValue | undefined,
+    message = 'Auto blocked an action that requires permission. Review it or restart explicitly with YOLO.',
+  ): Promise<PrepareToolExecutionResult> {
+    this.agent.telemetry.track('auto_action_blocked', {
+      reason_code: 'permission_required',
+      category: typeof category === 'string' ? category : 'unknown',
+    });
+
+    const current = this.agent.goal.getGoal().goal;
+    if (current?.status === 'active' && current.stopCondition !== undefined) {
+      const summary = 'Auto paused the Loop because an action requires explicit permission.';
+      this.agent.goal.recordLoopResult({
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'permission_required',
+        summary,
+        checks: [],
+        blockers: [],
+      });
+      await this.agent.goal.markBlocked(
+        { reason: `loop:NEEDS_WORK:permission_required:${summary}` },
+        'system',
+      );
+      this.agent.context.appendSystemReminder(
+        'The current Loop paused at a permission boundary. Review the requested action, then resume manually or restart explicitly with YOLO if you accept the risk.',
+        { kind: 'system_trigger', name: 'loop_permission_required' },
+      );
+    }
+
+    return {
+      block: true,
+      reason: message,
     };
   }
 

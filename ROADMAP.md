@@ -6,8 +6,10 @@
 这份 ROADMAP 是当前商业化方向的执行层文档。更细的商业模型和技术方案仍以这些文档为准：
 
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
+- [Wukong 能力体系与商业化原则](docs/business/WUKONG_CAPABILITY_MODEL.md)
 - [商业化重构技术实现方案](docs/tech/commercial-refactor-implementation.md)
 - [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md)
+- [0.0.16 Loop Convergence](docs/design/0.0.16-loop-convergence.md)
 - [0.1.0 Pro PR Gate 与 Billing](docs/design/0.1.0-pro-pr-gate.md)
 - [TODO.md](TODO.md)：本仓库执行层任务清单，按本 ROADMAP 的 milestone 拆解
 - `wukong_web/TODO.md`：官网与托管产品 TODO，位于 sibling web 仓库中
@@ -28,6 +30,8 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 ```
 
 差异化叙事不再以"又一个 coding agent"为主，而是围绕 Loop Engineering：Wukong 是 AI Coding Loop 的控制层与验证层。
+
+长期产品层级遵循 [Wukong 能力体系与商业化原则](docs/business/WUKONG_CAPABILITY_MODEL.md)：Loop 是普通用户直接体验的产品；内置分身是可靠完成 Loop 的基础能力；Custom Specialist、Managed Gate、托管并行与团队治理只有在真实使用和成本证据成立后才进入付费版本。高级 entitlement 解锁编排、模型和治理，不扩大系统安全权限。
 
 命令分层对应 loop engineering 的谱系（参考 Claude Code 的 loop 分类）：
 
@@ -109,6 +113,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 | `0.0.13` | Smarter Review Loop | 结构化多 findings、项目 review policy、独立 reviewer model、本地反馈、Loop-first TUI 与 Web 文案；保持免费/BYOK，不上线支付 |
 | `0.0.14` | Cross-Agent Resume + Loop UX | `/resume codex|claude|cursor`、安全只读上下文导入、Resume → Loop 确认、Gate/Footer 清晰结论、更多真实项目检查发现；保持免费/BYOK |
 | `0.0.15` | Loop Reliability + First Success | durable run lifecycle、completion outbox、重启恢复、preflight、简洁终态和隐私受限激活指标；保持免费/BYOK |
+| `0.0.16` | Loop Convergence | 固定 acceptance contract、prior blockers、anti-ratchet reviewer、stall strategist、reviewer model fallback、Resume 建议、Role contract、统一任务状态与有界 session 搜索；保持免费/BYOK |
 | `0.1.0` | Pro PR Gate + Billing | Free dry-run、Pro GitHub PR comment/status、capability entitlement 与支付生命周期可用；真实 Stripe+D1/GitHub E2E 通过；邀请制实验取得至少 3 个非关联付款用户和 1 个续费信号 |
 
 `0.1.0` 不设日期承诺。当前生产基线只有 1 位 activated Loop user、0 位 completed users，不满足商业决策门槛；代码可以先进入 `0.1.0-rc.N` + feature-flagged invite-only pilot，但使用、支付和真实 E2E 门槛未满足时不开放**公开 Checkout**，也不升正式 `0.1.0`。
@@ -316,6 +321,43 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 - 不做支付、GitHub PR、Team rules、Hosted Report、云端 `/schedule`、新增 Agent 来源、managed credits 或 Role 系统扩张。
 - 不把 reviewer-only 结果默认包装成 PASS。
 - 不用 started、注册数或 GitHub 下载量冒充完成和重复使用。
+
+## Milestone 2.8: 0.0.16 Loop Convergence
+
+状态：功能实现完成，正在进行发布前验证；尚未发布。完整 contract 见 [0.0.16 Loop Convergence](docs/design/0.0.16-loop-convergence.md)。
+
+目标：让 Loop 围绕固定的用户目标与验收合同持续收敛，并在自动化和分身增加后仍保持可解释的权限边界。Reviewer 必须先复核上轮 blocker，不能在每一轮提高标准；相同 blocker 重复时，Loop 能识别无进展、切换一次策略，并在仍无法推进时给出清晰终态。
+
+交付项：
+
+- 为每个 Goal 创建一次不可由 writer/reviewer/strategist 修改的 acceptance contract，并通过 agent records 在 restart/resume/compaction 后恢复。
+- 将 prior blockers、stable blocker key 和 blocking-set fingerprint 注入下一轮 reviewer。
+- 建立 reviewer anti-ratchet：旧 blocker 优先复核，新的风格偏好或未约定扩展不能阻断。
+- 连续两次相同 fingerprint 时启动一次 read-only strategist；仍无进展时返回 `NEEDS_WORK/no_progress`，不增加第四种 Gate 状态。
+- 显式 reviewer model 不可用时回退当前 writer model 一次；取消、invalid output 和 infrastructure error 使用不同语义。
+- 重构 Permission Mode v2：`manual` 负责交互确认，`auto` 成为不提问但受 workspace/risk/capability 约束的自主模式，`yolo` 成为显式危险 approval bypass；Auto 不得比 YOLO 更宽松。
+- Headless `-p` 默认使用受限 Auto；危险 headless 执行要求显式 `--yolo --yes`，`--yes` 不再作为 YOLO 隐藏别名，旧 `--auto-approve` 进入警告兼容期。
+- reviewer、planner、strategist 和只读 explore 的 capability ceiling 不继承父 Agent 的 Auto/YOLO 扩权；custom/MCP tools 只有被 child profile 明确允许时才能激活。
+- Welcome 提供有界、可关闭的近期 Cross-Agent Resume suggestion，不自动写入或启动 Loop。
+- Role Profile 增加可选 inputs/outputs/capabilityMode，且只能收窄基础权限。
+- footer 用一条紧凑计数汇总后台命令和 subagent，详细状态保留在 `/tasks`；session picker 支持有界本地内容搜索。
+- 增加不含 objective、finding、路径、session id 或 transcript 的 convergence metrics。
+
+验收：
+
+- 至少三个真实仓库完成 prior blocker → fix → PASS，并证明 reviewer 不会逐轮抬高门槛。
+- 相同 blocker doom loop 在最大轮次前触发 strategist 或 `no_progress`，且不超 quota/maxIterations。
+- reviewer model fallback、两模型失败、取消和 invalid output 均有独立 contract tests。
+- Auto 对 workspace 外写入、敏感目标、高风险命令和未知 mutating tool fail-closed；YOLO 仍服从 hard deny、Plan guard 和 read-only profile。
+- Manual/Auto/YOLO、Headless、旧 flags/config/records 以及 Auto/YOLO 父 Agent → 只读分身均有真实 E2E。
+- 0.0.15 durable lifecycle、completion outbox、旧 Goal/Role/session records 全部回归通过。
+- Codex、Claude Code、Cursor suggestion → resume → edit objective → Loop terminal E2E 通过。
+- 中英文 README、ROADMAP、TODO、用户指南、CHANGELOG、release notes、公告和 Web 文案在发布前同步。
+
+不做：
+
+- 不做支付、PR Gate 写入、Team、managed reviewer、默认多 reviewer、云端 `/schedule`、远程 session、Hosted Report、Agent/Persona 市场或自动 policy 修改。
+- 不改变 `/loop` 的 iterate-until-verified 语义，也不把 verify/scan/proof 恢复为普通用户产品。
 
 ## Milestone 3: 0.1.0 Pro PR Gate + Billing
 

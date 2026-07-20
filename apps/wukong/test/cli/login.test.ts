@@ -18,6 +18,7 @@ vi.mock('@wukong/wukong-sdk', async () => {
   return {
     ...actual,
     createWukongHarness: vi.fn(() => ({
+      track: vi.fn(),
       auth: {
         login: mockLogin,
       },

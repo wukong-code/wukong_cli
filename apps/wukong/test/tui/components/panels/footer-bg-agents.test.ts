@@ -38,72 +38,64 @@ function makeChromeState(): ChromeStateAggregator {
   return new ChromeStateAggregator({ cwd: '/tmp/proj' });
 }
 
-describe('FooterComponent — background task / agent badges', () => {
-  it('omits both badges when counts are 0', () => {
+describe('FooterComponent — unified Task Plane status', () => {
+  it('omits task status when counts are 0', () => {
     const footer = new FooterComponent(baseState(), makeChromeState());
     const out = strip(footer.render(120).join('\n'));
-    expect(out).not.toMatch(/tasks? running/);
-    expect(out).not.toMatch(/agents? running/);
+    expect(out).not.toMatch(/◎ \d+ tasks?/);
   });
 
-  it('renders the task badge alone when only bash tasks are running', () => {
+  it('renders commands in one task status', () => {
     const footer = new FooterComponent(baseState(), makeChromeState());
     footer.setBackgroundCounts({ bashTasks: 1, agentTasks: 0 });
     const out = strip(footer.render(120)[0]!);
-    expect(out).toMatch(/\[1 task running\]/);
-    expect(out).not.toMatch(/agents? running/);
+    expect(out).toContain('◎ 1 task · 1 command');
   });
 
-  it('renders the agent badge alone when only agent tasks are running', () => {
+  it('renders agents in one task status', () => {
     const footer = new FooterComponent(baseState(), makeChromeState());
     footer.setBackgroundCounts({ bashTasks: 0, agentTasks: 1 });
     const out = strip(footer.render(120)[0]!);
-    expect(out).toMatch(/\[1 agent running\]/);
-    expect(out).not.toMatch(/tasks? running/);
+    expect(out).toContain('◎ 1 task · 1 agent');
   });
 
-  it('renders both badges side by side when both are non-zero', () => {
+  it('combines agents and commands without duplicate status lines', () => {
     const footer = new FooterComponent(baseState(), makeChromeState());
     footer.setBackgroundCounts({ bashTasks: 2, agentTasks: 3 });
     const out = strip(footer.render(120)[0]!);
-    expect(out).toMatch(/\[2 tasks running\]/);
-    expect(out).toMatch(/\[3 agents running\]/);
-    // Task badge appears before agent badge in the line.
-    expect(out.indexOf('2 tasks')).toBeLessThan(out.indexOf('3 agents'));
+    expect(out).toContain('◎ 5 tasks · 3 agents · 2 commands');
+    expect(out.match(/◎/g)).toHaveLength(1);
   });
 
-  it('pluralizes correctly across both badges', () => {
+  it('pluralizes correctly', () => {
     const footer = new FooterComponent(baseState(), makeChromeState());
     footer.setBackgroundCounts({ bashTasks: 1, agentTasks: 1 });
     const out = strip(footer.render(120)[0]!);
-    expect(out).toMatch(/\[1 task running\]/);
-    expect(out).toMatch(/\[1 agent running\]/);
+    expect(out).toContain('◎ 2 tasks · 1 agent · 1 command');
   });
 
-  it('updates badges live via setBackgroundCounts', () => {
+  it('updates task status live via setBackgroundCounts', () => {
     const footer = new FooterComponent(baseState(), makeChromeState());
     footer.setBackgroundCounts({ bashTasks: 2, agentTasks: 1 });
-    expect(strip(footer.render(120)[0]!)).toMatch(/\[2 tasks running\]/);
+    expect(strip(footer.render(120)[0]!)).toContain('◎ 3 tasks');
     footer.setBackgroundCounts({ bashTasks: 0, agentTasks: 0 });
     const after = strip(footer.render(120)[0]!);
-    expect(after).not.toMatch(/tasks? running/);
-    expect(after).not.toMatch(/agents? running/);
+    expect(after).not.toMatch(/◎ \d+ tasks?/);
   });
 
   it('clamps negative counts to 0', () => {
     const footer = new FooterComponent(baseState(), makeChromeState());
     footer.setBackgroundCounts({ bashTasks: -5, agentTasks: -2 });
     const out = strip(footer.render(120)[0]!);
-    expect(out).not.toMatch(/tasks? running/);
-    expect(out).not.toMatch(/agents? running/);
+    expect(out).not.toMatch(/◎ \d+ tasks?/);
   });
 
-  it('drops the badges when terminal is too narrow to fit them', () => {
+  it('drops task detail when terminal is too narrow to fit it', () => {
     const footer = new FooterComponent(baseState(), makeChromeState());
     footer.setBackgroundCounts({ bashTasks: 4, agentTasks: 3 });
     // At a narrow width the env line is truncated and badges may be dropped.
     const out = strip(footer.render(20).join('\n'));
-    expect(out).not.toMatch(/\[4 tasks running\]/);
-    expect(out).not.toMatch(/\[3 agents running\]/);
+    expect(out).not.toContain('3 agents');
+    expect(out).not.toContain('4 commands');
   });
 });

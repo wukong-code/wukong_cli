@@ -194,13 +194,7 @@ export class FooterComponent implements Component {
   private gitCache: GitStatusCache;
   private gitCacheWorkDir: string;
   private transientHint: string | null = null;
-  /**
-   * Non-terminal background-task counts split by kind so the footer can
-   * render two distinct badges. `bashTasks` covers `bash-*` BPM tasks
-   * spawned via `Shell run_in_background=true`; `agentTasks` covers
-   * `agent-*` BPM tasks (background subagents). Either zero hides its
-   * respective badge.
-   */
+  /** Non-terminal task counts rendered as one compact Task Plane status. */
   private backgroundBashTaskCount = 0;
   private backgroundAgentCount = 0;
 
@@ -238,11 +232,7 @@ export class FooterComponent implements Component {
     return this.transientHint;
   }
 
-  /**
-   * Sync both background-task badges with live counts. Each non-zero
-   * count produces its own bracketed badge on line 1; zeros hide them
-   * independently.
-   */
+  /** Sync the single Task Plane status with live task counts. */
   setBackgroundCounts(counts: { bashTasks: number; agentTasks: number }): void {
     this.backgroundBashTaskCount = Math.max(0, counts.bashTasks);
     this.backgroundAgentCount = Math.max(0, counts.agentTasks);
@@ -256,26 +246,23 @@ export class FooterComponent implements Component {
 
     const { lines: conclusionLines, useWarning } = buildConclusionLines(this.chromeState, colors);
     const chromeState = this.chromeState.getState();
-    const backgroundBadges: string[] = [];
-    if (this.backgroundBashTaskCount > 0) {
-      const noun = this.backgroundBashTaskCount === 1 ? 'task' : 'tasks';
-      backgroundBadges.push(
-        chalk.hex(colors.primary)(`[${String(this.backgroundBashTaskCount)} ${noun} running]`),
-      );
-    }
-    if (this.backgroundAgentCount > 0) {
-      const noun = this.backgroundAgentCount === 1 ? 'agent' : 'agents';
-      backgroundBadges.push(
-        chalk.hex(colors.primary)(`[${String(this.backgroundAgentCount)} ${noun} running]`),
-      );
-    }
-    if (
-      chromeState.uiMode === 'idle'
-      && conclusionLines[0] !== undefined
-      && backgroundBadges.length > 0
-    ) {
-      const candidate = `${conclusionLines[0]}  ${backgroundBadges.join('  ')}`;
-      if (visibleWidth(candidate) <= width) conclusionLines[0] = candidate;
+    const backgroundTaskCount = this.backgroundBashTaskCount + this.backgroundAgentCount;
+    if (conclusionLines[0] !== undefined && backgroundTaskCount > 0) {
+      const base = `◎ ${String(backgroundTaskCount)} ${backgroundTaskCount === 1 ? 'task' : 'tasks'}`;
+      const details: string[] = [];
+      if (this.backgroundAgentCount > 0) {
+        details.push(`${String(this.backgroundAgentCount)} ${this.backgroundAgentCount === 1 ? 'agent' : 'agents'}`);
+      }
+      if (this.backgroundBashTaskCount > 0) {
+        details.push(`${String(this.backgroundBashTaskCount)} ${this.backgroundBashTaskCount === 1 ? 'command' : 'commands'}`);
+      }
+      const full = details.length === 0 ? base : `${base} · ${details.join(' · ')}`;
+      const prefix = `${conclusionLines[0]}  `;
+      const available = Math.max(0, width - visibleWidth(prefix));
+      const summary = visibleWidth(full) <= available ? full : base;
+      if (visibleWidth(summary) <= available) {
+        conclusionLines[0] = prefix + chalk.hex(colors.primary)(summary);
+      }
     }
 
     // Idle mode: append rotating tips to the ready line when space allows.
@@ -322,11 +309,6 @@ export class FooterComponent implements Component {
       }
       envParts.push(renderedModelLabel);
     }
-
-    // Background-task badges sit immediately before cwd. `bash-*` tasks
-    // (shell processes) and `agent-*` tasks (background subagents) get
-    // separate badges so the user can distinguish them at a glance.
-    if (chromeState.uiMode !== 'idle') envParts.push(...backgroundBadges);
 
     const cwd = shortenCwd(state.workDir);
     if (cwd) envParts.push(chalk.hex(colors.textDim)(cwd));

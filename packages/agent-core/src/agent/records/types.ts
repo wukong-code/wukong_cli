@@ -1,7 +1,15 @@
 import type { ContentPart, TokenUsage } from '@wukong/kosong';
 
 import type { LoopRecordedEvent } from '../../loop';
-import type { GoalActor, GoalBudgetLimits, GoalStatus, LoopResult } from '../goal';
+import type {
+  GoalActor,
+  GoalBudgetLimits,
+  GoalStatus,
+  LoopContract,
+  LoopResult,
+  LoopReviewAttempt,
+  LoopStrategyAttempt,
+} from '../goal';
 import type { ToolStoreUpdate } from '../../tools/store';
 import type { CompactionBeginData, CompactionResult } from '../compaction';
 import type { AgentConfigUpdateData } from '../config';
@@ -102,6 +110,18 @@ export interface AgentRecordEvents {
     reason?: string;
     actor?: GoalActor;
     loopResult?: LoopResult;
+  };
+  'goal.contract.create': {
+    goalId: string;
+    contract: LoopContract;
+  };
+  'goal.review.record': {
+    goalId: string;
+    attempt: LoopReviewAttempt;
+  };
+  'goal.strategy.record': {
+    goalId: string;
+    attempt: LoopStrategyAttempt;
   };
   'goal.clear': {};
 }

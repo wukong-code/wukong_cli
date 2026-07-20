@@ -126,6 +126,15 @@ function restoreAgentRecord(agent: Agent, input: AgentRecord): void {
     case 'goal.update':
       agent.goal.restoreUpdate(input);
       return;
+    case 'goal.contract.create':
+      agent.goal.restoreContractCreate(input);
+      return;
+    case 'goal.review.record':
+      agent.goal.restoreReviewRecord(input);
+      return;
+    case 'goal.strategy.record':
+      agent.goal.restoreStrategyRecord(input);
+      return;
     case 'goal.clear':
       agent.goal.restoreClear(input);
       return;

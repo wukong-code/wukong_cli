@@ -145,17 +145,21 @@ Action: confirm
 Continue? [y/N]
 ```
 
-## 6. 悟空能力映射
+## 6. Wukong 能力体系
 
-| 能力 | 产品表现 |
-|---|---|
-| 火眼金睛 | 风险扫描、diff 检查、secret-looking 检查 |
-| 金箍棒 | 标准化验证执行和证据报告 |
-| 紧箍咒 | 危险命令确认和策略约束 |
-| 分身术 | agent/tool 调用 Wukong 验证 |
-| 筋斗云 | 未来 cloud reports 和跨设备状态 |
-| 七十二变 | Role Profiles（实验性）：为 agent 选择专门角色与约束 |
-| 取经路 | 未来 verification stats 和复盘 |
+品牌能力、产品术语、权限不变量和商业分层统一以 [Wukong 能力体系与商业化原则](../business/WUKONG_CAPABILITY_MODEL.md) 为准。本文不再维护第二份能力映射。
+
+设计摘要：
+
+- 斗战到底 / 取经路对应围绕固定目标推进到终态的 Loop。
+- 七十二变对应 Role 与 Custom Specialist；基础 Role 和完整分身必须区分。
+- 身外身法对应拥有独立上下文、运行记录和能力边界的 Agent。
+- 火眼金睛对应独立 Reviewer 与 Managed Gate，不等同于规则数量更多的扫描器。
+- 筋斗云对应 Wukong 承担执行成本的后台、远程与云端能力。
+- 定身法和金刚不坏对应 Gate enforcement、隔离、恢复与团队治理。
+- 如意金箍棒对应工具与集成执行面。
+
+“紧箍咒”是施加在悟空身上的外部约束，不作为悟空自身能力或官网主卖点；Auto/YOLO 也不代表付费后获得无限权限。
 
 ## 7. 成长体系与 `today`
 

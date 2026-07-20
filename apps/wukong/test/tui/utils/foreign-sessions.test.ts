@@ -1,10 +1,13 @@
-import { mkdir, realpath, rm, symlink, writeFile } from 'node:fs/promises';
+import { mkdir, realpath, rm, symlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-import { discoverForeignSessionRows } from '#/tui/utils/foreign-sessions';
+import {
+  discoverForeignSessionRows,
+  discoverForeignSessionSuggestion,
+} from '#/tui/utils/foreign-sessions';
 
 describe('discoverForeignSessionRows', () => {
   let home: string;
@@ -95,6 +98,37 @@ describe('discoverForeignSessionRows', () => {
     const rows = await discoverForeignSessionRows({ source: 'codex', homeDir: home, workDir });
 
     expect(rows.map((row) => row.external?.id)).toEqual(['match']);
+  });
+
+  it('returns only a recent workspace-matching suggestion', async () => {
+    const recent = join(home, '.codex/sessions/2026/07/18/rollout-recent.jsonl');
+    const old = join(home, '.claude/projects/project/old.jsonl');
+    await Promise.all([
+      mkdir(join(recent, '..'), { recursive: true }),
+      mkdir(join(old, '..'), { recursive: true }),
+    ]);
+    await writeFile(
+      recent,
+      `${JSON.stringify({ type: 'session_meta', payload: { id: 'recent', cwd: workDir } })}\n${JSON.stringify({ type: 'event_msg', payload: { type: 'user_message', message: 'Continue recent work' } })}`,
+    );
+    await writeFile(
+      old,
+      JSON.stringify({
+        type: 'user',
+        sessionId: 'old',
+        cwd: workDir,
+        message: { content: 'Old work' },
+      }),
+    );
+    const now = Date.parse('2026-07-20T00:00:00.000Z');
+    await utimes(recent, new Date(now - 1_000), new Date(now - 1_000));
+    await utimes(old, new Date(now - 31 * 24 * 60 * 60 * 1000), new Date(now - 31 * 24 * 60 * 60 * 1000));
+
+    await expect(discoverForeignSessionSuggestion({
+      homeDir: home,
+      workDir,
+      now,
+    })).resolves.toMatchObject({ source: 'codex', title: 'Continue recent work' });
   });
 
   it('recovers an existing Cursor workspace path when listing all sessions', async () => {

@@ -1,9 +1,10 @@
 # Wukong Code 商业化与产品重构方案
 
-> 版本: v1.4
-> 日期: 2026-07-16
+> 版本: v1.5
+> 日期: 2026-07-20
 > 当前范围: `wukong_cli` 新 Kimi-code base
 > 技术落地: [商业化重构技术实现方案](../tech/commercial-refactor-implementation.md)
+> 长期产品原则: [Wukong 能力体系与商业化原则](WUKONG_CAPABILITY_MODEL.md)
 
 ## 0. 当前事实
 
@@ -79,17 +80,29 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 - 在终端层约束 agent 的高风险操作。
 - 用 `/loop`（本机）和 `/schedule`（云端）把"写 → 验 → 修"串成自动循环，把人从持续 prompt agent 的位置移出来。
 
-## 2. 悟空能力映射
+## 2. Wukong 能力体系
 
-| 悟空能力 | 产品含义 | CLI 目标 |
+长期能力、权限和商业化边界以 [Wukong 能力体系与商业化原则](WUKONG_CAPABILITY_MODEL.md) 为单点真相源。本方案只保留执行摘要：
+
+```text
+Loop 是产品主流程
+分身是 Loop 的执行结构
+火眼金睛与 Gate 是可信结论
+Policy 与 Audit 是团队付费价值
+```
+
+| 悟空能力 | 产品含义 | 当前商业判断 |
 |---|---|---|
-| 火眼金睛 | 风险识别 + 只审不写 | `scan`、risk rules、secret scan、`judge` |
-| 金箍棒 | 标准化验证执行 | `verify`、`proof`、`test`、`ship`、report |
-| 紧箍咒 | 权限约束 | `guard`、policy、command confirmation |
-| 分身术 | agent 能力分发 | `wukong_verify` tool / MCP bridge |
-| 筋斗云 | 持续驱动与远程能力 | `loop`（本机迭代）、cron 工具（本机巡检，已实现）、`schedule`（云端例程）、`sync`、cloud reports |
-| 七十二变 | 专家模式 | 实验性 Role Profiles：可选择 agent 角色、prompt 与工具约束 |
-| 取经路 | 成长与复盘 | `today`（日简报+focus）、`retro`（周）、`journey`（长期），P1+ |
+| 斗战到底 / 取经路 | 围绕固定目标持续写、查、审、修到明确终态 | 完整本地 Loop 是 Free 核心入口 |
+| 七十二变 | Role、模型、工具与输出契约的任务化切换 | 基础 Role 免费；完整 Custom Specialist 是 Pro 候选 |
+| 身外身法 / 毫毛分身 | 独立上下文的 Explorer、Coder、Reviewer、Strategist | 内置分身免费；托管并行和高级编排可收费 |
+| 火眼金睛 | 独立 Reviewer 识别伪通过、遗漏和隐藏风险 | Managed Gate 的首要付费候选 |
+| 筋斗云 | 后台、远程、跨设备和云端执行 | Wukong 承担执行成本时可作为 Pro 能力 |
+| 定身法 | 阻断危险操作、不合格 Gate 和高风险合并 | Team policy / required Gate |
+| 金刚不坏 | Sandbox、worktree 隔离、失败恢复和 durable state | Team / Enterprise 可靠性能力 |
+| 如意金箍棒 | 工具、MCP、GitHub、CI 与项目命令执行面 | 基础工具免费；组织级治理和集成可收费 |
+
+“紧箍咒”不是孙悟空自身神通，只能作为内部理解外部约束的隐喻；Auto/YOLO 也不能被包装为付费后获得无限权限。高级 entitlement 解锁的是模型、编排、托管执行和团队治理，不是绕过系统安全上限。
 
 ## 3. 目标命令结构
 

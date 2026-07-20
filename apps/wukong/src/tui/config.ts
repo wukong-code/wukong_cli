@@ -30,6 +30,10 @@ export const UpgradePreferencesSchema = z.object({
   autoInstall: z.boolean(),
 });
 
+export const ResumePreferencesSchema = z.object({
+  foreignSuggestions: z.boolean(),
+});
+
 export const TuiConfigFileSchema = z.object({
   theme: TuiThemeSchema.optional(),
   editor: z
@@ -48,6 +52,11 @@ export const TuiConfigFileSchema = z.object({
       auto_install: z.boolean().optional(),
     })
     .optional(),
+  resume: z
+    .object({
+      foreign_suggestions: z.boolean().optional(),
+    })
+    .optional(),
 });
 
 export const TuiConfigSchema = z.object({
@@ -55,12 +64,14 @@ export const TuiConfigSchema = z.object({
   editorCommand: z.string().nullable(),
   notifications: NotificationsConfigSchema,
   upgrade: UpgradePreferencesSchema,
+  resume: ResumePreferencesSchema.optional(),
 });
 
 export type TuiConfigFileShape = z.infer<typeof TuiConfigFileSchema>;
 export type TuiConfig = z.infer<typeof TuiConfigSchema>;
 export type NotificationsConfig = z.infer<typeof NotificationsConfigSchema>;
 export type UpgradePreferences = z.infer<typeof UpgradePreferencesSchema>;
+export type ResumePreferences = z.infer<typeof ResumePreferencesSchema>;
 
 export const DEFAULT_NOTIFICATIONS_CONFIG: NotificationsConfig = {
   enabled: true,
@@ -71,11 +82,16 @@ export const DEFAULT_UPGRADE_PREFERENCES: UpgradePreferences = {
   autoInstall: true,
 };
 
+export const DEFAULT_RESUME_PREFERENCES: ResumePreferences = {
+  foreignSuggestions: true,
+};
+
 export const DEFAULT_TUI_CONFIG: TuiConfig = TuiConfigSchema.parse({
   theme: 'auto',
   editorCommand: null,
   notifications: DEFAULT_NOTIFICATIONS_CONFIG,
   upgrade: DEFAULT_UPGRADE_PREFERENCES,
+  resume: DEFAULT_RESUME_PREFERENCES,
 });
 
 /**
@@ -141,6 +157,10 @@ export function normalizeTuiConfig(config: TuiConfigFileShape): TuiConfig {
     upgrade: {
       autoInstall: config.upgrade?.auto_install ?? DEFAULT_UPGRADE_PREFERENCES.autoInstall,
     },
+    resume: {
+      foreignSuggestions:
+        config.resume?.foreign_suggestions ?? DEFAULT_RESUME_PREFERENCES.foreignSuggestions,
+    },
   });
 }
 
@@ -160,6 +180,9 @@ notification_condition = "${config.notifications.condition}" # "unfocused" | "al
 
 [upgrade]
 auto_install = ${String(config.upgrade.autoInstall)} # true | false
+
+[resume]
+foreign_suggestions = ${String(config.resume?.foreignSuggestions ?? DEFAULT_RESUME_PREFERENCES.foreignSuggestions)} # true | false
 `;
 }
 

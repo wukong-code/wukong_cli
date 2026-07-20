@@ -252,6 +252,138 @@ describe('GoalMode accounting and budgets', () => {
 });
 
 describe('GoalMode records', () => {
+  it('creates one immutable Loop contract and restores convergence records', async () => {
+    const { goals, records } = makeGoalMode();
+    const created = await goals.createGoal({
+      objective: 'ship the loop',
+      completionCriterion: 'all acceptance checks pass',
+      stopCondition: 'proof-pass',
+    });
+
+    const first = goals.ensureLoopContract();
+    const second = goals.ensureLoopContract();
+    expect(second).toBe(first);
+    expect(first).toMatchObject({
+      goalId: created.goalId,
+      objective: 'ship the loop',
+      source: 'user',
+      acceptanceCriteria: [
+        { id: 'objective', source: 'objective' },
+        { id: 'completion-criterion', source: 'completion_criterion' },
+      ],
+    });
+    expect(records.filter((record) => record.type === 'goal.contract.create')).toHaveLength(1);
+
+    goals.recordReviewAttempt({
+      schemaVersion: 1,
+      iteration: 1,
+      status: 'NEEDS_WORK',
+      blockers: [{
+        key: 'review:objective:correctness:src/loop.ts',
+        findingId: 'loop-bug',
+        category: 'correctness',
+        file: 'src/loop.ts',
+        summary: 'Loop exits early.',
+        nextAction: 'Keep iterating until the gate passes.',
+      }],
+      blockerKeys: ['review:objective:correctness:src/loop.ts'],
+      blockerFingerprint: 'same-blocker',
+      model: 'reviewer',
+      usedModelFallback: false,
+      priorBlockerDispositions: [],
+    });
+    goals.recordStrategyAttempt({
+      schemaVersion: 1,
+      triggeredAtIteration: 1,
+      blockerFingerprint: 'same-blocker',
+      model: 'writer',
+      status: 'advised',
+      diagnosis: 'The retry condition never changes.',
+      recommendedApproach: 'Replace the retry condition instead of adding another guard.',
+      risks: ['Preserve the retry limit.'],
+      usedModelFallback: false,
+    });
+
+    const restored = makeGoalMode().goals;
+    restored.restoreCreate({
+      type: 'goal.create',
+      goalId: created.goalId,
+      objective: 'ship the loop',
+      completionCriterion: 'all acceptance checks pass',
+      stopCondition: 'proof-pass',
+    });
+    const contractRecord = records.find((record) => record.type === 'goal.contract.create');
+    const reviewRecord = records.find((record) => record.type === 'goal.review.record');
+    const strategyRecord = records.find((record) => record.type === 'goal.strategy.record');
+    if (contractRecord?.type !== 'goal.contract.create') throw new Error('contract record missing');
+    if (reviewRecord?.type !== 'goal.review.record') throw new Error('review record missing');
+    if (strategyRecord?.type !== 'goal.strategy.record') throw new Error('strategy record missing');
+    restored.restoreContractCreate(contractRecord);
+    restored.restoreReviewRecord(reviewRecord);
+    restored.restoreStrategyRecord(strategyRecord);
+
+    expect(restored.getGoal().goal).toMatchObject({
+      loopContract: { objective: 'ship the loop' },
+      convergence: {
+        reviewAttempts: 1,
+        lastBlockerFingerprint: 'same-blocker',
+        strategyAttempts: 1,
+      },
+    });
+  });
+
+  it('creates a fallback contract for a legacy Goal without changing its objective', () => {
+    const { goals, records } = makeGoalMode();
+    goals.restoreCreate({
+      type: 'goal.create',
+      goalId: 'legacy-goal',
+      objective: 'preserve this exact objective',
+      stopCondition: 'proof-pass',
+    });
+
+    const contract = goals.ensureLoopContract();
+
+    expect(contract).toMatchObject({
+      goalId: 'legacy-goal',
+      objective: 'preserve this exact objective',
+      source: 'fallback',
+    });
+    expect(goals.getGoal().goal?.objective).toBe('preserve this exact objective');
+    expect(records).toEqual([
+      expect.objectContaining({ type: 'goal.contract.create', goalId: 'legacy-goal' }),
+    ]);
+  });
+
+  it('restores legacy strategy records into the 0.0.16 strategy contract', () => {
+    const { goals } = makeGoalMode();
+    goals.restoreCreate({
+      type: 'goal.create',
+      goalId: 'legacy-goal',
+      objective: 'finish the loop',
+      stopCondition: 'proof-pass',
+    });
+    goals.restoreStrategyRecord({
+      type: 'goal.strategy.record',
+      goalId: 'legacy-goal',
+      attempt: {
+        schemaVersion: 1,
+        afterIteration: 2,
+        blockerFingerprint: 'legacy-blocker',
+        model: 'writer',
+        outcome: 'advice',
+        advice: 'Inspect the first failing assertion.',
+      },
+    } as never);
+
+    expect(goals.getStrategyHistory()).toEqual([expect.objectContaining({
+      triggeredAtIteration: 2,
+      blockerFingerprint: 'legacy-blocker',
+      status: 'advised',
+      recommendedApproach: 'Inspect the first failing assertion.',
+      usedModelFallback: false,
+    })]);
+  });
+
   it('records only replay-relevant create/update/clear fields', async () => {
     const { goals, records } = makeGoalMode();
 

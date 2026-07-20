@@ -55,6 +55,7 @@ const config = withMermaid(defineConfig({
         text: 'Commercial Refactor',
         items: [
           { text: 'Commercial Plan', link: '/business/COMMERCIAL_REFACTOR_PLAN' },
+          { text: 'Wukong Capability Model', link: '/business/WUKONG_CAPABILITY_MODEL' },
           { text: 'Architecture', link: '/tech/architecture' },
           { text: 'Technical Plan', link: '/tech/commercial-refactor-implementation' },
           { text: 'Product Design', link: '/design/design' },

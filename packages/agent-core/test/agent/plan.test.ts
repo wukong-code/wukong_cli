@@ -209,7 +209,7 @@ describe('plan exit tool', () => {
       kaos: createPlanKaos({ readText, execWithEnv }),
     });
     ctx.configure({ tools: ['ExitPlanMode', 'Bash'] });
-    await ctx.rpc.setPermission({ mode: 'yolo' });
+    await ctx.rpc.setPermission({ mode: 'manual' });
     await ctx.agent.planMode.enter('reject-and-exit-plan', false);
 
     const planPath = ctx.agent.planMode.planFilePath;
