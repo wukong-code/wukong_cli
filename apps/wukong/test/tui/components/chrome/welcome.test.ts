@@ -72,8 +72,11 @@ describe('WelcomeComponent', () => {
   it('renders a compact Loop-first ready state', () => {
     const output = new WelcomeComponent(appState).render(80).join('\n');
     expect(output).toContain('Wukong Code');
-    expect(output).toContain('Ready');
+    expect(output).toContain('Continue a task');
+    expect(output).toContain('Start a Loop');
     expect(output).toContain('/loop <goal>');
+    expect(output).toContain('Configure model');
+    expect(output).toContain('/provider');
   });
 
   it('keeps every line within the requested width on narrow terminals', () => {

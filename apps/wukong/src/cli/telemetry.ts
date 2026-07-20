@@ -1,3 +1,6 @@
+import { existsSync, unlinkSync } from 'node:fs';
+import { join } from 'node:path';
+
 import { createWukongDeviceId, WUKONG_CODE_PROVIDER_NAME } from '@wukong/wukong-oauth';
 import {
   WukongAuthFacade,
@@ -42,6 +45,15 @@ export function createCliTelemetryBootstrap(): CliTelemetryBootstrap {
       firstLaunch = true;
     },
   });
+  const installerMarker = join(homeDir, 'install_first_run_pending');
+  if (!firstLaunch && existsSync(installerMarker)) {
+    firstLaunch = true;
+    try {
+      unlinkSync(installerMarker);
+    } catch {
+      // Best effort: a read-only home must not block startup.
+    }
+  }
   return { homeDir, deviceId, firstLaunch };
 }
 
@@ -58,7 +70,7 @@ export function initializeCliTelemetry(options: InitializeCliTelemetryOptions): 
       (await options.harness.auth.getCachedAccessToken(WUKONG_CODE_PROVIDER_NAME)) ?? null,
   });
   if (options.bootstrap.firstLaunch) {
-    options.harness.track('first_launch');
+    options.harness.track('first_run');
   }
 }
 

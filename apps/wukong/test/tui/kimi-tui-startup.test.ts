@@ -4,8 +4,16 @@ import { join } from 'node:path';
 
 import { log, type GoalSnapshot } from '@wukong/wukong-sdk';
 import type { MigrationPlan } from '@wukong/migration-legacy';
-import { describe, expect, it, vi } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
+import {
+  cancelTrackedLoopRecord,
+  completeTrackedTuiLoop,
+} from '#/cli/lib/loop-quota';
+import {
+  listActiveLoopRuns,
+  type LoopRunRecord,
+} from '#/cli/lib/loop-run-store';
 import { BannerProvider } from '#/tui/banner/banner-provider';
 import { readBannerDisplayState } from '#/tui/banner/state';
 import { handleLoginCommand, handleLogoutCommand } from '#/tui/commands/auth';
@@ -34,9 +42,20 @@ vi.mock('#/utils/clipboard/clipboard-text', () => ({
 vi.mock('#/tui/utils/foreign-sessions', () => ({
   discoverForeignSessionRows: vi.fn(async () => []),
 }));
+vi.mock('#/cli/lib/loop-quota', () => ({
+  cancelTrackedLoopRecord: vi.fn(async () => {}),
+  completeTrackedTuiLoop: vi.fn(async () => {}),
+  flushLoopCompletionOutbox: vi.fn(async () => {}),
+}));
+vi.mock('#/cli/lib/loop-run-store', () => ({
+  listActiveLoopRuns: vi.fn(async () => []),
+}));
 
 const copyTextToClipboardMock = vi.mocked(copyTextToClipboard);
 const discoverForeignSessionRowsMock = vi.mocked(discoverForeignSessionRows);
+const listActiveLoopRunsMock = vi.mocked(listActiveLoopRuns);
+const cancelTrackedLoopRecordMock = vi.mocked(cancelTrackedLoopRecord);
+const completeTrackedTuiLoopMock = vi.mocked(completeTrackedTuiLoop);
 
 interface StartupDriver {
   state: TUIState;
@@ -794,6 +813,10 @@ describe('WukongTUI startup', () => {
         workDir: '/tmp/proj-a',
       }),
     );
+    expect(harness.track).toHaveBeenCalledWith('resume_selected', {
+      source: 'codex',
+      mode: 'continue',
+    });
     expect(driver.state.activeDialog).toBeNull();
   });
 
@@ -813,7 +836,8 @@ describe('WukongTUI startup', () => {
       },
     ]);
     const session = makeSession({ id: 'ses-current' });
-    const driver = makeDriver(makeHarness(session), makeStartupInput());
+    const harness = makeHarness(session);
+    const driver = makeDriver(harness, makeStartupInput());
     const skillHost = driver as unknown as {
       sendSkillActivation(session: unknown, skillName: string, skillArgs: string): void;
     };
@@ -831,6 +855,10 @@ describe('WukongTUI startup', () => {
       '/loop Continue the Claude Code task: Run the final checks and publish',
     );
     expect(sendSkillActivation).not.toHaveBeenCalled();
+    expect(harness.track).toHaveBeenCalledWith('resume_selected', {
+      source: 'claude',
+      mode: 'loop',
+    });
     expect(driver.state.activeDialog).toBeNull();
   });
 
@@ -1898,3 +1926,109 @@ function uiContainsFooter(driver: StartupDriver): boolean {
   };
   return visit(driver.state.ui);
 }
+
+describe('WukongTUI active Loop recovery', () => {
+  const activeRecord: LoopRunRecord = {
+    version: 1,
+    requestId: 'request-1',
+    goalId: 'goal-1',
+    sessionId: 'ses-1',
+    workspace: '/tmp/proj-a',
+    state: 'active',
+    startedAt: '2026-07-20T08:00:00.000Z',
+    sync: { attempts: 0 },
+  };
+
+  type RecoveryDriver = StartupDriver & {
+    maybeOfferActiveLoopRecovery(): Promise<void>;
+    handleActiveLoopRecovery(record: LoopRunRecord, action: string): Promise<void>;
+    sendNormalUserInput(text: string): void;
+  };
+
+  beforeEach(() => {
+    listActiveLoopRunsMock.mockReset().mockResolvedValue([]);
+    cancelTrackedLoopRecordMock.mockReset().mockResolvedValue(undefined);
+    completeTrackedTuiLoopMock.mockReset().mockResolvedValue(undefined);
+  });
+
+  it('offers resume, explicit cancellation, and details for a matching active Loop', async () => {
+    listActiveLoopRunsMock.mockResolvedValue([activeRecord]);
+    const driver = makeDriver(makeHarness(), makeStartupInput()) as RecoveryDriver;
+
+    await driver.init();
+    await driver.maybeOfferActiveLoopRecovery();
+
+    expect(driver.state.editorContainer.render(100).join('\n')).toContain('Active Loop found');
+    expect(driver.state.editorContainer.render(100).join('\n')).toContain('Resume Loop');
+    expect(driver.state.editorContainer.render(100).join('\n')).toContain('End as cancelled');
+    expect(driver.state.editorContainer.render(100).join('\n')).toContain('View details');
+  });
+
+  it('ends an abandoned Loop without fabricating a Gate outcome', async () => {
+    const cancelGoal = vi.fn(async () => {});
+    const session = makeSession({
+      cancelGoal,
+      getGoal: vi.fn(async () => ({
+        goal: goalSnapshot({ status: 'paused', iteration: 3 }),
+      })),
+    });
+    const driver = makeDriver(makeHarness(session), makeStartupInput()) as RecoveryDriver;
+
+    await driver.init();
+    await driver.handleActiveLoopRecovery(activeRecord, 'cancel');
+
+    expect(cancelGoal).toHaveBeenCalledOnce();
+    expect(cancelTrackedLoopRecordMock).toHaveBeenCalledWith(activeRecord, 3);
+    expect(completeTrackedTuiLoopMock).not.toHaveBeenCalled();
+    expect(driver.state.editorContainer.children[0]).toBe(driver.state.editor);
+  });
+
+  it('resumes the persisted Goal and forces a fresh workspace and checks read', async () => {
+    const resumeGoal = vi.fn(async () => {});
+    const session = makeSession({
+      resumeGoal,
+      getGoal: vi.fn(async () => ({ goal: goalSnapshot({ status: 'paused' }) })),
+    });
+    const driver = makeDriver(makeHarness(session), makeStartupInput()) as RecoveryDriver;
+    const sendNormalUserInput = vi.spyOn(driver, 'sendNormalUserInput').mockImplementation(() => {});
+
+    await driver.init();
+    await driver.handleActiveLoopRecovery(activeRecord, 'resume');
+
+    expect(resumeGoal).toHaveBeenCalledOnce();
+    expect(sendNormalUserInput).toHaveBeenCalledWith(expect.stringMatching(
+      /Re-read the workspace, Git state, project checks, and review policy/,
+    ));
+    expect(sendNormalUserInput).toHaveBeenCalledWith(expect.stringContaining(
+      'Do not reuse an old Gate conclusion',
+    ));
+  });
+
+  it('reconciles a terminal SDK Goal instead of prompting for recovery', async () => {
+    listActiveLoopRunsMock.mockResolvedValue([activeRecord]);
+    const session = makeSession({
+      getGoal: vi.fn(async () => ({
+        goal: goalSnapshot({
+          status: 'complete',
+          iteration: 2,
+          loopResult: {
+            schemaVersion: 2,
+            status: 'PASS',
+            reasonCode: 'passed',
+            summary: 'Delivery gate passed.',
+            iterations: 2,
+            checks: [],
+            blockers: [],
+          },
+        }),
+      })),
+    });
+    const driver = makeDriver(makeHarness(session), makeStartupInput()) as RecoveryDriver;
+
+    await driver.init();
+    await driver.maybeOfferActiveLoopRecovery();
+
+    expect(completeTrackedTuiLoopMock).toHaveBeenCalledWith('goal-1', 'PASS', 2);
+    expect(driver.state.editorContainer.render(100).join('\n')).not.toContain('Active Loop found');
+  });
+});

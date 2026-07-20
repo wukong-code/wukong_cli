@@ -12,6 +12,12 @@ Version `0.0.13` adds structured multi-finding reviews, project-specific rules i
 
 Version `0.0.14` adds Cross-Agent Resume, an explicit Resume → Loop handoff, clearer TUI Gate results, and broader real-project check discovery. It remains free and BYOK; see the [0.0.14 design](docs/design/0.0.14-resume-loop-polish.md).
 
+The `0.0.15` release candidate makes that Loop reliable across restarts and network failures:
+durable run records, a retryable completion outbox, active-Loop recovery,
+preflight before quota reservation, a shorter first-run surface, and real
+lifecycle states in the Dashboard. It remains free and BYOK; see the
+[0.0.15 design](docs/design/0.0.15-loop-reliability.md).
+
 Version `0.0.12` established the Loop-first runtime. `verify`, `scan`, and `proof` remain available as advanced diagnostics, but they are internal Loop layers rather than separate products or quotas. See the [0.0.12 design contract](docs/design/verification-loop-v2.md) and the [0.0.13 review design](docs/design/review-learning-loop.md).
 
 Loop returns one durable result: `PASS` (exit `0`), `NEEDS_WORK` (exit `1`), or `ERROR` (exit `2`). Guests receive one two-iteration local trial; signed-in Free users receive 10 Loop sessions per month with up to five iterations each. Internal checks never consume additional quota. Temporary quota-service failures warn and continue locally with the five-iteration safety cap. Legacy `verify-pass`, `scan-clean`, and `judge-pass` Goal records and flags remain readable and migrate to the unified proof gate; see the [compatibility matrix](docs/design/0.0.12-compatibility.md).
@@ -19,6 +25,11 @@ Loop returns one durable result: `PASS` (exit `0`), `NEEDS_WORK` (exit `1`), or 
 The experimental Role Profiles foundation is now implemented. Enable `experimental.role_profiles` in `~/.wukong/config.toml`, then run `wukong roles list`, start with `wukong --role security`, or switch the current TUI session with `/transform security` and `/transform off`.
 
 Inside the TUI, `/resume` opens Wukong sessions. Use `/resume codex`, `/resume claude`, or `/resume cursor` to continue a local session from another agent. Foreign history is imported into Wukong as read-only context; old tool calls are never replayed and the current workspace is checked again before work continues.
+
+Anonymous installer and CLI product telemetry is limited to install, first-run,
+and Loop lifecycle events; it excludes source, prompts, transcripts, repository
+names, and file paths. Set `WUKONG_TELEMETRY=0` to opt out without changing local
+Loop behavior.
 
 ## Current Command Surface
 

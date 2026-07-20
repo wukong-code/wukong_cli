@@ -509,7 +509,7 @@ describe('wukong export', () => {
     expect(mocks.wukongHarnessConstructor).toHaveBeenCalledWith(
       expect.objectContaining({ homeDir: '/tmp/wukong-export-home' }),
     );
-    expect(mocks.harnessTrack).toHaveBeenCalledWith('first_launch');
+    expect(mocks.harnessTrack).toHaveBeenCalledWith('first_run');
     expect(mocks.initializeTelemetry.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.harnessTrack.mock.invocationCallOrder[0]!,
     );

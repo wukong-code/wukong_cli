@@ -33,12 +33,33 @@ const loopQuotaMocks = vi.hoisted(() => ({
     maxIterations: 5,
     tracked: true,
   })),
-  register: vi.fn(),
+  register: vi.fn(async () => {}),
+  complete: vi.fn(async () => {}),
+  completeGrant: vi.fn(async () => {}),
+}));
+
+const loopPreflightMocks = vi.hoisted(() => ({
+  run: vi.fn(async () => ({
+    ready: true as const,
+    model: 'wukong-model',
+    workspace: '/workspace',
+    checks: ['pnpm test'],
+  })),
 }));
 
 vi.mock('#/cli/lib/loop-quota', () => ({
   beginLoopQuota: loopQuotaMocks.begin,
   registerTrackedTuiLoop: loopQuotaMocks.register,
+  completeTrackedTuiLoop: loopQuotaMocks.complete,
+  completeLoopQuota: loopQuotaMocks.completeGrant,
+}));
+
+vi.mock('#/cli/lib/loop-preflight', () => ({
+  runLoopPreflight: loopPreflightMocks.run,
+  formatLoopPreflightBlocked: (result: { reason: string; next: string }) =>
+    `Loop not started\nReason   ${result.reason}\nNext     ${result.next}`,
+  formatLoopPreflightReady: (_result: unknown, maxIterations: number) =>
+    `Ready to start Loop\nLimit    up to ${String(maxIterations)} iterations`,
 }));
 
 vi.mock('#/tui/goal-queue-store', () => ({
@@ -109,6 +130,7 @@ function makeHost(
   } = {},
 ) {
   const session = {
+    id: 'session-1',
     setPermission: vi.fn(async () => {}),
     createGoal: vi.fn(async () => fakeSnapshot()),
     getGoal: vi.fn(async (): Promise<{ goal: ReturnType<typeof fakeSnapshot> | null }> => ({
@@ -849,11 +871,18 @@ describe('dispatchInput /goal integration', () => {
 
 describe('handleLoopSlashCommand', () => {
   beforeEach(() => {
+    vi.clearAllMocks();
     loopQuotaMocks.begin.mockResolvedValue({
       allowed: true,
       requestId: 'request123',
       maxIterations: 5,
       tracked: true,
+    });
+    loopPreflightMocks.run.mockResolvedValue({
+      ready: true,
+      model: 'wukong-model',
+      workspace: '/workspace',
+      checks: ['pnpm test'],
     });
   });
 
@@ -871,7 +900,12 @@ describe('handleLoopSlashCommand', () => {
       }),
     );
     expect(host.sendNormalUserInput).toHaveBeenCalledWith('fix tests');
-    expect(loopQuotaMocks.register).toHaveBeenCalledWith('g1', expect.objectContaining({ tracked: true }));
+    expect(loopQuotaMocks.register).toHaveBeenCalledWith(
+      'g1',
+      expect.objectContaining({ tracked: true }),
+      expect.any(String),
+      '/workspace',
+    );
   });
 
   it('blocks an interactive Loop before goal creation when quota is exhausted', async () => {
@@ -888,6 +922,37 @@ describe('handleLoopSlashCommand', () => {
 
     expect(session.createGoal).not.toHaveBeenCalled();
     expect(host.showError).toHaveBeenCalledWith('Monthly Loop limit reached.');
+  });
+
+  it('does not reserve quota when Loop preflight is blocked', async () => {
+    loopPreflightMocks.run.mockResolvedValueOnce({
+      ready: false,
+      reason: 'Another Goal is already active.',
+      next: 'Resume or cancel it.',
+    } as never);
+    const { host, session } = makeHost();
+
+    await handleLoopSlashCommand(host, 'fix tests');
+
+    expect(loopQuotaMocks.begin).not.toHaveBeenCalled();
+    expect(session.createGoal).not.toHaveBeenCalled();
+    expect(host.showError).toHaveBeenCalledWith(expect.stringContaining('Another Goal'));
+  });
+
+  it('ends the reserved run as cancelled when goal creation fails', async () => {
+    const { host, session } = makeHost();
+    session.createGoal.mockRejectedValueOnce(new Error('goal store unavailable'));
+
+    await handleLoopSlashCommand(host, 'fix tests');
+
+    expect(loopQuotaMocks.completeGrant).toHaveBeenCalledWith(
+      expect.objectContaining({ requestId: 'request123' }),
+      'ERROR',
+      0,
+      expect.any(Function),
+      'cancelled',
+    );
+    expect(host.sendNormalUserInput).not.toHaveBeenCalled();
   });
 
   it('rejects an invalid --every duration', async () => {

@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
 
+import { flushLoopCompletionOutbox } from '#/cli/lib/loop-quota';
 import { formatTodayFull } from '#/tui/utils/today-format';
 
 import {
@@ -70,6 +71,7 @@ export function registerTodayCommand(parent: Command, deps?: Partial<TodayDeps>)
     .option('--workspace <path>', 'Use this workspace directory instead of the current directory.')
     .option('--json', 'Print the structured briefing as JSON.')
     .action(async (focusTokens: string[] | undefined, raw: RawTodayOptions) => {
+      await flushLoopCompletionOutbox().catch(() => {});
       const code = await handleToday(resolveDeps(deps), {
         focus: focusTokens?.join(' '),
         clearFocus: raw.clearFocus === true,

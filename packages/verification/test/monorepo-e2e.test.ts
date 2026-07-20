@@ -98,6 +98,32 @@ describe('real monorepo proof E2E', () => {
     },
   );
 
+  it.skipIf(!toolAvailable('python3'))(
+    'executes a real Python standard-library test configured by the project',
+    { timeout: 15_000 },
+    async () => {
+      const cwd = await makeTempRepo('wukong-python-unittest-e2e-');
+      await writeRepoFile(cwd, '.wukong/checks.json', JSON.stringify({
+        commands: ['python3 -m unittest discover -s tests'],
+      }));
+      await writeRepoFile(cwd, 'ready.py', 'def ready() -> bool:\n    return True\n');
+      await writeRepoFile(
+        cwd,
+        'tests/test_ready.py',
+        'import unittest\nfrom ready import ready\n\nclass ReadyTest(unittest.TestCase):\n    def test_ready(self):\n        self.assertTrue(ready())\n',
+      );
+      await gitAdd(cwd);
+
+      const result = await runProof({ cwd, writeReport: false });
+
+      expect(result.status).toBe('passed');
+      expect(result.verification.selectedCommands).toEqual([
+        'python3 -m unittest discover -s tests',
+      ]);
+      expect(result.verification.commandResults[0]?.status).toBe('passed');
+    },
+  );
+
   it.skipIf(!toolAvailable('go'))(
     'discovers and executes a real Go project test',
     { timeout: 30_000 },
@@ -140,6 +166,40 @@ describe('real monorepo proof E2E', () => {
       nextAction: "Run npm --prefix 'packages/api' run test and fix the reported failure.",
     });
     expect(result.blockers[0]?.evidence).toContain('nested failure');
+  });
+
+  it('returns NEEDS_WORK guidance when source changed but no checks exist', async () => {
+    const cwd = await makeTempRepo('wukong-no-checks-e2e-');
+    await writeRepoFile(cwd, 'src/feature.ts', 'export const feature = true;\n');
+    await gitAdd(cwd);
+
+    const result = await runProof({ cwd, writeReport: false });
+
+    expect(result.status).toBe('blocked');
+    expect(result.reasonCode).toBe('tests_missing');
+    expect(result.blockers[0]).toMatchObject({
+      id: 'tests_missing',
+      summary: 'Source code changed but no project checks were discovered.',
+      nextAction: 'Add a project test/typecheck script or configure .wukong/checks.json.',
+    });
+  });
+
+  it('separates a missing check tool from a failed project test', async () => {
+    const cwd = await makeTempRepo('wukong-missing-tool-e2e-');
+    await writeRepoFile(cwd, '.wukong/checks.json', JSON.stringify({
+      commands: ['wukong-tool-that-does-not-exist --check'],
+    }));
+    await writeRepoFile(cwd, 'src/feature.ts', 'export const feature = true;\n');
+    await gitAdd(cwd);
+
+    const result = await runProof({ cwd, writeReport: false });
+
+    expect(result.status).toBe('blocked');
+    expect(result.reasonCode).toBe('check_unavailable');
+    expect(result.blockers[0]).toMatchObject({
+      id: 'check_unavailable',
+      nextAction: expect.stringContaining('Install the required tool'),
+    });
   });
 });
 

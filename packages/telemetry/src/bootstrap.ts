@@ -3,6 +3,7 @@ import { EventSink } from './sink';
 import { AsyncTransport } from './transport';
 
 export const TELEMETRY_DISABLE_ENV = 'WUKONG_DISABLE_TELEMETRY';
+export const TELEMETRY_ENABLE_ENV = 'WUKONG_TELEMETRY';
 
 const TRUE_ENV_VALUES = new Set(['1', 'true', 't', 'yes', 'y']);
 
@@ -23,7 +24,9 @@ export interface TelemetryBootstrapOptions {
 
 export function isTelemetryDisabledByEnv(env: NodeJS.ProcessEnv = process.env): boolean {
   const value = env[TELEMETRY_DISABLE_ENV];
-  return value !== undefined && TRUE_ENV_VALUES.has(value.trim().toLowerCase());
+  if (value !== undefined && TRUE_ENV_VALUES.has(value.trim().toLowerCase())) return true;
+  const enabled = env[TELEMETRY_ENABLE_ENV]?.trim().toLowerCase();
+  return enabled === '0' || enabled === 'false' || enabled === 'no' || enabled === 'off';
 }
 
 export function shouldEnableTelemetry(

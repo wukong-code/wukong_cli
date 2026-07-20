@@ -26,6 +26,15 @@ import type { MigrationPlan } from '@wukong/migration-legacy';
 import { resolve } from 'pathe';
 
 import type { CLIOptions } from '#/cli/options';
+import {
+  cancelTrackedLoopRecord,
+  completeTrackedTuiLoop,
+  flushLoopCompletionOutbox,
+} from '#/cli/lib/loop-quota';
+import {
+  listActiveLoopRuns,
+  type LoopRunRecord,
+} from '#/cli/lib/loop-run-store';
 import { MigrationScreenComponent, type MigrationScreenResult } from '#/migration/index';
 import { copyTextToClipboard } from '#/utils/clipboard/clipboard-text';
 import { appendInputHistory, loadInputHistory } from '#/utils/history/input-history';
@@ -62,6 +71,7 @@ import {
   type ApprovalPreviewBlock,
 } from './components/dialogs/approval-preview';
 import { CompactionComponent } from './components/dialogs/compaction';
+import { ChoicePickerComponent } from './components/dialogs/choice-picker';
 import { HelpPanelComponent } from './components/dialogs/help-panel';
 import { QuestionDialogComponent } from './components/dialogs/question-dialog';
 import {
@@ -162,6 +172,7 @@ import {
 } from './utils/transcript-window';
 import { formatBashOutputForDisplay } from './utils/shell-output';
 import { nextTranscriptId } from './utils/transcript-id';
+import { loopOutcomeFromGoal } from '#/utils/loop-result';
 
 export type { TUIState } from './tui-state';
 export { createTUIState } from './tui-state';
@@ -264,6 +275,7 @@ export class WukongTUI {
   private readonly migrationPlan: MigrationPlan | null;
   private readonly migrateOnly: boolean;
   private startupNotice: string | undefined;
+  private activeLoopRecoveryHandling = false;
   private lastHistoryContent: string | undefined;
   // Live `!` shell output entries, keyed by commandId so concurrent commands
   // each update their own card and stale events are dropped. Mutated in place
@@ -438,6 +450,9 @@ export class WukongTUI {
   async start(): Promise<void> {
     // Signal handlers must be installed before raw mode to avoid EIO loops.
     this.registerSignalHandlers();
+    // Completion accounting is best-effort and must not delay or block the UI.
+    // Persisted pending records make this safe across process restarts.
+    void flushLoopCompletionOutbox().catch(() => {});
     // Outer try rolls back signal listeners on startup failure.
     try {
       if (this.migrationPlan !== null) {
@@ -626,6 +641,143 @@ export class WukongTUI {
       this.updateTerminalTitle();
     }
     void this.refreshSkillCommands(this.session);
+    await this.maybeOfferActiveLoopRecovery();
+  }
+
+  private async maybeOfferActiveLoopRecovery(): Promise<void> {
+    if (this.activeLoopRecoveryHandling || this.session === undefined) return;
+    let records: LoopRunRecord[];
+    try {
+      records = await listActiveLoopRuns();
+    } catch {
+      return;
+    }
+    const currentWorkspace = resolve(this.state.appState.workDir);
+    const currentSessionId = this.session.id;
+    const record = records.find((candidate) =>
+      candidate.workspace !== undefined
+        ? resolve(candidate.workspace) === currentWorkspace
+        : candidate.sessionId === currentSessionId,
+    );
+    if (record === undefined) return;
+
+    if (record.sessionId === currentSessionId) {
+      const goal = (await this.session.getGoal().catch(() => ({ goal: null }))).goal;
+      if (
+        goal !== null
+        && goal.goalId === record.goalId
+        && (goal.status === 'complete' || goal.status === 'blocked')
+      ) {
+        const outcome = goal.loopResult?.status ?? loopOutcomeFromGoal(goal).status;
+        const iterations = goal.loopResult?.iterations ?? goal.iteration;
+        await completeTrackedTuiLoop(goal.goalId, outcome, iterations);
+        this.showStatus(`Recovered Loop terminal · Gate ${outcome}.`);
+        return;
+      }
+    }
+
+    this.showActiveLoopRecovery(record);
+  }
+
+  private showActiveLoopRecovery(record: LoopRunRecord): void {
+    this.mountEditorReplacement(new ChoicePickerComponent({
+      title: 'Active Loop found',
+      notice: 'Resume it or end its accounting explicitly. No old check result will be reused.',
+      noticeTone: 'warning',
+      options: [
+        {
+          value: 'resume',
+          label: 'Resume Loop',
+          description: 'Reopen its session and re-read the workspace, Git state, checks, and review policy.',
+        },
+        {
+          value: 'cancel',
+          label: 'End as cancelled',
+          tone: 'danger',
+          description: 'End this run without recording PASS, NEEDS_WORK, or ERROR.',
+        },
+        {
+          value: 'details',
+          label: 'View details',
+          description: 'Show local session, workspace, start time, and retry state.',
+        },
+      ],
+      onSelect: (value) => {
+        void this.handleActiveLoopRecovery(record, value).catch((error: unknown) => {
+          this.showError(`Loop recovery failed: ${formatErrorMessage(error)}`);
+          this.showActiveLoopRecovery(record);
+        });
+      },
+      onCancel: () => {
+        this.restoreEditor();
+        this.showStatus('Active Loop left unchanged.');
+      },
+    }));
+  }
+
+  private async handleActiveLoopRecovery(record: LoopRunRecord, action: string): Promise<void> {
+    if (action === 'details') {
+      this.showStatus([
+        'Active Loop details',
+        `Session   ${record.sessionId ?? 'unavailable'}`,
+        `Workspace ${record.workspace ?? 'unavailable'}`,
+        `Started   ${record.startedAt}`,
+        `Retry     ${String(record.sync.attempts)} attempt(s)`,
+      ].join('\n'));
+      this.showActiveLoopRecovery(record);
+      return;
+    }
+
+    if (action === 'cancel') {
+      this.restoreEditor();
+      let iterations = 0;
+      const currentGoal = this.session === undefined
+        ? null
+        : (await this.session.getGoal().catch(() => ({ goal: null }))).goal;
+      if (currentGoal !== null && currentGoal.goalId === record.goalId) {
+        iterations = currentGoal.iteration;
+        await this.session?.cancelGoal().catch(() => {});
+      }
+      await cancelTrackedLoopRecord(record, iterations);
+      this.showNotice('Loop ended as cancelled. No Gate outcome was recorded.');
+      return;
+    }
+
+    this.activeLoopRecoveryHandling = true;
+    try {
+      if (record.workspace !== undefined && resolve(record.workspace) !== resolve(this.state.appState.workDir)) {
+        this.showError('Loop workspace does not match the current directory. Start Wukong from that workspace.');
+        this.showActiveLoopRecovery(record);
+        return;
+      }
+      if (record.sessionId === undefined) {
+        this.showError('The Loop session id is unavailable. End it as cancelled or view details.');
+        this.showActiveLoopRecovery(record);
+        return;
+      }
+      if (this.session?.id !== record.sessionId && !(await this.resumeSession(record.sessionId))) {
+        this.showActiveLoopRecovery(record);
+        return;
+      }
+      const session = this.requireSession();
+      const goal = (await session.getGoal()).goal;
+      if (goal === null || goal.goalId !== record.goalId) {
+        this.showError('The saved Goal no longer exists. End the Loop as cancelled or view details.');
+        this.showActiveLoopRecovery(record);
+        return;
+      }
+      if (goal.status === 'paused' || goal.status === 'blocked') {
+        await session.resumeGoal();
+      }
+      this.track('resume_selected', { source: 'active_loop' });
+      this.restoreEditor();
+      this.showStatus('Resuming Loop · workspace and checks will be read again.');
+      this.sendNormalUserInput(
+        'Resume the active Loop. Re-read the workspace, Git state, project checks, and review policy before continuing. Do not reuse an old Gate conclusion.',
+      );
+    } finally {
+      this.activeLoopRecoveryHandling = false;
+    }
   }
 
   private async showSessionWarnings(session: Session): Promise<void> {
@@ -2692,6 +2844,7 @@ export class WukongTUI {
     source: Exclude<SessionSource, 'wukong'>,
     action: ResumeHandoffAction,
   ): void {
+    this.track('resume_selected', { source, mode: action });
     if (action === 'loop') {
       this.state.activeDialog = null;
       this.restoreInputText(foreignLoopDraft(session, source));

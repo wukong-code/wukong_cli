@@ -227,9 +227,12 @@ describe('EventSink', () => {
       version: '1.2.3',
       runtime: 'node',
       ui_mode: 'shell',
-      model: 'wukong-k2',
-      terminal: 'test-terminal',
     });
+    expect(transport.saved[0]?.[0]?.context).not.toHaveProperty('model');
+    expect(transport.saved[0]?.[0]?.context).not.toHaveProperty('terminal');
+    expect(transport.saved[0]?.[0]?.context).not.toHaveProperty('locale');
+    expect(transport.saved[0]?.[0]?.context).not.toHaveProperty('os_version');
+    expect(transport.saved[0]?.[0]?.context).not.toHaveProperty('node_version');
   });
 
   it('delegates retry of disk events to its transport', async () => {
@@ -626,6 +629,9 @@ describe('telemetry bootstrap', () => {
     expect(isTelemetryDisabledByEnv({ WUKONG_DISABLE_TELEMETRY: 'yes' })).toBe(true);
     expect(isTelemetryDisabledByEnv({ WUKONG_DISABLE_TELEMETRY: '0' })).toBe(false);
     expect(isTelemetryDisabledByEnv({ WUKONG_DISABLE_TELEMETRY: 'false' })).toBe(false);
+    expect(isTelemetryDisabledByEnv({ WUKONG_TELEMETRY: '0' })).toBe(true);
+    expect(isTelemetryDisabledByEnv({ WUKONG_TELEMETRY: 'false' })).toBe(true);
+    expect(isTelemetryDisabledByEnv({ WUKONG_TELEMETRY: '1' })).toBe(false);
   });
 
   it('disables the singleton without attaching a sink when opted out', async () => {

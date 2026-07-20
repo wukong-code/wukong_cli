@@ -10,6 +10,7 @@ import {
 import type { Command } from 'commander';
 import { z } from 'zod';
 
+import { flushLoopCompletionOutbox } from '#/cli/lib/loop-quota';
 import { getTuiConfigPath, parseTuiConfig } from '#/tui/config';
 
 interface WritableLike {
@@ -107,6 +108,7 @@ async function runDoctorCommand(
   deps: Partial<DoctorDeps> | undefined,
   options: DoctorOptions,
 ): Promise<void> {
+  await flushLoopCompletionOutbox().catch(() => {});
   const resolved = resolveDeps(deps);
   const code = await handleDoctor(resolved, options);
   if (code !== 0) resolved.exit(code);

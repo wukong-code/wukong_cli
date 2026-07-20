@@ -1,10 +1,59 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.14 以 [Cross-Agent Resume 与 Loop UX 收尾](docs/design/0.0.14-resume-loop-polish.md) 为准，共享验证基础以 [技术实现方案](docs/tech/commercial-refactor-implementation.md) 为准，现有测试基线以 [测试计划](docs/test/verification-cli-test-plan.md) 为准；本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.15 以 [Loop Reliability 与 First Success](docs/design/0.0.15-loop-reliability.md) 为准，共享验证基础以 [技术实现方案](docs/tech/commercial-refactor-implementation.md) 为准，现有测试基线以 [测试计划](docs/test/verification-cli-test-plan.md) 为准；本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
-## 📋 当前重点: 0.0.14 — Cross-Agent Resume + Loop UX
+## 📋 当前重点: 0.0.15 — Loop Reliability + First Success
+
+> 方案: [docs/design/0.0.15-loop-reliability.md](docs/design/0.0.15-loop-reliability.md)。本版继续免费/BYOK，先解决 Loop 可靠结束、重启恢复和首次成功，不做支付或 GitHub PR。
+
+### P0：Lifecycle Contract 与持久化
+
+- [x] 冻结 `LoopRunStatus`、`LoopOutcome`、状态迁移和旧 `/complete` payload 兼容（2026-07-20）
+- [x] 将 TUI `requestId → goalId/sessionId` tracking 从内存迁移到 `~/.wukong/usage/loop-runs`（2026-07-20）
+- [x] 本地 record 使用 `0600`、atomic rename，不保存 objective、prompt、transcript 或 diff（2026-07-20）
+- [x] headless/TUI 的 PASS、NEEDS_WORK、ERROR、cancel 和启动失败均写入 terminal record（2026-07-20）
+- [x] CLI 重启后发现 active Loop，支持 Resume / End as cancelled / View details；terminal SDK Goal 自动对账（2026-07-20）
+
+### P0：Completion Outbox
+
+- [x] completion 网络失败写入 outbox，不改变本地 Gate 结论（2026-07-20）
+- [x] CLI/TUI 启动、session resume、today/doctor 和新 Loop 前 fail-open flush（2026-07-20）
+- [x] 区分 401、409、5xx、timeout；实现有上限指数退避（2026-07-20）
+- [x] start/complete 服务端幂等，跨用户 requestId 隔离，冲突终态返回 409（2026-07-20）
+- [x] 旧 started rows reconciliation；metrics 区分 cancelled、abandoned 和 stale started（2026-07-20）
+
+### P0：Preflight 与首次成功
+
+- [x] provider/model、workspace、objective、active Goal 和 checks discovery 在 quota start 前完成（2026-07-20）
+- [x] preflight 失败不创建服务端 run、不消耗额度，并只显示 Reason + Next（2026-07-20）
+- [x] 初次 TUI 只突出 Continue a task / Start a Loop / Configure model（2026-07-20）
+- [x] 无 checks 返回 NEEDS_WORK + 配置指引，不误写为测试失败或 PASS（2026-07-20）
+- [x] 最终结果默认只显示 Gate、Iterations、Primary blocker 和 Next；高级诊断保留在 transcript（2026-07-20）
+
+### P1：隐私指标与 Dashboard
+
+- [x] 定义并实现 `install_success`、`first_run`、`resume_selected`、`loop_started`、`loop_first_iteration`、`loop_terminal`、`loop_repeated_7d`（2026-07-20）
+- [x] 匿名 telemetry 明示并支持 `WUKONG_TELEMETRY=0`；禁止源码、路径、prompt、transcript、model 和机器指纹（2026-07-20）
+- [x] production metrics 区分注册、activated、completed users、terminal reporting rate 和 repeat users（2026-07-20）
+- [x] Dashboard 展示 active、stale 和真实 terminal lifecycle，不恢复 Reports 产品面（2026-07-20）
+
+### 测试与发布
+
+- [x] restart/offline/cancel/duplicate-complete/旧 payload contract tests（2026-07-20）
+- [x] Node、Python、Rust、Go、无 checks、缺失工具和 Cross-Agent Resume → editable Loop fixture E2E（2026-07-20）
+- [x] 全量 test/typecheck/lint/bundle 与本机 darwin-arm64 native smoke（2026-07-20；全量 9214 项通过、10 项资源竞争超时随后按失败文件单 worker 80/80 通过）
+- [x] 0.0.14 → 0.0.15 native upgrade pinning contract 与显式 0.0.15 fresh installer E2E（2026-07-20）
+- [ ] 发布时以真实六平台 assets 验证 0.0.14 → 0.0.15 下载升级；当前不可用 mock 冒充
+- [x] 三仓 README、用户指南、CHANGELOG、官网、Today 和禁用公告草稿同步（2026-07-20）
+- [ ] 正式发布时切换 manifest、启用公告并验证 live download
+
+### 明确不做
+
+- Stripe/Pro 支付、GitHub PR、Team rules、Hosted Report、云端 `/schedule`、新增 Agent 来源、managed credits 和 Role 系统扩张均不进入 0.0.15。
+
+## ✅ 0.0.14 — Cross-Agent Resume + Loop UX
 
 > 方案: [docs/design/0.0.14-resume-loop-polish.md](docs/design/0.0.14-resume-loop-polish.md)。本版继续免费/BYOK，不做支付或 GitHub PR 集成。
 

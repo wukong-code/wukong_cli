@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -14,7 +14,12 @@ vi.mock('@wukong/wukong-sdk', async (importOriginal) => ({
   resolveWukongHome: mocks.resolveWukongHome,
 }));
 
-import { beginLoopQuota, completeLoopQuota } from '#/cli/lib/loop-quota';
+import {
+  beginLoopQuota,
+  completeLoopQuota,
+  registerTrackedTuiLoop,
+} from '#/cli/lib/loop-quota';
+import { readLoopRunForTests } from '#/cli/lib/loop-run-store';
 
 describe('Loop quota client', () => {
   let home: string;
@@ -25,6 +30,8 @@ describe('Loop quota client', () => {
   });
 
   afterEach(async () => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
     vi.clearAllMocks();
     await rm(home, { recursive: true, force: true });
   });
@@ -56,6 +63,112 @@ describe('Loop quota client', () => {
       expect.stringContaining('/api/v1/loops/complete'),
       expect.objectContaining({ body: expect.stringContaining('"outcome":"PASS"') }),
     );
+    await expect(readLoopRunForTests(grant.requestId)).resolves.toMatchObject({
+      state: 'synced',
+      terminal: { status: 'completed', outcome: 'PASS', iterations: 2 },
+    });
+  });
+
+  it('marks a second tracked Loop within seven days as repeated use', async () => {
+    mocks.getCliAccessToken.mockResolvedValue('token');
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        quota: { tier: 'free', used: 1, limit: 10 },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        quota: { tier: 'free', used: 2, limit: 10 },
+      }), { status: 200 }));
+
+    const first = await beginLoopQuota(fetchMock);
+    const second = await beginLoopQuota(fetchMock);
+
+    expect(first.repeatedWithin7d).toBeUndefined();
+    expect(second.repeatedWithin7d).toBe(true);
+  });
+
+  it('keeps a failed completion in the outbox and retries before the next reservation', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date('2026-07-20T08:00:00.000Z'));
+    mocks.getCliAccessToken.mockResolvedValue('token');
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        quota: { tier: 'free', used: 1, limit: 10 },
+      }), { status: 200 }))
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'completed' }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        quota: { tier: 'free', used: 2, limit: 10 },
+      }), { status: 200 }));
+
+    const first = await beginLoopQuota(fetchMock);
+    await completeLoopQuota(first, 'NEEDS_WORK', 5, fetchMock);
+    await expect(readLoopRunForTests(first.requestId)).resolves.toMatchObject({
+      state: 'pending_terminal',
+      sync: { attempts: 1, lastErrorCode: 'network_error' },
+    });
+
+    vi.advanceTimersByTime(31_000);
+    await beginLoopQuota(fetchMock);
+
+    await expect(readLoopRunForTests(first.requestId)).resolves.toMatchObject({
+      state: 'synced',
+      sync: { attempts: 2 },
+    });
+    expect(fetchMock.mock.calls[2]?.[0]).toContain('/api/v1/loops/complete');
+    expect(fetchMock.mock.calls[3]?.[0]).toContain('/api/v1/loops/start');
+  });
+
+  it('recovers the goal-to-request mapping after the quota module reloads', async () => {
+    mocks.getCliAccessToken.mockResolvedValue('token');
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        quota: { tier: 'free', used: 1, limit: 10 },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'completed' }), { status: 200 }));
+
+    const grant = await beginLoopQuota(fetchMock);
+    await registerTrackedTuiLoop(
+      'goal-after-restart',
+      grant,
+      'session-after-restart',
+      '/workspace',
+    );
+    vi.stubGlobal('fetch', fetchMock);
+    vi.resetModules();
+    const reloaded = await import('#/cli/lib/loop-quota');
+
+    await reloaded.completeTrackedTuiLoop('goal-after-restart', 'PASS', 3);
+
+    await expect(readLoopRunForTests(grant.requestId)).resolves.toMatchObject({
+      goalId: 'goal-after-restart',
+      sessionId: 'session-after-restart',
+      workspace: '/workspace',
+      state: 'synced',
+    });
+    const recordPath = join(home, 'usage', 'loop-runs', `${grant.requestId}.json`);
+    expect((await stat(recordPath)).mode & 0o777).toBe(0o600);
+  });
+
+  it('records user cancellation separately from the Loop outcome', async () => {
+    mocks.getCliAccessToken.mockResolvedValue('token');
+    const fetchMock = vi.fn<typeof fetch>()
+      .mockResolvedValueOnce(new Response(JSON.stringify({
+        quota: { tier: 'free', used: 1, limit: 10 },
+      }), { status: 200 }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ status: 'cancelled' }), { status: 200 }));
+
+    const grant = await beginLoopQuota(fetchMock);
+    await completeLoopQuota(grant, 'ERROR', 1, fetchMock, 'cancelled');
+
+    expect(fetchMock).toHaveBeenLastCalledWith(
+      expect.stringContaining('/api/v1/loops/complete'),
+      expect.objectContaining({ body: expect.stringContaining('"status":"cancelled"') }),
+    );
+    await expect(readLoopRunForTests(grant.requestId)).resolves.toMatchObject({
+      state: 'synced',
+      terminal: { status: 'cancelled' },
+    });
+    expect((await readLoopRunForTests(grant.requestId))?.terminal?.outcome).toBeUndefined();
   });
 
   it('fails open with a five-iteration cap on a temporary network error', async () => {

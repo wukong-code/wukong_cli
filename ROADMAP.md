@@ -1,6 +1,6 @@
 # Wukong Code Roadmap
 
-> 最后更新: 2026-07-18
+> 最后更新: 2026-07-20
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 
 这份 ROADMAP 是当前商业化方向的执行层文档。更细的商业模型和技术方案仍以这些文档为准：
@@ -107,6 +107,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 | `0.0.12` | Loop-first v2 | Loop 状态机；fresh-context reviewer；仅 Loop session 额度；BYOK model alias；轻量 Role Profiles；高级命令兼容；真实 E2E 通过 |
 | `0.0.13` | Smarter Review Loop | 结构化多 findings、项目 review policy、独立 reviewer model、本地反馈、Loop-first TUI 与 Web 文案；保持免费/BYOK，不上线支付 |
 | `0.0.14` | Cross-Agent Resume + Loop UX | `/resume codex|claude|cursor`、安全只读上下文导入、Resume → Loop 确认、Gate/Footer 清晰结论、更多真实项目检查发现；保持免费/BYOK |
+| `0.0.15` | Loop Reliability + First Success | durable run lifecycle、completion outbox、重启恢复、preflight、简洁终态和隐私受限激活指标；保持免费/BYOK |
 | `0.1.0` | 真实 PR 工作流 + 支付 | GitHub PR comment/status check 与 Pro 支付生命周期可用；visibility/redaction 和 checkout→entitlement→cancel/failure E2E 通过；至少 1 个真实付费 Team Pilot 或 3 个非关联个人付费用户 |
 
 `0.1.0` 的条件式目标是 **2026 年 8 月上旬，最早 8 月 3 日当周**。日期不是发布承诺；上表的 PR Evidence 和真实试点门槛未满足时不升 `0.1.0`。
@@ -257,7 +258,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 
 ## Milestone 2.5: 0.0.14 Cross-Agent Resume + Loop UX
 
-状态：开发中。完整 contract 见 [0.0.14 Cross-Agent Resume 与 Loop UX 收尾](docs/design/0.0.14-resume-loop-polish.md)。
+状态：已于 2026-07-18 发布。完整 contract 见 [0.0.14 Cross-Agent Resume 与 Loop UX 收尾](docs/design/0.0.14-resume-loop-polish.md)。
 
 目标：让用户把 Codex、Claude Code 或 Cursor 中未完成的任务安全带进 Wukong，并用清晰的 Gate 结论和 `/loop` 完成收尾。
 
@@ -283,6 +284,37 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 不做：
 
 - 不做支付、GitHub PR 自动评论、Team policy、云端 `/schedule` 或自动 policy improver；这些继续归 `0.1.0+`。
+
+## Milestone 2.75: 0.0.15 Loop Reliability + First Success
+
+状态：开发中（2026-07-20 核心实现完成，正在执行完整 release gate 与升级兼容验证）。完整 contract 见 [0.0.15 Loop Reliability 与 First Success](docs/design/0.0.15-loop-reliability.md)。
+
+目标：让每个真正开始的 Loop 都能可靠进入终态；CLI 崩溃、断网、重启和用户取消不再让服务端 run 永久停在 `started`。同时把首次入口、preflight 和最终结果收敛到普通用户可理解的最短路径。
+
+交付项：
+
+- 将 `requestId → goalId/sessionId` tracking 从进程内状态改为本地 durable record。
+- completion 失败进入本地 outbox，并在启动、resume、today/doctor 和下一次 Loop 前安全重试。
+- lifecycle 与 Gate outcome 分离：started/completed/cancelled/abandoned 对应 PASS/NEEDS_WORK/ERROR 或无代码结论。
+- provider、model、workspace、objective 和 checks preflight 在 quota start 之前完成。
+- 重启后允许恢复 active Loop，恢复时重新读取 workspace/Git/checks/policy。
+- 默认 TUI 只突出 Continue task、Start Loop、Configure model；终态只显示 Gate、主要 blocker 和下一步。
+- 建立不含源码、prompt、transcript、路径和机器指纹的 install → first run → Loop terminal → repeat 漏斗。
+- Dashboard 和受保护 metrics 区分 terminal、cancelled、abandoned 与 stale started。
+
+验收：
+
+- crash/restart/offline/cancel/duplicate complete 都有自动化和真实 E2E。
+- preflight 失败不消耗服务端额度。
+- 所有 pending completion 要么成功同步，要么保留在可解释、可重试的 outbox。
+- Node、Python、Rust、Go、无 checks 和缺失工具项目均返回正确状态和下一步。
+- 0.0.14 → 0.0.15 upgrade、fresh installer、六平台 assets、manifest、公告和官网同步通过。
+
+不做：
+
+- 不做支付、GitHub PR、Team rules、Hosted Report、云端 `/schedule`、新增 Agent 来源、managed credits 或 Role 系统扩张。
+- 不把 reviewer-only 结果默认包装成 PASS。
+- 不用 started、注册数或 GitHub 下载量冒充完成和重复使用。
 
 ## Milestone 3: 0.1.0 GitHub PR Evidence + Payment
 

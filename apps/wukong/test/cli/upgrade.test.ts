@@ -134,6 +134,17 @@ describe('handleUpgrade', () => {
     expect(stdout.join('')).not.toContain('npm install');
   });
 
+  it('keeps the 0.0.14 to 0.0.15 native upgrade pinned to the release version', async () => {
+    const { stdout, writable } = captureOutput();
+    const deps = createDeps({ latest: '0.0.15', source: 'native', platform: 'darwin' });
+
+    await expect(handleUpgrade('0.0.14', { ...deps, ...writable })).resolves.toBe(0);
+
+    expect(deps.installUpdate).toHaveBeenCalledWith('native', '0.0.15', 'darwin');
+    expect(stdout.join('')).toContain('Upgrading Wukong v0.0.14 -> v0.0.15...');
+    expect(stdout.join('')).toContain('Updated @wukong.today/code to 0.0.15');
+  });
+
   it('automatically upgrades without requiring an interactive terminal', async () => {
     const { stdout, writable } = captureOutput();
     const deps = createDeps({ latest: '0.5.0', source: 'npm-global' });

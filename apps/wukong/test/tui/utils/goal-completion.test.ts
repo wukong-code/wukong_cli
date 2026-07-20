@@ -38,9 +38,49 @@ describe('buildGoalCompletionMessage', () => {
   it('renders the public Loop PASS result without the encoded reason', () => {
     const text = buildGoalCompletionMessage(snapshot({
       terminalReason: 'loop:PASS:passed:Delivery gate passed.',
+      loopResult: {
+        schemaVersion: 2,
+        status: 'PASS',
+        reasonCode: 'passed',
+        summary: 'Delivery gate passed.',
+        iterations: 2,
+        checks: [],
+        blockers: [],
+      },
     }));
 
-    expect(text).toContain('Loop PASS — Delivery gate passed.');
+    expect(text).toContain('Gate        PASS');
+    expect(text).toContain('Iterations  2');
+    expect(text).toContain('Blocker     None');
+    expect(text).toContain('Next        Ready to ship.');
     expect(text).not.toContain('loop:PASS');
+    expect(text).not.toContain('tokens');
+  });
+
+  it('shows only the primary blocker and next action for a Loop that needs work', () => {
+    const text = buildGoalCompletionMessage(snapshot({
+      status: 'blocked',
+      loopResult: {
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'checks_failed',
+        summary: 'Checks failed.',
+        iterations: 3,
+        checks: [],
+        blockers: [{
+          id: 'test_failed',
+          kind: 'check',
+          summary: 'Auth fixture still fails.',
+          nextAction: 'Fix the fixture and continue the Loop.',
+        }],
+      },
+    }));
+
+    expect(text).toBe([
+      'Gate        NEEDS_WORK',
+      'Iterations  3',
+      'Blocker     Auth fixture still fails.',
+      'Next        Fix the fixture and continue the Loop.',
+    ].join('\n'));
   });
 });

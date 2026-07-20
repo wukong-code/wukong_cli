@@ -34,7 +34,18 @@ import {
 } from './goal-prompt';
 import { createCliTelemetryBootstrap, initializeCliTelemetry } from './telemetry';
 import { createWukongCodeHostIdentity } from './version';
-import { beginLoopQuota, completeLoopQuota, type LoopQuotaGrant } from './lib/loop-quota';
+import {
+  beginLoopQuota,
+  completeLoopQuota,
+  flushLoopCompletionOutbox,
+  registerTrackedTuiLoop,
+  type LoopQuotaGrant,
+} from './lib/loop-quota';
+import {
+  formatLoopPreflightBlocked,
+  formatLoopPreflightReady,
+  runLoopPreflight,
+} from './lib/loop-preflight';
 
 interface PromptOutput {
   readonly columns?: number | undefined;
@@ -64,6 +75,7 @@ export async function runPrompt(
   io: PromptRunIO = {},
 ): Promise<void> {
   const startedAt = Date.now();
+  void flushLoopCompletionOutbox().catch(() => {});
   const stdout = io.stdout ?? process.stdout;
   const stderr = io.stderr ?? process.stderr;
   const promptProcess = io.process ?? process;
@@ -130,6 +142,25 @@ export async function runPrompt(
         );
       }
     }
+    const goalCreate = parseHeadlessGoalCreate(opts.prompt!);
+    if (
+      goalCreate?.kind === 'loop'
+      && opts.session === undefined
+      && !opts.continue
+      && configuredModel(opts.model, config.defaultModel) === undefined
+    ) {
+      const preflight = await runLoopPreflight({
+        objective: goalCreate.objective,
+        model: undefined,
+        workspace: workDir,
+        getActiveGoal: async () => null,
+      });
+      if (!preflight.ready) {
+        stderr.write(`${formatLoopPreflightBlocked(preflight)}\n`);
+        process.exitCode = 2;
+        return;
+      }
+    }
     const { session, restorePermission, telemetryModel, goalModel } =
       await resolvePromptSession(
         harness,
@@ -163,7 +194,6 @@ export async function runPrompt(
     // the turn-run alive across continuation turns, so the normal prompt-turn
     // waiter blocks until the goal is terminal; we then emit a summary and set a
     // distinct exit code.
-    const goalCreate = parseHeadlessGoalCreate(opts.prompt!);
     if (goalCreate !== undefined) {
       await runHeadlessGoal(session, goalCreate, goalModel, outputFormat, stdout, stderr);
     } else {
@@ -187,29 +217,69 @@ async function runHeadlessGoal(
   stdout: PromptOutput,
   stderr: PromptOutput,
 ): Promise<void> {
-  requireConfiguredModel(model);
+  const resolvedModel = goal.kind === 'loop' ? configuredModel(model) : requireConfiguredModel(model);
   let loopGrant: LoopQuotaGrant | undefined;
   if (goal.kind === 'loop') {
+    const preflight = await runLoopPreflight({
+      objective: goal.objective,
+      model: resolvedModel,
+      workspace: process.cwd(),
+      getActiveGoal: async () => (await session.getGoal()).goal,
+    });
+    if (!preflight.ready) {
+      stderr.write(`${formatLoopPreflightBlocked(preflight)}\n`);
+      process.exitCode = 2;
+      return;
+    }
     loopGrant = await beginLoopQuota();
     if (loopGrant.message !== undefined) stderr.write(`${loopGrant.message}\n`);
     if (!loopGrant.allowed) {
       process.exitCode = 3;
       return;
     }
+    stderr.write(`${formatLoopPreflightReady(
+      preflight,
+      Math.min(goal.maxIterations ?? loopGrant.maxIterations, loopGrant.maxIterations),
+    )}\n`);
   }
   const maxIterations = loopGrant === undefined
     ? goal.maxIterations
     : Math.min(goal.maxIterations ?? loopGrant.maxIterations, loopGrant.maxIterations);
-  await session.createGoal({
-    objective: goal.objective,
-    replace: goal.replace,
-    ...(goal.stopCondition === undefined ? {} : { stopCondition: goal.stopCondition }),
-    reviewModel: goal.reviewModel,
-    ...(maxIterations === undefined ? {} : { maxIterations }),
-    ...(goal.minIntervalMs === undefined ? {} : { minIntervalMs: goal.minIntervalMs }),
-  });
+  let createdGoal: GoalSnapshot;
+  try {
+    createdGoal = await session.createGoal({
+      objective: goal.objective,
+      replace: goal.replace,
+      ...(goal.stopCondition === undefined ? {} : { stopCondition: goal.stopCondition }),
+      reviewModel: goal.reviewModel,
+      ...(maxIterations === undefined ? {} : { maxIterations }),
+      ...(goal.minIntervalMs === undefined ? {} : { minIntervalMs: goal.minIntervalMs }),
+    });
+  } catch (error) {
+    if (loopGrant !== undefined) {
+      await completeLoopQuota(loopGrant, 'ERROR', 0, fetch, 'cancelled');
+    }
+    throw error;
+  }
+  if (loopGrant !== undefined) {
+    await registerTrackedTuiLoop(createdGoal.goalId, loopGrant, session.id, process.cwd());
+    track('loop_started');
+    if (loopGrant.repeatedWithin7d === true) track('loop_repeated_7d');
+  }
   let completedSnapshot: GoalSnapshot | null = null;
+  let firstIterationTracked = false;
   const unsubscribeGoalEvents = session.onEvent((event) => {
+    if (
+      loopGrant !== undefined
+      && !firstIterationTracked
+      && event.type === 'goal.updated'
+      && event.agentId === 'main'
+      && event.snapshot?.iteration !== undefined
+      && event.snapshot.iteration >= 1
+    ) {
+      firstIterationTracked = true;
+      track('loop_first_iteration');
+    }
     if (
       event.type === 'goal.updated' &&
       event.agentId === 'main' &&
@@ -239,6 +309,11 @@ async function runHeadlessGoal(
       if (loopGrant !== undefined) {
         const result = loopSummaryJson(snapshot);
         await completeLoopQuota(loopGrant, result.status, result.iterations);
+        track('loop_terminal', {
+          outcome: result.status,
+          iterations: result.iterations,
+          reason_code: result.reasonCode,
+        });
       }
       process.exitCode = loopExitCode(snapshot);
     } else if (snapshot !== null && snapshot.status !== 'complete') {

@@ -78,10 +78,16 @@ export class WelcomeComponent implements Component {
 
   private renderReadyBlock(safeWidth: number): string[] {
     const title = chalk.bold.hex(currentTheme.palette.primary)('Wukong Code');
-    const prompt = chalk.hex(currentTheme.palette.textDim)(
-      'Ready · Describe a task, or use /loop <goal>',
-    );
-    return ['', title, prompt, ''].map((line) => truncateToWidth(line, safeWidth, '…'));
+    const dim = chalk.hex(currentTheme.palette.textDim);
+    const command = chalk.hex(currentTheme.palette.primary);
+    return [
+      '',
+      title,
+      dim('Continue a task  · describe what remains'),
+      dim('Start a Loop     · ') + command('/loop <goal>'),
+      dim('Configure model · ') + command('/model') + dim(' or ') + command('/provider'),
+      '',
+    ].map((line) => truncateToWidth(line, safeWidth, '…'));
   }
 
   private renderWelcomeCard(safeWidth: number): string[] {

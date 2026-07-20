@@ -1,5 +1,11 @@
 # @wukong.today/code
 
+## 0.0.15
+
+### Patch Changes
+
+- Make active Loops recoverable across restarts with preflight, durable completion retries, and clearer terminal results. Run `/loop <goal>` to start.
+
 ## 0.0.14
 
 ### Patch Changes

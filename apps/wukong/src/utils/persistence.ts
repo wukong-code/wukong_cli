@@ -58,7 +58,10 @@ export async function writeJsonFile<T>(
   await mkdir(dirname(filePath), { recursive: true });
   const tmpPath = tempPathFor(filePath);
   try {
-    await writeFile(tmpPath, `${JSON.stringify(parsed, null, 2)}\n`, 'utf-8');
+    await writeFile(tmpPath, `${JSON.stringify(parsed, null, 2)}\n`, {
+      encoding: 'utf-8',
+      mode: 0o600,
+    });
     await rename(tmpPath, filePath);
   } catch (error) {
     await unlink(tmpPath).catch(() => {});

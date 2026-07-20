@@ -3,6 +3,7 @@ import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { runPrompt } from '#/cli/run-prompt';
 import type { HeadlessGoalCreate } from '#/cli/goal-prompt';
+import type { LoopPreflightResult } from '#/cli/lib/loop-preflight';
 
 type CreateWukongDeviceId = typeof createWukongDeviceIdFn;
 
@@ -104,6 +105,14 @@ const mocks = vi.hoisted(() => {
       tracked: true,
     })),
     completeLoopQuota: vi.fn(async () => {}),
+    flushLoopCompletionOutbox: vi.fn(async () => {}),
+    registerTrackedTuiLoop: vi.fn(async () => {}),
+    runLoopPreflight: vi.fn<() => Promise<LoopPreflightResult>>(async () => ({
+      ready: true as const,
+      model: 'k2',
+      workspace: process.cwd(),
+      checks: ['pnpm test'],
+    })),
   };
 });
 
@@ -191,6 +200,16 @@ vi.mock('#/cli/goal-prompt', async (importOriginal) => {
 vi.mock('#/cli/lib/loop-quota', () => ({
   beginLoopQuota: mocks.beginLoopQuota,
   completeLoopQuota: mocks.completeLoopQuota,
+  flushLoopCompletionOutbox: mocks.flushLoopCompletionOutbox,
+  registerTrackedTuiLoop: mocks.registerTrackedTuiLoop,
+}));
+
+vi.mock('#/cli/lib/loop-preflight', () => ({
+  runLoopPreflight: mocks.runLoopPreflight,
+  formatLoopPreflightBlocked: (result: { reason: string; next: string }) =>
+    `Loop not started\nReason   ${result.reason}\nNext     ${result.next}`,
+  formatLoopPreflightReady: (_result: unknown, maxIterations: number) =>
+    `Ready to start Loop\nLimit    up to ${String(maxIterations)} iterations`,
 }));
 
 function opts(overrides: Partial<Parameters<typeof runPrompt>[0]> = {}) {
@@ -271,6 +290,12 @@ describe('runPrompt', () => {
       requestId: 'request123',
       maxIterations: 5,
       tracked: true,
+    });
+    mocks.runLoopPreflight.mockResolvedValue({
+      ready: true,
+      model: 'k2',
+      workspace: process.cwd(),
+      checks: ['pnpm test'],
     });
     mocks.createWukongCodeHostIdentity.mockImplementation((version: string) => ({
       userAgentProduct: 'wukong-code',
@@ -378,7 +403,7 @@ describe('runPrompt', () => {
     expect(mocks.wukongHarnessConstructor).toHaveBeenCalledWith(
       expect.objectContaining({ homeDir: '/tmp/wukong-test-home' }),
     );
-    expect(mocks.harnessTrack).toHaveBeenCalledWith('first_launch');
+    expect(mocks.harnessTrack).toHaveBeenCalledWith('first_run');
   });
 
   it('formats thinking and assistant output as transcript blocks', async () => {
@@ -1053,6 +1078,7 @@ describe('runPrompt', () => {
 
     it('reserves Loop quota and caps Free sessions at five iterations', async () => {
       process.exitCode = undefined;
+      mocks.session.createGoal.mockResolvedValueOnce({ goalId: 'goal-loop-1' });
       mocks.parseHeadlessGoalCreate.mockReturnValue({
         kind: 'loop',
         objective: 'fix tests',
@@ -1082,6 +1108,37 @@ describe('runPrompt', () => {
       expect(mocks.completeLoopQuota).toHaveBeenCalledTimes(1);
     });
 
+    it('routes a missing Loop model through preflight before quota reservation', async () => {
+      process.exitCode = undefined;
+      mocks.harnessGetConfig.mockResolvedValueOnce({ providers: {}, telemetry: true });
+      mocks.parseHeadlessGoalCreate.mockReturnValue({
+        kind: 'loop',
+        objective: 'fix tests',
+        replace: false,
+      });
+      mocks.runLoopPreflight.mockResolvedValueOnce({
+        ready: false,
+        reason: 'No model is configured.',
+        next: 'Run /provider or /model, then start the Loop again.',
+      });
+      const stderr = writer();
+
+      await runPrompt(opts({ prompt: '/loop fix tests' }), '1.2.3-test', {
+        stdout: writer(),
+        stderr,
+      });
+
+      expect(mocks.runLoopPreflight).toHaveBeenCalledWith(expect.objectContaining({
+        objective: 'fix tests',
+        model: undefined,
+      }));
+      expect(mocks.beginLoopQuota).not.toHaveBeenCalled();
+      expect(mocks.session.createGoal).not.toHaveBeenCalled();
+      expect(stderr.text()).toContain('Reason   No model is configured.');
+      expect(stderr.text()).toContain('Next     Run /provider or /model');
+      expect(process.exitCode).toBe(2);
+    });
+
     it('does not create a Loop when the monthly quota is exhausted', async () => {
       process.exitCode = undefined;
       mocks.parseHeadlessGoalCreate.mockReturnValue({
@@ -1106,6 +1163,31 @@ describe('runPrompt', () => {
       expect(mocks.session.createGoal).not.toHaveBeenCalled();
       expect(stderr.text()).toContain('Monthly Loop limit reached');
       expect(process.exitCode).toBe(3);
+    });
+
+    it('cancels a reserved Loop when goal creation fails', async () => {
+      process.exitCode = undefined;
+      mocks.parseHeadlessGoalCreate.mockReturnValue({
+        kind: 'loop',
+        objective: 'fix tests',
+        replace: false,
+        stopCondition: 'proof-pass',
+      });
+      mocks.session.createGoal.mockRejectedValueOnce(new Error('goal store unavailable'));
+
+      await expect(runPrompt(opts({ prompt: '/loop fix tests' }), '1.2.3-test', {
+        stdout: writer(),
+        stderr: writer(),
+      })).rejects.toThrow('goal store unavailable');
+
+      expect(mocks.completeLoopQuota).toHaveBeenCalledWith(
+        expect.objectContaining({ requestId: 'request123' }),
+        'ERROR',
+        0,
+        expect.any(Function),
+        'cancelled',
+      );
+      expect(mocks.registerTrackedTuiLoop).not.toHaveBeenCalled();
     });
 
     it('throws when no model is configured', async () => {

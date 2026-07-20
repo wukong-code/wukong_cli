@@ -1,6 +1,6 @@
 # Wukong Code 文档索引
 
-> 最后更新: 2026-07-18
+> 最后更新: 2026-07-20
 > 当前事实基线: `wukong_cli` 内部实现仓库，产品名称为 **Wukong Code**
 > 状态说明: 本目录区分 **当前已实现** 与 **商业化后续待实现**。
 
@@ -42,11 +42,14 @@
 - [0.0.14 Cross-Agent Resume 与 Loop UX 收尾](design/0.0.14-resume-loop-polish.md)
   定义跨 Agent 本地会话导入、Resume → Loop、TUI Gate/Footer 简化、真实项目检查发现、兼容边界和发布门槛。
 - [0.0.14 Release Notes](releases/0.0.14.md)
+- [0.0.15 Release Notes](releases/0.0.15.md)
   正式版本安装、升级、功能与商业边界。
+- [0.0.15 Loop Reliability 与 First Success](design/0.0.15-loop-reliability.md)
+  定义 durable Loop lifecycle、completion outbox、重启恢复、preflight、首次成功 UX、隐私指标与 0.1.0 商业决策门槛。
 - [跨 Agent Session Resume](design/cross-agent-resume.md)
   `/resume` 恢复 Wukong 会话；`/resume codex|claude|cursor` 显式发现对应 Agent 的本地会话，并通过内置 Skill 只读导入后在 Wukong 中继续。
 - [执行层 TODO](../TODO.md)
-  按 ROADMAP milestone 拆解的任务清单，记录当前重点（0.0.14 Cross-Agent Resume + Loop UX）、暂缓项和已完成基线。
+  按 ROADMAP milestone 拆解的任务清单，记录当前重点（0.0.15 Loop Reliability + First Success）、暂缓项和已完成基线。
 
 当前可用 top-level commands 以 `wukong --help` 为准，主要包括：
 

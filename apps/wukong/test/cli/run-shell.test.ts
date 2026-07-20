@@ -272,7 +272,7 @@ describe('runShell', () => {
       '/tmp/wukong-test-home',
       expect.objectContaining({ onFirstLaunch: expect.any(Function) }),
     );
-    expect(mocks.harnessTrack).toHaveBeenCalledWith('first_launch');
+    expect(mocks.harnessTrack).toHaveBeenCalledWith('first_run');
   });
 
   it('registers first launch before harness construction can create the device id', async () => {
@@ -319,7 +319,7 @@ describe('runShell', () => {
     expect(mocks.wukongHarnessConstructor).toHaveBeenCalledWith(
       expect.objectContaining({ homeDir: '/tmp/wukong-test-home' }),
     );
-    expect(mocks.harnessTrack).toHaveBeenCalledWith('first_launch');
+    expect(mocks.harnessTrack).toHaveBeenCalledWith('first_run');
   });
 
   it('binds startup_perf to the session captured before MCP metrics resolve', async () => {

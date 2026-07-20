@@ -1053,6 +1053,19 @@ describe('runUpdatePreflight', () => {
 });
 
 describe('spawnForSource native', () => {
+  it('pins the 0.0.15 installer when upgrading a 0.0.14 native binary', () => {
+    const command = spawnForSource('native', '0.0.15', 'darwin');
+
+    expect(command.cmd).toBe('sh');
+    expect(command.args).toEqual([
+      '-c',
+      'curl -fsSL https://wukong.today/install.sh | sh',
+    ]);
+    expect(command.env).toEqual(expect.objectContaining({
+      WUKONG_VERSION: 'v0.0.15',
+    }));
+  });
+
   it('builds a pinned native installer command for explicit upgrades', () => {
     const command = spawnForSource('native', '0.5.0', 'darwin');
 

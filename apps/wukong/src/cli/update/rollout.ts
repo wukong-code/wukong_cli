@@ -188,7 +188,7 @@ export async function appendRolloutDecisionLog(
 /**
  * Stable per-installation id used for bucketing when telemetry has already
  * minted one. Missing ids stay ephemeral here so update preflight never
- * creates the telemetry device_id before telemetry can emit first_launch.
+ * creates the telemetry device_id before telemetry can emit first_run.
  */
 export function resolveUpdateDeviceId(): string {
   return readWukongDeviceId(resolveWukongHome()) ?? randomUUID();

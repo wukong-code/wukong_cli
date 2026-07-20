@@ -7,6 +7,7 @@ interface GoalCompletionStats {
   readonly turnsUsed: number;
   readonly tokensUsed: number;
   readonly wallClockMs: number;
+  readonly loopResult?: GoalSnapshot['loopResult'];
 }
 
 /**
@@ -19,6 +20,7 @@ export function buildGoalCompletionMessage(goal: GoalSnapshot): string {
 }
 
 export function buildGoalCompletionMessageFromStats(goal: GoalCompletionStats): string {
+  if (goal.loopResult !== undefined) return buildLoopResultCard(goal.loopResult);
   const loop = parseLoopTerminalReason(goal.terminalReason);
   const head = loop?.status === 'PASS'
     ? `✓ Loop PASS — ${loop.summary}`
@@ -26,6 +28,22 @@ export function buildGoalCompletionMessageFromStats(goal: GoalCompletionStats): 
   const turns = `${goal.turnsUsed} turn${goal.turnsUsed === 1 ? '' : 's'}`;
   const stats = `Worked ${turns} over ${formatElapsed(goal.wallClockMs)}, using ${formatTokens(goal.tokensUsed)} tokens.`;
   return `${head}\n${stats}`;
+}
+
+export function buildLoopResultCard(result: NonNullable<GoalSnapshot['loopResult']>): string {
+  const blocker = result.blockers[0];
+  const next = blocker?.nextAction
+    ?? (result.status === 'PASS'
+      ? 'Ready to ship.'
+      : result.status === 'ERROR'
+        ? 'Run wukong doctor, then retry the Loop.'
+        : 'Fix the blocker, then continue the Loop.');
+  return [
+    `Gate        ${result.status}`,
+    `Iterations  ${String(result.iterations)}`,
+    `Blocker     ${blocker?.summary ?? (result.status === 'PASS' ? 'None' : result.summary)}`,
+    `Next        ${next}`,
+  ].join('\n');
 }
 
 function formatElapsed(ms: number): string {

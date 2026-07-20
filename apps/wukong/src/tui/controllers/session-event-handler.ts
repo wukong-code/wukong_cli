@@ -44,7 +44,7 @@ import {
   OAUTH_LOGIN_REQUIRED_CODE,
   OAUTH_LOGIN_REQUIRED_STARTUP_NOTICE,
 } from '../constant/wukong-tui';
-import { buildGoalCompletionMessage } from '../utils/goal-completion';
+import { buildGoalCompletionMessage, buildLoopResultCard } from '../utils/goal-completion';
 import {
   argsRecord,
   formatErrorPayload,
@@ -147,6 +147,8 @@ export class SessionEventHandler {
   private queuedGoalPromotionPending = false;
   private queuedGoalPromotionInFlight = false;
   private queuedGoalPromotionTimer: ReturnType<typeof setTimeout> | undefined;
+  private readonly loopFirstIterationTracked = new Set<string>();
+  private readonly loopTerminalTracked = new Set<string>();
 
   resetRuntimeState(): void {
     this.backgroundTasks.clear();
@@ -161,6 +163,8 @@ export class SessionEventHandler {
     this.pendingModelBlockedFallback = undefined;
     this.queuedGoalPromotionPending = false;
     this.queuedGoalPromotionInFlight = false;
+    this.loopFirstIterationTracked.clear();
+    this.loopTerminalTracked.clear();
     this.clearQueuedGoalPromotionTimer();
     this.stopAllMcpServerStatusSpinners();
   }
@@ -654,6 +658,14 @@ export class SessionEventHandler {
 
   private handleGoalUpdated(event: GoalUpdatedEvent): void {
     this.host.setAppState({ goal: event.snapshot });
+    if (
+      event.snapshot?.stopCondition === 'proof-pass'
+      && event.snapshot.iteration >= 1
+      && !this.loopFirstIterationTracked.has(event.snapshot.goalId)
+    ) {
+      this.loopFirstIterationTracked.add(event.snapshot.goalId);
+      this.host.track('loop_first_iteration');
+    }
     if (event.snapshot === null && this.goalCompletionAwaitingClear) {
       this.goalCompletionAwaitingClear = false;
       this.queuedGoalPromotionPending = true;
@@ -677,6 +689,7 @@ export class SessionEventHandler {
           event.snapshot.loopResult.status,
           event.snapshot.loopResult.iterations,
         );
+        this.trackLoopTerminal(event.snapshot.goalId, event.snapshot.loopResult);
       }
       this.pendingModelBlockedFallback = undefined;
       this.goalCompletionAwaitingClear = true;
@@ -703,10 +716,11 @@ export class SessionEventHandler {
           event.snapshot.loopResult.status,
           event.snapshot.loopResult.iterations,
         );
+        this.trackLoopTerminal(event.snapshot.goalId, event.snapshot.loopResult);
       }
       const reason = typeof change.reason === 'string' ? change.reason : undefined;
       this.host.state.chromeState.recordGoal('blocked');
-      this.appendBlockedTranscriptEntry(event.snapshot?.iteration ?? 0, reason);
+      this.appendBlockedTranscriptEntry(event.snapshot, reason);
       void this.notifyQueuedGoalWaitingOnBlocked();
       if (change.actor === 'model' || change.reason === undefined) {
         this.pendingModelBlockedFallback = this.currentTurnHasAssistantText
@@ -723,6 +737,19 @@ export class SessionEventHandler {
       state.transcriptContainer.addChild(marker);
       state.ui.requestRender();
     }
+  }
+
+  private trackLoopTerminal(
+    goalId: string,
+    result: NonNullable<GoalUpdatedEvent['snapshot']>['loopResult'],
+  ): void {
+    if (result === undefined || this.loopTerminalTracked.has(goalId)) return;
+    this.loopTerminalTracked.add(goalId);
+    this.host.track('loop_terminal', {
+      outcome: result.status,
+      iterations: result.iterations,
+      reason_code: result.reasonCode,
+    });
   }
 
   private renderPendingModelBlockedFallback(): void {
@@ -899,7 +926,16 @@ export class SessionEventHandler {
     });
   }
 
-  private appendBlockedTranscriptEntry(iteration: number, reason?: string): void {
+  private appendBlockedTranscriptEntry(snapshot: GoalUpdatedEvent['snapshot'], reason?: string): void {
+    if (snapshot?.loopResult !== undefined) {
+      this.host.appendTranscriptEntry({
+        id: nextTranscriptId(),
+        kind: 'status',
+        renderMode: 'plain',
+        content: buildLoopResultCard(snapshot.loopResult),
+      });
+      return;
+    }
     const loop = parseLoopTerminalReason(reason);
     const reasonText = loop?.summary ?? reason;
     const reasonPart = reasonText !== undefined && reasonText.length > 0 ? ` — ${reasonText}` : '';
@@ -908,7 +944,7 @@ export class SessionEventHandler {
       id: nextTranscriptId(),
       kind: 'status',
       renderMode: 'plain',
-      content: `⛔ iter ${iteration} ${headline}${reasonPart}`,
+      content: `⛔ iter ${snapshot?.iteration ?? 0} ${headline}${reasonPart}`,
     });
   }
 
