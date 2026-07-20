@@ -287,7 +287,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 
 ## Milestone 2.75: 0.0.15 Loop Reliability + First Success
 
-状态：开发中（2026-07-20 核心实现完成，正在执行完整 release gate 与升级兼容验证）。完整 contract 见 [0.0.15 Loop Reliability 与 First Success](docs/design/0.0.15-loop-reliability.md)。
+状态：已于 2026-07-20 发布；六平台 assets、真实升级、fresh installer、manifest、公告、官网和 D1 lifecycle migration 均已验证。完整 contract 见 [0.0.15 Loop Reliability 与 First Success](docs/design/0.0.15-loop-reliability.md)。
 
 目标：让每个真正开始的 Loop 都能可靠进入终态；CLI 崩溃、断网、重启和用户取消不再让服务端 run 永久停在 `started`。同时把首次入口、preflight 和最终结果收敛到普通用户可理解的最短路径。
 

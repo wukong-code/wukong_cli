@@ -12,7 +12,7 @@ Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal →
 
 `0.0.14` 增加跨 Agent Resume、明确的 Resume → Loop 衔接、更清晰的 TUI Gate 结论和更多真实项目检查发现。本版本继续免费/BYOK，完整范围见 [0.0.14 设计](docs/design/0.0.14-resume-loop-polish.md)。
 
-`0.0.15` 候选版本把这条 Loop 做成可恢复闭环：持久化 run record、completion outbox、重启后的 active Loop 恢复、额度预留前 preflight、精简首次入口，以及 Dashboard 真实生命周期状态。本版本继续免费/BYOK，尚未替换当前公开下载；完整范围见 [0.0.15 设计](docs/design/0.0.15-loop-reliability.md)。
+`0.0.15` 把这条 Loop 做成可恢复闭环：持久化 run record、completion outbox、重启后的 active Loop 恢复、额度预留前 preflight、精简首次入口，以及 Dashboard 真实生命周期状态。本版本继续免费/BYOK，现已作为六平台公开版本发布；完整范围见 [0.0.15 设计](docs/design/0.0.15-loop-reliability.md)。
 
 `0.0.12` 建立了 Loop-first runtime。`verify`、`scan`、`proof` 仍保留为高级诊断命令，但只是 Loop 的内部层，不再各自形成产品或额度。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md) 和 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。
 

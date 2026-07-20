@@ -12,7 +12,7 @@ Version `0.0.13` adds structured multi-finding reviews, project-specific rules i
 
 Version `0.0.14` adds Cross-Agent Resume, an explicit Resume → Loop handoff, clearer TUI Gate results, and broader real-project check discovery. It remains free and BYOK; see the [0.0.14 design](docs/design/0.0.14-resume-loop-polish.md).
 
-The `0.0.15` release candidate makes that Loop reliable across restarts and network failures:
+Version `0.0.15` makes that Loop reliable across restarts and network failures:
 durable run records, a retryable completion outbox, active-Loop recovery,
 preflight before quota reservation, a shorter first-run surface, and real
 lifecycle states in the Dashboard. It remains free and BYOK; see the

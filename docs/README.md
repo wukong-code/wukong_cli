@@ -49,7 +49,7 @@
 - [跨 Agent Session Resume](design/cross-agent-resume.md)
   `/resume` 恢复 Wukong 会话；`/resume codex|claude|cursor` 显式发现对应 Agent 的本地会话，并通过内置 Skill 只读导入后在 Wukong 中继续。
 - [执行层 TODO](../TODO.md)
-  按 ROADMAP milestone 拆解的任务清单，记录当前重点（0.0.15 Loop Reliability + First Success）、暂缓项和已完成基线。
+  按 ROADMAP milestone 拆解的任务清单，记录最新完成版本（0.0.15 Loop Reliability + First Success）、暂缓项和已完成基线。
 
 当前可用 top-level commands 以 `wukong --help` 为准，主要包括：
 

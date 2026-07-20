@@ -4,7 +4,7 @@
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
-## 📋 当前重点: 0.0.15 — Loop Reliability + First Success
+## ✅ 0.0.15 — Loop Reliability + First Success
 
 > 方案: [docs/design/0.0.15-loop-reliability.md](docs/design/0.0.15-loop-reliability.md)。本版继续免费/BYOK，先解决 Loop 可靠结束、重启恢复和首次成功，不做支付或 GitHub PR。
 
@@ -45,9 +45,9 @@
 - [x] Node、Python、Rust、Go、无 checks、缺失工具和 Cross-Agent Resume → editable Loop fixture E2E（2026-07-20）
 - [x] 全量 test/typecheck/lint/bundle 与本机 darwin-arm64 native smoke（2026-07-20；全量 9214 项通过、10 项资源竞争超时随后按失败文件单 worker 80/80 通过）
 - [x] 0.0.14 → 0.0.15 native upgrade pinning contract 与显式 0.0.15 fresh installer E2E（2026-07-20）
-- [ ] 发布时以真实六平台 assets 验证 0.0.14 → 0.0.15 下载升级；当前不可用 mock 冒充
+- [x] 以真实六平台 assets 验证 0.0.14 → 0.0.15 自动升级与 0.0.15 fresh installer（2026-07-20）
 - [x] 三仓 README、用户指南、CHANGELOG、官网、Today 和禁用公告草稿同步（2026-07-20）
-- [ ] 正式发布时切换 manifest、启用公告并验证 live download
+- [x] 切换正式 manifest、启用仅面向 0.0.14 的公告并验证 live download / health（2026-07-20）
 
 ### 明确不做
 
