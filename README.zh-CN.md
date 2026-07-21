@@ -16,13 +16,15 @@ Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal →
 
 `0.0.16` 为每个 Loop 冻结用户目标和显式完成标准，在复审中保留上轮 blocker，识别重复无进展循环，相同 blocker 持续时启动一次只读 strategist，并在显式 reviewer model 不可用时安全回退。本版也重构 Permission Mode：Auto 成为不提问但受 workspace/risk/capability 约束的自主模式，YOLO 明确为危险 approval bypass，且不能为 reviewer/strategist 等只读分身扩权。版本同时包含有界 Resume 建议、Role 任务契约、紧凑任务状态和本地 session 内容搜索，不增加支付或 managed model credits。完整范围见 [0.0.16 设计](docs/design/0.0.16-loop-convergence.md)。
 
+`0.0.17` 是下一个计划补丁版：删除误导的 Role/Report 别名，保留可发现的 `/transform list|status|off`，阻止未知或已禁用 slash command 进入模型，并严格校验 permission、Loop、export、Today 与 roles 参数。版本继续免费/BYOK；发布门槛通过前，公开 package 和下载版本仍保持 `0.0.16`。完整范围见 [0.0.17 设计](docs/design/0.0.17-command-surface-reliability.md)。
+
 `0.1.0` 已开始规划一个收窄的商业实验：完整的本地 BYOK Loop 继续免费，Pro 计划只新增把脱敏 Gate summary 和 commit status 发布到 GitHub Pull Request 的能力。真实 Loop 完成和工程门槛达到后才允许 invite-only RC；真实付款和重复发布门槛未达到前，公开 Checkout 继续关闭。完整范围见 [0.1.0 设计](docs/design/0.1.0-pro-pr-gate.md)。
 
 `0.0.12` 建立了 Loop-first runtime。`verify`、`scan`、`proof` 仍保留为高级诊断命令，但只是 Loop 的内部层，不再各自形成产品或额度。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md) 和 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。
 
 Loop 只返回一个持久化结果：`PASS`（退出码 `0`）、`NEEDS_WORK`（退出码 `1`）或 `ERROR`（退出码 `2`）。未登录用户有 1 次、最多 2 轮的本地试用；登录后的 Free 用户每月 10 个 Loop session，每次最多 5 轮，内部检查不重复计数。额度服务暂时不可用时，CLI 会警告并按本地 5 轮安全上限继续。旧 `verify-pass`、`scan-clean`、`judge-pass` Goal records 和 flags 仍可读取，并迁移到统一 proof gate；详见 [兼容矩阵](docs/design/0.0.12-compatibility.md)。
 
-Role Profiles 基础能力已经实现并处于实验阶段。在 `~/.wukong/config.toml` 启用 `experimental.role_profiles` 后，可运行 `wukong roles list`，用 `wukong --role security` 启动，或在 TUI 中通过 `/transform security` 与 `/transform off` 切换和恢复。
+Role Profiles 基础能力已经实现并处于实验阶段。在 `~/.wukong/config.toml` 启用 `experimental.role_profiles` 后，可用 `wukong roles list/show/init` 管理角色，并在 TUI 中通过 `/transform security` 与 `/transform off` 切换和恢复。
 
 TUI 内的 `/resume` 用于恢复 Wukong 会话；需要继续其他 Agent 的本地会话时，使用 `/resume codex`、`/resume claude` 或 `/resume cursor`。外部历史只作为只读上下文导入 Wukong，不重放旧工具调用，并在继续前重新检查当前 workspace。
 
@@ -38,9 +40,9 @@ wukong acp                     # 以 Agent Client Protocol server 运行
 wukong server                  # 启动本地 REST/WebSocket server
 wukong web                     # 打开本地 web UI
 wukong loop "完成当前改动"      # 迭代直到独立交付 gate 通过
-wukong loop "修复测试" --model fast --role tester
+wukong loop "修复测试" --model fast --review-model slow
 wukong loop "修复测试" --review-model reviewer
-wukong loop "修复测试" --max-iterations 5 --every 30s
+wukong loop "修复测试" --max-iterations 5 --every 1m
 wukong review init             # 创建 .wukong/review-policy.md
 wukong review feedback <finding-id> accept
 wukong review stats            # 查看本地 feedback 数量

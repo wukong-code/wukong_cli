@@ -68,7 +68,7 @@ wukong guard --stats
 wukong guard -- rm -rf ./tmp
 ```
 
-TUI 内已实现 `/verify`、`/scan`、`/guard`、`/report`、`/goal`（含队列管理）。
+TUI 内已实现 `/verify`、`/scan`、`/guard`、`/goal`（含队列管理）。
 
 ### P0.5 已实现命令（proof → judge → goal gate → loop）
 
@@ -101,7 +101,7 @@ wukong schedule every hour "check feedback channel"    # Milestone 3+
 4. JSON 输出适合 agent/CI，Markdown report 适合人读。
 5. Guard 必须明确 best-effort，不做不可绕过承诺。
 6. `/loop` 的完成由统一 `proof-pass` gate 判断：deterministic proof 通过后，必须再经 fresh-context 只读 reviewer；写代码的 agent 不能自评通过。旧 `verify-pass`、`scan-clean`、`judge-pass` flag 和 Goal record 会兼容归一化。云端 `/schedule` 复用同一原则。
-7. `/loop` 有 max-iterations 上限和单轮超时，人可随时 stop；核心语义是迭代直到验证通过，`--every` 只是可选轮间节流（复用 cron scheduler）；定时巡检本机归 cron 工具，跨机器持续性归 `/schedule`（hosted）。
+7. `/loop` 有 max-iterations 硬上限和单轮超时，人可随时 stop；核心语义是迭代直到验证通过，`--every` 是 Goal-owned、可取消的轮间节流；定时巡检本机归 cron 工具，跨机器持续性归 `/schedule`（hosted）。
 
 ## 5. 输出格式
 

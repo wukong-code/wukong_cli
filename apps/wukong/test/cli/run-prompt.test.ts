@@ -280,6 +280,7 @@ describe('runPrompt', () => {
     );
     mocks.harnessCreatesDeviceIdOnConstruction = false;
     mocks.parseHeadlessGoalCreate.mockReturnValue(undefined);
+    mocks.session.createGoal.mockResolvedValue({ goalId: 'goal-default' });
     mocks.goalSummaryJson.mockImplementation((snapshot: any) => snapshot);
     mocks.formatGoalSummaryText.mockImplementation(
       (snapshot: any) => `Goal [${snapshot?.status ?? 'none'}]`,
@@ -1034,6 +1035,7 @@ describe('runPrompt', () => {
         goalId: 'goal-123',
         status: 'complete',
       });
+      mocks.session.createGoal.mockResolvedValueOnce({ goalId: 'goal-123' });
       mocks.session.prompt.mockImplementationOnce(async () => {
         for (const handler of mocks.eventHandlers) {
           handler(mocks.mainEvent({ type: 'turn.started', turnId: 10, origin: { kind: 'user' } }));
@@ -1076,6 +1078,53 @@ describe('runPrompt', () => {
       expect(process.exitCode).toBeUndefined();
     });
 
+    it('waits for a later Goal turn instead of finishing after the first turn', async () => {
+      process.exitCode = undefined;
+      mocks.parseHeadlessGoalCreate.mockReturnValue({
+        kind: 'goal',
+        objective: 'finish across turns',
+        replace: false,
+      });
+      mocks.session.createGoal.mockResolvedValueOnce({ goalId: 'goal-multi' });
+      let releaseSecondTurn!: () => void;
+      const continueDrive = new Promise<void>((resolve) => {
+        releaseSecondTurn = resolve;
+      });
+      mocks.session.prompt.mockImplementationOnce(async () => {
+        for (const handler of mocks.eventHandlers) {
+          handler(mocks.mainEvent({ type: 'turn.started', turnId: 10, origin: { kind: 'user' } }));
+          handler(mocks.mainEvent({ type: 'assistant.delta', turnId: 10, delta: 'first' }));
+          handler(mocks.mainEvent({ type: 'turn.ended', turnId: 10, reason: 'completed' }));
+        }
+        await continueDrive;
+        for (const handler of mocks.eventHandlers) {
+          handler(mocks.mainEvent({ type: 'turn.started', turnId: 11, origin: { kind: 'system_trigger' } }));
+          handler(mocks.mainEvent({ type: 'assistant.delta', turnId: 11, delta: 'second' }));
+          handler(mocks.mainEvent({
+            type: 'goal.updated',
+            change: { kind: 'completion' },
+            snapshot: { goalId: 'goal-multi', status: 'complete' },
+          }));
+          handler(mocks.mainEvent({ type: 'turn.ended', turnId: 11, reason: 'completed' }));
+        }
+      });
+
+      let settled = false;
+      const running = runPrompt(opts({ prompt: '/goal finish across turns' }), '1.2.3-test', {
+        stdout: writer(),
+        stderr: writer(),
+      }).finally(() => {
+        settled = true;
+      });
+      await vi.waitFor(() => expect(mocks.session.prompt).toHaveBeenCalledOnce());
+      await Promise.resolve();
+      expect(settled).toBe(false);
+
+      releaseSecondTurn();
+      await running;
+      expect(settled).toBe(true);
+    });
+
     it('reserves Loop quota and caps Free sessions at five iterations', async () => {
       process.exitCode = undefined;
       mocks.session.createGoal.mockResolvedValueOnce({ goalId: 'goal-loop-1' });
@@ -1093,6 +1142,22 @@ describe('runPrompt', () => {
           terminalReason: 'loop:NEEDS_WORK:max_iterations:Tests still fail.',
         },
       });
+      mocks.session.prompt.mockImplementationOnce(async () => {
+        for (const handler of mocks.eventHandlers) {
+          handler(mocks.mainEvent({ type: 'turn.started', turnId: 10, origin: { kind: 'user' } }));
+          handler(mocks.mainEvent({ type: 'turn.ended', turnId: 10, reason: 'completed' }));
+          handler(mocks.mainEvent({
+            type: 'goal.updated',
+            change: { kind: 'lifecycle', status: 'blocked' },
+            snapshot: {
+              goalId: 'goal-loop-1',
+              status: 'blocked',
+              iteration: 5,
+              terminalReason: 'loop:NEEDS_WORK:max_iterations:Tests still fail.',
+            },
+          }));
+        }
+      });
       const stderr = writer();
 
       await runPrompt(opts({ prompt: '/loop fix tests' }), '1.2.3-test', {
@@ -1106,6 +1171,42 @@ describe('runPrompt', () => {
       }));
       expect(mocks.beginLoopQuota).toHaveBeenCalledTimes(1);
       expect(mocks.completeLoopQuota).toHaveBeenCalledTimes(1);
+    });
+
+    it('records runtime failures as Loop ERROR instead of completed NEEDS_WORK', async () => {
+      mocks.parseHeadlessGoalCreate.mockReturnValue({
+        kind: 'loop',
+        objective: 'fix tests',
+        replace: false,
+        stopCondition: 'proof-pass',
+        maxIterations: 3,
+      });
+      mocks.session.createGoal.mockResolvedValueOnce({ goalId: 'goal-runtime-error' });
+      mocks.session.getGoal.mockResolvedValueOnce({
+        goal: { goalId: 'goal-runtime-error', status: 'paused', iteration: 1 },
+      });
+      mocks.session.prompt.mockImplementationOnce(async () => {
+        for (const handler of mocks.eventHandlers) {
+          handler(mocks.mainEvent({ type: 'turn.started', turnId: 10, origin: { kind: 'user' } }));
+          handler(mocks.mainEvent({
+            type: 'turn.ended',
+            turnId: 10,
+            reason: 'failed',
+            error: { message: 'provider unavailable' },
+          }));
+        }
+      });
+
+      await expect(runPrompt(opts({ prompt: '/loop fix tests' }), '1.2.3-test', {
+        stdout: writer(),
+        stderr: writer(),
+      })).rejects.toThrow('provider unavailable');
+
+      expect(mocks.completeLoopQuota).toHaveBeenCalledWith(
+        expect.objectContaining({ requestId: 'request123' }),
+        'ERROR',
+        1,
+      );
     });
 
     it('routes a missing Loop model through preflight before quota reservation', async () => {

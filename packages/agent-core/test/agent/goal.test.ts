@@ -471,6 +471,20 @@ describe('GoalMode records', () => {
     },
   );
 
+  it.each([0, -1, 0.5, 3.9, Number.POSITIVE_INFINITY])(
+    'rejects invalid maxIterations %s at the core boundary',
+    async (maxIterations) => {
+      const { goals } = makeGoalMode();
+
+      await expect(goals.createGoal({
+        objective: 'bounded loop',
+        stopCondition: 'proof-pass',
+        maxIterations,
+      })).rejects.toThrow('maxIterations must be a positive safe integer');
+      expect(goals.getGoal().goal).toBeNull();
+    },
+  );
+
   it('records and restores the durable Loop result', async () => {
     const { goals, records } = makeGoalMode();
 

@@ -24,7 +24,7 @@ wukong migrate
 wukong upgrade
 ```
 
-`verify`, `scan`, `guard`, matching TUI slash commands (`/verify`, `/scan`, `/guard`, `/report`, `/goal`), and the `wukong_verify` builtin agent tool are implemented as the local P0 commercial refactor loop. The next milestone (P0.5) adds `/loop` (local interval), `/proof`, and `/judge`; `/schedule` (cloud routine) follows with hosted execution. `sync`, billing, team rules, and deep review remain planned follow-up work.
+`verify`, `scan`, `guard`, matching TUI slash commands (`/verify`, `/scan`, `/guard`, `/goal`), and the `wukong_verify` builtin agent tool are implemented as the local P0 commercial refactor loop. The next milestone (P0.5) adds `/loop` (local interval), `/proof`, and `/judge`; `/schedule` (cloud routine) follows with hosted execution. `sync`, billing, team rules, and deep review remain planned follow-up work.
 
 ## Development
 

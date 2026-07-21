@@ -5,6 +5,7 @@ import { basename, dirname, join, relative, resolve } from 'pathe';
 import type { AutocompleteItem } from '@earendil-works/pi-tui';
 
 import { completeLeadingArg, type ArgCompletionSpec } from './complete-args';
+import { isExperimentalFlagEnabled } from './experimental-flags';
 import type { WukongSlashCommand, SlashCommandAvailability } from './types';
 
 /** Subcommands offered when autocompleting `/goal <…>`. */
@@ -24,6 +25,49 @@ const GOAL_NEXT_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
 const SWARM_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
   { value: 'on', description: 'Turn swarm mode on' },
   { value: 'off', description: 'Turn swarm mode off' },
+];
+
+const LOOP_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
+  { value: 'status', description: 'Show the active Loop' },
+  { value: 'pause', description: 'Pause the active Loop' },
+  { value: 'resume', description: 'Resume a paused Loop' },
+  { value: 'stop', description: 'Stop and remove the active Loop' },
+  { value: '--help', description: 'Show Loop usage' },
+];
+
+const PLAN_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
+  { value: 'on', description: 'Turn plan mode on' },
+  { value: 'off', description: 'Turn plan mode off' },
+  { value: 'clear', description: 'Clear the current plan' },
+];
+
+const PERMISSION_TOGGLE_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
+  { value: 'on', description: 'Turn this permission mode on' },
+  { value: 'off', description: 'Turn this permission mode off' },
+];
+
+const PLUGINS_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
+  { value: 'list', description: 'List installed plugins' },
+  { value: 'marketplace', description: 'Browse a plugin marketplace' },
+  { value: 'install', description: 'Install a plugin from a path or ZIP URL' },
+  { value: 'info', description: 'Show plugin details' },
+  { value: 'enable', description: 'Enable an installed plugin' },
+  { value: 'disable', description: 'Disable an installed plugin' },
+  { value: 'remove', description: 'Remove an installed plugin' },
+  { value: 'mcp', description: 'Enable or disable a plugin MCP server' },
+  { value: 'reload', description: 'Reload installed plugins' },
+];
+
+const TRANSFORM_BUILTIN_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
+  { value: 'general', description: 'General-purpose role profile' },
+  { value: 'reviewer', description: 'Code review role profile' },
+  { value: 'planner', description: 'Planning role profile' },
+  { value: 'strategist', description: 'Strategy role profile' },
+  { value: 'security', description: 'Security review role profile' },
+  { value: 'tester', description: 'Testing role profile' },
+  { value: 'off', description: 'Disable the active transform' },
+  { value: 'list', description: 'List built-in and custom roles' },
+  { value: 'status', description: 'Show the active transform' },
 ];
 
 const ADD_DIR_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
@@ -59,6 +103,35 @@ export function goalArgumentCompletions(argumentPrefix: string): AutocompleteIte
 /** Argument autocompletion for the `/swarm` command (subcommands). */
 export function swarmArgumentCompletions(argumentPrefix: string): AutocompleteItem[] | null {
   return completeLeadingArg(SWARM_ARG_COMPLETIONS, argumentPrefix);
+}
+
+export function loopArgumentCompletions(argumentPrefix: string): AutocompleteItem[] | null {
+  return completeLeadingArg(LOOP_ARG_COMPLETIONS, argumentPrefix);
+}
+
+export function planArgumentCompletions(argumentPrefix: string): AutocompleteItem[] | null {
+  return completeLeadingArg(PLAN_ARG_COMPLETIONS, argumentPrefix);
+}
+
+export function permissionToggleArgumentCompletions(argumentPrefix: string): AutocompleteItem[] | null {
+  return completeLeadingArg(PERMISSION_TOGGLE_ARG_COMPLETIONS, argumentPrefix);
+}
+
+export function pluginsArgumentCompletions(argumentPrefix: string): AutocompleteItem[] | null {
+  return completeLeadingArg(PLUGINS_ARG_COMPLETIONS, argumentPrefix);
+}
+
+export function transformArgumentCompletions(
+  argumentPrefix: string,
+  roles: readonly { readonly selection: string; readonly description: string }[] = [],
+): AutocompleteItem[] | null {
+  const specs = new Map(
+    TRANSFORM_BUILTIN_ARG_COMPLETIONS.map((item) => [item.value, item] as const),
+  );
+  for (const role of roles) {
+    specs.set(role.selection, { value: role.selection, description: role.description });
+  }
+  return completeLeadingArg([...specs.values()], argumentPrefix);
 }
 
 /** Argument autocompletion for the `/add-dir` command. */
@@ -189,7 +262,14 @@ export const BUILTIN_SLASH_COMMANDS = [
     aliases: [],
     description: 'Start a local iteration loop with a verification gate',
     priority: 70,
-    availability: 'idle-only',
+    argumentHint: '[status|pause|resume|stop] | [options] -- <objective>',
+    completeArgs: loopArgumentCompletions,
+    availability: (args) => {
+      const control = args.trim().toLowerCase();
+      return control === 'status' || control === 'pause' || control === 'stop'
+        ? 'always'
+        : 'idle-only';
+    },
   },
   {
     name: 'guard',
@@ -200,17 +280,12 @@ export const BUILTIN_SLASH_COMMANDS = [
     availability: 'always',
   },
   {
-    name: 'report',
-    aliases: [],
-    description: 'Open the most recent verification or scan report',
-    priority: 70,
-    availability: 'always',
-  },
-  {
     name: 'yolo',
-    aliases: ['yes'],
+    aliases: [],
     description: 'Toggle auto-approve mode',
     priority: 100,
+    argumentHint: '[on|off]',
+    completeArgs: permissionToggleArgumentCompletions,
     availability: 'always',
   },
   {
@@ -218,6 +293,8 @@ export const BUILTIN_SLASH_COMMANDS = [
     aliases: [],
     description: 'Toggle auto permission mode',
     priority: 100,
+    argumentHint: '[on|off]',
+    completeArgs: permissionToggleArgumentCompletions,
     availability: 'always',
   },
   {
@@ -232,13 +309,15 @@ export const BUILTIN_SLASH_COMMANDS = [
     aliases: ['config'],
     description: 'Open TUI settings',
     priority: 100,
-    availability: 'always',
+    availability: 'idle-only',
   },
   {
     name: 'plan',
     aliases: [],
     description: 'Toggle plan mode',
     priority: 100,
+    argumentHint: '[on|off|clear]',
+    completeArgs: planArgumentCompletions,
     availability: (args) => (args.trim().toLowerCase() === 'clear' ? 'idle-only' : 'always'),
   },
   {
@@ -255,21 +334,19 @@ export const BUILTIN_SLASH_COMMANDS = [
     aliases: [],
     description: 'Switch LLM model',
     priority: 100,
+    argumentHint: '[alias]',
     availability: 'always',
   },
   {
     name: 'transform',
-    aliases: ['role'],
+    aliases: [],
     description: 'Transform the agent with a role profile',
     priority: 80,
     argumentHint: '<role|off|list>',
     availability: 'idle-only',
     experimentalFlag: 'role_profiles',
-    completeArgs: (prefix) => {
-      const values = ['general', 'reviewer', 'security', 'tester', 'off', 'list', 'status'];
-      const matches = values.filter((value) => value.startsWith(prefix.trim().toLowerCase()));
-      return matches.map((value) => ({ value, label: value }));
-    },
+    visibleWhenDisabled: true,
+    completeArgs: transformArgumentCompletions,
   },
   {
     name: 'provider',
@@ -283,6 +360,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     aliases: [],
     description: 'Ask a forked side agent a question',
     priority: 90,
+    argumentHint: '<question>',
     availability: 'always',
   },
   {
@@ -346,6 +424,8 @@ export const BUILTIN_SLASH_COMMANDS = [
     aliases: [],
     description: 'Manage plugins',
     priority: 60,
+    argumentHint: '[list|marketplace|install|info|enable|disable|remove|mcp|reload]',
+    completeArgs: pluginsArgumentCompletions,
     availability: 'always',
   },
   {
@@ -456,6 +536,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     aliases: [],
     description: 'Withdraw the last prompt from the transcript',
     priority: 80,
+    argumentHint: '[count]',
     availability: 'idle-only',
   },
   {
@@ -486,13 +567,13 @@ export const BUILTIN_SLASH_COMMANDS = [
   },
   {
     name: 'export-md',
-    aliases: ['export'],
+    aliases: [],
     description: 'Export current session as a Markdown file',
     priority: 40,
   },
   {
     name: 'export-debug-zip',
-    aliases: [],
+    aliases: ['export'],
     description: 'Export current session as a debug ZIP archive',
     priority: 40,
   },
@@ -534,6 +615,11 @@ export function resolveSlashCommandAvailability(
 ): SlashCommandAvailability {
   const availability = command.availability ?? 'idle-only';
   return typeof availability === 'function' ? availability(args) : availability;
+}
+
+export function isSlashCommandVisible(command: WukongSlashCommand): boolean {
+  return command.hidden !== true &&
+    (isExperimentalFlagEnabled(command.experimentalFlag) || command.visibleWhenDisabled === true);
 }
 
 export function sortSlashCommands(commands: readonly WukongSlashCommand[]): WukongSlashCommand[] {

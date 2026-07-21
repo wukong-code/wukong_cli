@@ -61,6 +61,7 @@ type GoalCommandHost = Pick<
 >;
 
 export interface GoalStartOptions {
+  readonly commandName?: 'goal' | 'loop';
   readonly prepareCreate?: () => Promise<{ readonly maxIterations?: number } | false>;
   readonly afterCreate?: (snapshot: GoalSnapshot) => void | Promise<void>;
   readonly onCreateError?: () => void | Promise<void>;
@@ -383,7 +384,7 @@ function showGoalStartPermissionPrompt(
   rawArgs: string,
   options: GoalStartOptions,
 ): void {
-  const commandText = `/goal ${rawArgs.trim()}`;
+  const commandText = `/${options.commandName ?? 'goal'} ${rawArgs.trim()}`;
   const cancelStart = (): void => {
     host.restoreInputText(commandText);
     host.showStatus('Goal not started.');
@@ -410,10 +411,22 @@ async function startGoalWithPermission(
   choice: GoalStartPermissionChoice,
   options: GoalStartOptions,
 ): Promise<void> {
+  const previousPermission = host.state.appState.permissionMode;
+  let permissionChanged = false;
   if (choice !== host.state.appState.permissionMode && (choice === 'auto' || choice === 'yolo')) {
     if (!(await setPermissionForGoal(host, choice))) return;
+    permissionChanged = true;
   }
-  await startGoal(host, parsed, options);
+  let started = false;
+  try {
+    started = await startGoal(host, parsed, options);
+  } catch (error) {
+    host.showError(`Failed to start goal: ${formatErrorMessage(error)}`);
+  } finally {
+    if (permissionChanged && !started) {
+      await setPermissionForGoal(host, previousPermission);
+    }
+  }
 }
 
 async function setPermissionForGoal(host: GoalCommandHost, mode: PermissionMode): Promise<boolean> {
@@ -513,7 +526,7 @@ async function cancelGoal(host: SlashCommandHost): Promise<void> {
     const active = (await session.getGoal()).goal;
     await session.cancelGoal();
     if (active !== null) {
-      void completeTrackedTuiLoop(active.goalId, 'ERROR', active.iteration, 'cancelled');
+      await completeTrackedTuiLoop(active.goalId, 'ERROR', active.iteration, 'cancelled');
     }
     if (isStreaming(host)) await session.cancel();
   } catch (error) {
@@ -541,6 +554,51 @@ async function showGoalStatus(host: SlashCommandHost): Promise<void> {
   host.state.ui.requestRender();
 }
 
+async function getLoopGoal(host: SlashCommandHost): Promise<GoalSnapshot | null> {
+  const goal = (await host.requireSession().getGoal()).goal;
+  return goal?.stopCondition === undefined ? null : goal;
+}
+
+async function showLoopStatus(host: SlashCommandHost): Promise<void> {
+  const goal = await getLoopGoal(host);
+  host.track('loop_status', { status: goal?.status ?? 'none' });
+  if (goal === null) {
+    host.showStatus('No Loop is active. Start one with `/loop <objective>`.');
+    return;
+  }
+  host.state.transcriptContainer.addChild(new GoalStatusMessageComponent(goal));
+  host.state.ui.requestRender();
+}
+
+async function pauseLoop(host: SlashCommandHost): Promise<void> {
+  if (await getLoopGoal(host) === null) {
+    host.showStatus('No Loop is active.');
+    return;
+  }
+  await pauseGoal(host);
+}
+
+async function resumeLoop(host: SlashCommandHost): Promise<void> {
+  const goal = await getLoopGoal(host);
+  if (goal === null) {
+    host.showStatus('No Loop is available to resume.');
+    return;
+  }
+  if (goal.loopResult !== undefined) {
+    host.showStatus(`Loop already ended with ${goal.loopResult.status}. Start a new Loop instead.`);
+    return;
+  }
+  await resumeGoal(host);
+}
+
+async function cancelLoop(host: SlashCommandHost): Promise<void> {
+  if (await getLoopGoal(host) === null) {
+    host.showStatus('No Loop is active. The current Goal was left unchanged.');
+    return;
+  }
+  await cancelGoal(host);
+}
+
 function isStreaming(host: SlashCommandHost): boolean {
   return host.state.appState.streamingPhase !== 'idle';
 }
@@ -550,7 +608,10 @@ function isBusy(host: SlashCommandHost): boolean {
 }
 
 export type ParsedLoopCommand =
+  | { readonly kind: 'help' }
   | { readonly kind: 'status' }
+  | { readonly kind: 'pause' }
+  | { readonly kind: 'resume' }
   | { readonly kind: 'stop' }
   | {
       readonly kind: 'create';
@@ -567,6 +628,9 @@ const DEFAULT_MAX_ITERATIONS = 10;
 export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
   const args = rawArgs.trim();
   if (args.length === 0 || args === 'status') return { kind: 'status' };
+  if (args === 'help' || args === '--help' || args === '-h') return { kind: 'help' };
+  if (args === 'pause') return { kind: 'pause' };
+  if (args === 'resume') return { kind: 'resume' };
   if (args === 'stop') return { kind: 'stop' };
 
   const tokens = args.split(/\s+/);
@@ -575,17 +639,29 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
   let minIntervalMs: number | undefined;
   let reviewModel: string | undefined;
 
-  const stopCondition = parseStopCondition(tokens, index);
-  if (stopCondition.condition !== undefined) {
-    index += stopCondition.consumed;
-  }
-
   while (index < tokens.length) {
     const token = tokens[index];
+    if (token === '--until') {
+      const condition = tokens[index + 1];
+      if (
+        condition !== 'proof-pass'
+        && condition !== 'verify-pass'
+        && condition !== 'scan-clean'
+        && condition !== 'judge-pass'
+      ) {
+        return { kind: 'error', message: '`--until` must be `proof-pass`.' };
+      }
+      index += 2;
+      continue;
+    }
     if (token === '--max-iterations') {
-      const value = Number(tokens[index + 1]);
-      if (Number.isFinite(value) && value > 0) {
-        maxIterations = Math.floor(value);
+      const rawValue = tokens[index + 1];
+      if (rawValue !== undefined && /^[1-9]\d*$/u.test(rawValue)) {
+        const value = Number(rawValue);
+        if (!Number.isSafeInteger(value)) {
+          return { kind: 'error', message: '`--max-iterations` requires a positive safe integer.' };
+        }
+        maxIterations = value;
         index += 2;
         continue;
       }
@@ -615,6 +691,10 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
     }
     if (token === '--') {
       index += 1;
+      break;
+    }
+    if (token?.startsWith('-') === true) {
+      return { kind: 'error', message: `Unknown Loop option: ${token}` };
     }
     break;
   }
@@ -646,15 +726,28 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
 export async function handleLoopSlashCommand(host: SlashCommandHost, args: string): Promise<void> {
   const parsed = parseLoopCommand(args);
   switch (parsed.kind) {
+    case 'help':
+      host.showStatus([
+        'Usage: /loop [options] -- <objective>',
+        '       /loop status|pause|resume|stop',
+        'Options: --max-iterations <n> --every <duration> --review-model <alias>',
+      ].join('\n'));
+      return;
     case 'error':
       if (parsed.severity === 'hint') host.showStatus(parsed.message);
       else host.showError(parsed.message);
       return;
     case 'status':
-      await showGoalStatus(host);
+      await showLoopStatus(host);
+      return;
+    case 'pause':
+      await pauseLoop(host);
+      return;
+    case 'resume':
+      await resumeLoop(host);
       return;
     case 'stop':
-      await cancelGoal(host);
+      await cancelLoop(host);
       return;
     case 'create': {
       let grant: Awaited<ReturnType<typeof beginLoopQuota>> | undefined;
@@ -672,6 +765,7 @@ export async function handleLoopSlashCommand(host: SlashCommandHost, args: strin
         },
         args,
         {
+          commandName: 'loop',
           prepareCreate: async () => {
             const result = await runLoopPreflight({
               objective: parsed.objective,

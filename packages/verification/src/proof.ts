@@ -15,6 +15,7 @@ export interface ProofOptions {
   readonly strict?: boolean;
   readonly writeReport?: boolean;
   readonly reportPath?: string;
+  readonly signal?: AbortSignal;
 }
 
 export interface ProofResult {
@@ -123,6 +124,7 @@ async function runProofAttempt(cwd: string, options: ProofOptions): Promise<{
       selectedCommands,
       snapshot,
       writeReport: false,
+      signal: options.signal,
     }),
     runScan({ cwd, snapshot, writeReport: false }),
   ]);

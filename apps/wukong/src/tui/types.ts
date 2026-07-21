@@ -226,7 +226,6 @@ export interface TUIStartupOptions {
   readonly auto: boolean;
   readonly plan: boolean;
   readonly model?: string;
-  readonly role?: string;
   readonly startupNotice?: string;
 }
 

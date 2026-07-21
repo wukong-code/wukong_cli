@@ -1,4 +1,7 @@
+import type { FlagId } from '@wukong/wukong-sdk';
+
 import {
+  BUILTIN_SLASH_COMMANDS,
   findBuiltInSlashCommand,
   resolveSlashCommandAvailability,
   type BuiltinSlashCommand,
@@ -26,7 +29,11 @@ export type SlashCommandIntent =
       readonly skillName: string;
       readonly args: string;
     }
-  | { readonly kind: 'message'; readonly input: string }
+  | {
+      readonly kind: 'disabled';
+      readonly commandName: string;
+      readonly experimentalFlag: FlagId;
+    }
   | {
       readonly kind: 'blocked';
       readonly commandName: string;
@@ -36,6 +43,7 @@ export type SlashCommandIntent =
       readonly kind: 'invalid';
       readonly commandName: string;
       readonly reason: SlashCommandInvalidReason;
+      readonly suggestions: readonly string[];
     };
 
 export interface ResolveSlashCommandInput {
@@ -51,10 +59,19 @@ export function resolveSlashCommandInput(options: ResolveSlashCommandInput): Sla
 
   const command = findBuiltInSlashCommand(parsed.name);
   // `command` is a literal union where only some members carry `experimentalFlag`; widen to read it.
+  const experimentalFlag = (command as WukongSlashCommand | undefined)?.experimentalFlag;
   if (
     command !== undefined &&
-    isExperimentalFlagEnabled((command as WukongSlashCommand).experimentalFlag)
+    experimentalFlag !== undefined &&
+    !isExperimentalFlagEnabled(experimentalFlag)
   ) {
+    return {
+      kind: 'disabled',
+      commandName: parsed.name,
+      experimentalFlag,
+    };
+  }
+  if (command !== undefined) {
     const busyReason = slashCommandBusyReason(options);
     if (
       busyReason !== undefined &&
@@ -93,9 +110,58 @@ export function resolveSlashCommandInput(options: ResolveSlashCommandInput): Sla
   }
 
   return {
-    kind: 'message',
-    input: options.input,
+    kind: 'invalid',
+    commandName: parsed.name,
+    reason: 'unknown',
+    suggestions: suggestSlashCommands(parsed.name, options.skillCommandMap),
   };
+}
+
+export function suggestSlashCommands(
+  commandName: string,
+  skillCommandMap: ReadonlyMap<string, string>,
+): readonly string[] {
+  const query = commandName.toLowerCase();
+  const candidates = new Set<string>();
+  for (const command of BUILTIN_SLASH_COMMANDS) {
+    candidates.add(command.name);
+    for (const alias of command.aliases) candidates.add(alias);
+  }
+  for (const name of skillCommandMap.keys()) {
+    candidates.add(name.startsWith('skill:') ? name.slice('skill:'.length) : name);
+  }
+
+  const maxDistance = Math.max(2, Math.ceil(query.length * 0.4));
+  return [...candidates]
+    .map((candidate) => ({
+      candidate,
+      distance: editDistance(query, candidate.toLowerCase()),
+    }))
+    .filter(({ candidate, distance }) =>
+      distance <= maxDistance || candidate.startsWith(query) || query.startsWith(candidate),
+    )
+    .toSorted(
+      (left, right) =>
+        left.distance - right.distance || left.candidate.localeCompare(right.candidate),
+    )
+    .slice(0, 3)
+    .map(({ candidate }) => candidate);
+}
+
+function editDistance(left: string, right: string): number {
+  let previous = Array.from({ length: right.length + 1 }, (_, index) => index);
+  for (let leftIndex = 1; leftIndex <= left.length; leftIndex += 1) {
+    const current = [leftIndex];
+    for (let rightIndex = 1; rightIndex <= right.length; rightIndex += 1) {
+      current[rightIndex] = Math.min(
+        (current[rightIndex - 1] ?? 0) + 1,
+        (previous[rightIndex] ?? 0) + 1,
+        (previous[rightIndex - 1] ?? 0) + (left[leftIndex - 1] === right[rightIndex - 1] ? 0 : 1),
+      );
+    }
+    previous = current;
+  }
+  return previous[right.length] ?? right.length;
 }
 
 export function resolveSkillCommand(
@@ -121,4 +187,11 @@ export function slashBusyMessage(
     return `Cannot /${commandName} while streaming — press Esc or Ctrl-C first.`;
   }
   return `Cannot /${commandName} while compacting — wait for compaction to finish first.`;
+}
+
+export function slashDisabledMessage(commandName: string, experimentalFlag: FlagId): string {
+  if (experimentalFlag === 'role_profiles') {
+    return `Role profiles are experimental. Run /experiments and enable Role Profiles before using /${commandName}.`;
+  }
+  return `/${commandName} is disabled (${experimentalFlag}). Run /experiments to enable it.`;
 }

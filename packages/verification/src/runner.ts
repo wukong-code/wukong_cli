@@ -5,13 +5,18 @@ const DEFAULT_TIMEOUT_MS = 180_000;
 
 export async function runVerificationCommands(
   commands: readonly VerificationCommand[],
-  options: { readonly cwd: string; readonly timeoutMs?: number },
+  options: { readonly cwd: string; readonly timeoutMs?: number; readonly signal?: AbortSignal },
 ): Promise<VerificationCommandResult[]> {
   const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
   const results: VerificationCommandResult[] = [];
   for (const command of commands) {
+    options.signal?.throwIfAborted();
     const started = Date.now();
-    const result = await runShellCommand(command.command, { cwd: options.cwd, timeoutMs });
+    const result = await runShellCommand(command.command, {
+      cwd: options.cwd,
+      timeoutMs,
+      signal: options.signal,
+    });
     const durationMs = Date.now() - started;
     results.push({
       command: command.command,

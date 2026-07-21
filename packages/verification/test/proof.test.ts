@@ -1,3 +1,5 @@
+import { mkdtemp, mkdir, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
@@ -7,6 +9,39 @@ import { createWorkspaceSnapshot } from '../src/snapshot';
 import { gitAdd, makeTempRepo, writeJson, writeRepoFile } from './helpers';
 
 describe('runProof', () => {
+  it('fingerprints source changes in non-Git workspaces', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'wukong-non-git-fingerprint-'));
+    try {
+      await mkdir(join(cwd, 'src'), { recursive: true });
+      await writeFile(join(cwd, 'src', 'feature.ts'), 'export const value = 1;\n');
+      const before = await createWorkspaceSnapshot({ cwd });
+
+      await writeFile(join(cwd, 'src', 'feature.ts'), 'export const value = 2;\n');
+      const after = await createWorkspaceSnapshot({ cwd });
+
+      expect(after.inputDigest).not.toBe(before.inputDigest);
+      expect(after.id).not.toBe(before.id);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('aborts an in-flight deterministic check', async () => {
+    const cwd = await makeTempRepo('wukong-proof-abort-');
+    const controller = new AbortController();
+    const startedAt = Date.now();
+    const running = runProof({
+      cwd,
+      commands: ['node -e "setTimeout(() => process.exit(0), 10000)"'],
+      writeReport: false,
+      signal: controller.signal,
+    });
+    setTimeout(() => controller.abort(), 25);
+
+    await expect(running).rejects.toMatchObject({ name: 'AbortError' });
+    expect(Date.now() - startedAt).toBeLessThan(2_000);
+  });
+
   it('includes project review policy changes in the workspace fingerprint', async () => {
     const cwd = await makeTempRepo('wukong-review-policy-fingerprint-');
     await writeRepoFile(cwd, '.wukong/review-policy.md', '# Policy\nBlock auth regressions.\n');

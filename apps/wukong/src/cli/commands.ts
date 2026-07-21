@@ -64,9 +64,6 @@ export function createProgram(
       ),
     )
     .addOption(
-      new Option('--role <role>', 'Transform the agent for this invocation (for example: security).'),
-    )
-    .addOption(
       new Option(
         '-p, --prompt <prompt>',
         'Run one prompt non-interactively and print the response.',
@@ -108,19 +105,29 @@ export function createProgram(
   registerJudgeCommand(program);
   registerLoopCommand(program, (loop) => {
     const raw = program.opts<Record<string, unknown>>();
-    const every = loop.minIntervalMs === undefined ? '' : ` --every ${String(loop.minIntervalMs / 1_000)}s`;
-    const reviewModel = loop.reviewModel === undefined ? '' : ` --review-model ${loop.reviewModel}`;
+    const rawSession = raw['session'] ?? raw['resume'];
+    const session = rawSession === true ? '' : rawSession as string | undefined;
+    const legacyAutoApprove = raw['autoApprove'] === true;
+    const yolo = raw['yolo'] === true || legacyAutoApprove;
     onMain({
-      session: undefined,
-      continue: false,
-      yolo: false,
-      yes: false,
-      auto: false,
-      plan: false,
+      session,
+      continue: raw['continue'] === true || raw['C'] === true,
+      yolo,
+      yes: raw['yes'] === true || legacyAutoApprove,
+      auto: raw['auto'] === true || !yolo,
+      plan: raw['plan'] === true,
       model: loop.model ?? raw['model'] as string | undefined,
-      role: loop.role ?? raw['role'] as string | undefined,
       outputFormat: raw['outputFormat'] as CLIOptions['outputFormat'],
-      prompt: `/loop --max-iterations ${String(loop.maxIterations)}${every}${reviewModel} -- ${loop.objective ?? ''}`,
+      prompt: loop.objective,
+      headlessGoal: {
+        kind: 'loop',
+        objective: loop.objective!,
+        replace: false,
+        stopCondition: 'proof-pass',
+        maxIterations: loop.maxIterations!,
+        ...(loop.minIntervalMs === undefined ? {} : { minIntervalMs: loop.minIntervalMs }),
+        ...(loop.reviewModel === undefined ? {} : { reviewModel: loop.reviewModel }),
+      },
       skillsDirs: raw['skillsDir'] as string[],
       addDirs: raw['addDir'] as string[],
     });
@@ -178,7 +185,6 @@ export function createProgram(
       auto: autoValue,
       plan: raw['plan'] as boolean,
       model: raw['model'] as string | undefined,
-      role: raw['role'] as string | undefined,
       outputFormat: raw['outputFormat'] as CLIOptions['outputFormat'],
       prompt: promptValue,
       skillsDirs: raw['skillsDir'] as string[],

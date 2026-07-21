@@ -1,6 +1,16 @@
 export type UIMode = 'shell' | 'print';
 export type PromptOutputFormat = 'text' | 'stream-json';
 
+export interface CLIHeadlessGoal {
+  readonly kind: 'loop';
+  readonly objective: string;
+  readonly replace: false;
+  readonly stopCondition: 'proof-pass';
+  readonly maxIterations: number;
+  readonly minIntervalMs?: number;
+  readonly reviewModel?: string;
+}
+
 export interface CLIOptions {
   session: string | undefined;
   continue: boolean;
@@ -10,9 +20,10 @@ export interface CLIOptions {
   auto: boolean;
   plan: boolean;
   model: string | undefined;
-  role?: string | undefined;
   outputFormat: PromptOutputFormat | undefined;
   prompt: string | undefined;
+  /** Structured `wukong loop` input; avoids lossy slash-command re-parsing. */
+  headlessGoal?: CLIHeadlessGoal;
   skillsDirs: string[];
   addDirs?: string[];
 }
@@ -37,9 +48,6 @@ export function validateOptions(opts: CLIOptions): ValidatedOptions {
   }
   if (opts.model !== undefined && opts.model.trim().length === 0) {
     throw new OptionConflictError('Model cannot be empty.');
-  }
-  if (opts.role !== undefined && opts.role.trim().length === 0) {
-    throw new OptionConflictError('Role cannot be empty.');
   }
   if (!promptMode && opts.outputFormat !== undefined) {
     throw new OptionConflictError('Output format is only supported in prompt mode.');

@@ -34,10 +34,12 @@ function makeHost() {
 describe('/transform', () => {
   it('is gated by the role_profiles experiment', () => {
     expect(findBuiltInSlashCommand('transform')).toMatchObject({
-      aliases: ['role'],
+      aliases: [],
       availability: 'idle-only',
       experimentalFlag: 'role_profiles',
+      visibleWhenDisabled: true,
     });
+    expect(findBuiltInSlashCommand('role')).toBeUndefined();
   });
 
   it('applies a role and updates the visible model', async () => {

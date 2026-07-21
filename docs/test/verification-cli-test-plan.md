@@ -37,7 +37,7 @@
 - Free 10 Loop sessions/月且每个最多 5 轮；第 3 次起软提示 Pro，第 10 次后硬限制。
 - 内部 verify/scan/proof/reviewer 不计数；直接运行高级诊断命令也不计数。
 - 相同 idempotency key 的并发/retry start 只创建一个 run、增加一次 used。
-- 参数/plan/model/role 验证失败不计数；start 成功后的取消、失败或崩溃计入一次。
+- 参数/plan/model 验证失败不计数；start 成功后的取消、失败或崩溃计入一次。
 - 月度重置、LIMIT_REACHED、SIGN_IN_REQUIRED、USAGE_UNAVAILABLE/exit 3 有覆盖，且它们不产生 Loop verdict；不存在 Checks/reservation/lease/AI credit 分支。
 
 ### 高级命令兼容
@@ -49,7 +49,7 @@
 ### Role Profiles
 
 - 内置 general/reviewer/security/tester 可 list/show/use。
-- `--role` 与 TUI `/transform` 使用同一 active role；`/transform off` 恢复默认。
+- 角色只在 TUI 通过 `/transform` 切换；`/transform off` 恢复默认。CLI `roles` 只管理角色目录。
 - 用户 role 从 `~/.wukong/roles/` 读取；project role 只有显式 `project:<name>` + 当前 plan trust 才加载，不能 shadow builtin。
 - role tool allowlist 只能收窄权限，不能扩大权限或执行内嵌 shell command。
 - role model/profile/prompt 生效，且运行仍只计对应 Check 或 Loop session。
@@ -71,7 +71,7 @@ P0 测试必须证明：
 4. `wukong guard` 默认阻断高风险命令。
 5. 三个 top-level commands 出现在 `wukong --help` 中。
 6. CLI smoke 能从真实 entrypoint 启动，而不只是单元测试通过。
-7. TUI `/verify`、`/scan`、`/guard`、`/report` 能渲染结果或状态。
+7. TUI `/verify`、`/scan`、`/guard` 能渲染结果或状态。
 8. `wukong_verify` agent tool 能返回 structured summary，并在失败时提醒 agent 不要声明完成。
 
 ## 2. 当前自动化测试
@@ -87,7 +87,7 @@ P0 测试必须证明：
 | Core unit | `packages/verification/test/status.test.ts` | statusFrom 全矩阵（含 strict）、highestSeverity |
 | Core unit | `packages/verification/test/policy.test.ts` | command risk classifier（含绝对路径、Windows 路径与 .exe/.cmd/.bat）、guard status、blocked/allowed 事件、`--yes` override、空命令、损坏 events 容错 |
 | App unit | `apps/wukong/test/cli/verification-commands.test.ts` | command registration、verify/scan/guard handler output and exit code |
-| App unit | `apps/wukong/test/tui/commands/verification.test.ts` | `/verify`、`/scan`、`/guard status`、`/report` handlers |
+| App unit | `apps/wukong/test/tui/commands/verification.test.ts` | `/verify`、`/scan`、`/guard status` handlers |
 | Agent unit | `packages/agent-core/test/tools/wukong-verify.test.ts` | `wukong_verify` schema、execution、failed verification guidance |
 
 ## 3. 必跑命令
@@ -175,7 +175,7 @@ tsx --tsconfig apps/wukong/tsconfig.dev.json \
 - `wukong loop "<goal>" --until verify-pass` 在会话内持续驱动直到 verify 通过。
 - 停止条件由 goal verification gate 判断，**不**由写代码的 agent 自评（必须有测试断言这点）。
 - 默认紧循环：上一轮 gate 未过后立即开始下一轮，无隐式等待。
-- `--every` 设置时，轮间等待由 agent-core cron scheduler 驱动（断言无第二套 timer 实现）。
+- `--every` 设置时，Goal driver 在上一轮 Gate 失败后做可取消等待；断言不会立即续轮，也不会创建或遗留 cron task。
 - `--max-iterations` 达到上限时返回 `max-iterations` 状态，不假装成功。
 - `--dry-run` 不实际驱动 agent，只校验参数与停止条件。
 - `loop` 可被人随时 stop，停止后返回 `stopped` 状态与最后一轮 verification 快照。

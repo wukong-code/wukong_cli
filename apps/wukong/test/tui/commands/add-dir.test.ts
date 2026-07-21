@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import { handleAddDirCommand } from '#/tui/commands/add-dir';
 import { dispatchInput, type SlashCommandHost } from '#/tui/commands/dispatch';
+import { setExperimentalFeatures } from '#/tui/commands/experimental-flags';
 
 type MountedPanel = {
   handleInput: (data: string) => void;
@@ -186,5 +187,58 @@ describe('handleAddDirCommand', () => {
     expect(host.setAppState).not.toHaveBeenCalled();
     expect(host.refreshSlashCommandAutocomplete).not.toHaveBeenCalled();
     expect(host.sendNormalUserInput).not.toHaveBeenCalled();
+  });
+});
+
+describe('slash command dispatch errors', () => {
+  it('keeps unknown slash commands local instead of sending them to the model', async () => {
+    const { host } = makeHost();
+
+    dispatchInput(host, '/transfrm security');
+
+    await vi.waitFor(() => {
+      expect(host.showError).toHaveBeenCalledWith(
+        expect.stringContaining('Did you mean /transform?'),
+      );
+    });
+    expect(host.sendNormalUserInput).not.toHaveBeenCalled();
+  });
+
+  it.each(['/report', '/role list', '/yes'])(
+    'keeps removed command %s local instead of sending it to the model',
+    async (command) => {
+      const { host } = makeHost();
+
+      dispatchInput(host, command);
+
+      await vi.waitFor(() => {
+        expect(host.showError).toHaveBeenCalledWith(expect.stringContaining('Unknown slash command'));
+      });
+      expect(host.sendNormalUserInput).not.toHaveBeenCalled();
+    },
+  );
+
+  it('explains how to enable a disabled experimental command', async () => {
+    setExperimentalFeatures([]);
+    const { host } = makeHost();
+
+    dispatchInput(host, '/transform list');
+
+    await vi.waitFor(() => {
+      expect(host.showError).toHaveBeenCalledWith(
+        'Role profiles are experimental. Run /experiments and enable Role Profiles before using /transform.',
+      );
+    });
+    expect(host.sendNormalUserInput).not.toHaveBeenCalled();
+  });
+
+  it('rejects unexpected arguments instead of silently ignoring them', async () => {
+    const { host } = makeHost();
+
+    dispatchInput(host, '/status extra');
+
+    await vi.waitFor(() => {
+      expect(host.showError).toHaveBeenCalledWith('Usage: /status');
+    });
   });
 });

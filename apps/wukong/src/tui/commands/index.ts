@@ -33,7 +33,6 @@ export {
   handleVerifySlashCommand,
   handleScanSlashCommand,
   handleGuardSlashCommand,
-  handleReportSlashCommand,
   handleProofSlashCommand,
   handleJudgeSlashCommand,
 } from './verification';

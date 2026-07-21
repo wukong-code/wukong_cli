@@ -32,7 +32,7 @@ wukong upgrade
 
 其中 `acp`、`server`、`migrate` 当前为 hidden 命令，不出现在 `wukong --help` 默认输出中；对外命令面以 `wukong --help` 为准。
 
-已实现的 TUI slash commands 包括 `/verify`、`/scan`、`/guard`、`/report`、`/goal`（含 verification gate 和队列）、`/proof`、`/judge`、`/loop`、`/today`。agent-core 另已实现会话内 cron 调度工具（CronCreate/CronList/CronDelete，支持 recurring/one-shot、持久化与 resume 恢复），是 `/loop` 时间触发的复用基础。
+已实现的 TUI slash commands 包括 `/verify`、`/scan`、`/guard`、`/goal`（含 verification gate 和队列）、`/proof`、`/judge`、`/loop`、`/today`。agent-core 另有独立的会话内 cron 调度工具（CronCreate/CronList/CronDelete，支持 recurring/one-shot、持久化与 resume 恢复）；Loop 的 `--every` 属于 Goal 生命周期，不使用 cron task。
 
 当前仍未实现的 top-level CLI 扩展是：
 
@@ -70,7 +70,7 @@ Wukong 不和 Claude Code / Cursor / Codex 拼写代码速度，而是补上 AI 
 | 证据层 | 手动 | 单次 | `/proof` | 已实现 |
 | 评估层 | 手动/被 loop 调用 | 单次 | `/judge` | deterministic 模式已实现 |
 
-`/loop` 的核心语义是**迭代直到验证通过**（关机即停）：轮次自动衔接，`--every` 只是可选的轮间节流；时间触发复用 agent-core 已有 cron scheduler，不新写定时引擎。定时巡检型任务本机由 cron 工具承载，云端归 `/schedule`（hosted，Milestone 3+）。0.0.12 的 `/goal` 出口已经统一为 `proof-pass`：先运行 deterministic checks，再由 fresh-context 只读 reviewer 判定，写代码的 agent 不能自判通过。
+`/loop` 的核心语义是**迭代直到验证通过**（关机即停）：轮次自动衔接，`--every` 是 Goal-owned、可取消的轮间节流。定时巡检型任务本机由 cron 工具承载，云端归 `/schedule`（hosted，Milestone 3+）。0.0.12 的 `/goal` 出口已经统一为 `proof-pass`：先运行 deterministic checks，再由 fresh-context 只读 reviewer 判定，写代码的 agent 不能自判通过。
 
 用户在 Claude Code、Cursor、Copilot、Codex 或其他 agent 生成代码后，用 Wukong 运行确定性检查、扫描风险、生成证据报告，再决定是否相信、提交或合并。Wukong 补上 agent 最薄弱的一环：
 
@@ -114,7 +114,7 @@ Policy 与 Audit 是团队付费价值
 | `wukong scan` | 已实现 | 只读风险扫描，不运行项目命令 |
 | `wukong guard` | 已实现 | 本地 guard 状态、统计和命令风险阻断 |
 | `wukong_verify` tool | 已实现 | 让外部 agent 在完成前调用验证 |
-| `/verify`、`/scan`、`/guard`、`/report` | 已实现 | TUI 会话内运行验证、扫描、guard 状态和查看报告 |
+| `/verify`、`/scan`、`/guard` | 已实现 | TUI 会话内运行验证、扫描和查看 guard 状态 |
 | `/goal` | 已实现 | 单任务跑到验证条件满足，含队列管理 |
 
 ### P0.5: Loop 控制层 + Merge Proof（已完成）
@@ -155,7 +155,7 @@ Policy 与 Audit 是团队付费价值
 | 层 | 含义 | Wukong 对应 | 状态 |
 |---|---|---|---|
 | 第一层：Agentic Coding Loop | agent 写代码 → 跑测试 → 修错 → 再跑 | `wukong loop` / `/loop`（本机）+ `/goal` + 内部 checks | 本机 top-level/TUI 均已实现；云端 `/schedule` 待实现 |
-| 第二层：Developer Feedback Loop | 人看报告、决定接受、更新规则 | `/proof`、`/judge`、`/report`、`/today`、`/sessions`、`/undo`、`/rules`(待实现) | 本地证据与 TUI briefing 已实现；共享 rules 待实现 |
+| 第二层：Developer Feedback Loop | 人看报告、决定接受、更新规则 | `/proof`、`/judge`、`/today`、`/sessions`、`/undo`、`/rules`(待实现) | 本地证据与 TUI briefing 已实现；共享 rules 待实现 |
 | 第三层：External Feedback Loop | 用户 bug、CI 失败、issue、PR review 回到 loop | GitHub Issues、CI、Sentry、Linear、Slack 集成 | 未实现，归 hosted/CI |
 
 ## 3.2 Loop 代码质量保障原则
@@ -329,7 +329,7 @@ Loop 必须提供真实免费体验，但额度只作用于顶层 session，不�
 3. `wukong scan` CLI command。
 4. `wukong guard` CLI command，先做 best-effort interactive guard。
 5. `wukong_verify` builtin agent tool。
-6. TUI slash commands: `/verify`、`/scan`、`/guard`、`/report`。
+6. TUI slash commands: `/verify`、`/scan`、`/guard`。
 7. `/goal` 持续修复（单任务跑到验证条件满足，含队列）。
 8. fixtures、unit tests、CLI/TUI/tool smoke tests。
 
@@ -338,15 +338,15 @@ Loop 必须提供真实免费体验，但额度只作用于顶层 session，不�
 1. `/proof` Merge Proof Report：verify+scan+report 固定格式汇总（Wow Moment，第 1 步）。
 2. `/judge` evaluator-only 判定：默认 `--assume-broken`，deterministic 模式复用 verification 引擎（第 2 步）。
 3. `/goal` verification gate：agent 宣布完成 → 强制 deterministic 评估 → 未过打回（第 3 步，`/loop` 硬前置）。
-4. `/loop` 本机迭代 loop：驱动 agent + 验证 + 修复直到停止条件满足，复用 cron scheduler 与 goal gate，关机即停（第 4 步，产品核心）。
+4. `/loop` 本机迭代 loop：驱动 agent + 验证 + 修复直到停止条件满足；轮间等待归 Goal driver，关机即停（第 4 步，产品核心）。
 5. 文档与官网 hero 切换到 loop control plane / proof-layer 叙事。
 
 ### 当前重点：0.0.12 Free Trust Loop v2
 
 1. 重写 Loop 的 snapshot、状态与错误 contract；verify/scan/proof 变成内部检查层。
 2. 只实现 Loop session 额度，以及幂等 start/complete/usage；不引入 Checks、reservation/lease。
-3. Loop 支持用户指定 writer model/role，并使用 fresh-context reviewer；reviewer 不能覆盖真实失败。
-4. 增加轻量 Role Profiles（内置、本地自定义、`--role`、`/transform`），不建立第二套 agent。
+3. Loop 支持用户指定 writer model，并使用 fresh-context reviewer；reviewer 不能覆盖真实失败。
+4. 增加轻量 Role Profiles（内置、本地自定义、TUI `/transform`），不建立第二套 agent；CLI `roles` 只管理角色目录。
 5. 旧 verify/scan/proof 命令兼容但从主入口隐藏；本地 evidence 仅在显式请求时写入。
 
 ### P0 不做
@@ -357,7 +357,7 @@ Loop 必须提供真实免费体验，但额度只作用于顶层 session，不�
 - 不发布尚未存在的 install script、Homebrew formula 或旧包名。
 - 不把 legacy `packages/cli` / `packages/mcp-server` 复制为长期架构。
 - 不把 `/schedule`（云端例程）在本机做；`/loop`（本机迭代，关机即停）与定时巡检（本机 cron 工具 / 云端 `/schedule`）拆开，跨机器持续性归 hosted。
-- 不为 `/loop` 新写定时引擎；时间触发复用 agent-core cron scheduler。
+- `/loop --every` 只做 Goal-owned 可取消等待；长期时间触发仍使用 agent-core cron scheduler。
 
 ## 6. Guard 产品口径
 

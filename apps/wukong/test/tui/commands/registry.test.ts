@@ -1,15 +1,25 @@
 import {
   BUILTIN_SLASH_COMMANDS,
   findBuiltInSlashCommand,
+  isSlashCommandVisible,
   parseSlashInput,
   resolveSlashCommandAvailability,
   addDirArgumentCompletions,
+  permissionToggleArgumentCompletions,
+  planArgumentCompletions,
+  pluginsArgumentCompletions,
   resumeArgumentCompletions,
+  setExperimentalFeatures,
   sortSlashCommands,
   swarmArgumentCompletions,
+  transformArgumentCompletions,
   type WukongSlashCommand,
 } from '#/tui/commands/index';
-import { describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+
+afterEach(() => {
+  setExperimentalFeatures([]);
+});
 
 describe('parseSlashInput', () => {
   it('parses command names and trimmed args', () => {
@@ -46,6 +56,21 @@ describe('built-in slash command registry', () => {
     expect(findBuiltInSlashCommand('unknown')).toBeUndefined();
   });
 
+  it('does not register removed /report, /role, or /yes command names', () => {
+    expect(findBuiltInSlashCommand('report')).toBeUndefined();
+    expect(findBuiltInSlashCommand('role')).toBeUndefined();
+    expect(findBuiltInSlashCommand('yes')).toBeUndefined();
+  });
+
+  it('keeps /transform visible while disabled so the TUI can show enable guidance', () => {
+    const transform = findBuiltInSlashCommand('transform');
+    expect(transform).toBeDefined();
+    expect(isSlashCommandVisible(transform!)).toBe(true);
+
+    setExperimentalFeatures([{ id: 'role_profiles', enabled: true }]);
+    expect(isSlashCommandVisible(transform!)).toBe(true);
+  });
+
   it('offers resume source argument completions', () => {
     expect(resumeArgumentCompletions('')?.map((item) => item.value)).toEqual([
       'codex',
@@ -62,6 +87,28 @@ describe('built-in slash command registry', () => {
     expect(resolveSlashCommandAvailability(plan!, '')).toBe('always');
     expect(resolveSlashCommandAvailability(plan!, 'on')).toBe('always');
     expect(resolveSlashCommandAvailability(plan!, 'clear')).toBe('idle-only');
+  });
+
+  it('offers argument hints for commands with subcommands', () => {
+    expect(planArgumentCompletions('')?.map((item) => item.value)).toEqual(['on', 'off', 'clear']);
+    expect(permissionToggleArgumentCompletions('o')?.map((item) => item.value)).toEqual(['on', 'off']);
+    expect(pluginsArgumentCompletions('re')?.map((item) => item.value)).toEqual(['remove', 'reload']);
+    expect(transformArgumentCompletions('', [
+      { selection: 'project:backend', description: 'Backend role' },
+    ])?.map((item) => item.value)).toContain('project:backend');
+    expect(transformArgumentCompletions('pl')?.map((item) => item.value)).toEqual(['planner']);
+    expect(transformArgumentCompletions('st')?.map((item) => item.value)).toEqual(['strategist', 'status']);
+  });
+
+  it('keeps settings idle-only because it can reload the session', () => {
+    const settings = findBuiltInSlashCommand('settings');
+    expect(settings).toBeDefined();
+    expect(resolveSlashCommandAvailability(settings!, '')).toBe('idle-only');
+  });
+
+  it('aligns /export with ZIP export and keeps Markdown explicit', () => {
+    expect(findBuiltInSlashCommand('export')?.name).toBe('export-debug-zip');
+    expect(findBuiltInSlashCommand('export-md')?.aliases).toEqual([]);
   });
 
   it('keeps swarm mode changes and swarm tasks idle-only', () => {
@@ -182,7 +229,6 @@ describe('built-in slash command registry', () => {
         'plan',
         'reload',
         'reload-tui',
-        'report',
         'scan',
         'sessions',
         'settings',

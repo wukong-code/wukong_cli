@@ -13,24 +13,27 @@ const TRUNCATION_MARKER = '\n[output truncated; showing beginning and end]\n';
 export function runFile(
   file: string,
   args: readonly string[],
-  options: { readonly cwd: string; readonly timeoutMs?: number },
+  options: { readonly cwd: string; readonly timeoutMs?: number; readonly signal?: AbortSignal },
 ): Promise<CapturedProcess> {
-  return runSpawn(file, args, { cwd: options.cwd, shell: false, timeoutMs: options.timeoutMs });
+  return runSpawn(file, args, { cwd: options.cwd, shell: false, timeoutMs: options.timeoutMs, signal: options.signal });
 }
 
 export function runShellCommand(
   command: string,
-  options: { readonly cwd: string; readonly timeoutMs?: number },
+  options: { readonly cwd: string; readonly timeoutMs?: number; readonly signal?: AbortSignal },
 ): Promise<CapturedProcess> {
-  return runSpawn(command, [], { cwd: options.cwd, shell: true, timeoutMs: options.timeoutMs });
+  return runSpawn(command, [], { cwd: options.cwd, shell: true, timeoutMs: options.timeoutMs, signal: options.signal });
 }
 
 function runSpawn(
   file: string,
   args: readonly string[],
-  options: { readonly cwd: string; readonly shell: boolean; readonly timeoutMs?: number },
+  options: { readonly cwd: string; readonly shell: boolean; readonly timeoutMs?: number; readonly signal?: AbortSignal },
 ): Promise<CapturedProcess> {
-  return new Promise((resolve) => {
+  if (options.signal?.aborted === true) {
+    return Promise.reject(abortReason(options.signal));
+  }
+  return new Promise((resolve, reject) => {
     let stdout = '';
     let stderr = '';
     let timedOut = false;
@@ -60,6 +63,18 @@ function runSpawn(
     function clearTimers() {
       if (timer !== undefined) clearTimeout(timer);
       if (killTimer !== undefined) clearTimeout(killTimer);
+      options.signal?.removeEventListener('abort', onAbort);
+    }
+
+    function onAbort() {
+      if (settled) return;
+      settled = true;
+      clearTimers();
+      killSubtree('SIGTERM');
+      killTimer = setTimeout(() => {
+        killSubtree('SIGKILL');
+      }, 1500);
+      reject(options.signal === undefined ? new DOMException('This operation was aborted', 'AbortError') : abortReason(options.signal));
     }
 
     const timer = options.timeoutMs === undefined
@@ -72,6 +87,7 @@ function runSpawn(
             killSubtree('SIGKILL');
           }, 1500);
         }, options.timeoutMs);
+    options.signal?.addEventListener('abort', onAbort, { once: true });
 
     child.stdout?.on('data', (chunk: Buffer) => {
       stdout = appendLimited(stdout, chunk.toString('utf8'));
@@ -80,7 +96,10 @@ function runSpawn(
       stderr = appendLimited(stderr, chunk.toString('utf8'));
     });
     child.on('error', (error) => {
-      if (settled) return;
+      if (settled) {
+        clearTimers();
+        return;
+      }
       settled = true;
       clearTimers();
       // eslint-disable-next-line eslint-plugin-promise/no-multiple-resolved -- guarded by settled flag above
@@ -92,13 +111,22 @@ function runSpawn(
       });
     });
     child.on('close', (code) => {
-      if (settled) return;
+      if (settled) {
+        clearTimers();
+        return;
+      }
       settled = true;
       clearTimers();
       // eslint-disable-next-line eslint-plugin-promise/no-multiple-resolved -- guarded by settled flag above
       resolve({ exitCode: code, timedOut, stdout, stderr });
     });
   });
+}
+
+function abortReason(signal: AbortSignal): Error {
+  return signal.reason instanceof Error
+    ? signal.reason
+    : new DOMException('This operation was aborted', 'AbortError');
 }
 
 function appendLimited(current: string, next: string): string {

@@ -108,6 +108,11 @@ export async function handleYoloCommand(host: SlashCommandHost, args: string): P
     return;
   }
 
+  if (subcmd.length > 0) {
+    host.showError('Usage: /yolo [on|off]');
+    return;
+  }
+
   // toggle
   if (currentMode === 'yolo') {
     await session.setPermission('manual');
@@ -149,6 +154,11 @@ export async function handleAutoCommand(host: SlashCommandHost, args: string): P
     await session.setPermission('manual');
     host.setAppState({ permissionMode: 'manual' });
     host.showNotice('Auto mode: OFF');
+    return;
+  }
+
+  if (subcmd.length > 0) {
+    host.showError('Usage: /auto [on|off]');
     return;
   }
 

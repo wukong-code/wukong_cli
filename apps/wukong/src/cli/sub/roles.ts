@@ -26,13 +26,25 @@ export function registerRolesCommand(parent: Command, overrides?: Partial<RolesD
   const deps = { ...DEFAULT_DEPS, ...overrides };
   const roles = parent.command('roles').description('List, inspect, or create agent role profiles.');
 
+  const printRoles = async (): Promise<void> => {
+    const items = await listRoles({ cwd: deps.cwd(), wukongHomeDir: deps.homeDir() });
+    deps.stdout.write(formatRoleList(items));
+  };
+
   roles
-    .command('list', { isDefault: true })
-    .description('List built-in, user, and project roles.')
-    .action(async () => {
-      const items = await listRoles({ cwd: deps.cwd(), wukongHomeDir: deps.homeDir() });
-      deps.stdout.write(formatRoleList(items));
+    .argument('[command]')
+    .action(async (command: string | undefined) => {
+      if (command !== undefined) {
+        roles.error(`unknown command '${command}'. See 'wukong roles --help'.`);
+        return;
+      }
+      await printRoles();
     });
+
+  roles
+    .command('list')
+    .description('List built-in, user, and project roles.')
+    .action(printRoles);
 
   roles
     .command('show')

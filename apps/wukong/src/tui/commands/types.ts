@@ -11,8 +11,10 @@ export interface WukongSlashCommand<Name extends string = string> extends SlashC
   /** Keep the command executable by name while omitting it from help and autocomplete. */
   readonly hidden?: boolean;
   readonly availability?: SlashCommandAvailability | ((args: string) => SlashCommandAvailability);
-  /** When set, the command is hidden from the palette and blocked unless this flag is enabled. */
+  /** When set, the command is blocked unless this flag is enabled. */
   readonly experimentalFlag?: FlagId;
+  /** Keep a gated command discoverable so invoking it can explain how to enable the feature. */
+  readonly visibleWhenDisabled?: boolean;
   /**
    * Generic argument autocompletion. `argumentPrefix` is the text typed after
    * `/<command> `; return suggestions or `null`. Declared as a plain function

@@ -1,6 +1,6 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；当前 0.0.16 以 [Loop Convergence](docs/design/0.0.16-loop-convergence.md) 为准，共享验证基础以 [技术实现方案](docs/tech/commercial-refactor-implementation.md) 为准，现有测试基线以 [测试计划](docs/test/verification-cli-test-plan.md) 为准；本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；当前 0.0.17 以 [Command Surface Reliability](docs/design/0.0.17-command-surface-reliability.md) 为准，共享验证基础以 [技术实现方案](docs/tech/commercial-refactor-implementation.md) 为准，现有测试基线以 [测试计划](docs/test/verification-cli-test-plan.md) 为准；本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
@@ -71,6 +71,38 @@
 
 - 支付、GitHub PR 写入、Team、managed reviewer、默认多 reviewer、云端 `/schedule`、远程 session、Hosted Report、Agent/Persona 市场和自动 policy 修改均不进入 0.0.16。
 
+## 🚧 0.0.17 — Command Surface Reliability
+
+> 方案: [docs/design/0.0.17-command-surface-reliability.md](docs/design/0.0.17-command-surface-reliability.md)。本版继续免费/BYOK，只收口现有 CLI/TUI 命令契约，不新增 Agent 引擎、托管能力或商业功能。
+
+### P0：命令契约
+
+- [x] 删除全局与 Loop `--role`，删除 TUI `/role`；Role 管理统一为 `wukong roles list|show|init`，会话切换统一为 `/transform`（2026-07-21）
+- [x] 删除 TUI `/report` 与 `/yes`，保留 Loop/Gate、高级 `/proof` 和明确 permission 命令（2026-07-21）
+- [x] `/transform list|status|off` 可发现；补全包含内置与自定义 Role；实验未启用时提供本地 `/experiments` 指引（2026-07-21）
+- [x] 未知、禁用和当前不可用 slash command 在本地拦截并给出建议，不发送给模型；保留 `/dance`（2026-07-21）
+- [x] `/auto`、`/yolo` 非法参数不改变 permission mode，`/settings` 只允许 idle 状态打开（2026-07-21）
+- [x] Loop 数值严格解析且 dry-run 显示 writer/reviewer model；`/export` 统一 ZIP、Markdown 使用 `/export-md`（2026-07-21）
+- [x] Today focus/clear 冲突在写入前拒绝，`wukong roles` 未知子命令返回明确 usage（2026-07-21）
+
+### P0：自动化回归
+
+- [x] 覆盖 registry/resolve/dispatch 的命令可见性、实验开关、idle gate、参数拒绝、建议和不会调用模型（2026-07-21）
+- [x] 覆盖 `--role` 删除、Loop 数值、Today 无副作用、roles 子命令和 permission mode 真实边界（2026-07-21）
+- [x] 9 个目标测试文件 129 项通过；完整 app 205 个 test files 通过、2 个跳过，2391 项通过、3 项跳过（2026-07-21）
+- [x] app typecheck 与 oxlint 通过，0 warning / 0 error（2026-07-21）
+
+### 发布门槛
+
+- [ ] 完成真实 TUI smoke：`/transform list|status|off`、实验指引、未知 slash、本地 permission 错误、ZIP/Markdown export 与真实 `/loop`
+- [ ] 完成 bundle/native smoke、六平台 ZIP/SHA assets、0.0.16 → 0.0.17 upgrade 与 0.0.17 fresh install；安装器不恢复 telemetry 提示行
+- [ ] 增加 0.0.17 release notes，完成内部 CHANGELOG、README、用户指南和设计文档最终对账
+- [ ] 正式发布时才切换 package version、tag、公开 release、Web manifest、下载页、Changelog 与升级公告
+
+### 明确不做
+
+- 支付、GitHub PR 写入、entitlement、Team、managed reviewer、云端 `/schedule`、`/ship`、Hosted Report、同步闭环、默认多 reviewer、`--agent` judge mode、Role/Agent 市场、mascot 与 welcome 动画均不进入 0.0.17。
+
 ## ⏳ 0.1.0 — Pro PR Gate + Billing
 
 > 方案: [docs/design/0.1.0-pro-pr-gate.md](docs/design/0.1.0-pro-pr-gate.md)。本版保留完整的本地 BYOK Loop，首个付费权益是把 Gate summary/comment 和 `wukong/gate` status 发布回 GitHub PR。候选 `$9/月` 只用于邀请制实验，不是公开价格承诺。
@@ -83,7 +115,7 @@
 - [ ] terminal completion reporting rate ≥ 90%
 - [ ] 至少 2 个用户在 7 天内重复完成 Loop
 - [ ] 至少取得 3 条可归因反馈，解释继续使用或放弃原因
-- [ ] 完成 0.0.14 遗留的真实 TUI `/loop` 人工 smoke
+- [ ] 0.0.17 正式发布并完成升级、fresh install 与真实 TUI `/loop` smoke
 
 ### P0：Entitlement 单点真相源
 
@@ -290,7 +322,7 @@
 - [x] NEEDS_WORK 才继续修改；ERROR 停止；transient reviewer error 最多原地重试一次（2026-07-16）
 - [x] 达到最大轮次返回 NEEDS_WORK/max_iterations，不增加 EXHAUSTED 用户状态（2026-07-16）
 - [x] 无测试项目：源代码改动阻断；纯文档改动可进入 reviewer（2026-07-15）
-- [x] `wukong loop` 支持 headless 运行及 `--model/--role` writer；reviewer 独立且只读（2026-07-15）
+- [x] `wukong loop` 支持 headless 运行及 `--model` writer；reviewer 独立且只读（2026-07-15，`--role` 于 2026-07-21 移除）
 - [x] `--every` 继续复用 agent-core scheduler，不新增 timer（2026-07-16，现有实现已满足）
 
 ### 内部检查层与兼容
@@ -304,11 +336,11 @@
 
 ### 变身 Role Profiles
 
-- [x] 内置 general/reviewer/security/tester，支持全局 `--role` 和 TUI `/transform`（实验开关默认关闭，2026-07-15）
+- [x] 内置 general/reviewer/planner/strategist/security/tester，通过 TUI `/transform` 切换（实验开关默认关闭；全局 `--role` 于 2026-07-21 移除）
 - [x] 用户角色存 `~/.wukong/roles/`；项目角色必须以 `project:<name>` 显式选择，不能覆盖 builtin（2026-07-15）
 - [x] role 只定义 prompt、默认 model、允许 tools、verify profile；工具 allowlist 只能收窄基础 profile，未知字段会被拒绝（2026-07-15）
 - [x] `wukong roles list/show/init`；0.0.12 不做市场、团队同步或多角色自动编排（2026-07-15）
-- [x] 将 `loop --role` 接到 Session role resolver；内部检查不单独选择角色或模型（2026-07-15）
+- [x] 将角色切换收敛到 TUI `/transform`；删除 `loop --role`，内部检查不单独选择角色或模型（2026-07-21）
 
 ### 端到端同步与发布门槛
 
@@ -442,7 +474,7 @@
 - [x] `packages/verification` 独立核心包（verify / scan / risks / policy / report）
 - [x] `wukong verify` / `wukong scan` / `wukong guard` top-level 命令
 - [x] `wukong_verify` builtin agent tool（structured result）
-- [x] TUI `/verify`、`/scan`、`/guard`、`/report`
+- [x] TUI `/verify`、`/scan`、`/guard`（`/report` 于 2026-07-21 移除）
 - [x] `/goal` 单任务驱动（含队列；完成判定为 agent 自评，gate 见上）
 - [x] agent-core cron 工具（CronCreate/List/Delete，会话内 recurring/one-shot，`/loop --every` 的复用基础）
 - [x] fixtures、unit tests、CLI/TUI/tool smoke tests
@@ -451,4 +483,4 @@
 
 ---
 
-**最后更新**: 2026-07-20（0.1.0 Pro PR Gate + Billing 规划；公开 Checkout 继续关闭）
+**最后更新**: 2026-07-21（增加 0.0.17 Command Surface Reliability；0.1.0 商业边界不变）

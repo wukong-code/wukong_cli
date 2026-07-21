@@ -43,7 +43,7 @@ import { handlePluginsCommand } from './plugins';
 import { handleProviderCommand } from './provider';
 import type { BuiltinSlashCommandName } from './registry';
 import { handleReloadCommand, handleReloadTuiCommand } from './reload';
-import { resolveSlashCommandInput, slashBusyMessage } from './resolve';
+import { resolveSlashCommandInput, slashBusyMessage, slashDisabledMessage } from './resolve';
 import {
   handleExportDebugZipCommand,
   handleExportMdCommand,
@@ -60,7 +60,6 @@ import {
   handleVerifySlashCommand,
   handleScanSlashCommand,
   handleGuardSlashCommand,
-  handleReportSlashCommand,
   handleProofSlashCommand,
   handleJudgeSlashCommand,
 } from './verification';
@@ -186,12 +185,23 @@ async function executeSlashCommand(host: SlashCommandHost, input: string): Promi
       host.track('input_command_invalid', { reason: 'blocked', command: intent.commandName });
       host.showError(slashBusyMessage(intent.commandName, intent.reason));
       return;
+    case 'disabled':
+      host.track('input_command_invalid', { reason: 'disabled', command: intent.commandName });
+      host.showError(slashDisabledMessage(intent.commandName, intent.experimentalFlag));
+      return;
     case 'invalid':
+      if (parsedCommand !== null && tryHandleDanceCommand(host, parsedCommand)) {
+        return;
+      }
       host.track('input_command_invalid', {
         reason: intent.reason,
         command: intent.commandName,
       });
-      host.showError(`Invalid slash command: /${intent.commandName}`);
+      host.showError(
+        intent.suggestions.length === 0
+          ? `Unknown slash command: /${intent.commandName}. Run /help to list commands.`
+          : `Unknown slash command: /${intent.commandName}. Did you mean ${intent.suggestions.map((name) => `/${name}`).join(', ')}?`,
+      );
       return;
     case 'skill': {
       const session = host.session;
@@ -206,15 +216,6 @@ async function executeSlashCommand(host: SlashCommandHost, input: string): Promi
       host.sendSkillActivation(session, intent.skillName, intent.args);
       return;
     }
-    case 'message':
-      // Unknown slash command: let /dance claim it before it falls through to
-      // the model as a normal message. This runs *after* builtin and skill
-      // resolution, so a real command or a same-named skill always wins.
-      if (parsedCommand !== null && tryHandleDanceCommand(host, parsedCommand)) {
-        return;
-      }
-      host.sendNormalUserInput(intent.input);
-      return;
     case 'builtin':
       host.track('input_command', { command: intent.name });
       if (intent.name === 'new' && parsedCommand?.name === 'clear') {
@@ -234,6 +235,10 @@ async function handleBuiltInSlashCommand(
   name: BuiltinSlashCommandName,
   args: string,
 ): Promise<void> {
+  if (args.trim().length > 0 && NO_ARGUMENT_COMMANDS.has(name)) {
+    host.showError(`Usage: /${name}`);
+    return;
+  }
   switch (name) {
     case 'exit':
       void host.stop();
@@ -383,9 +388,6 @@ async function handleBuiltInSlashCommand(
     case 'guard':
       await handleGuardSlashCommand(host, args);
       return;
-    case 'report':
-      await handleReportSlashCommand(host);
-      return;
     case 'review':
       await handleReviewSlashCommand(host, args);
       return;
@@ -394,6 +396,37 @@ async function handleBuiltInSlashCommand(
       return;
   }
 }
+
+const NO_ARGUMENT_COMMANDS = new Set<BuiltinSlashCommandName>([
+  'exit',
+  'help',
+  'version',
+  'new',
+  'resume-codex',
+  'resume-claude',
+  'resume-cursor',
+  'tasks',
+  'mcp',
+  'experiments',
+  'reload',
+  'reload-tui',
+  'provider',
+  'permission',
+  'settings',
+  'usage',
+  'status',
+  'feedback',
+  'init',
+  'fork',
+  'export-debug-zip',
+  'login',
+  'logout',
+  'web',
+  'verify',
+  'scan',
+  'proof',
+  'judge',
+]);
 
 function parseResumeSource(args: string): SessionSource | null {
   const value = args.trim().toLowerCase();

@@ -37,6 +37,10 @@ export interface TodayDeps {
 
 export async function handleToday(deps: TodayDeps, options: TodayCliOptions): Promise<number> {
   try {
+    if (options.clearFocus === true && options.focus?.trim()) {
+      deps.stderr.write('wukong today failed: focus and --clear-focus cannot be used together.\n');
+      return 2;
+    }
     const cwd = options.workspace ?? deps.cwd();
 
     if (options.clearFocus === true) {

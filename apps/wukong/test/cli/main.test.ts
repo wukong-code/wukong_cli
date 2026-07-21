@@ -8,7 +8,7 @@ import { runPrompt } from '#/cli/run-prompt';
 import { runShell } from '#/cli/run-shell';
 import { formatStartupError } from '#/cli/startup-error';
 import { runUpdatePreflight } from '#/cli/update/preflight';
-import { handleMainCommand, handleUpgradeCommand, main } from '#/main';
+import { handleMainCommand, handleUpgradeCommand, main, promptFailureExitCode } from '#/main';
 
 const mocks = vi.hoisted(() => {
   const parse = vi.fn();
@@ -353,5 +353,20 @@ describe('main entry command handling', () => {
         operation: 'run prompt',
       }),
     ).toBe('error: failed to run prompt: Provider not set\n');
+  });
+
+  it('maps Loop runtime failures to exit 2', () => {
+    expect(promptFailureExitCode({
+      ...defaultOpts(),
+      prompt: 'fix tests',
+      headlessGoal: {
+        kind: 'loop',
+        objective: 'fix tests',
+        replace: false,
+        stopCondition: 'proof-pass',
+        maxIterations: 3,
+      },
+    })).toBe(2);
+    expect(promptFailureExitCode({ ...defaultOpts(), prompt: 'normal prompt' })).toBe(1);
   });
 });

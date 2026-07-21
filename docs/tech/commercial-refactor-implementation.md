@@ -641,14 +641,14 @@ wukong test --coverage
 
 ## 8.5 P0.5 已实现基线: `proof` / `judge` / goal gate / `loop`
 
-这一组已按 ROADMAP Milestone 0.5 完成。`loop` 是产品组织核心，`proof` 是 deterministic evidence，`judge` 是独立的 deterministic evaluator；Loop 的最终出口统一为 proof + fresh-context reviewer。全部构建在 `@wukong/verification`、`/goal` 和 agent-core cron scheduler 之上，不引入新核心引擎。
+这一组已按 ROADMAP Milestone 0.5 完成。`loop` 是产品组织核心，`proof` 是 deterministic evidence，`judge` 是独立的 deterministic evaluator；Loop 的最终出口统一为 proof + fresh-context reviewer。执行构建在 `@wukong/verification` 和 `/goal` 之上；长期时间触发仍由独立 cron 工具负责。
 
 实施顺序固定为：**`/proof`（§8.5.2）→ `/judge`（§8.5.3）→ `/goal` verification gate（§8.5.4）→ `/loop`（§8.5.1）**。理由：proof/judge 只是 verify+scan 的编排与重排版，便宜且先产出可分享物；judge-pass 与 goal gate 是 loop 停止判断的前提；loop 最后落地时只做编排。
 
 两个复用决策（本节其余部分以此为前提）：
 
 - **执行核复用 `/goal`**：`/goal` 已具备强制 delivery gate，`/loop` 只负责设置 `proof-pass`、迭代上限和 pacing。
-- **时间触发复用 cron**：`/loop` 的可选 `--every` 节流由 agent-core cron scheduler 驱动，不新写 timer（见 §2.1 原则 8）。
+- **轮间节流归 Goal 生命周期**：`/loop --every` 由 Goal driver 可取消等待，PASS、stop、cancel 后不会遗留 cron prompt。
 
 ### 8.5.1 `wukong loop` / `/loop` — 本机迭代 loop（核心，最后落地）
 
@@ -658,7 +658,7 @@ wukong test --coverage
 
 两类用例明确拆开，`/loop` 只做第一类：
 
-- **迭代收敛型**（"fix all failing tests until verify-pass"）：归 `/loop`。默认紧循环——上一轮 gate 未过立即开始下一轮；`--every` 是可选的轮间最小间隔（节流），用于等外部反馈（如 CI 跑完）的场景，由 cron scheduler 驱动。
+- **迭代收敛型**（"fix all failing tests until verify-pass"）：归 `/loop`。默认紧循环——上一轮 gate 未过立即开始下一轮；`--every` 是可选的轮间最小间隔（节流），用于等外部反馈（如 CI 跑完）的场景，由 Goal driver 等待。
 - **定时巡检型**（"每小时 check PR / feedback channel"）：不归 `/loop`。本机现在就能用已实现的 cron 工具（自然语言让 agent 创建 recurring 任务）；跨机器持续性归 `/schedule`（hosted，Milestone 3+），不在 P0.5。
 
 与其它命令的关系：
@@ -672,9 +672,9 @@ wukong test --coverage
 
 ```bash
 # TUI — 迭代直到验证通过（默认紧循环，轮次自动衔接）
-/loop "<目标>" until verify-pass
-/loop "fix all failing tests" until verify-pass
-/loop "<目标>" until scan-clean every 10m   # 可选节流：轮间最小间隔
+/loop --until verify-pass -- "<目标>"
+/loop --until verify-pass -- "fix all failing tests"
+/loop --until scan-clean --every 10m -- "<目标>"   # 可选节流：轮间最小间隔
 /loop status
 /loop pause
 /loop resume
@@ -697,7 +697,7 @@ wukong loop "<目标>" --until verify-pass --dry-run
 export interface LoopOptions {
   goal: string;                      // 自然语言目标
   stopCondition: StopCondition;      // 可验证停止条件（必填，loop 的核心）
-  everyMs?: number;                  // 可选：轮间最小间隔（节流），由 cron scheduler 驱动
+  everyMs?: number;                  // 可选：轮间最小间隔（Goal-owned、可取消）
   maxIterations?: number;            // 默认 10，防失控
   iterationTimeoutMs?: number;       // 单轮超时
   cwd?: string;
@@ -729,7 +729,6 @@ export interface LoopResult {
 sequenceDiagram
   participant U as User
   participant L as Loop Orchestrator
-  participant C as Cron Scheduler（仅设 everyMs 时参与）
   participant G as Goal（执行核 + verification gate）
   participant A as Agent (写代码)
 
@@ -744,19 +743,19 @@ sequenceDiagram
       L-->>U: completed
     else gate 未过
       G-->>L: failed + 失败反馈
-      L->>C: 若设 everyMs，等待下一轮窗口（cron scheduler 驱动）
+      L->>L: 若设 everyMs，执行可取消的 Goal-owned 等待
       L->>G: 失败反馈注入下一轮 goal prompt
     end
   end
   note over L: 进程退出即停；定时巡检用 cron 工具，云端持续性是 /schedule
 ```
 
-#### 与 `/goal` 和 cron 的集成
+#### 与 `/goal` 和 cron 的边界
 
 `/loop` 自身只做编排，能力全部来自复用：
 
 - 单轮执行复用 `/goal` 执行核，停止判断复用 goal verification gate（§8.5.4，硬前置）。
-- `--every` 节流复用 agent-core cron scheduler（session-scoped、关机即停，与 cron 现有语义一致），不新写 timer。
+- `--every` 节流由 Goal driver 持有并可取消，不创建 cron task；定时巡检继续使用独立 cron 工具。
 - `/loop` 额外提供的只有：多轮编排、失败反馈注入下一轮 prompt、迭代历史快照（`LoopResult.history` 取自每轮 gate 的 `VerificationResult`）。
 
 #### P0.5 已交付边界
@@ -1135,9 +1134,9 @@ pnpm -C apps/wukong run dev:cli-only -- guard --disable
 
 ### Milestone 4.5: TUI verification slash commands - 已完成
 
-- 新增 `/verify`、`/scan`、`/guard`、`/report`。
+- 新增 `/verify`、`/scan`、`/guard`。
 - TUI handler 复用 `@wukong/verification`。
-- `/report` 读取 workspace 内最新 verification/scan report。
+- `/report` 查看器已于 2026-07-21 移除；生成报告仍由 verify/scan/proof 负责。
 - 添加 TUI handler 单元测试。
 
 验收:
@@ -1156,7 +1155,7 @@ pnpm --filter @wukong/wukong exec vitest run test/tui/commands/verification.test
 - `apps/wukong/src/cli/sub/proof.ts`、`judge.ts`、`loop.ts` 及 `commands.ts` 注册。
 - TUI slash commands `/proof`、`/judge`、`/loop` 及 dispatch。
 - `/goal` verification gate（§8.5.4）：goal 完成判定接入 deterministic 评估，未过打回并注入反馈。
-- `/loop` 编排层：复用 goal gate 做停止判断，`--every` 节流复用 agent-core cron scheduler，不新写 timer。
+- `/loop` 编排层：复用 goal gate 做停止判断，`--every` 使用 Goal-owned 可取消等待。
 
 验收:
 
@@ -1171,7 +1170,7 @@ pnpm -C apps/wukong run dev:cli-only -- loop "fix failing tests" --until verify-
 - 带 stopCondition 的 goal：agent 宣布完成但 verify 失败时，gate 拒绝完成并注入反馈继续。
 - `loop` 对一个目标持续驱动，停止条件由 gate 判断，不由写代码的 agent 自评。
 - `loop` 达到 max-iterations 时明确返回 `max-iterations` 状态，不假装成功。
-- `loop --every` 的轮间等待由 cron scheduler 驱动，代码中无第二套 timer 实现。
+- `loop --every` 的轮间等待不会立即续轮，且 PASS、stop、cancel 后不存在遗留 cron task。
 
 ### Milestone 5: 商业化接口
 
@@ -1201,7 +1200,7 @@ pnpm -C apps/wukong run dev:cli-only -- loop "fix failing tests" --until verify-
 - policy engine。
 - shell hook render/parse/remove。
 - goal verification gate（agent 宣布完成 → gate 评估 → 未过打回并注入反馈的完整路径）。
-- loop orchestrator（停止条件判断、max-iterations、反馈注入、`--every` 走 cron scheduler）。
+- loop orchestrator（停止条件判断、max-iterations、反馈注入、`--every` 可取消等待）。
 
 ### 11.2 Fixture tests
 
@@ -1255,7 +1254,7 @@ packages/verification/test/fixtures/
 | `/loop` 失控（agent 持续烧 token） | 高 | max-iterations 默认上限、单轮超时、dry-run、人可随时 stop |
 | `/loop` 停止条件由 agent 自评 | 高 | 先落地 `/goal` verification gate（§8.5.4）再实现 `/loop`，禁止 agent 自评 |
 | `/loop` 被误当成 cron/daemon | 中 | 文档与 help 明确迭代收敛语义（关机即停）；定时巡检指向 cron 工具与 `/schedule` |
-| loop 与 cron 形成两套定时引擎 | 中 | `--every` 强制复用 agent-core cron scheduler，不新写 timer |
+| Loop 节流在结束后再次触发 | 高 | `--every` 归 Goal driver；不创建脱离 Goal 生命周期的 cron task |
 | judge 叙事超前（宣传第二 agent 但实现是 deterministic） | 中 | 默认模式如实标注 deterministic；`--agent` 落地前不外宣"第二-agent reviewer" |
 
 ---

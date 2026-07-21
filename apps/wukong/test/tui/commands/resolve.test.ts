@@ -103,6 +103,11 @@ describe('resolveSlashCommandInput', () => {
       commandName: 'experiments',
       reason: 'streaming',
     });
+    expect(resolve('/settings', { isStreaming: true })).toEqual({
+      kind: 'blocked',
+      commandName: 'settings',
+      reason: 'streaming',
+    });
     expect(resolve('/swarm on', { isStreaming: true })).toEqual({
       kind: 'blocked',
       commandName: 'swarm',
@@ -237,10 +242,33 @@ describe('resolveSlashCommandInput', () => {
     });
   });
 
-  it('returns message for unknown slash input', () => {
+  it('returns a local error intent with suggestions for unknown slash input', () => {
+    expect(resolve('/transfrm security')).toEqual({
+      kind: 'invalid',
+      commandName: 'transfrm',
+      reason: 'unknown',
+      suggestions: ['transform'],
+    });
     expect(resolve('/does-not-exist arg')).toEqual({
-      kind: 'message',
-      input: '/does-not-exist arg',
+      kind: 'invalid',
+      commandName: 'does-not-exist',
+      reason: 'unknown',
+      suggestions: [],
+    });
+  });
+
+  it('blocks disabled experimental commands instead of sending them to the model', () => {
+    expect(resolve('/transform list')).toEqual({
+      kind: 'disabled',
+      commandName: 'transform',
+      experimentalFlag: 'role_profiles',
+    });
+
+    setExperimentalFeatures([{ id: 'role_profiles', enabled: true }]);
+    expect(resolve('/transform list')).toMatchObject({
+      kind: 'builtin',
+      name: 'transform',
+      args: 'list',
     });
   });
 
@@ -286,6 +314,28 @@ describe('goal command resolution', () => {
       kind: 'builtin',
       name: 'goal',
     });
+  });
+});
+
+describe('loop command resolution', () => {
+  it('allows status, pause, and stop while streaming', () => {
+    for (const subcommand of ['status', 'pause', 'stop']) {
+      expect(resolve(`/loop ${subcommand}`, { isStreaming: true })).toMatchObject({
+        kind: 'builtin',
+        name: 'loop',
+        args: subcommand,
+      });
+    }
+  });
+
+  it('blocks Loop creation and resume while streaming', () => {
+    for (const args of ['fix tests', 'resume']) {
+      expect(resolve(`/loop ${args}`, { isStreaming: true })).toEqual({
+        kind: 'blocked',
+        commandName: 'loop',
+        reason: 'streaming',
+      });
+    }
   });
 });
 

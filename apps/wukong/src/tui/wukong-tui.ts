@@ -49,9 +49,10 @@ import {
   BUILTIN_SLASH_COMMANDS,
   buildSkillSlashCommands,
   findBuiltInSlashCommand,
-  isExperimentalFlagEnabled,
+  isSlashCommandVisible,
   setExperimentalFeatures,
   sortSlashCommands,
+  transformArgumentCompletions,
   type WukongSlashCommand,
   type SkillListSession,
 } from './commands';
@@ -176,7 +177,6 @@ import {
 } from './utils/transcript-window';
 import { formatBashOutputForDisplay } from './utils/shell-output';
 import { nextTranscriptId } from './utils/transcript-id';
-import { loopOutcomeFromGoal } from '#/utils/loop-result';
 
 export type { TUIState } from './tui-state';
 export { createTUIState } from './tui-state';
@@ -335,7 +335,6 @@ export class WukongTUI {
         auto: startupInput.cliOptions.auto,
         plan: startupInput.cliOptions.plan,
         model: startupInput.cliOptions.model,
-        role: startupInput.cliOptions.role,
         startupNotice: startupInput.startupNotice,
       },
     };
@@ -381,7 +380,7 @@ export class WukongTUI {
 
   private getSlashCommands(): readonly WukongSlashCommand[] {
     const builtins = sortSlashCommands(BUILTIN_SLASH_COMMANDS).filter(
-      (command) => command.hidden !== true && isExperimentalFlagEnabled(command.experimentalFlag),
+      isSlashCommandVisible,
     );
     const skills = this.skillCommands.filter(
       (command) => findBuiltInSlashCommand(command.name) === undefined,
@@ -397,7 +396,14 @@ export class WukongTUI {
         aliases: cmd.aliases,
         description: cmd.description,
         ...(cmd.argumentHint !== undefined ? { argumentHint: cmd.argumentHint } : {}),
-        ...(completer !== undefined
+        ...(cmd.name === 'transform'
+          ? {
+              getArgumentCompletions: async (prefix: string) => {
+                const roles = await this.session?.listRoles().catch(() => []);
+                return transformArgumentCompletions(prefix, roles);
+              },
+            }
+          : completer !== undefined
           ? { getArgumentCompletions: (prefix: string) => completer(prefix) }
           : {}),
       };
@@ -684,10 +690,10 @@ export class WukongTUI {
       if (
         goal !== null
         && goal.goalId === record.goalId
-        && (goal.status === 'complete' || goal.status === 'blocked')
+        && goal.loopResult !== undefined
       ) {
-        const outcome = goal.loopResult?.status ?? loopOutcomeFromGoal(goal).status;
-        const iterations = goal.loopResult?.iterations ?? goal.iteration;
+        const outcome = goal.loopResult.status;
+        const iterations = goal.loopResult.iterations;
         const completion = await completeTrackedTuiLoop(goal.goalId, outcome, iterations);
         if (completion?.repeatedCompletedWithin7d) {
           this.track('loop_repeat_completed_7d');
@@ -787,6 +793,17 @@ export class WukongTUI {
         this.showActiveLoopRecovery(record);
         return;
       }
+      if (goal.loopResult !== undefined) {
+        const completion = await completeTrackedTuiLoop(
+          goal.goalId,
+          goal.loopResult.status,
+          goal.loopResult.iterations,
+        );
+        if (completion?.repeatedCompletedWithin7d) this.track('loop_repeat_completed_7d');
+        this.restoreEditor();
+        this.showStatus(`Loop already ended · Gate ${goal.loopResult.status}.`);
+        return;
+      }
       if (goal.status === 'paused' || goal.status === 'blocked') {
         await session.resumeGoal();
       }
@@ -822,11 +839,6 @@ export class WukongTUI {
 
   private async init(): Promise<boolean> {
     setExperimentalFeatures(await this.harness.getExperimentalFeatures());
-    if (this.options.startup.role !== undefined && !isExperimentalFlagEnabled('role_profiles')) {
-      throw new Error(
-        'Role profiles are experimental. Enable experimental.role_profiles in config.toml before using --role.',
-      );
-    }
     await this.authFlow.refreshAvailableModels();
     void this.refreshProviderModelsInBackground();
 
@@ -904,10 +916,6 @@ export class WukongTUI {
         if (startup.model !== undefined) {
           await session.setModel(startup.model);
         }
-      }
-      if (session !== undefined && startup.role !== undefined) {
-        await session.setRole(startup.role);
-        if (startup.model !== undefined) await session.setModel(startup.model);
       }
     } catch (error) {
       if (!isOAuthLoginRequiredError(error)) throw error;

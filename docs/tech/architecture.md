@@ -47,7 +47,6 @@ wukong loop
 /verify
 /scan
 /guard
-/report
 /goal          # 单任务驱动 agent 多轮推进；带 stop condition 时由 proof + 只读 reviewer gate 判定
 wukong_verify
 ```
@@ -58,7 +57,7 @@ P0.5 已按 proof → judge → goal gate → loop 的顺序完成，把验证�
 wukong proof   # Merge Proof Report（Wow Moment，第 1 步）
 wukong judge   # evaluator-only 判定（第 2 步，deterministic 先行）
 goal gate      # /goal verification gate（第 3 步，/loop 硬前置）
-wukong loop    # 本机迭代 loop（第 4 步，核心，关机即停；--every 节流复用 cron scheduler）
+wukong loop    # 本机迭代 loop（第 4 步，核心，关机即停；--every 是 Goal-owned 可取消等待）
 ```
 
 ## 2. 架构原则
@@ -74,7 +73,7 @@ wukong loop    # 本机迭代 loop（第 4 步，核心，关机即停；--every
    `verify`、`scan`、`proof` 和 deterministic `judge` 不依赖模型并可离线运行；Loop gate 在这些检查通过后，再用用户配置的模型启动 fresh-context 只读 reviewer。模型不可用时返回 `inconclusive`，不会伪装成通过。
 
 4. **loop 停止判断不由写代码的 agent 自评**
-   `/loop` 的统一 `proof-pass` gate 先运行 deterministic proof，再由 fresh-context 只读 reviewer 判定；任一步未通过都不会完成。`/loop` 不新写定时引擎，`--every` 节流复用 agent-core cron scheduler。
+   `/loop` 的统一 `proof-pass` gate 先运行 deterministic proof，再由 fresh-context 只读 reviewer 判定；任一步未通过都不会完成。`--every` 由 Goal driver 等待，PASS、stop、cancel 都不会遗留未来 prompt。
 
 5. **guard 是 best-effort 防护**
    P0 guard 是交互式 shell 风险确认层，不宣传不可绕过。更强隔离以后再接 sandbox/tool-policy。

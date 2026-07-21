@@ -102,6 +102,12 @@ export async function handleUpgradeCommand(version: string): Promise<void> {
   process.exit(exitCode);
 }
 
+export function promptFailureExitCode(opts: CLIOptions): 1 | 2 {
+  return opts.headlessGoal?.kind === 'loop' || /^\s*\/loop(?:\s|$)/u.test(opts.prompt ?? '')
+    ? 2
+    : 1;
+}
+
 /** A neutral CLIOptions value — `wukong migrate` never opens a chat session. */
 const MIGRATE_CLI_OPTIONS: CLIOptions = {
   session: undefined,
@@ -111,7 +117,6 @@ const MIGRATE_CLI_OPTIONS: CLIOptions = {
   auto: false,
   plan: false,
   model: undefined,
-  role: undefined,
   outputFormat: undefined,
   prompt: undefined,
   skillsDirs: [],
@@ -150,7 +155,7 @@ export function main(): void {
           }),
         );
         process.stderr.write(`See log: ${resolveGlobalLogPath(resolveWukongHome())}\n`);
-        process.exit(1);
+        process.exit(promptFailureExitCode(opts));
       });
     },
     () => {

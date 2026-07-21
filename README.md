@@ -29,13 +29,20 @@ background-task count, and local session-content search are included without add
 payment or managed model credits. See the
 [0.0.16 design](docs/design/0.0.16-loop-convergence.md).
 
+Version `0.0.17` is the next planned patch. It removes misleading role/report aliases,
+keeps `/transform list|status|off` discoverable, prevents unknown or disabled slash
+commands from reaching the model, and makes permission, Loop, export, Today, and
+roles argument handling strict and regression-tested. It remains free and BYOK;
+the public package and download version stay at `0.0.16` until the release gates
+pass. See the [0.0.17 design](docs/design/0.0.17-command-surface-reliability.md).
+
 Version `0.1.0` is planned around one narrow commercial experiment: the local BYOK Loop remains complete and free, while Pro is planned to unlock publishing a redacted Gate summary and commit status to a GitHub pull request. Public Checkout remains closed; an invite-only RC can start only after activation and engineering gates are met. See the [0.1.0 design](docs/design/0.1.0-pro-pr-gate.md).
 
 Version `0.0.12` established the Loop-first runtime. `verify`, `scan`, and `proof` remain available as advanced diagnostics, but they are internal Loop layers rather than separate products or quotas. See the [0.0.12 design contract](docs/design/verification-loop-v2.md) and the [0.0.13 review design](docs/design/review-learning-loop.md).
 
 Loop returns one durable result: `PASS` (exit `0`), `NEEDS_WORK` (exit `1`), or `ERROR` (exit `2`). Guests receive one two-iteration local trial; signed-in Free users receive 10 Loop sessions per month with up to five iterations each. Internal checks never consume additional quota. Temporary quota-service failures warn and continue locally with the five-iteration safety cap. Legacy `verify-pass`, `scan-clean`, and `judge-pass` Goal records and flags remain readable and migrate to the unified proof gate; see the [compatibility matrix](docs/design/0.0.12-compatibility.md).
 
-The experimental Role Profiles foundation is now implemented. Enable `experimental.role_profiles` in `~/.wukong/config.toml`, then run `wukong roles list`, start with `wukong --role security`, or switch the current TUI session with `/transform security` and `/transform off`.
+The experimental Role Profiles foundation is now implemented. Enable `experimental.role_profiles` in `~/.wukong/config.toml`, use `wukong roles list/show/init` to manage profiles, and switch the current TUI session with `/transform security` or `/transform off`.
 
 Inside the TUI, `/resume` opens Wukong sessions. Use `/resume codex`, `/resume claude`, or `/resume cursor` to continue a local session from another agent. Foreign history is imported into Wukong as read-only context; old tool calls are never replayed and the current workspace is checked again before work continues.
 
@@ -54,9 +61,9 @@ wukong acp                     # run as an Agent Client Protocol server
 wukong server                  # run the local REST/WebSocket server
 wukong web                     # open the local web UI
 wukong loop "ship the change"  # iterate until the independent delivery gate passes
-wukong loop "fix tests" --model fast --role tester
+wukong loop "fix tests" --model fast --review-model slow
 wukong loop "fix tests" --review-model reviewer
-wukong loop "fix tests" --max-iterations 5 --every 30s
+wukong loop "fix tests" --max-iterations 5 --every 1m
 wukong review init             # create .wukong/review-policy.md
 wukong review feedback <finding-id> accept
 wukong review stats            # show local feedback counts

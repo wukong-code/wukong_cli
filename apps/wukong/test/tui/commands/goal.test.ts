@@ -99,6 +99,7 @@ function fakeSnapshot() {
     goalId: 'g1',
     objective: 'obj',
     status: 'active' as const,
+    iteration: 0,
     turnsUsed: 0,
     tokensUsed: 0,
     wallClockMs: 0,
@@ -371,13 +372,22 @@ describe('parseLoopCommand', () => {
 
   it('returns status and stop subcommands', () => {
     expect(parseLoopCommand('status')).toEqual({ kind: 'status' });
+    expect(parseLoopCommand('pause')).toEqual({ kind: 'pause' });
+    expect(parseLoopCommand('resume')).toEqual({ kind: 'resume' });
     expect(parseLoopCommand('stop')).toEqual({ kind: 'stop' });
+    expect(parseLoopCommand('--help')).toEqual({ kind: 'help' });
   });
 
   it('rejects invalid --max-iterations', () => {
-    expect(parseLoopCommand('--until verify-pass --max-iterations abc fix')).toMatchObject({
-      kind: 'error',
-    });
+    for (const value of ['abc', '0', '-1', '0.5', '3.9', '1e3', '3x']) {
+      expect(parseLoopCommand(`--max-iterations ${value} fix`)).toMatchObject({ kind: 'error' });
+    }
+  });
+
+  it('rejects unknown and malformed Loop options instead of treating them as objectives', () => {
+    expect(parseLoopCommand('--wat fix tests')).toMatchObject({ kind: 'error' });
+    expect(parseLoopCommand('--until nope fix tests')).toMatchObject({ kind: 'error' });
+    expect(parseLoopCommand('--review-model')).toMatchObject({ kind: 'error' });
   });
 });
 
@@ -962,6 +972,55 @@ describe('handleLoopSlashCommand', () => {
 
     expect(session.createGoal).not.toHaveBeenCalled();
     expect(host.showError).toHaveBeenCalled();
+  });
+
+  it('does not let /loop stop cancel an ordinary Goal', async () => {
+    const { host, session } = makeHost();
+    session.getGoal.mockResolvedValueOnce({ goal: fakeSnapshot() });
+
+    await handleLoopSlashCommand(host, 'stop');
+
+    expect(session.cancelGoal).not.toHaveBeenCalled();
+    expect(host.showStatus).toHaveBeenCalledWith(
+      'No Loop is active. The current Goal was left unchanged.',
+    );
+  });
+
+  it('cancels only an actual Loop', async () => {
+    const { host, session } = makeHost();
+    session.getGoal.mockResolvedValue({
+      goal: { ...fakeSnapshot(), stopCondition: 'proof-pass' } as never,
+    });
+
+    await handleLoopSlashCommand(host, 'stop');
+
+    expect(session.cancelGoal).toHaveBeenCalledOnce();
+    expect(loopQuotaMocks.complete).toHaveBeenCalledWith('g1', 'ERROR', 0, 'cancelled');
+  });
+
+  it('restores the original /loop command when permission confirmation is cancelled', async () => {
+    const { host, session } = makeHost({ permissionMode: 'manual' });
+
+    await handleLoopSlashCommand(host, '--max-iterations 3 fix tests');
+    mountedPicker(host).handleInput(ESCAPE);
+
+    expect(host.restoreInputText).toHaveBeenCalledWith('/loop --max-iterations 3 fix tests');
+    expect(session.createGoal).not.toHaveBeenCalled();
+  });
+
+  it('rolls permission mode back when Loop creation fails', async () => {
+    const { host, session } = makeHost({ permissionMode: 'manual' });
+    session.createGoal.mockRejectedValueOnce(new Error('goal store unavailable'));
+
+    await handleLoopSlashCommand(host, 'fix tests');
+    mountedPicker(host).handleInput(ENTER);
+
+    await vi.waitFor(() => {
+      expect(session.setPermission).toHaveBeenNthCalledWith(1, 'auto');
+      expect(session.setPermission).toHaveBeenNthCalledWith(2, 'manual');
+    });
+    expect(host.state.appState.permissionMode).toBe('manual');
+    expect(host.sendNormalUserInput).not.toHaveBeenCalled();
   });
 });
 

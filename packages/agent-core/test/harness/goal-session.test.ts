@@ -362,6 +362,124 @@ describe('goal session end-to-end', () => {
     expect(goal?.terminalReason).toBeUndefined();
   });
 
+  it('records a terminal NEEDS_WORK result when a Loop writer marks itself blocked', async () => {
+    const sessionDir = await makeTempDir();
+    const events: Array<Record<string, unknown>> = [];
+    const { session, agent, scripted } = await setupSession(sessionDir, events, ['GetGoal', 'UpdateGoal']);
+    const api = new SessionAPIImpl(session);
+    await api.createGoal({
+      agentId: 'main',
+      objective: 'finish the migration',
+      stopCondition: 'proof-pass',
+      maxIterations: 3,
+    });
+
+    scripted.mockNextResponse({
+      type: 'function',
+      id: 'blocked-loop',
+      name: 'UpdateGoal',
+      arguments: JSON.stringify({ status: 'blocked' }),
+    });
+    scripted.mockNextResponse({ type: 'text', text: 'The required credential is unavailable.' });
+
+    agent.turn.prompt([{ type: 'text', text: 'finish the migration' }]);
+    await agent.turn.waitForCurrentTurn();
+
+    const goal = (await api.getGoal({ agentId: 'main' })).goal;
+    expect(goal).toMatchObject({
+      status: 'blocked',
+      loopResult: { status: 'NEEDS_WORK', reasonCode: 'model_blocked' },
+    });
+  });
+
+  it('enforces maxIterations even when the writer never calls UpdateGoal', async () => {
+    const sessionDir = await makeTempDir();
+    const events: Array<Record<string, unknown>> = [];
+    const { session, agent, scripted } = await setupSession(sessionDir, events, ['GetGoal', 'UpdateGoal']);
+    const api = new SessionAPIImpl(session);
+    await api.createGoal({
+      agentId: 'main',
+      objective: 'finish the work',
+      stopCondition: 'proof-pass',
+      maxIterations: 2,
+    });
+    scripted.mockNextResponse({ type: 'text', text: 'Still working.' });
+    scripted.mockNextResponse({ type: 'text', text: 'Still working without a Gate decision.' });
+
+    agent.turn.prompt([{ type: 'text', text: 'finish the work' }]);
+    await agent.turn.waitForCurrentTurn();
+
+    const goal = (await api.getGoal({ agentId: 'main' })).goal;
+    expect(scripted.calls).toHaveLength(2);
+    expect(goal).toMatchObject({
+      status: 'blocked',
+      turnsUsed: 2,
+      loopResult: { status: 'NEEDS_WORK', reasonCode: 'max_iterations' },
+    });
+  });
+
+  it('waits for the configured interval before starting the next Loop turn', async () => {
+    vi.useFakeTimers();
+    try {
+      const sessionDir = await makeTempDir();
+      const events: Array<Record<string, unknown>> = [];
+      const scripted = createScriptedGenerate();
+      let agentRef: Awaited<ReturnType<typeof setupSession>>['agent'] | undefined;
+      let generateCalls = 0;
+      const generate: NonNullable<AgentOptions['generate']> = async (...args) => {
+        generateCalls += 1;
+        if (generateCalls === 1) {
+          await agentRef!.goal.incrementIteration();
+          agentRef!.goal.recordLoopResult({
+            schemaVersion: 2,
+            status: 'NEEDS_WORK',
+            reasonCode: 'check_failed',
+            summary: 'Tests still fail.',
+            checks: [],
+            blockers: [],
+          });
+        }
+        return scripted.generate(...args);
+      };
+      const setup = await setupSession(
+        sessionDir,
+        events,
+        ['GetGoal', 'UpdateGoal'],
+        generate,
+      );
+      agentRef = setup.agent;
+      const api = new SessionAPIImpl(setup.session);
+      await api.createGoal({
+        agentId: 'main',
+        objective: 'fix tests',
+        stopCondition: 'proof-pass',
+        maxIterations: 3,
+        minIntervalMs: 60_000,
+      });
+      scripted.mockNextResponse({ type: 'text', text: 'First attempt finished.' });
+      scripted.mockNextResponse({
+        type: 'function',
+        id: 'blocked-after-wait',
+        name: 'UpdateGoal',
+        arguments: JSON.stringify({ status: 'blocked' }),
+      });
+      scripted.mockNextResponse({ type: 'text', text: 'Stopping after the paced retry.' });
+
+      setup.agent.turn.prompt([{ type: 'text', text: 'fix tests' }]);
+      for (let attempt = 0; attempt < 20 && scripted.calls.length === 0; attempt += 1) {
+        await vi.advanceTimersByTimeAsync(0);
+      }
+      expect(scripted.calls).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(59_999);
+      expect(scripted.calls).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(scripted.calls.length).toBeGreaterThanOrEqual(3);
+      expect((await api.getGoal({ agentId: 'main' })).goal?.status).toBe('blocked');
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not force a goal outcome summary after maxStepsPerTurn is exhausted', async () => {
     const sessionDir = await makeTempDir();
     const events: Array<Record<string, unknown>> = [];

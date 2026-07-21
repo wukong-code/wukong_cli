@@ -11,10 +11,6 @@ import type { JudgeResult, ProofResult, ScanResult, VerificationResult } from '@
 import { UsagePanelComponent } from '../components/messages/usage-panel';
 import { formatErrorMessage } from '../utils/event-payload';
 import type { SlashCommandHost } from './dispatch';
-import { handleReportSlashCommand } from './report';
-
-export { handleReportSlashCommand };
-
 export async function handleVerifySlashCommand(host: SlashCommandHost, _args: string): Promise<void> {
   host.showStatus('Advanced diagnostic · /loop runs project checks automatically.');
   const spinner = host.showProgressSpinner('Running Wukong verification...');

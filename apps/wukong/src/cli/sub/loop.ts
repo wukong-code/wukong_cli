@@ -2,6 +2,8 @@ import type { Command } from 'commander';
 
 import { parseLoopDuration } from '#/utils/duration';
 
+const MAX_LOOP_OBJECTIVE_LENGTH = 4000;
+
 export interface LoopCliOptions {
   readonly objective?: string;
   readonly until?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
@@ -10,7 +12,6 @@ export interface LoopCliOptions {
   readonly dryRun?: boolean;
   readonly model?: string;
   readonly reviewModel?: string;
-  readonly role?: string;
 }
 
 export type RunLoopHandler = (options: LoopCliOptions) => void;
@@ -25,53 +26,47 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
     .option('--every <duration>', 'Optional minimum interval between iterations (e.g. 5m, 1h).')
     .option('--model <model>', 'Writer model alias for this Loop session.')
     .option('--review-model <model>', 'Independent reviewer model alias for this Loop.')
-    .option('--role <role>', 'Writer role profile for this Loop session.')
     .option('--dry-run', 'Validate arguments and print the planned loop without running it.', false)
-    .action(async (objective: string, raw: RawLoopOptions) => {
+    .action(async (objective: string, raw: RawLoopOptions, command: Command) => {
       const everyResult = parseEvery(raw.every);
       if (everyResult.kind === 'error') {
         process.stderr.write(`error: ${everyResult.message}\n`);
         process.exit(1);
+        return;
       }
 
       const until = normalizeLoopStopCondition(raw.until);
       if (raw.until !== undefined && raw.until !== 'proof-pass') {
         process.stderr.write(`warning: --until ${raw.until} is deprecated; using proof-pass.\n`);
       }
+      const inherited = command.optsWithGlobals<Record<string, unknown>>();
       const options: LoopCliOptions = {
         objective,
         until,
-        maxIterations: Number.parseInt(raw.maxIterations, 10),
+        maxIterations: parseMaxIterations(raw.maxIterations),
         minIntervalMs: everyResult.ms,
         dryRun: raw.dryRun === true,
-        model: raw.model,
+        model: raw.model ?? (inherited['model'] as string | undefined),
         reviewModel: raw.reviewModel,
-        role: raw.role,
       };
 
       const validated = validateLoopOptions(options);
       if (validated.kind === 'error') {
         process.stderr.write(`error: ${validated.message}\n`);
         process.exit(1);
+        return;
       }
 
       if (options.dryRun === true) {
-        process.stdout.write('Planned loop:\n');
-        process.stdout.write(`  Objective: ${objective}\n`);
-        process.stdout.write(`  Stop when: ${options.until}\n`);
-        process.stdout.write(`  Max iterations: ${String(options.maxIterations)}\n`);
-        if (options.minIntervalMs !== undefined) {
-          process.stdout.write(`  Minimum interval: ${formatDuration(options.minIntervalMs)}\n`);
-        }
-        if (options.reviewModel !== undefined) {
-          process.stdout.write(`  Reviewer model: ${options.reviewModel}\n`);
-        }
+        process.stdout.write(formatLoopPlan(options));
         process.exit(0);
+        return;
       }
 
       if (onRun === undefined) {
         process.stderr.write('error: Loop runner is unavailable in this build.\n');
         process.exit(2);
+        return;
       }
       onRun(options);
     });
@@ -84,7 +79,6 @@ interface RawLoopOptions {
   readonly dryRun?: boolean;
   readonly model?: string;
   readonly reviewModel?: string;
-  readonly role?: string;
 }
 
 type ValidationResult = { readonly kind: 'ok' } | { readonly kind: 'error'; readonly message: string };
@@ -101,6 +95,9 @@ export function validateLoopOptions(options: LoopCliOptions): ValidationResult {
   if (options.objective === undefined || options.objective.trim().length === 0) {
     return { kind: 'error', message: 'Loop objective is required.' };
   }
+  if (options.objective.length > MAX_LOOP_OBJECTIVE_LENGTH) {
+    return { kind: 'error', message: `Loop objective is too long (max ${String(MAX_LOOP_OBJECTIVE_LENGTH)} characters).` };
+  }
   if (
     options.until !== 'proof-pass'
   ) {
@@ -109,11 +106,33 @@ export function validateLoopOptions(options: LoopCliOptions): ValidationResult {
   if (
     options.maxIterations === undefined ||
     !Number.isFinite(options.maxIterations) ||
+    !Number.isInteger(options.maxIterations) ||
     options.maxIterations <= 0
   ) {
     return { kind: 'error', message: '--max-iterations must be a positive integer.' };
   }
   return { kind: 'ok' };
+}
+
+export function parseMaxIterations(raw: string): number | undefined {
+  if (!/^[1-9]\d*$/.test(raw)) return undefined;
+  const value = Number(raw);
+  return Number.isSafeInteger(value) ? value : undefined;
+}
+
+export function formatLoopPlan(options: LoopCliOptions): string {
+  const lines = [
+    'Planned loop:',
+    `  Objective: ${options.objective ?? ''}`,
+    `  Stop when: ${options.until ?? ''}`,
+    `  Max iterations: ${String(options.maxIterations ?? '')}`,
+  ];
+  if (options.minIntervalMs !== undefined) {
+    lines.push(`  Minimum interval: ${formatDuration(options.minIntervalMs)}`);
+  }
+  if (options.model !== undefined) lines.push(`  Writer model: ${options.model}`);
+  if (options.reviewModel !== undefined) lines.push(`  Reviewer model: ${options.reviewModel}`);
+  return `${lines.join('\n')}\n`;
 }
 
 function normalizeLoopStopCondition(

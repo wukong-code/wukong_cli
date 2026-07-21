@@ -1,7 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Agent } from '../../src/agent';
-import type { CronManager } from '../../src/agent/cron/manager';
 import { GoalMode } from '../../src/agent/goal';
 import { UpdateGoalTool } from '../../src/tools/builtin';
 import { executeTool } from './fixtures/execute-tool';
@@ -100,7 +99,7 @@ describe('UpdateGoalTool verification gate', () => {
     expect(result.isError).toBeFalsy();
     expect(result.stopTurn).toBe(true);
     expect(store.getGoal().goal).toBeNull();
-    expect(mocks.runProof).toHaveBeenCalledWith({ cwd: '/workspace', writeReport: false });
+    expect(mocks.runProof).toHaveBeenCalledWith({ cwd: '/workspace', writeReport: false, signal });
   });
 
   it('rejects complete and injects feedback when proof-pass gate fails', async () => {
@@ -140,7 +139,7 @@ describe('UpdateGoalTool verification gate', () => {
 
     expect(result.stopTurn).toBe(false);
     expect(store.getGoal().goal?.status).toBe('active');
-    expect(mocks.runProof).toHaveBeenCalledWith({ cwd: '/workspace', writeReport: false });
+    expect(mocks.runProof).toHaveBeenCalledWith({ cwd: '/workspace', writeReport: false, signal });
   });
 
   it('marks complete when judge-pass gate passes', async () => {
@@ -155,7 +154,7 @@ describe('UpdateGoalTool verification gate', () => {
 
     expect(result.stopTurn).toBe(true);
     expect(store.getGoal().goal).toBeNull();
-    expect(mocks.runProof).toHaveBeenCalledWith({ cwd: '/workspace', writeReport: false });
+    expect(mocks.runProof).toHaveBeenCalledWith({ cwd: '/workspace', writeReport: false, signal });
   });
 
   it('has no gate when stopCondition is absent', async () => {
@@ -203,7 +202,7 @@ describe('UpdateGoalTool verification gate', () => {
     });
   });
 
-  it('schedules a one-shot cron retry when gate fails and minIntervalMs is set', async () => {
+  it('leaves interval pacing to the Goal driver without creating a cron task', async () => {
     const store = makeStore();
     const reminders: Array<{ readonly content: string; readonly origin: unknown }> = [];
     await store.createGoal({
@@ -213,22 +212,13 @@ describe('UpdateGoalTool verification gate', () => {
     });
     mocks.runProof.mockResolvedValue(proof('blocked'));
 
-    const addTask = vi.fn();
     const agent = makeAgent(store, reminders);
-    (agent as unknown as { cron: CronManager | null }).cron = {
-      addTask,
-      clocks: { wallNow: () => 1_000_000_000 },
-    } as unknown as CronManager;
 
     const result = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
 
     expect(result.stopTurn).toBe(true);
-    expect(addTask).toHaveBeenCalledOnce();
-    const init = addTask.mock.calls[0]![0] as { readonly cron: string; readonly prompt: string; readonly recurring: boolean };
-    expect(init.recurring).toBe(false);
-    expect(init.prompt).toContain('work');
-    expect(init.prompt).toContain('proof-pass');
-    expect(init.cron).toMatch(/^\d+ \d+ \d+ \d+ \*$/);
+    expect(result.output).toContain('configured interval');
+    expect(store.getGoal().goal).toMatchObject({ status: 'active', minIntervalMs: 300_000 });
   });
 
   it('continues immediately when gate fails without minIntervalMs', async () => {
@@ -237,17 +227,11 @@ describe('UpdateGoalTool verification gate', () => {
     await store.createGoal({ objective: 'work', stopCondition: 'verify-pass' });
     mocks.runProof.mockResolvedValue(proof('blocked'));
 
-    const addTask = vi.fn();
     const agent = makeAgent(store, reminders);
-    (agent as unknown as { cron: CronManager | null }).cron = {
-      addTask,
-      clocks: { wallNow: () => 1_000_000_000 },
-    } as unknown as CronManager;
 
     const result = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
 
     expect(result.stopTurn).toBe(false);
-    expect(addTask).not.toHaveBeenCalled();
   });
 
   it('uses a fresh read-only reviewer after deterministic proof passes', async () => {
@@ -357,7 +341,7 @@ VERDICT_JSON: ${JSON.stringify({
       })
       .mockResolvedValueOnce({
         completion: Promise.resolve({
-          result: 'Review complete.\nVERDICT_JSON: {"schemaVersion":1,"status":"PASS","summary":"Logout now revokes the token.","findings":[],"priorBlockerDispositions":[{"key":"review:objective:security:src/auth.ts","status":"resolved"}]}',
+          result: 'Review complete.\nVERDICT_JSON: {"schemaVersion":1,"status":"PASS","summary":"Logout now revokes the token.","findings":[],"priorBlockerDispositions":[{"key":"review:objective:security:src/auth.ts:auth-refresh","status":"resolved"}]}',
         }),
       });
     const agent = makeAgent(store);
@@ -375,6 +359,116 @@ VERDICT_JSON: ${JSON.stringify({
     expect(secondPrompt).toContain('Immutable Loop contract');
     expect(secondPrompt).toContain('Prior blocking findings');
     expect(secondPrompt).toContain('auth-refresh');
+  });
+
+  it('keeps same-file blockers distinct so the next reviewer verdict can resolve both', async () => {
+    const store = makeStore();
+    await store.createGoal({
+      objective: 'secure logout',
+      stopCondition: 'proof-pass',
+      maxIterations: 3,
+    });
+    mocks.runProof.mockResolvedValue(proof('passed'));
+    const firstVerdict = {
+      schemaVersion: 1,
+      status: 'NEEDS_WORK',
+      summary: 'Two independent logout defects remain.',
+      findings: [
+        {
+          id: 'cookie-not-cleared',
+          criterionId: 'objective',
+          severity: 'blocking',
+          category: 'security',
+          summary: 'The cookie remains set.',
+          file: 'src/auth.ts',
+          evidence: 'logout returns without clearing the cookie',
+          nextAction: 'Clear the cookie.',
+          confidence: 'high',
+          validationStatus: 'verified',
+        },
+        {
+          id: 'token-not-revoked',
+          criterionId: 'objective',
+          severity: 'blocking',
+          category: 'security',
+          summary: 'The refresh token remains valid.',
+          file: 'src/auth.ts',
+          evidence: 'the token row is not revoked',
+          nextAction: 'Revoke the token.',
+          confidence: 'high',
+          validationStatus: 'verified',
+        },
+      ],
+      priorBlockerDispositions: [],
+    };
+    const secondVerdict = {
+      schemaVersion: 1,
+      status: 'PASS',
+      summary: 'Both logout defects are fixed.',
+      findings: [],
+      priorBlockerDispositions: [
+        { key: 'review:objective:security:src/auth.ts:cookie-not-cleared', status: 'resolved' },
+        { key: 'review:objective:security:src/auth.ts:token-not-revoked', status: 'resolved' },
+      ],
+    };
+    const spawn = vi.fn()
+      .mockResolvedValueOnce({ completion: Promise.resolve({ result: `VERDICT_JSON: ${JSON.stringify(firstVerdict)}` }) })
+      .mockResolvedValueOnce({ completion: Promise.resolve({ result: `VERDICT_JSON: ${JSON.stringify(secondVerdict)}` }) });
+    const agent = makeAgent(store);
+    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+    expect((await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }))).stopTurn).toBe(false);
+    expect(store.getReviewHistory().at(-1)?.blockerKeys).toHaveLength(2);
+    expect((await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }))).stopTurn).toBe(true);
+    expect(store.getGoal().goal).toBeNull();
+  });
+
+  it('rejects PASS when replaced_by does not reference a current blocking key', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'secure logout', stopCondition: 'proof-pass', maxIterations: 3 });
+    mocks.runProof.mockResolvedValue(proof('passed'));
+    const first = {
+      schemaVersion: 1,
+      status: 'NEEDS_WORK',
+      summary: 'Logout is insecure.',
+      findings: [{
+        id: 'token-not-revoked',
+        criterionId: 'objective',
+        severity: 'blocking',
+        category: 'security',
+        summary: 'Token remains valid.',
+        file: 'src/auth.ts',
+        evidence: 'No revocation write exists.',
+        nextAction: 'Revoke the token.',
+        confidence: 'high',
+        validationStatus: 'verified',
+      }],
+      priorBlockerDispositions: [],
+    };
+    const invalidPass = {
+      schemaVersion: 1,
+      status: 'PASS',
+      summary: 'Ready.',
+      findings: [],
+      priorBlockerDispositions: [{
+        key: 'review:objective:security:src/auth.ts:token-not-revoked',
+        status: 'replaced_by',
+        replacedBy: 'anything',
+      }],
+    };
+    const spawn = vi.fn()
+      .mockResolvedValueOnce({ completion: Promise.resolve({ result: `VERDICT_JSON: ${JSON.stringify(first)}` }) })
+      .mockResolvedValue({ completion: Promise.resolve({ result: `VERDICT_JSON: ${JSON.stringify(invalidPass)}` }) });
+    const agent = makeAgent(store);
+    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+
+    expect(store.getGoal().goal?.loopResult).toMatchObject({
+      status: 'ERROR',
+      reasonCode: 'reviewer_invalid_output',
+    });
   });
 
   it('falls back from an invalid configured reviewer model to the writer model', async () => {
@@ -534,6 +628,29 @@ VERDICT_JSON: ${JSON.stringify({
     })).rejects.toMatchObject({ name: 'AbortError' });
 
     expect(spawn).toHaveBeenCalledOnce();
+    expect(store.getGoal().goal?.status).toBe('active');
+  });
+
+  it('propagates cancellation into deterministic proof checks', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });
+    const controller = new AbortController();
+    mocks.runProof.mockImplementationOnce(async (options: { readonly signal: AbortSignal }) => {
+      return new Promise((_, reject) => {
+        options.signal.addEventListener('abort', () => {
+          reject(new DOMException('This operation was aborted', 'AbortError'));
+        }, { once: true });
+      });
+    });
+    const running = executeTool(new UpdateGoalTool(makeAgent(store)), {
+      ...ctx({ status: 'complete' }),
+      signal: controller.signal,
+    });
+
+    await vi.waitFor(() => expect(mocks.runProof).toHaveBeenCalledOnce());
+    controller.abort();
+
+    await expect(running).rejects.toMatchObject({ name: 'AbortError' });
     expect(store.getGoal().goal?.status).toBe('active');
   });
 

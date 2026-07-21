@@ -1,4 +1,4 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
@@ -24,6 +24,7 @@ export interface LoopQuotaGrant {
   readonly requestId: string;
   readonly maxIterations: number;
   readonly tracked: boolean;
+  readonly guestTrial?: boolean;
   readonly repeatedWithin7d?: boolean;
   readonly message?: string;
 }
@@ -58,7 +59,7 @@ async function useGuestTrial(requestId: string): Promise<LoopQuotaGrant> {
       `${JSON.stringify({ requestId, usedAt: new Date().toISOString() })}\n`,
       { encoding: 'utf8', flag: 'wx', mode: 0o600 },
     );
-    return { allowed: true, requestId, maxIterations: 2, tracked: false };
+    return { allowed: true, requestId, maxIterations: 2, tracked: false, guestTrial: true };
   } catch (error) {
     if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
       return {
@@ -144,7 +145,12 @@ export async function completeLoopQuota(
   fetchImpl: typeof fetch = fetch,
   lifecycle: LoopRunLifecycle = 'completed',
 ): Promise<LoopCompletionResult> {
-  if (!grant.tracked) return { repeatedCompletedWithin7d: false };
+  if (!grant.tracked) {
+    if (grant.guestTrial === true && lifecycle === 'cancelled' && iterations === 0) {
+      await releaseUnusedGuestTrial(grant.requestId);
+    }
+    return { repeatedCompletedWithin7d: false };
+  }
   const repeatedCompletedWithin7d = lifecycle === 'completed'
     && (outcome === 'PASS' || outcome === 'NEEDS_WORK')
     && await hasPriorCompletedLoopWithin7d(grant.requestId).catch(() => false);
@@ -175,6 +181,16 @@ export async function completeLoopQuota(
     );
   }
   return { repeatedCompletedWithin7d };
+}
+
+async function releaseUnusedGuestTrial(requestId: string): Promise<void> {
+  const path = join(resolveWukongHome(), 'usage', 'loop-guest-trial.json');
+  try {
+    const parsed = JSON.parse(await readFile(path, 'utf8')) as { readonly requestId?: unknown };
+    if (parsed.requestId === requestId) await unlink(path);
+  } catch {
+    // Best-effort rollback must never hide the original Goal creation error.
+  }
 }
 
 async function sendLoopTerminal(

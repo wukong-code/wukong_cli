@@ -1,6 +1,6 @@
 # Wukong Code Roadmap
 
-> 最后更新: 2026-07-20
+> 最后更新: 2026-07-21
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 
 这份 ROADMAP 是当前商业化方向的执行层文档。更细的商业模型和技术方案仍以这些文档为准：
@@ -10,6 +10,7 @@
 - [商业化重构技术实现方案](docs/tech/commercial-refactor-implementation.md)
 - [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md)
 - [0.0.16 Loop Convergence](docs/design/0.0.16-loop-convergence.md)
+- [0.0.17 Command Surface Reliability](docs/design/0.0.17-command-surface-reliability.md)
 - [0.1.0 Pro PR Gate 与 Billing](docs/design/0.1.0-pro-pr-gate.md)
 - [TODO.md](TODO.md)：本仓库执行层任务清单，按本 ROADMAP 的 milestone 拆解
 - `wukong_web/TODO.md`：官网与托管产品 TODO，位于 sibling web 仓库中
@@ -114,9 +115,10 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 | `0.0.14` | Cross-Agent Resume + Loop UX | `/resume codex|claude|cursor`、安全只读上下文导入、Resume → Loop 确认、Gate/Footer 清晰结论、更多真实项目检查发现；保持免费/BYOK |
 | `0.0.15` | Loop Reliability + First Success | durable run lifecycle、completion outbox、重启恢复、preflight、简洁终态和隐私受限激活指标；保持免费/BYOK |
 | `0.0.16` | Loop Convergence | 固定 acceptance contract、prior blockers、anti-ratchet reviewer、stall strategist、reviewer model fallback、Resume 建议、Role contract、统一任务状态与有界 session 搜索；保持免费/BYOK |
+| `0.0.17` | Command Surface Reliability | 删除误导的 `--role`、`/role`、`/report`、`/yes`；保留可发现的 `/transform`；未知 slash 本地拦截；严格参数解析；CLI/TUI 命令契约与自动化回归一致；保持免费/BYOK |
 | `0.1.0` | Pro PR Gate + Billing | Free dry-run、Pro GitHub PR comment/status、capability entitlement 与支付生命周期可用；真实 Stripe+D1/GitHub E2E 通过；邀请制实验取得至少 3 个非关联付款用户和 1 个续费信号 |
 
-`0.1.0` 不设日期承诺。当前生产基线只有 1 位 activated Loop user、0 位 completed users，不满足商业决策门槛；代码可以先进入 `0.1.0-rc.N` + feature-flagged invite-only pilot，但使用、支付和真实 E2E 门槛未满足时不开放**公开 Checkout**，也不升正式 `0.1.0`。
+`0.0.17` 先完成现有命令面的可靠性收口，不增加新的产品层。`0.1.0` 仍不设日期承诺：当前生产基线只有 1 位 activated Loop user、0 位 completed users，不满足商业决策门槛；代码可以先进入 `0.1.0-rc.N` + feature-flagged invite-only pilot，但使用、支付和真实 E2E 门槛未满足时不开放**公开 Checkout**，也不升正式 `0.1.0`。
 
 ## Milestone 0: Public Install And Local Proof
 
@@ -208,7 +210,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 4. 实现幂等 `loop-runs/start`、`complete` 和 session usage；不引入 Checks、reservation、lease 或 AI credits。
 5. verify/scan/proof 保留直接调用兼容，但从主 help、TUI autocomplete 和 onboarding 中隐藏。
 6. 默认不写报告；保存、上传和分享都是显式次级动作。
-7. 增加轻量 Role Profiles：`--role`、`/transform`、内置与本地自定义角色，复用现有 agent。
+7. 增加轻量 Role Profiles：TUI `/transform`、内置与本地自定义角色，复用现有 agent；CLI `roles list/show/init` 只负责角色目录管理。
 
 免费初始额度：
 
@@ -358,6 +360,26 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 
 - 不做支付、PR Gate 写入、Team、managed reviewer、默认多 reviewer、云端 `/schedule`、远程 session、Hosted Report、Agent/Persona 市场或自动 policy 修改。
 - 不改变 `/loop` 的 iterate-until-verified 语义，也不把 verify/scan/proof 恢复为普通用户产品。
+
+## Milestone 2.9: 0.0.17 Command Surface Reliability
+
+状态：实施中，尚未发布。完整 contract 见 [0.0.17 Command Surface Reliability](docs/design/0.0.17-command-surface-reliability.md)。
+
+目标：在 0.1.0 商业实验前，把 CLI/TUI 的现有命令面收敛为可发现、可预测、可自动回归的稳定契约；删除会制造错误预期的入口，不新增 Agent 引擎或托管能力。
+
+交付项：
+
+- 删除全局与 Loop `--role`、TUI `/role`、`/report` 和 `/yes`；Role 管理使用 `wukong roles`，会话切换使用 `/transform`。
+- `/transform list|status|off` 可发现，并在 Role Profiles 未启用时提供本地 `/experiments` 指引。
+- 未知、已禁用和当前不可用的 slash command 只返回本地错误与建议，不进入模型。
+- permission、Loop 数值、Today focus、roles 子命令和 export 参数严格解析，错误时不产生副作用。
+- registry、resolve、dispatch 与真实 CLI boundary 均有正向和负向自动化测试。
+- 发布前完成真实 TUI smoke、native build、六平台 assets、upgrade/fresh install 和三仓文档同步。
+
+不做：
+
+- 不做支付、PR Gate、Team、managed reviewer、云端 `/schedule`、Hosted Report、同步闭环或新的 Role/Agent 市场。
+- 不加入 mascot、welcome 动画或与命令可靠性无关的视觉功能。
 
 ## Milestone 3: 0.1.0 Pro PR Gate + Billing
 

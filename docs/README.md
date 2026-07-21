@@ -1,6 +1,6 @@
 # Wukong Code 文档索引
 
-> 最后更新: 2026-07-20
+> 最后更新: 2026-07-21
 > 当前事实基线: `wukong_cli` 内部实现仓库，产品名称为 **Wukong Code**
 > 状态说明: 本目录区分 **当前已实现** 与 **商业化后续待实现**。
 
@@ -52,12 +52,14 @@
   定义固定验收合同、prior blockers、anti-ratchet reviewer、无进展检测、一次性 strategist、reviewer model fallback、Permission Mode v2、只读分身 capability ceiling、Resume 建议、Role contract、统一任务状态与本地 session 内容搜索。
 - [0.0.16 Release Notes](releases/0.0.16.md)
   记录正式版能力、兼容边界、验证结果和发布验收标准。
+- [0.0.17 Command Surface Reliability](design/0.0.17-command-surface-reliability.md)
+  定义 CLI/TUI 命令契约收口：删除误导入口、保留可发现的 `/transform`、未知 slash 本地拦截、严格参数解析与四层自动化回归；当前仍在实施，公开版本保持 0.0.16。
 - [0.1.0 Pro PR Gate 与 Billing](design/0.1.0-pro-pr-gate.md)
   定义 Free 本地 BYOK 边界、Pro PR comment/status、capability entitlement、Stripe lifecycle、邀请制价格实验和正式发布门槛；当前仍是规划，公开 Checkout 保持关闭。
 - [跨 Agent Session Resume](design/cross-agent-resume.md)
   `/resume` 恢复 Wukong 会话；`/resume codex|claude|cursor` 显式发现对应 Agent 的本地会话，并通过内置 Skill 只读导入后在 Wukong 中继续。
 - [执行层 TODO](../TODO.md)
-  按 ROADMAP milestone 拆解的任务清单，记录当前开发版本（0.0.16 Loop Convergence）、后续商业实验、暂缓项和已完成基线。
+  按 ROADMAP milestone 拆解的任务清单，记录当前开发版本（0.0.17 Command Surface Reliability）、后续商业实验、暂缓项和已完成基线。
 
 当前可用 top-level commands 以 `wukong --help` 为准，主要包括：
 
@@ -87,7 +89,7 @@ wukong upgrade
 
 ## 商业化文档
 
-这些文档记录当前 P0/P0.5 实现和后续计划。`verify`、`scan`、`guard`、`proof`、`judge`、`loop` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop`、`/today` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。Milestone 0.5 已按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序完整落地，`/loop --every` 复用 agent-core cron scheduler 实现轮间 pacing。后续工作是 `/schedule`、sync、完整计费与团队能力：
+这些文档记录当前 P0/P0.5 实现和后续计划。`verify`、`scan`、`guard`、`proof`、`judge`、`loop` 已作为 top-level CLI 命令实现；`/verify`、`/scan`、`/guard`、`/goal`、`/proof`、`/judge`、`/loop`、`/today` 已作为 TUI slash commands 实现；`wukong_verify` agent tool 已接入 agent-core。Milestone 0.5 已按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序完整落地，`/loop --every` 由 Goal driver 执行可取消的轮间等待，不创建脱离 Goal 生命周期的 cron task。后续工作是 `/schedule`、sync、完整计费与团队能力：
 
 - [商业化与产品重构方案](business/COMMERCIAL_REFACTOR_PLAN.md)
   定义产品定位、商业模型、目标命令结构（含 loop/proof/judge/schedule）和路线图。

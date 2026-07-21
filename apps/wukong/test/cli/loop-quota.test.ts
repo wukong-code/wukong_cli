@@ -46,6 +46,17 @@ describe('Loop quota client', () => {
     expect(second).toMatchObject({ allowed: false, maxIterations: 2, tracked: false });
   });
 
+  it('releases an unused guest trial when Goal creation is cancelled', async () => {
+    mocks.getCliAccessToken.mockResolvedValue(null);
+
+    const first = await beginLoopQuota();
+    await completeLoopQuota(first, 'ERROR', 0, fetch, 'cancelled');
+    const retry = await beginLoopQuota();
+
+    expect(first).toMatchObject({ allowed: true, guestTrial: true });
+    expect(retry).toMatchObject({ allowed: true, guestTrial: true });
+  });
+
   it('parses a signed-in Free grant and reports completion', async () => {
     mocks.getCliAccessToken.mockResolvedValue('token');
     const fetchMock = vi.fn<typeof fetch>()

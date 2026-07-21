@@ -110,7 +110,7 @@ TUI 最稀缺的资源是垂直行数。**底部 chrome（心跳行到 mode 行�
 ↻ 3/10 · verifying · 42s                          ← loop active
 ↻ 3/10 · writing · fix auth tests · 12s           ← 迭代中 agent 在写
 ⛔ gate failed · verify ✗ session.test.ts          ← blocked（warning 色）
-↻ 3/10 · retry in 40s (--every 1m)                ← cron 节流等待中
+↻ 3/10 · retry in 40s (--every 1m)                ← Goal-owned 节流等待中
 ```
 
 设计要点：

@@ -24,6 +24,7 @@ export async function runVerification(options: VerificationOptions = {}): Promis
   const commandResults = await runVerificationCommands(selected, {
     cwd,
     timeoutMs: options.timeoutMs,
+    signal: options.signal,
   });
   const selectedCommands = selected.map((command) => command.command);
   const risks = scanRisks({

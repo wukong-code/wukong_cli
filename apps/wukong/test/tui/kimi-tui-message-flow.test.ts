@@ -4470,7 +4470,7 @@ command = "vim"
 
     try {
       process.title = 'wukong-test-runner';
-      driver.handleUserInput('/fork ignored args');
+      driver.handleUserInput('/fork');
 
       await vi.waitFor(() => {
         expect(forkSession).toHaveBeenCalledWith({

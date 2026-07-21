@@ -80,6 +80,17 @@ describe('handleToday', () => {
     expect(deps.clearFocus).toHaveBeenCalled();
   });
 
+  it('rejects setting and clearing focus in the same invocation without mutating state', async () => {
+    const deps = makeDeps();
+    const code = await handleToday(deps, { focus: 'ship auth fix', clearFocus: true });
+
+    expect(code).toBe(2);
+    expect(deps.writeFocus).not.toHaveBeenCalled();
+    expect(deps.clearFocus).not.toHaveBeenCalled();
+    expect(deps.buildBriefing).not.toHaveBeenCalled();
+    expect(deps.stderrWriter.chunks.join('')).toContain('cannot be used together');
+  });
+
   it('prints JSON when requested', async () => {
     const deps = makeDeps();
     await handleToday(deps, { json: true });
@@ -114,5 +125,23 @@ describe('registerTodayCommand', () => {
 
     const names = program.commands.map((cmd) => cmd.name());
     expect(names).toContain('today');
+  });
+
+  it('rejects focus plus --clear-focus through the registered CLI command', async () => {
+    const deps = makeDeps();
+    const previousExitCode = process.exitCode;
+    const program = new Command();
+    registerTodayCommand(program, deps);
+
+    try {
+      await program.parseAsync(['node', 'wukong', 'today', 'ship auth fix', '--clear-focus']);
+
+      expect(process.exitCode).toBe(2);
+      expect(deps.writeFocus).not.toHaveBeenCalled();
+      expect(deps.clearFocus).not.toHaveBeenCalled();
+      expect(deps.buildBriefing).not.toHaveBeenCalled();
+    } finally {
+      process.exitCode = previousExitCode;
+    }
   });
 });

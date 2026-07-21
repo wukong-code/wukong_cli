@@ -99,14 +99,18 @@ pnpm -C apps/wukong run dev:cli-only -- review feedback <finding-id> accept
 /loop <objective>
 /loop --review-model <model-alias> -- <objective>
 /loop status
+/loop pause
+/loop resume
 /loop stop
 ```
+
+以 `-` 开头的 objective 需要放在 `--` 后；未知参数会直接报错，不再被当作 objective。
 
 ### 10. 启动受验证约束的 Loop
 
 ```bash
 wukong loop "修复失败测试" --max-iterations 5
-wukong loop "完成 API 改动" --model fast --role tester
+wukong loop "完成 API 改动" --model fast --review-model slow
 wukong loop "完成 API 改动" --review-model reviewer
 ```
 
@@ -160,7 +164,7 @@ Welcome 最多建议一条当前 workspace、30 天内的外部会话，可在 `
 | `wukong guard` | 已实现 | 本地 guard 状态、统计和命令风险阻断 |
 | `wukong proof` | 已实现 | 生成 Merge Proof Report（verify + scan 汇总） |
 | `wukong judge` | 已实现 | deterministic 合并判定（只审不写） |
-| `wukong loop` | 已实现 | headless Loop；支持 `--max-iterations`、`--every`、`--model`、`--role`、`--review-model`、`--dry-run` |
+| `wukong loop` | 已实现 | headless Loop；支持 `--max-iterations`、`--every`、`--model`、`--review-model`、`--dry-run` |
 | `wukong review init` | 已实现 | 创建 `.wukong/review-policy.md` |
 | `wukong review feedback` | 已实现 | 将 finding 反馈追加到本地 JSONL，不上传源码或 reason |
 | `wukong review stats` | 已实现 | 查看本地反馈原始数量；样本少于 10 时隐藏质量比例 |
@@ -195,7 +199,7 @@ Welcome 最多建议一条当前 workspace、30 天内的外部会话，可在 `
 | `wukong loop` | 本机迭代 loop，直到检查与只读 reviewer 通过 | top-level 和 TUI 均已实现；返回结构化多 findings，只有 blocking finding 阻止 Loop |
 | `wukong review` | 项目 review policy 与本地 finding feedback | `init`、`feedback`、`stats` 已实现 |
 | `wukong_verify` agent tool | 让 agent 在完成前调用验证 | 已实现，作为 builtin tool 接入 agent-core |
-| `/verify`、`/scan`、`/guard`、`/report`、`/goal`、`/proof`、`/judge`、`/loop` | TUI 内验证、扫描、guard 状态、查看报告、goal/loop 驱动 | 已实现 |
+| `/verify`、`/scan`、`/guard`、`/goal`、`/proof`、`/judge`、`/loop` | TUI 内验证、扫描、guard 状态及 goal/loop 驱动 | 已实现 |
 | `wukong sync` | 云同步 | 等待新 base API 与本地数据模型对齐 |
 | `wukong today` / `/today` | Daily Proof Briefing：本地统计 + focus，不依赖网络 | 已实现，见 [today 设计](design/today.md) |
 
@@ -233,7 +237,7 @@ pnpm -C apps/wukong run dev:cli-only -- login --help
 
 - `wukong verify`、`wukong guard`、`wukong scan` 是当前已实现命令。
 - `wukong_verify` 是内置 agent tool，不是 top-level shell command。
-- `/verify`、`/scan`、`/guard status`、`/report`、`/proof`、`/judge`、`/goal`、`/loop` 是 TUI slash commands。
+- `/verify`、`/scan`、`/guard status`、`/proof`、`/judge`、`/goal`、`/loop` 是 TUI slash commands。
 - `wukong login --provider google --dev-email ...` 不是当前登录命令参数。
 - `wukong sync --push`、`wukong sync --pull` 尚未在当前 CLI 中实现。
 - 文档站 `/en/guides/*`、`/zh/guides/*` 页面当前没有对应源文件，不应作为发布入口宣传。

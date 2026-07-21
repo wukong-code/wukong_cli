@@ -132,17 +132,7 @@ export async function runPrompt(
     for (const warning of (await harness.getConfigDiagnostics()).warnings) {
       stderr.write(`Warning: ${warning}\n`);
     }
-    if (opts.role !== undefined) {
-      const roleFeature = (await harness.getExperimentalFeatures()).find(
-        (feature) => feature.id === 'role_profiles',
-      );
-      if (roleFeature?.enabled !== true) {
-        throw new Error(
-          'Role profiles are experimental. Enable experimental.role_profiles in config.toml before using --role.',
-        );
-      }
-    }
-    const goalCreate = parseHeadlessGoalCreate(opts.prompt!);
+    const goalCreate = opts.headlessGoal ?? parseHeadlessGoalCreate(opts.prompt!);
     if (
       goalCreate?.kind === 'loop'
       && opts.session === undefined
@@ -173,11 +163,6 @@ export async function runPrompt(
         },
       );
     restorePromptSessionPermission = restorePermission;
-
-    if (opts.role !== undefined) {
-      await session.setRole(opts.role);
-      if (opts.model !== undefined) await session.setModel(opts.model);
-    }
 
     initializeCliTelemetry({
       harness,
@@ -289,36 +274,51 @@ async function runHeadlessGoal(
       completedSnapshot = event.snapshot;
     }
   });
+  let promptFailed = false;
   try {
     // The objective is sent as the normal prompt; goal continuation keeps the
     // turn alive until a terminal state is reached.
-    await runPromptTurn(session, goal.objective, outputFormat, stdout, stderr);
+    await runPromptTurn(session, goal.objective, outputFormat, stdout, stderr, createdGoal.goalId);
+  } catch (error) {
+    promptFailed = true;
+    if (loopGrant !== undefined) {
+      const failedSnapshot = (await session.getGoal().catch(() => ({ goal: null }))).goal;
+      await completeLoopQuota(loopGrant, 'ERROR', failedSnapshot?.iteration ?? 0);
+      track('loop_terminal', {
+        outcome: 'ERROR',
+        iterations: failedSnapshot?.iteration ?? 0,
+        reason_code: 'runtime_error',
+      });
+    }
+    throw error;
   } finally {
     unsubscribeGoalEvents();
-    const snapshot = completedSnapshot ?? (await session.getGoal()).goal;
-    if (outputFormat === 'stream-json') {
-      const summary = goal.kind === 'loop' ? loopSummaryJson(snapshot) : goalSummaryJson(snapshot);
-      stdout.write(`${JSON.stringify(summary)}\n`);
-    } else {
-      const summary = goal.kind === 'loop' ? formatLoopSummaryText(snapshot) : formatGoalSummaryText(snapshot);
-      stderr.write(`${summary}\n`);
-    }
-    // Map the terminal goal status to a distinct, non-fatal exit code. A turn
-    // that threw (error / cancellation) already propagates its own exit path.
-    if (goal.kind === 'loop') {
-      if (loopGrant !== undefined) {
-        const result = loopSummaryJson(snapshot);
-        const completion = await completeLoopQuota(loopGrant, result.status, result.iterations);
-        if (completion?.repeatedCompletedWithin7d) track('loop_repeat_completed_7d');
-        track('loop_terminal', {
-          outcome: result.status,
-          iterations: result.iterations,
-          reason_code: result.reasonCode,
-        });
+    if (!promptFailed) {
+      const snapshot = completedSnapshot ?? (await session.getGoal()).goal;
+      if (outputFormat === 'stream-json') {
+        const summary = goal.kind === 'loop' ? loopSummaryJson(snapshot) : goalSummaryJson(snapshot);
+        stdout.write(`${JSON.stringify(summary)}\n`);
+      } else {
+        const summary = goal.kind === 'loop' ? formatLoopSummaryText(snapshot) : formatGoalSummaryText(snapshot);
+        stderr.write(`${summary}\n`);
       }
-      process.exitCode = loopExitCode(snapshot);
-    } else if (snapshot !== null && snapshot.status !== 'complete') {
-      process.exitCode = goalExitCode(snapshot.status);
+      // Map the terminal goal status to a distinct, non-fatal exit code. A turn
+      // that threw (error / cancellation) already propagates its own exit path.
+      if (goal.kind === 'loop') {
+        if (loopGrant !== undefined) {
+          const result = loopSummaryJson(snapshot);
+          const completion = await completeLoopQuota(loopGrant, result.status, result.iterations);
+          if (completion?.repeatedCompletedWithin7d) track('loop_repeat_completed_7d');
+          track('loop_terminal', {
+            outcome: result.status,
+            iterations: result.iterations,
+            reason_code: result.reasonCode,
+          });
+        }
+        process.exitCode = loopExitCode(snapshot);
+      } else if (snapshot !== null && snapshot.status !== 'complete') {
+        process.exitCode = goalExitCode(snapshot.status);
+      }
     }
   }
 }
@@ -506,9 +506,11 @@ function runPromptTurn(
   outputFormat: PromptOutputFormat,
   stdout: PromptOutput,
   stderr: PromptOutput,
+  goalId?: string,
 ): Promise<void> {
   let activeTurnId: number | undefined;
-  let activeAgentId: string | undefined;
+  const openTurnIds = new Set<number>();
+  let goalTerminalObserved = false;
   const outputWriter =
     outputFormat === 'stream-json'
       ? new PromptJsonWriter(stdout)
@@ -537,20 +539,30 @@ function runPromptTurn(
         finish(new Error(`${event.code}: ${event.message}`));
         return;
       }
-      if (event.type === 'turn.started' && activeTurnId === undefined) {
+      if (event.type === 'goal.updated' && goalId !== undefined && event.agentId === PROMPT_MAIN_AGENT_ID) {
+        if (
+          (event.snapshot !== null && event.snapshot.goalId === goalId && event.snapshot.status !== 'active')
+          || (event.snapshot === null && event.change?.kind === 'completion')
+        ) {
+          goalTerminalObserved = true;
+          if (openTurnIds.size === 0) finish();
+        }
+        return;
+      }
+      if (event.type === 'turn.started') {
         if (event.agentId !== PROMPT_MAIN_AGENT_ID) {
           return;
         }
-        activeTurnId = event.turnId;
-        activeAgentId = event.agentId;
+        if (goalId === undefined && activeTurnId !== undefined) return;
+        activeTurnId ??= event.turnId;
+        openTurnIds.add(event.turnId);
         return;
       }
       if (
         activeTurnId === undefined ||
-        activeAgentId === undefined ||
         !hasTurnId(event) ||
-        event.turnId !== activeTurnId ||
-        event.agentId !== activeAgentId
+        event.agentId !== PROMPT_MAIN_AGENT_ID ||
+        (goalId === undefined ? event.turnId !== activeTurnId : !openTurnIds.has(event.turnId))
       ) {
         return;
       }
@@ -588,8 +600,9 @@ function runPromptTurn(
           }
           return;
         case 'turn.ended':
+          openTurnIds.delete(event.turnId);
           if (event.reason === 'completed') {
-            finish();
+            if (goalId === undefined || goalTerminalObserved) finish();
             return;
           }
           finish(new Error(formatTurnEndedFailure(event)));
@@ -612,7 +625,6 @@ function runPromptTurn(
         case 'subagent.started':
         case 'subagent.suspended':
         case 'tool.list.updated':
-        case 'turn.started':
         case 'turn.step.completed':
         case 'warning':
           return;

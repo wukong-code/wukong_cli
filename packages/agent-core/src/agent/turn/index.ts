@@ -35,7 +35,7 @@ import {
 } from '../../loop/index';
 import type { AgentEvent, TurnEndedEvent, TurnEndReason } from '../../rpc';
 import type { TelemetryPropertyValue } from '../../telemetry';
-import { abortable, isUserCancellation, userCancellationReason } from '../../utils/abort';
+import { abortable, abortError, isUserCancellation, userCancellationReason } from '../../utils/abort';
 import { USER_PROMPT_ORIGIN, type PromptOrigin } from '../context';
 import { renderUserPromptHookBlockResult, renderUserPromptHookResult } from '../../session/hooks';
 import { canonicalTelemetryArgs, isPlainRecord } from './canonical-args';
@@ -78,6 +78,23 @@ const GOAL_PROVIDER_API_PAUSE_PREFIX = 'Paused after provider API error';
 const GOAL_MODEL_CONFIG_PAUSE_PREFIX = 'Paused after model configuration error';
 const GOAL_RUNTIME_PAUSE_PREFIX = 'Paused after runtime error';
 const GOAL_PROVIDER_FILTERED_PAUSE_REASON = 'Paused after provider safety policy block';
+
+function wait(durationMs: number, signal: AbortSignal): Promise<void> {
+  if (signal.aborted) {
+    return Promise.reject(signal.reason instanceof Error ? signal.reason : abortError());
+  }
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      signal.removeEventListener('abort', onAbort);
+      resolve();
+    }, durationMs);
+    const onAbort = (): void => {
+      clearTimeout(timer);
+      reject(signal.reason instanceof Error ? signal.reason : abortError());
+    };
+    signal.addEventListener('abort', onAbort, { once: true });
+  });
+}
 
 /**
  * The prompt the goal driver appends to start each continuation turn — the
@@ -366,6 +383,7 @@ export class TurnFlow {
     let turnOrigin = origin;
     while (true) {
       const goalBeforeTurn = this.agent.goal.getGoal().goal;
+      const iterationBeforeTurn = goalBeforeTurn?.iteration ?? 0;
       if (goalBeforeTurn?.status === 'active' && goalBeforeTurn.budget.overBudget) {
         await this.agent.goal.markBlocked({ reason: 'A configured budget was reached' });
         const ended = await this.endGoalTurnWithoutModel(turnId, turnInput, turnOrigin);
@@ -408,6 +426,45 @@ export class TurnFlow {
       if (goal.budget.overBudget) {
         await this.agent.goal.markBlocked({ reason: 'A configured budget was reached' });
         return end;
+      }
+      // `maxIterations` is also a hard writer-turn ceiling. The delivery gate
+      // normally increments `iteration`, but a model that never calls
+      // UpdateGoal must not be able to create unbounded continuation turns.
+      if (
+        goal.stopCondition !== undefined
+        && goal.maxIterations !== undefined
+        && goal.turnsUsed >= goal.maxIterations
+      ) {
+        const summary = 'Maximum Loop iterations reached before the delivery gate passed.';
+        this.agent.goal.recordLoopResult({
+          schemaVersion: 2,
+          status: 'NEEDS_WORK',
+          reasonCode: 'max_iterations',
+          summary,
+          checks: [],
+          blockers: [],
+        });
+        await this.agent.goal.markBlocked({
+          reason: `loop:NEEDS_WORK:max_iterations:${summary}`,
+        }, 'system');
+        return end;
+      }
+
+      // Pace only a newly failed Gate attempt. Keeping the delay in the Goal
+      // driver makes it cancellable and goal-owned; no orphan cron prompt can
+      // fire after PASS, stop, or cancellation.
+      if (
+        goal.minIntervalMs !== undefined
+        && goal.loopResult?.status === 'NEEDS_WORK'
+        && goal.iteration > iterationBeforeTurn
+      ) {
+        try {
+          await wait(goal.minIntervalMs, signal);
+        } catch (error) {
+          if (!isAbortError(error)) throw error;
+          await this.agent.goal.pauseOnInterrupt({ reason: 'Paused during Loop interval wait' });
+          return end;
+        }
       }
 
       turnId = this.allocateTurnId();

@@ -21,8 +21,8 @@ const MIN_INTERVAL_MS = 60_000;
  * Parse a simple duration string into milliseconds.
  *
  * Supported: `<n>s`, `<n>m`, `<n>h`, `<n>d` where n is a positive integer.
- * The cron scheduler resolves to the next minute, so the minimum returned
- * value is 60 seconds.
+ * Loop pacing uses a cancellable in-process wait. Keep a 60-second product
+ * floor so accidental tiny intervals cannot create a hot retry loop.
  */
 export function parseLoopDuration(raw: string): ParseDurationResult | ParseDurationError {
   const trimmed = raw.trim();

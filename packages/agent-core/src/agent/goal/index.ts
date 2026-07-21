@@ -533,6 +533,12 @@ export class GoalMode {
         `Goal objective cannot exceed ${MAX_GOAL_OBJECTIVE_LENGTH} characters`,
       );
     }
+    if (
+      input.maxIterations !== undefined
+      && (!Number.isSafeInteger(input.maxIterations) || input.maxIterations <= 0)
+    ) {
+      throw new RangeError('maxIterations must be a positive safe integer');
+    }
 
     const existing = this.state;
     if (existing !== undefined) {
@@ -1094,9 +1100,8 @@ function normalizeMaxIterations(value: number | undefined): number | undefined {
 function normalizeMinIntervalMs(value: number | undefined): number | undefined {
   if (value === undefined) return undefined;
   if (!Number.isFinite(value) || value <= 0) return undefined;
-  // The cron scheduler resolves to the next minute, so sub-minute intervals
-  // are rounded up at fire time anyway. Enforce a 1-minute floor here so the
-  // user-visible option matches the actual scheduler resolution.
+  // Match the command parser's one-minute safety floor so malformed or older
+  // SDK clients cannot create a hot retry loop.
   return Math.max(60_000, Math.floor(value));
 }
 

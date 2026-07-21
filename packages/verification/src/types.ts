@@ -64,6 +64,7 @@ export interface VerificationOptions {
   readonly strict?: boolean;
   readonly snapshot?: WorkspaceSnapshot;
   readonly selectedCommands?: readonly VerificationCommand[];
+  readonly signal?: AbortSignal;
 }
 
 export interface VerificationResult {

@@ -19,7 +19,6 @@ vi.mock('@wukong/verification', () => mocks);
 
 const {
   handleGuardSlashCommand,
-  handleReportSlashCommand,
   handleScanSlashCommand,
   handleVerifySlashCommand,
   handleProofSlashCommand,

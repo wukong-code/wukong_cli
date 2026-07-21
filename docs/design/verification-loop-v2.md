@@ -27,8 +27,8 @@
 
 ```bash
 wukong loop "add user authentication"
-wukong loop "fix checkout race condition" --role backend
-wukong loop "review authorization boundaries" --role security
+wukong loop "fix checkout race condition" --model fast
+wukong loop "review authorization boundaries" --review-model strict
 ```
 
 TUI：
@@ -36,6 +36,8 @@ TUI：
 ```text
 /loop add user authentication
 /loop status
+/loop pause
+/loop resume
 /loop stop
 ```
 
@@ -185,16 +187,17 @@ Role Profile 控制 writer 如何工作，也可以指定 reviewer 模型和检�
 
 已实现基础能力：
 
-- 内置 `general`、`reviewer`、`security`、`tester`
+- 内置 `general`、`reviewer`、`planner`、`strategist`、`security`、`tester`
 - 用户角色 `~/.wukong/roles/<name>.md`
 - 项目角色 `.wukong/roles/<name>.md`，显式使用 `project:<name>`
 - `wukong roles list/show/init`
-- 全局 `--role` 和 TUI `/transform`
+- TUI `/transform`（CLI `roles` 只管理角色目录）
 
-0.0.12 需要把同一个 role resolver 接入 Loop：
+需要角色化 writer 时，在同一个 TUI 会话中先切换角色再启动 Loop：
 
-```bash
-wukong loop "finish auth" --role security
+```text
+/transform security
+/loop finish auth
 ```
 
 角色工具 allowlist 只能收窄基础权限，不能扩大权限或内嵌 shell command。0.0.12 不做角色市场、团队同步或自动多角色编排。
@@ -310,7 +313,7 @@ interface WorkspaceSnapshot {
 3. 项目没有测试时不能空 PASS，并能给出补测试或配置 gate 的动作。
 4. 真实命令失败不能被 reviewer 改成 PASS。
 5. 每轮使用新 snapshot，结构化反馈能驱动下一轮修复。
-6. `/transform` 和 `--role` 能影响 Loop writer；reviewer 固定使用只读 profile。
+6. `/transform` 能影响当前 TUI 会话中的 Loop writer；reviewer 固定使用只读 profile。
 7. Loop session 计数幂等；内部检查不重复计费。
 8. 默认运行不新增 Report 文件、不上传。
 9. 旧 verify/scan/proof 脚本仍能运行，但不再占据主产品界面。
