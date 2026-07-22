@@ -1,4 +1,4 @@
-import { release as osRelease, type as osType } from 'node:os';
+import { randomUUID } from 'node:crypto';
 
 import type { McpServerInfo, SessionStatus, SessionUsage } from '@wukong/wukong-sdk';
 
@@ -9,20 +9,17 @@ import {
   FEEDBACK_ISSUE_URL,
   FEEDBACK_STATUS_CANCELLED,
   FEEDBACK_STATUS_FALLBACK,
-  FEEDBACK_STATUS_NOT_SIGNED_IN,
   FEEDBACK_STATUS_SUBMITTING,
   FEEDBACK_STATUS_SUCCESS,
-  FEEDBACK_STATUS_UPLOAD_FAILED,
-  FEEDBACK_TELEMETRY_EVENT,
   feedbackIdLine,
-  feedbackSessionLine,
-  withFeedbackVersionPrefix,
 } from '../constant/feedback';
 import { isManagedUsageProvider } from '../constant/wukong-tui';
-import { submitFeedbackWithAttachments } from '../../feedback/feedback-attachments';
 import { formatErrorMessage } from '../utils/event-payload';
-import { openUrl } from '#/utils/open-url';
-import { promptFeedbackAttachment, promptFeedbackInput } from './prompts';
+import {
+  promptFeedbackCategory,
+  promptFeedbackConfirmation,
+  promptFeedbackInput,
+} from './prompts';
 import type { SlashCommandHost } from './dispatch';
 
 // ---------------------------------------------------------------------------
@@ -33,14 +30,7 @@ export async function handleFeedbackCommand(host: SlashCommandHost): Promise<voi
   const fallback = (reason: string): void => {
     host.showStatus(reason);
     host.showStatus(FEEDBACK_ISSUE_URL);
-    openUrl(FEEDBACK_ISSUE_URL);
   };
-
-  const providerKey = host.state.appState.availableModels[host.state.appState.model]?.provider;
-  if (!isManagedUsageProvider(providerKey)) {
-    fallback(FEEDBACK_STATUS_NOT_SIGNED_IN);
-    return;
-  }
 
   // Stage 1: collect the free-form feedback text.
   const input = await promptFeedbackInput(host);
@@ -49,21 +39,45 @@ export async function handleFeedbackCommand(host: SlashCommandHost): Promise<voi
     return;
   }
 
-  // Stage 2: ask whether to attach diagnostics (logs / codebase).
-  const level = await promptFeedbackAttachment(host);
-  if (level === undefined) {
+  const category = await promptFeedbackCategory(host);
+  if (category === undefined) {
     host.showStatus(FEEDBACK_STATUS_CANCELLED);
     return;
   }
 
-  const version = withFeedbackVersionPrefix(host.state.appState.version);
+  const platform = feedbackPlatform();
+  const arch = feedbackArch();
+  if (platform === undefined || arch === undefined) {
+    fallback('Feedback is not available on this platform. You can use GitHub Issues instead:');
+    return;
+  }
+  const loopOutcome = host.state.appState.lastProofSummary?.status === 'pass'
+    ? 'PASS' as const
+    : host.state.appState.lastProofSummary?.status === 'blocked'
+      ? 'NEEDS_WORK' as const
+      : undefined;
+  const payload = {
+    message: input.value,
+    category,
+    version: host.state.appState.version,
+    platform,
+    arch,
+    ...(loopOutcome === undefined ? {} : { loop_outcome: loopOutcome }),
+  };
+  if (!(await promptFeedbackConfirmation(host, payload))) {
+    host.showStatus(FEEDBACK_STATUS_CANCELLED);
+    return;
+  }
+
   const spinner = host.showLoginProgressSpinner(FEEDBACK_STATUS_SUBMITTING);
   const res = await host.harness.auth.submitFeedback({
-    content: input.value,
-    sessionId: host.state.appState.sessionId,
-    version,
-    os: `${osType()} ${osRelease()}`,
-    model: host.state.appState.model.length > 0 ? host.state.appState.model : null,
+    message: input.value,
+    category,
+    version: host.state.appState.version,
+    platform,
+    arch,
+    loopOutcome,
+    idempotencyKey: randomUUID(),
   });
 
   if (res.kind !== 'ok') {
@@ -72,16 +86,18 @@ export async function handleFeedbackCommand(host: SlashCommandHost): Promise<voi
     return;
   }
 
-  // Stage 3: prepare and upload each requested attachment independently.
-  const attachmentFailed = await submitFeedbackWithAttachments(host, res.feedbackId, level);
-
   spinner.stop({ ok: true, label: FEEDBACK_STATUS_SUCCESS });
-  host.showStatus(feedbackSessionLine(host.state.appState.sessionId));
   host.showStatus(feedbackIdLine(res.feedbackId));
-  host.track(FEEDBACK_TELEMETRY_EVENT);
-  if (attachmentFailed) {
-    host.showStatus(FEEDBACK_STATUS_UPLOAD_FAILED);
-  }
+}
+
+function feedbackPlatform(): 'darwin' | 'linux' | 'win32' | undefined {
+  return process.platform === 'darwin' || process.platform === 'linux' || process.platform === 'win32'
+    ? process.platform
+    : undefined;
+}
+
+function feedbackArch(): 'arm64' | 'x64' | undefined {
+  return process.arch === 'arm64' || process.arch === 'x64' ? process.arch : undefined;
 }
 
 // ---------------------------------------------------------------------------
@@ -187,11 +203,23 @@ async function loadRuntimeStatusReport(host: SlashCommandHost): Promise<RuntimeS
 async function loadManagedUsageReport(host: SlashCommandHost): Promise<ManagedUsageResult | undefined> {
   const alias = host.state.appState.model;
   const providerKey = host.state.appState.availableModels[alias]?.provider;
-  if (!isManagedUsageProvider(providerKey)) return undefined;
+  const managedProvider = isManagedUsageProvider(providerKey) ? providerKey : undefined;
+
+  // Account status is independent from the active model. In 0.0.18 a user can
+  // be signed in while the hosted catalog is empty and a BYOK model remains
+  // active, so /usage and /status must still report the real (currently empty)
+  // managed usage response instead of hiding it behind the active provider.
+  if (managedProvider === undefined) {
+    try {
+      if ((await host.harness.auth.getCachedAccessToken()) === undefined) return undefined;
+    } catch {
+      return undefined;
+    }
+  }
 
   let res;
   try {
-    res = await host.harness.auth.getManagedUsage(providerKey);
+    res = await host.harness.auth.getManagedUsage(managedProvider);
   } catch (error) {
     return { error: formatErrorMessage(error) };
   }

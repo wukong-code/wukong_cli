@@ -48,13 +48,6 @@ export const OAUTH_LOGIN_REQUIRED_CODE = ErrorCodes.AUTH_LOGIN_REQUIRED;
 
 export const FEEDBACK_ISSUE_URL = 'https://github.com/mutnpc/wukong-code/issues';
 
-// Sent in the feedback `version` field so the backend can distinguish this
-// TypeScript client from clients that send a bare version.
-export const FEEDBACK_VERSION_PREFIX = 'wukong-';
-
-// Telemetry event name; keep stable for dashboard queries.
-export const FEEDBACK_TELEMETRY_EVENT = 'feedback_submitted';
-
 // CDN source of truth for version checks and plugin metadata.
 export const WUKONG_CODE_CDN_BASE = 'https://wukong.today';
 export const WUKONG_CODE_CDN_LATEST_URL = `${WUKONG_CODE_CDN_BASE}/latest`;

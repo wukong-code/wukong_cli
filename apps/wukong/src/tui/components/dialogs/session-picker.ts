@@ -15,7 +15,7 @@ import { CURRENT_MARK, SELECT_POINTER } from '#/tui/constant/symbols';
 import { currentTheme } from '#/tui/theme';
 import { SearchableList } from '#/tui/utils/searchable-list';
 
-export type SessionSource = 'wukong' | 'codex' | 'claude' | 'cursor';
+export type SessionSource = 'wukong' | 'codex' | 'claude' | 'cursor' | 'kimi' | 'grok';
 
 export interface SessionRow {
   readonly id: string;

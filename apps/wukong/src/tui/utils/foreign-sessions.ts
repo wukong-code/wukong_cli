@@ -17,6 +17,9 @@ interface ForeignSessionCandidate {
   readonly sourceRoot: string;
   readonly id: string;
   readonly workDir: string;
+  readonly title?: string;
+  readonly lastPrompt?: string;
+  readonly updatedAt?: number;
 }
 
 export async function discoverForeignSessionRows(options: {
@@ -53,7 +56,9 @@ async function discoverForeignRowsInternal(options: {
 }): Promise<SessionRow[]> {
   const home = options.homeDir ?? homedir();
   const sources =
-    options.source === undefined ? (['codex', 'claude', 'cursor'] as const) : [options.source];
+    options.source === undefined
+      ? (['codex', 'claude', 'cursor', 'kimi', 'grok'] as const)
+      : [options.source];
   const groups = await Promise.all(
     sources.map((source) => discoverSource(
       source,
@@ -85,7 +90,122 @@ async function discoverSource(
       return discoverClaude(home, workDir, maxFiles);
     case 'cursor':
       return discoverCursor(home, workDir, maxFiles);
+    case 'kimi':
+      return discoverKimi(home, workDir, maxFiles);
+    case 'grok':
+      return discoverGrok(home, workDir, maxFiles);
   }
+}
+
+async function discoverKimi(
+  home: string,
+  workDir: string | undefined,
+  maxFiles: number,
+): Promise<ForeignSessionCandidate[]> {
+  const sourceRoot = join(home, '.kimi-code');
+  const indexPath = await existingContainedPath(sourceRoot, join(sourceRoot, 'session_index.jsonl'));
+  if (indexPath === undefined) return [];
+  let indexStat;
+  try {
+    indexStat = await stat(indexPath);
+  } catch {
+    return [];
+  }
+  const records = await lastJsonObjects(indexPath, indexStat.size, maxFiles);
+  const seen = new Set<string>();
+  const candidates: ForeignSessionCandidate[] = [];
+  for (const record of records.toReversed()) {
+    const id = stringValue(record['sessionId']);
+    const indexedWorkDir = stringValue(record['workDir']);
+    const sessionDir = stringValue(record['sessionDir']);
+    if (
+      id === undefined ||
+      indexedWorkDir === undefined ||
+      sessionDir === undefined ||
+      seen.has(id) ||
+      !sameOptionalWorkDir(indexedWorkDir, workDir)
+    ) {
+      continue;
+    }
+    seen.add(id);
+    const statePath = await existingContainedPath(sourceRoot, join(sessionDir, 'state.json'));
+    const historyPath = await existingContainedPath(
+      sourceRoot,
+      join(sourceRoot, 'user-history', `${id}.jsonl`),
+    );
+    let stateRecord: Record<string, unknown> | undefined;
+    try {
+      if (statePath !== undefined) {
+        stateRecord = asRecord(JSON.parse(await readSmallTextFile(statePath)) as unknown);
+      }
+    } catch {
+      // A missing or damaged state file does not hide an otherwise valid request history.
+    }
+    const sourcePath = historyPath ?? statePath;
+    if (sourcePath === undefined) continue;
+    candidates.push({
+      source: 'kimi',
+      sourcePath,
+      sourceRoot,
+      id,
+      workDir: indexedWorkDir,
+      title: singleLine(stringValue(stateRecord?.['title']) ?? 'Kimi Code request'),
+      lastPrompt: cleanPrompt(stringValue(stateRecord?.['lastPrompt']) ?? ''),
+      updatedAt: timestampValue(stateRecord?.['updatedAt']),
+    });
+  }
+  return candidates;
+}
+
+async function discoverGrok(
+  home: string,
+  workDir: string | undefined,
+  maxFiles: number,
+): Promise<ForeignSessionCandidate[]> {
+  const sourceRoot = join(home, '.grok/sessions');
+  const summaries = await collectGlob(join(sourceRoot, '*/*/summary.json'), maxFiles);
+  const candidates = await Promise.all(summaries.map(async (candidateSummaryPath) => {
+    try {
+      const summaryPath = await existingContainedPath(sourceRoot, candidateSummaryPath);
+      if (summaryPath === undefined) return undefined;
+      const summary = asRecord(JSON.parse(await readSmallTextFile(summaryPath)) as unknown);
+      const info = asRecord(summary?.['info']);
+      const id = stringValue(info?.['id']);
+      const cwd = stringValue(info?.['cwd']);
+      if (
+        id === undefined ||
+        cwd === undefined ||
+        summary?.['chat_format_version'] !== 1 ||
+        !sameOptionalWorkDir(cwd, workDir)
+      ) {
+        return undefined;
+      }
+      const sourcePath = await existingContainedPath(
+        sourceRoot,
+        join(dirname(summaryPath), 'chat_history.jsonl'),
+      );
+      if (sourcePath === undefined) return undefined;
+      return {
+        source: 'grok' as const,
+        sourcePath,
+        sourceRoot,
+        id,
+        workDir: cwd,
+        title: singleLine(
+          stringValue(summary['generated_title']) ??
+          stringValue(summary['session_summary']) ??
+          'Grok session',
+        ),
+        updatedAt:
+          timestampValue(summary['updated_at']) ?? timestampValue(summary['last_active_at']),
+      };
+    } catch {
+      return undefined;
+    }
+  }));
+  return candidates.filter(
+    (candidate): candidate is NonNullable<typeof candidate> => candidate !== undefined,
+  );
 }
 
 async function discoverCodex(
@@ -196,14 +316,14 @@ async function readCandidate(
     ]);
     const records = [...headRecords, ...tailRecords];
     const title =
-      (findTitle(candidate.source, records) ?? `${displaySource(candidate.source)} session`)
+      (candidate.title ?? findTitle(candidate.source, records) ?? `${displaySource(candidate.source)} session`)
         .slice(0, maxTitleLength);
     return {
       id: `external:${candidate.source}:${candidate.id}`,
       title,
-      last_prompt: findLastPrompt(candidate.source, records),
+      last_prompt: candidate.lastPrompt ?? findLastPrompt(candidate.source, records),
       work_dir: candidate.workDir,
-      updated_at: fileStat.mtimeMs,
+      updated_at: candidate.updatedAt ?? fileStat.mtimeMs,
       source: candidate.source,
       external: {
         id: candidate.id,
@@ -261,6 +381,13 @@ function userText(
   if (source === 'claude') {
     if (record['type'] !== 'user') return undefined;
     return contentText(asRecord(record['message'])?.['content']);
+  }
+  if (source === 'kimi') {
+    return contentText(record['content']);
+  }
+  if (source === 'grok') {
+    if (record['type'] !== 'user') return undefined;
+    return contentText(record['content']);
   }
   if (record['role'] !== 'user') return undefined;
   return contentText(asRecord(record['message'])?.['content']);
@@ -433,6 +560,63 @@ function singleLine(value: string): string {
   return value.replaceAll(/\s+/g, ' ').trim();
 }
 
+async function existingPath(path: string): Promise<string | undefined> {
+  try {
+    const info = await stat(path);
+    return info.isFile() ? path : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
+async function existingContainedPath(root: string, path: string): Promise<string | undefined> {
+  try {
+    const [safeRoot, safePath] = await Promise.all([realpath(root), realpath(path)]);
+    const pathRelative = relative(safeRoot, safePath);
+    if (
+      pathRelative.length === 0 ||
+      pathRelative === '..' ||
+      pathRelative.startsWith('../') ||
+      isAbsolute(pathRelative)
+    ) {
+      return undefined;
+    }
+    return await existingPath(safePath);
+  } catch {
+    return undefined;
+  }
+}
+
+async function readSmallTextFile(path: string): Promise<string> {
+  const info = await stat(path);
+  if (!info.isFile() || info.size > MAX_LINE_BYTES) {
+    throw new Error('Session metadata file is too large.');
+  }
+  const handle = await open(path, 'r');
+  try {
+    const buffer = Buffer.alloc(info.size);
+    const { bytesRead } = await handle.read(buffer, 0, info.size, 0);
+    return buffer.subarray(0, bytesRead).toString('utf8');
+  } finally {
+    await handle.close();
+  }
+}
+
+function timestampValue(value: unknown): number | undefined {
+  if (typeof value === 'number' && Number.isFinite(value)) {
+    return value > 10_000_000_000 ? value : value * 1000;
+  }
+  if (typeof value !== 'string' || value.length === 0) return undefined;
+  const timestamp = Date.parse(value);
+  return Number.isFinite(timestamp) ? timestamp : undefined;
+}
+
 function displaySource(source: ForeignSessionCandidate['source']): string {
-  return source === 'claude' ? 'Claude Code' : source === 'codex' ? 'Codex' : 'Cursor';
+  switch (source) {
+    case 'claude': return 'Claude Code';
+    case 'codex': return 'Codex';
+    case 'cursor': return 'Cursor';
+    case 'kimi': return 'Kimi Code';
+    case 'grok': return 'Grok';
+  }
 }

@@ -61,6 +61,16 @@ export interface FeedbackPromptResult {
   readonly value: string;
 }
 
+export type FeedbackCategory = 'bug' | 'onboarding' | 'loop_result' | 'feature_request' | 'other';
+
+const FEEDBACK_CATEGORY_OPTIONS: readonly ChoiceOption[] = [
+  { value: 'bug', label: 'Bug', description: 'Something did not work as expected' },
+  { value: 'onboarding', label: 'Onboarding', description: 'Installation or first-run feedback' },
+  { value: 'loop_result', label: 'Loop result', description: 'Feedback about a Loop outcome' },
+  { value: 'feature_request', label: 'Feature request', description: 'A capability you need' },
+  { value: 'other', label: 'Other', description: 'Anything else' },
+];
+
 export function promptFeedbackInput(host: SlashCommandHost): Promise<FeedbackPromptResult | undefined> {
   return new Promise((resolve) => {
     const dialog = new FeedbackInputDialogComponent((result: FeedbackInputDialogResult) => {
@@ -71,38 +81,47 @@ export function promptFeedbackInput(host: SlashCommandHost): Promise<FeedbackPro
   });
 }
 
-export type FeedbackAttachmentLevel = 'none' | 'logs' | 'logs+codebase';
-
-const FEEDBACK_ATTACHMENT_OPTIONS: readonly ChoiceOption[] = [
-  { value: 'none', label: 'No attachment', description: 'Text feedback only' },
-  {
-    value: 'logs',
-    label: 'Logs only',
-    description: 'Upload wire events and diagnostic logs from this session',
-  },
-  {
-    value: 'logs+codebase',
-    label: 'Logs + codebase',
-    description:
-      'Include your codebase for deeper diagnosis. Sensitive files are automatically excluded — e.g. .env, config files, secret keys. We use attachments only for diagnosis and never share them.',
-    descriptionTone: 'warning',
-  },
-];
-
-export function promptFeedbackAttachment(
+export function promptFeedbackCategory(
   host: SlashCommandHost,
-): Promise<FeedbackAttachmentLevel | undefined> {
+): Promise<FeedbackCategory | undefined> {
   return new Promise((resolve) => {
     const picker = new ChoicePickerComponent({
-      title: 'Share diagnostic info to help us investigate?',
-      options: FEEDBACK_ATTACHMENT_OPTIONS,
+      title: 'Feedback category',
+      options: FEEDBACK_CATEGORY_OPTIONS,
       onSelect: (value) => {
         host.restoreEditor();
-        resolve(value as FeedbackAttachmentLevel);
+        resolve(value as FeedbackCategory);
       },
       onCancel: () => {
         host.restoreEditor();
         resolve(undefined);
+      },
+    });
+    host.mountEditorReplacement(picker);
+  });
+}
+
+export function promptFeedbackConfirmation(
+  host: SlashCommandHost,
+  payload: Readonly<Record<string, unknown>>,
+): Promise<boolean> {
+  return new Promise((resolve) => {
+    const picker = new ChoicePickerComponent({
+      title: 'Submit this feedback?',
+      notice:
+        `Payload: ${JSON.stringify(payload)}\n` +
+        'No files, logs, source code, prompts, or local evidence are attached automatically.',
+      options: [
+        { value: 'submit', label: 'Submit', description: 'Send exactly the payload shown above' },
+        { value: 'cancel', label: 'Cancel', description: 'Return without sending anything' },
+      ],
+      onSelect: (value) => {
+        host.restoreEditor();
+        resolve(value === 'submit');
+      },
+      onCancel: () => {
+        host.restoreEditor();
+        resolve(false);
       },
     });
     host.mountEditorReplacement(picker);

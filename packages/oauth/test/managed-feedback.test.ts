@@ -12,13 +12,12 @@ afterEach(() => {
 });
 
 const SAMPLE_BODY: SubmitFeedbackBody = {
-  session_id: 'sess-123',
-  content: 'great tool',
-  version: 'wukong-0.1.1',
-  os: 'Darwin 25.3.0',
-  model: 'wukong/wukong-for-coding',
+  message: 'great tool',
+  category: 'other',
+  version: '0.0.18',
+  platform: 'darwin',
+  arch: 'arm64',
   contact: 'test@example.com',
-  info: { tool: 'wukong-cli', env: 'test' },
 };
 
 describe('wukongFeedbackUrl', () => {
@@ -33,176 +32,130 @@ describe('wukongFeedbackUrl', () => {
 });
 
 describe('fetchSubmitFeedback', () => {
-  it('POSTs JSON body with bearer auth and returns feedback_id on 200', async () => {
+  it('POSTs only the confirmed JSON body without authorization', async () => {
     const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ feedback_id: 3 }), {
-        status: 200,
+      new Response(JSON.stringify({ feedback_id: 'fb_123' }), {
+        status: 201,
         headers: { 'Content-Type': 'application/json' },
       }),
     );
-    vi.stubGlobal('fetch', fetchMock);
 
     const result = await fetchSubmitFeedback(
       'https://api.example/feedback',
-      'access-token',
       SAMPLE_BODY,
+      'idem-123',
+      { fetchImpl: fetchMock as typeof fetch },
     );
 
-    expect(result).toEqual({ kind: 'ok', feedbackId: 3 });
-
+    expect(result).toEqual({ kind: 'ok', feedbackId: 'fb_123' });
     const calls = fetchMock.mock.calls as unknown as [string, RequestInit?][];
     const [calledUrl, init] = calls[0]!;
     expect(calledUrl).toBe('https://api.example/feedback');
     expect(init?.method).toBe('POST');
 
     const headers = new Headers((init?.headers ?? {}) as Record<string, string>);
-    expect(headers.get('authorization')).toBe('Bearer access-token');
+    expect(headers.get('authorization')).toBeNull();
+    expect(headers.get('idempotency-key')).toBe('idem-123');
     expect(headers.get('content-type')).toBe('application/json');
-    expect(headers.get('accept')).toBe('application/json');
-
     expect(JSON.parse(init?.body as string)).toEqual(SAMPLE_BODY);
+    expect(init?.body).not.toContain('session_id');
+    expect(init?.body).not.toContain('model');
+    expect(init?.body).not.toContain('logs');
+    expect(init?.body).not.toContain('source');
+    expect(init?.body).not.toContain('prompt');
   });
 
-  it('returns an error when the server omits feedback_id', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () =>
-        new Response(JSON.stringify({ ok: true }), {
-          status: 200,
-          headers: { 'Content-Type': 'application/json' },
-        }),
-      ),
+  it('accepts a nested API data response', async () => {
+    const result = await fetchSubmitFeedback(
+      'https://api.example/feedback',
+      SAMPLE_BODY,
+      'idem-123',
+      {
+        fetchImpl: vi.fn(async () =>
+          new Response(JSON.stringify({ data: { id: 'fb_nested' } }), {
+            status: 201,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ) as typeof fetch,
+      },
     );
+    expect(result).toEqual({ kind: 'ok', feedbackId: 'fb_nested' });
+  });
 
-    const result = await fetchSubmitFeedback('https://api.example/feedback', 'access-token', SAMPLE_BODY);
-
+  it('rejects missing or malformed feedback identifiers', async () => {
+    const result = await fetchSubmitFeedback(
+      'https://api.example/feedback',
+      SAMPLE_BODY,
+      'idem-123',
+      {
+        fetchImpl: vi.fn(async () =>
+          new Response(JSON.stringify({ feedback_id: 3 }), {
+            status: 201,
+            headers: { 'Content-Type': 'application/json' },
+          }),
+        ) as typeof fetch,
+      },
+    );
     expect(result).toEqual({
       kind: 'error',
       message: 'Failed to submit feedback: missing feedback_id.',
     });
   });
 
-  it('preserves the wukong- version prefix in the request body', async () => {
-    const fetchMock = vi.fn(async () =>
-      new Response(JSON.stringify({ feedback_id: 3 }), {
-        status: 200,
-        headers: { 'Content-Type': 'application/json' },
-      }),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    await fetchSubmitFeedback('https://api.example/feedback', 'tok', SAMPLE_BODY);
-
-    const calls = fetchMock.mock.calls as unknown as [string, RequestInit?][];
-    const sent = JSON.parse(calls[0]?.[1]?.body as string) as Record<string, unknown>;
-    expect(sent['version']).toBe('wukong-0.1.1');
-  });
-
-  it('returns an error with status when the server responds 401', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('', { status: 401 })),
-    );
-
+  it('surfaces API error messages and status', async () => {
     const result = await fetchSubmitFeedback(
       'https://api.example/feedback',
-      'access-token',
       SAMPLE_BODY,
-    );
-
-    expect(result.kind).toBe('error');
-    if (result.kind !== 'error') return;
-    expect(result.status).toBe(401);
-    expect(result.message).toMatch(/401/);
-  });
-
-  it('surfaces API error messages from failed submissions', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        async () =>
+      'idem-123',
+      {
+        fetchImpl: vi.fn(async () =>
           new Response(JSON.stringify({ error: { message: 'feedback rejected' } }), {
-            status: 400,
+            status: 429,
             headers: { 'Content-Type': 'application/json' },
           }),
-      ),
+        ) as typeof fetch,
+      },
     );
-
-    const result = await fetchSubmitFeedback(
-      'https://api.example/feedback',
-      'access-token',
-      SAMPLE_BODY,
-    );
-
-    expect(result.kind).toBe('error');
-    if (result.kind !== 'error') return;
-    expect(result.status).toBe(400);
-    expect(result.message).toBe('feedback rejected');
-  });
-
-  it('returns an error with status when the server responds 500', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => new Response('', { status: 500 })),
-    );
-
-    const result = await fetchSubmitFeedback(
-      'https://api.example/feedback',
-      'access-token',
-      SAMPLE_BODY,
-    );
-
-    expect(result.kind).toBe('error');
-    if (result.kind !== 'error') return;
-    expect(result.status).toBe(500);
-    expect(result.message).toBe('Failed to submit feedback: HTTP 500');
+    expect(result).toEqual({ kind: 'error', status: 429, message: 'feedback rejected' });
   });
 
   it('returns a timeout error when the request aborts', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(
-        (_url: string, init?: RequestInit) =>
-          new Promise<Response>((_, reject) => {
-            init?.signal?.addEventListener('abort', () => {
-              const err = new Error('aborted');
-              err.name = 'AbortError';
-              reject(err);
-            });
-          }),
-      ),
-    );
-
+    const fetchImpl = vi.fn(
+      (_url: string, init?: RequestInit) =>
+        new Promise<Response>((_, reject) => {
+          init?.signal?.addEventListener('abort', () => {
+            const err = new Error('aborted');
+            err.name = 'AbortError';
+            reject(err);
+          });
+        }),
+    ) as typeof fetch;
     const result = await fetchSubmitFeedback(
       'https://api.example/feedback',
-      'access-token',
       SAMPLE_BODY,
-      { timeoutMs: 5 },
+      'idem-123',
+      { timeoutMs: 5, fetchImpl },
     );
-
-    expect(result.kind).toBe('error');
-    if (result.kind !== 'error') return;
-    expect(result.status).toBeUndefined();
-    expect(result.message).toMatch(/timed out/);
+    expect(result).toEqual({
+      kind: 'error',
+      message: 'Failed to submit feedback: request timed out.',
+    });
   });
 
   it('returns a generic error message on network failure', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async () => {
-        throw new TypeError('network down');
-      }),
-    );
-
     const result = await fetchSubmitFeedback(
       'https://api.example/feedback',
-      'access-token',
       SAMPLE_BODY,
+      'idem-123',
+      {
+        fetchImpl: vi.fn(async () => {
+          throw new TypeError('network down');
+        }) as typeof fetch,
+      },
     );
-
-    expect(result.kind).toBe('error');
-    if (result.kind !== 'error') return;
-    expect(result.status).toBeUndefined();
-    expect(result.message).toMatch(/network down/);
+    expect(result).toEqual({
+      kind: 'error',
+      message: 'Failed to submit feedback: network down',
+    });
   });
 });

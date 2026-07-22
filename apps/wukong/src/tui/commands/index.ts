@@ -40,6 +40,8 @@ export {
   promptApiKey,
   promptCatalogProviderSelection,
   promptFeedbackInput,
+  promptFeedbackCategory,
+  promptFeedbackConfirmation,
   promptLogoutProviderSelection,
   promptModelSelectionForCatalog,
   promptModelSelectionForOpenPlatform,

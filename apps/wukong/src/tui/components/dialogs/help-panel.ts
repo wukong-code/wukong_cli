@@ -46,6 +46,7 @@ export const DEFAULT_KEYBOARD_SHORTCUTS: readonly KeyboardShortcut[] = [
 
 export interface HelpPanelOptions {
   readonly commands: readonly HelpPanelCommand[];
+  readonly tier?: 'core' | 'advanced';
   readonly shortcuts?: readonly KeyboardShortcut[];
   readonly onClose: () => void;
   /** Terminal height — used to decide whether to show the hint tail. */
@@ -107,7 +108,7 @@ export class HelpPanelComponent extends Container implements Focusable {
     const cmdWidth = Math.max(12, ...cmdLabels.map((l) => l.length));
     const lines: string[] = [
       accent('─'.repeat(width)),
-      currentTheme.boldFg('primary', ' help ') + muted('· Esc / Enter / q to cancel · ↑↓ scroll'),
+      currentTheme.boldFg('primary', this.opts.tier === 'advanced' ? ' advanced help ' : ' help ') + muted('· Esc / Enter / q to cancel · ↑↓ scroll'),
       '',
       // Greeting
       `  ${dim('Sure, Wukong is ready to help! Just send a message to get started.')}`,
@@ -122,6 +123,9 @@ export class HelpPanelComponent extends Container implements Focusable {
         const label = cmdLabels[i] ?? `/${cmd.name}`;
         return `    ${slashColor(label.padEnd(cmdWidth))}  ${dim(cmd.description)}`;
       }),
+      ...(this.opts.tier === 'advanced'
+        ? []
+        : ['', `  ${muted('Run /help advanced to see advanced tools.')}`]),
       '',
       accent('─'.repeat(width)),
     ];

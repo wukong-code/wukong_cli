@@ -143,7 +143,7 @@ export interface SlashCommandHost {
   // Dispatch
   stop(exitCode?: number): Promise<void>;
   setExitOpenUrl(url: string): void;
-  showHelpPanel(): void;
+  showHelpPanel(tier?: 'core' | 'advanced'): void;
   createNewSession(): Promise<void>;
   showSessionPicker(source?: SessionSource): Promise<void>;
   sendNormalUserInput(text: string): void;
@@ -249,7 +249,15 @@ async function handleBuiltInSlashCommand(
       void host.stop();
       return;
     case 'help':
-      host.showHelpPanel();
+      if (args === '') {
+        host.showHelpPanel('core');
+        return;
+      }
+      if (args.trim().toLowerCase() === 'advanced') {
+        host.showHelpPanel('advanced');
+        return;
+      }
+      host.showError('Usage: /help [advanced]');
       return;
     case 'version':
       host.showStatus(`Wukong v${host.state.appState.version}`);
@@ -261,7 +269,7 @@ async function handleBuiltInSlashCommand(
     case 'resume': {
       const source = parseResumeSource(args);
       if (source === null) {
-        host.showError('Usage: /resume [codex|claude|cursor]');
+        host.showError('Usage: /resume [codex|claude|cursor|kimi|grok]');
         return;
       }
       void host.showSessionPicker(source);
@@ -404,7 +412,6 @@ async function handleBuiltInSlashCommand(
 
 const NO_ARGUMENT_COMMANDS = new Set<BuiltinSlashCommandName>([
   'exit',
-  'help',
   'version',
   'new',
   'resume-codex',
@@ -436,7 +443,13 @@ const NO_ARGUMENT_COMMANDS = new Set<BuiltinSlashCommandName>([
 function parseResumeSource(args: string): SessionSource | null {
   const value = args.trim().toLowerCase();
   if (value.length === 0) return 'wukong';
-  if (value === 'codex' || value === 'claude' || value === 'cursor') {
+  if (
+    value === 'codex' ||
+    value === 'claude' ||
+    value === 'cursor' ||
+    value === 'kimi' ||
+    value === 'grok'
+  ) {
     return value;
   }
   return null;

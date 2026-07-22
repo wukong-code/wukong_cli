@@ -1,8 +1,60 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；当前 0.0.17 以 [Command Surface Reliability](docs/design/0.0.17-command-surface-reliability.md) 为准，共享验证基础以 [技术实现方案](docs/tech/commercial-refactor-implementation.md) 为准，现有测试基线以 [测试计划](docs/test/verification-cli-test-plan.md) 为准；本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；当前 0.0.18 以 [Loop-First Simplification](docs/design/0.0.18-loop-first-simplification.md) 为准，共享验证基础以 [技术实现方案](docs/tech/commercial-refactor-implementation.md) 为准，现有测试基线以 [测试计划](docs/test/verification-cli-test-plan.md) 为准；本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
+
+## 🚧 0.0.18 — Loop-First Simplification
+
+> 方案: [docs/design/0.0.18-loop-first-simplification.md](docs/design/0.0.18-loop-first-simplification.md)。本版继续免费/BYOK。命令精简只改变默认可见性，不删除底层实现；唯一需要真正删除的是 `/feedback` 中会上传日志、session 或代码库的附件路径。
+
+### P0：默认命令面与 Loop
+
+- [x] 为 slash command 增加 core / advanced / hidden 分层；默认 help、autocomplete、welcome 只突出 Resume → Loop → Gate（2026-07-22）
+- [x] `/goal`、`/auto`、`/yolo` 等默认隐藏但仍可直接调用；`/login`、`/logout` 保持可发现，并增加自动化防止 handler/dispatch 被误删（2026-07-22）
+- [x] 默认 UI 的 Goal lifecycle 文案统一成 `/loop status|pause|resume|stop`；Goal engine、queue、gate 和旧记录兼容保持不变（2026-07-22）
+- [x] 将 `/permission` 作为 TUI 默认 permission 入口；全局 `--auto`、`--yolo` 继续支持 headless（2026-07-22）
+- [x] `/help advanced` 可发现内部检查、本地 reviewer、workspace/session/UI 工具；`/transform` 继续在实验未启用时可发现（2026-07-22）
+- [x] 恢复 CLI device flow → 网站确认 → token/refresh → `/api/v1/models` 空目录 → usage/logout 链路；有效 token 的 404 不得作为 expected skip（2026-07-22）
+
+### P0：Managed Wukong 与 Login
+
+- [x] `/login`/`wukong login` 申请 device code，打开或显示 Wukong 网站确认页，用户用 Google/GitHub 批准后完成 token exchange/refresh；CLI 不接收账号密码且每个失败阶段可辨认（2026-07-22）
+- [x] Web catalog 验证 access token；当前返回 `200 {data: []}`，不恢复 `wukong-for-coding` 或任何 placeholder（2026-07-22）
+- [x] 空 catalog 仍判定登录成功并保留 token；不创建 managed model alias、不覆盖 BYOK provider/default，显示“已连接账号，当前无 Wukong 模型”（2026-07-22）
+- [x] catalog 404/5xx 保留未来的 last-known-good 且明确报错；`200 data: []` 是正常空状态，只有 token 缺失时安静跳过 refresh（2026-07-22）
+- [ ] `/usage`、`/status` 显示真实 managed usage；无额度时为 null/empty，不虚构 Guest/Free 限制
+- [x] `/logout` 只清理 Wukong token/provider/default alias，不删除其他 BYOK provider（2026-07-22）
+- [ ] Privacy 明确 0.0.18 没有 Wukong 托管推理或 prompt 上传，并完成 CLI login → 网站确认 → 空 catalog → BYOK 不变 → logout/re-login production smoke
+
+### P0：Cross-Agent Resume
+
+- [x] `SessionSource`、补全、picker、welcome、handoff 增加 `kimi` 和 `grok`（2026-07-22）
+- [x] Kimi Code 读取 `.kimi-code/session_index.jsonl`、session `state.json` 与有界 user history；新格式存在时不重复扫描 `.kimi` legacy（2026-07-22）
+- [x] Grok 只读发现受支持的 session summary/chat history JSON 格式；禁止读取 auth、system prompt、terminal logs、memtrace 和隐藏状态（2026-07-22）
+- [x] 增加 `resume-kimi`、`resume-grok` 内置只读 import skill；不新增公开 `/resume-kimi`、`/resume-grok` 命令（2026-07-22）
+- [x] 覆盖 realpath/root containment、symlink escape、损坏记录、格式版本和 workspace 过滤 fixture（2026-07-22）
+- [ ] Kimi Code、Grok 各完成一次真实本机 picker → handoff → editable Loop → workspace re-check smoke
+
+### P1：文本 Feedback
+
+- [x] `/feedback` 无需登录或 managed provider，提交前预览精确字段并显式确认（2026-07-22）
+- [x] 只发送 message/category/version/platform/arch/可选 Loop outcome、reason code、contact（2026-07-22）
+- [x] 删除 logs、codebase、session archive、presigned upload、upload complete 和 feedback telemetry event（2026-07-22）
+- [x] 覆盖 Cancel、Submit、429/503、GitHub fallback 和不读取文件/日志的隐私负向测试（2026-07-22）
+- [ ] 与 Web `/api/v1/feedback` 使用共享 contract fixture，避免客户端/服务端字段漂移
+
+### 发布门槛
+
+- [x] 命令分层、Resume、Feedback、网站确认 OAuth/空 catalog 的 targeted tests 和完整 test 通过；typecheck/lint 待最终版本面复跑（2026-07-22）
+- [ ] docs build、bundle/native SEA smoke 与真实 TUI smoke 通过
+- [ ] 六平台 assets/SHA、0.0.17 → 0.0.18 upgrade 和 0.0.18 fresh install 通过
+- [ ] 三仓 README/ROADMAP/TODO/release notes/Changelog/installer/manifest 一致
+- [ ] Web Feedback API、D1 retention/purge、Privacy/Terms 和 production E2E 通过
+
+### 明确不做
+
+- 支付、本地 Loop quota、托管模型/推理、付费 managed credits/套餐、Hosted Terminal/Report、云同步、telemetry 指标后端、PR/Team、`/schedule` 和 feedback 附件均不进入 0.0.18；本版本只完成网站确认登录与可为空的模型目录基础。
 
 ## ✅ 0.0.16 — Loop Convergence
 

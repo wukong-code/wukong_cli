@@ -16,14 +16,6 @@ import {
   type SubmitFeedbackBody,
 } from './managed-feedback';
 import {
-  fetchCompleteFeedbackUpload,
-  fetchCreateFeedbackUploadUrl,
-  type CompleteFeedbackUploadBody,
-  type CreateFeedbackUploadUrlBody,
-  type FetchCompleteFeedbackUploadResult,
-  type FetchCreateFeedbackUploadUrlResult,
-} from './managed-feedback-upload';
-import {
   normalizeOAuthCredentialKey,
   WUKONG_CODE_OAUTH_KEY,
   WUKONG_CODE_PROVIDER_NAME,
@@ -303,68 +295,14 @@ export class WukongOAuthToolkit<TConfig = unknown> {
 
   async submitFeedback(
     body: SubmitFeedbackBody,
-    providerName?: string | undefined,
-    options: {
-      readonly oauthRef?: WukongOAuthTokenRef | undefined;
-      readonly baseUrl?: string | undefined;
-    } = {},
+    idempotencyKey: string,
+    options: { readonly baseUrl?: string | undefined } = {},
   ): Promise<FetchSubmitFeedbackResult> {
-    return this.withAccessToken(
-      providerName,
-      options,
-      (accessToken) => fetchSubmitFeedback(managedFeedbackUrl(options.baseUrl), accessToken, body),
-    );
-  }
-
-  private async withAccessToken<T>(
-    providerName: string | undefined,
-    options: {
-      readonly oauthRef?: WukongOAuthTokenRef | undefined;
-      readonly baseUrl?: string | undefined;
-    },
-    run: (accessToken: string) => Promise<T>,
-  ): Promise<T | { readonly kind: 'error'; readonly message: string }> {
-    const name = providerName ?? WUKONG_CODE_PROVIDER_NAME;
-    try {
-      const accessToken = await this.ensureFresh(name, {
-        oauthRef: options.oauthRef ?? this.defaultOAuthRef(options.baseUrl),
-      });
-      return await run(accessToken);
-    } catch (error) {
-      return {
-        kind: 'error',
-        message: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
-
-  async createFeedbackUploadUrl(
-    body: CreateFeedbackUploadUrlBody,
-    providerName?: string | undefined,
-    options: {
-      readonly oauthRef?: WukongOAuthTokenRef | undefined;
-      readonly baseUrl?: string | undefined;
-    } = {},
-  ): Promise<FetchCreateFeedbackUploadUrlResult> {
-    return this.withAccessToken(
-      providerName,
-      options,
-      (accessToken) => fetchCreateFeedbackUploadUrl(accessToken, body, { baseUrl: options.baseUrl }),
-    );
-  }
-
-  async completeFeedbackUpload(
-    body: CompleteFeedbackUploadBody,
-    providerName?: string | undefined,
-    options: {
-      readonly oauthRef?: WukongOAuthTokenRef | undefined;
-      readonly baseUrl?: string | undefined;
-    } = {},
-  ): Promise<FetchCompleteFeedbackUploadResult> {
-    return this.withAccessToken(
-      providerName,
-      options,
-      (accessToken) => fetchCompleteFeedbackUpload(accessToken, body, { baseUrl: options.baseUrl }),
+    return fetchSubmitFeedback(
+      managedFeedbackUrl(options.baseUrl),
+      body,
+      idempotencyKey,
+      { fetchImpl: this.fetchImpl },
     );
   }
 

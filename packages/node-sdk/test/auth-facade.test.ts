@@ -207,18 +207,7 @@ oauth = { storage = "file", key = "${oauthKey}", oauth_host = "https://auth.dev.
     const fetchMock = vi.fn<FetchMock>(
       async (_input, _init) =>
         new Response(
-          JSON.stringify({
-            data: [
-              {
-                id: 'wukong-for-coding',
-                context_length: 262144,
-                supports_reasoning: true,
-                supports_image_in: true,
-                supports_video_in: true,
-                display_name: 'Wukong for Coding',
-              },
-            ],
-          }),
+          JSON.stringify({ data: [] }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         ),
     );
@@ -231,11 +220,18 @@ oauth = { storage = "file", key = "${oauthKey}", oauth_host = "https://auth.dev.
     expect(result).toMatchObject({
       providerName: WUKONG_CODE_PROVIDER_NAME,
       ok: true,
+      modelCount: 0,
     });
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledOnce();
+    expect(fetchInputUrl(fetchMock.mock.calls[0]![0])).toBe(
+      'https://wukong.today/api/v1/models',
+    );
     expect(config.defaultModel).toBeUndefined();
     expect(config.models).toBeUndefined();
-    expect(config.providers[WUKONG_CODE_PROVIDER_NAME]).toBeUndefined();
+    expect(config.providers[WUKONG_CODE_PROVIDER_NAME]).toMatchObject({
+      type: 'wukong',
+      baseUrl: 'https://wukong.today/api/v1',
+    });
   });
 
   it('logs in against the configured scoped OAuth host and base URL when env is absent', async () => {
@@ -284,13 +280,7 @@ oauth = { storage = "file", key = "${oauthKey}", oauth_host = "${oauthHost}" }
         );
         return new Response(
           JSON.stringify({
-            data: [
-              {
-                id: 'wukong-for-coding',
-                context_length: 262144,
-                supports_reasoning: true,
-              },
-            ],
+            data: [],
           }),
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
@@ -314,6 +304,7 @@ oauth = { storage = "file", key = "${oauthKey}", oauth_host = "${oauthHost}" }
     });
     expect(fetchMock.mock.calls.map((call) => fetchInputUrl(call[0]))).toEqual([
       `${oauthHost}/api/oauth/token`,
+      `${baseUrl}/models`,
     ]);
   });
 
@@ -342,13 +333,7 @@ oauth = { storage = "file", key = "oauth/wukong" }
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer scoped-access-token');
       return new Response(
         JSON.stringify({
-          data: [
-            {
-              id: 'wukong-for-coding',
-              context_length: 262144,
-              supports_reasoning: true,
-            },
-          ],
+          data: [],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
@@ -361,11 +346,11 @@ oauth = { storage = "file", key = "oauth/wukong" }
       ok: true,
     });
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledOnce();
     const config = await harness.getConfig({ reload: true });
     expect(config.providers[WUKONG_CODE_PROVIDER_NAME]).toMatchObject({
       baseUrl,
-      oauth: { storage: 'file', key: 'oauth/wukong' },
+      oauth: { storage: 'file', key: oauthKey },
     });
   });
 
@@ -401,13 +386,7 @@ oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https:/
       expect(new Headers(init?.headers).get('authorization')).toBe('Bearer env-access-token');
       return new Response(
         JSON.stringify({
-          data: [
-            {
-              id: 'wukong-for-coding',
-              context_length: 262144,
-              supports_reasoning: true,
-            },
-          ],
+          data: [],
         }),
         { status: 200, headers: { 'Content-Type': 'application/json' } },
       );
@@ -420,11 +399,11 @@ oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https:/
       ok: true,
     });
 
-    expect(fetchMock).not.toHaveBeenCalled();
+    expect(fetchMock).toHaveBeenCalledOnce();
     const config = await harness.getConfig({ reload: true });
     expect(config.providers[WUKONG_CODE_PROVIDER_NAME]).toMatchObject({
-      baseUrl: configuredBaseUrl,
-      oauth: { storage: 'file', key: configuredOauthKey, oauthHost: 'https://wukong.today' },
+      baseUrl: envBaseUrl,
+      oauth: { storage: 'file', key: envOauthKey, oauthHost: envOauthHost },
     });
   });
 
@@ -674,8 +653,8 @@ oauth = { storage = "file", key = "${oauthKey}", oauth_host = "https://auth.dev.
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
-      return new Response(JSON.stringify({ feedback_id: 3 }), {
-        status: 200,
+      return new Response(JSON.stringify({ feedback_id: 'fb_dev' }), {
+        status: 201,
         headers: { 'Content-Type': 'application/json' },
       });
     });
@@ -688,20 +667,21 @@ oauth = { storage = "file", key = "${oauthKey}", oauth_host = "https://auth.dev.
     });
     await expect(
       harness.auth.submitFeedback({
-        content: 'dev feedback',
-        sessionId: 'sess-dev',
-        version: 'wukong-0.1.1',
-        os: 'Darwin 25.3.0',
-        model: 'wukong/wukong-for-coding',
+        message: 'dev feedback',
+        category: 'other',
+        version: '0.0.18',
+        platform: 'darwin',
+        arch: 'arm64',
+        idempotencyKey: 'idem-dev',
       }),
-    ).resolves.toEqual({ kind: 'ok', feedbackId: 3 });
+    ).resolves.toEqual({ kind: 'ok', feedbackId: 'fb_dev' });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(`${baseUrl}/usages`);
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${baseUrl}/feedback`);
-    for (const call of fetchMock.mock.calls) {
-      const init = call[1];
-      expect(new Headers(init?.headers).get('authorization')).toBe('Bearer dev-access-token');
-    }
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('authorization')).toBe(
+      'Bearer dev-access-token',
+    );
+    expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get('authorization')).toBeNull();
   });
 
   it('uses environment managed endpoints for usage and feedback over persisted config', async () => {
@@ -742,8 +722,8 @@ oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https:/
           { status: 200, headers: { 'Content-Type': 'application/json' } },
         );
       }
-      return new Response(JSON.stringify({ feedback_id: 3 }), {
-        status: 200,
+      return new Response(JSON.stringify({ feedback_id: 'fb_env' }), {
+        status: 201,
         headers: { 'Content-Type': 'application/json' },
       });
     });
@@ -772,26 +752,27 @@ oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https:/
     });
     await expect(
       harness.auth.submitFeedback({
-        content: 'env feedback',
-        sessionId: 'sess-env',
-        version: 'wukong-0.1.1',
-        os: 'Darwin 25.3.0',
-        model: 'wukong/wukong-for-coding',
+        message: 'env feedback',
+        category: 'other',
+        version: '0.0.18',
+        platform: 'darwin',
+        arch: 'arm64',
+        idempotencyKey: 'idem-env',
       }),
-    ).resolves.toEqual({ kind: 'ok', feedbackId: 3 });
+    ).resolves.toEqual({ kind: 'ok', feedbackId: 'fb_env' });
 
     expect(fetchMock.mock.calls[0]?.[0]).toBe(`${envBaseUrl}/usages`);
     expect(fetchMock.mock.calls[1]?.[0]).toBe(`${envBaseUrl}/feedback`);
-    for (const call of fetchMock.mock.calls) {
-      expect(new Headers(call[1]?.headers).get('authorization')).toBe('Bearer env-access-token');
-    }
+    expect(new Headers(fetchMock.mock.calls[0]?.[1]?.headers).get('authorization')).toBe(
+      'Bearer env-access-token',
+    );
+    expect(new Headers(fetchMock.mock.calls[1]?.[1]?.headers).get('authorization')).toBeNull();
   });
 
-  it('submitFeedback maps camelCase input to snake_case body and posts with bearer auth', async () => {
-    await new FileTokenStorage(join(homeDir, 'credentials')).save('wukong', freshToken());
+  it('submitFeedback maps the privacy-safe input and does not require bearer auth', async () => {
     const fetchMock = vi.fn<FetchMock>(async () =>
-      new Response(JSON.stringify({ feedback_id: 3 }), {
-        status: 200,
+      new Response(JSON.stringify({ feedback_id: 'fb_42' }), {
+        status: 201,
         headers: { 'Content-Type': 'application/json' },
       }),
     );
@@ -799,16 +780,16 @@ oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https:/
 
     const harness = createWukongHarness({ homeDir });
     const result = await harness.auth.submitFeedback({
-      content: 'great tool',
-      sessionId: 'sess-42',
-      version: 'wukong-0.1.1',
-      os: 'Darwin 25.3.0',
-      model: 'wukong/wukong-for-coding',
+      message: 'great tool',
+      category: 'feature_request',
+      version: '0.0.18',
+      platform: 'darwin',
+      arch: 'arm64',
       contact: 'test@example.com',
-      info: { codebase: { file_name: 'repo.zip' } },
+      idempotencyKey: 'idem-42',
     });
 
-    expect(result).toEqual({ kind: 'ok', feedbackId: 3 });
+    expect(result).toEqual({ kind: 'ok', feedbackId: 'fb_42' });
 
     const calls = fetchMock.mock.calls as unknown as [string, RequestInit?][];
     const [url, init] = calls[0]!;
@@ -816,77 +797,21 @@ oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https:/
     expect(init?.method).toBe('POST');
 
     const headers = new Headers((init?.headers ?? {}) as Record<string, string>);
-    expect(headers.get('authorization')).toBe('Bearer oauth-access-token');
+    expect(headers.get('authorization')).toBeNull();
+    expect(headers.get('idempotency-key')).toBe('idem-42');
     expect(headers.get('content-type')).toBe('application/json');
 
     expect(JSON.parse(init?.body as string)).toEqual({
-      session_id: 'sess-42',
-      content: 'great tool',
-      version: 'wukong-0.1.1',
-      os: 'Darwin 25.3.0',
-      model: 'wukong/wukong-for-coding',
+      message: 'great tool',
+      category: 'feature_request',
+      version: '0.0.18',
+      platform: 'darwin',
+      arch: 'arm64',
       contact: 'test@example.com',
-      info: { codebase: { file_name: 'repo.zip' } },
-    });
-  });
-
-  it('createFeedbackUploadUrl maps SDK input and returns camelCase upload parts', async () => {
-    await new FileTokenStorage(join(homeDir, 'credentials')).save('wukong', freshToken());
-    const fetchMock = vi.fn<FetchMock>(async () =>
-      new Response(
-        JSON.stringify({
-          upload: {
-            id: 28,
-            parts: [
-              {
-                part_number: 1,
-                url: 'https://upload.example.test/part-1',
-                method: 'PUT',
-                size: 1024,
-              },
-            ],
-          },
-        }),
-        { status: 200, headers: { 'Content-Type': 'application/json' } },
-      ),
-    );
-    vi.stubGlobal('fetch', fetchMock);
-
-    const harness = createWukongHarness({ homeDir });
-    const result = await harness.auth.createFeedbackUploadUrl({
-      feedbackId: 3,
-      filename: 'session.zip',
-      size: 1024,
-      sha256: 'abc123',
-    });
-
-    expect(result).toEqual({
-      kind: 'ok',
-      uploadId: 28,
-      parts: [
-        {
-          partNumber: 1,
-          url: 'https://upload.example.test/part-1',
-          method: 'PUT',
-          size: 1024,
-        },
-      ],
-    });
-
-    const calls = fetchMock.mock.calls as unknown as [string, RequestInit?][];
-    const [url, init] = calls[0]!;
-    expect(url).toBe('https://wukong.today/api/v1/feedback/upload_url');
-    expect(init?.method).toBe('POST');
-    expect(JSON.parse(init?.body as string)).toEqual({
-      feedback_id: 3,
-      file_name: 'session.zip',
-      file_size: 1024,
-      file_hash: 'abc123',
     });
   });
 
   it('submitFeedback surfaces HTTP errors without throwing', async () => {
-    await new FileTokenStorage(join(homeDir, 'credentials')).save('wukong', freshToken());
     vi.stubGlobal(
       'fetch',
       vi.fn<FetchMock>(
@@ -900,11 +825,12 @@ oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https:/
 
     const harness = createWukongHarness({ homeDir });
     const result = await harness.auth.submitFeedback({
-      content: 'x',
-      sessionId: 's',
-      version: 'wukong-0.0.0',
-      os: 'Darwin 25.3.0',
-      model: null,
+      message: 'x',
+      category: 'bug',
+      version: '0.0.18',
+      platform: 'darwin',
+      arch: 'arm64',
+      idempotencyKey: 'idem-error',
     });
 
     expect(result.kind).toBe('error');

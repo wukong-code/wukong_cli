@@ -1,27 +1,27 @@
 /**
  * Submit user feedback to the managed Wukong platform.
  *
- * POSTs a JSON body to `{wukongBaseUrl}/feedback` with a Bearer access
- * token. The client tags `version` with a `wukong-` prefix so the
- * backend can identify this client.
+ * POSTs an explicitly confirmed, content-minimal JSON body to
+ * `{wukongBaseUrl}/feedback`. Feedback is intentionally independent of OAuth.
  */
 
 import { readApiErrorMessage } from './api-error';
 import { wukongBaseUrl } from './managed-usage';
 
 export interface SubmitFeedbackBody {
-  readonly session_id: string;
-  readonly content: string;
+  readonly message: string;
+  readonly category: 'bug' | 'onboarding' | 'loop_result' | 'feature_request' | 'other';
   readonly version: string;
-  readonly os: string;
-  readonly model: string | null;
-  readonly contact?: string;
-  readonly info?: Record<string, unknown>;
+  readonly platform: 'darwin' | 'linux' | 'win32';
+  readonly arch: 'arm64' | 'x64';
+  readonly loop_outcome?: 'PASS' | 'NEEDS_WORK' | 'ERROR' | null;
+  readonly reason_code?: string | null;
+  readonly contact?: string | null;
 }
 
 export interface FetchSubmitFeedbackOk {
   readonly kind: 'ok';
-  readonly feedbackId: number;
+  readonly feedbackId: string;
 }
 
 export interface FetchSubmitFeedbackError {
@@ -38,21 +38,21 @@ export function wukongFeedbackUrl(baseUrl?: string): string {
 
 export async function fetchSubmitFeedback(
   url: string,
-  accessToken: string,
   body: SubmitFeedbackBody,
-  opts: { timeoutMs?: number } = {},
+  idempotencyKey: string,
+  opts: { timeoutMs?: number; fetchImpl?: typeof fetch } = {},
 ): Promise<FetchSubmitFeedbackResult> {
   const controller = new AbortController();
   const timer = setTimeout(() => {
     controller.abort();
   }, opts.timeoutMs ?? 8000);
   try {
-    const res = await fetch(url, {
+    const res = await (opts.fetchImpl ?? fetch)(url, {
       method: 'POST',
       headers: {
-        Authorization: `Bearer ${accessToken}`,
         Accept: 'application/json',
         'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
       },
       body: JSON.stringify(body),
       signal: controller.signal,
@@ -83,7 +83,7 @@ export async function fetchSubmitFeedback(
   }
 }
 
-function parseFeedbackId(payload: unknown): number | undefined {
+function parseFeedbackId(payload: unknown): string | undefined {
   const direct = readFeedbackId(payload);
   if (direct !== undefined) return direct;
   if (typeof payload === 'object' && payload !== null && 'data' in payload) {
@@ -92,9 +92,9 @@ function parseFeedbackId(payload: unknown): number | undefined {
   return undefined;
 }
 
-function readFeedbackId(payload: unknown): number | undefined {
+function readFeedbackId(payload: unknown): string | undefined {
   if (typeof payload !== 'object' || payload === null) return undefined;
   const record = payload as Record<string, unknown>;
   const value = record['feedback_id'] ?? record['id'];
-  return typeof value === 'number' && Number.isInteger(value) ? value : undefined;
+  return typeof value === 'string' && /^fb_[A-Za-z0-9-]+$/u.test(value) ? value : undefined;
 }

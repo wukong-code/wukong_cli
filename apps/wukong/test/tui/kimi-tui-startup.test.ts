@@ -1406,7 +1406,7 @@ describe('WukongTUI startup', () => {
     expect(showStatus).toHaveBeenCalledWith("New Models · +2 models.");
   });
 
-  it("does not warn when managed provider refresh is skipped for login-required", async () => {
+  it("suppresses only login-required refresh failures and keeps real catalog errors visible", async () => {
     const harness = makeHarness();
     const driver = makeDriver(harness, makeStartupInput());
     const showStatus = vi.spyOn(driver as any, "showStatus").mockImplementation(() => {});
@@ -1418,6 +1418,10 @@ describe('WukongTUI startup', () => {
       failed: [
         { provider: "managed:wukong", reason },
         { provider: "managed:wukong", reason },
+        {
+          provider: "managed:wukong",
+          reason: "Failed to list Wukong models (HTTP 404).",
+        },
         { provider: "custom", reason: "timeout" },
       ],
     });
@@ -1425,6 +1429,7 @@ describe('WukongTUI startup', () => {
     await (driver as any).refreshProviderModelsInBackground();
 
     expect(showStatus.mock.calls).toEqual([
+      ["Skipped refreshing managed:wukong: Failed to list Wukong models (HTTP 404).", "warning"],
       ["Skipped refreshing custom: timeout", "warning"],
     ]);
   });

@@ -59,7 +59,11 @@ export async function runLoginFlow(): Promise<never> {
       },
     });
     harness.track('device_login_terminal', { outcome: 'approved' });
-    process.stderr.write(`Logged in to ${result.providerName}.\n`);
+    process.stderr.write(
+      result.modelCount === 0
+        ? `Logged in to ${result.providerName}. No Wukong models are available yet; use /provider for BYOK models.\n`
+        : `Logged in to ${result.providerName}. ${String(result.modelCount)} model(s) available.\n`,
+    );
     process.exit(0);
   } catch (error) {
     if (controller.signal.aborted) {

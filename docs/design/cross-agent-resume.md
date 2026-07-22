@@ -47,9 +47,9 @@ Wukong 当前具备：
 - `wukong --continue` 可以继续当前工作目录最近的 Wukong session。
 - agent-core 已有 session store、事件 replay、按工作目录索引和 legacy session migration。
 - `/resume` 保持原语义，只显示 Wukong session。
-- `/resume codex|claude|cursor` 显式打开对应外部来源的 picker。
+- `/resume codex|claude|cursor|kimi|grok` 显式打开对应外部来源的 picker。
 - `/resume-codex`、`/resume-claude`、`/resume-cursor` 已作为隐藏兼容入口。
-- picker 明确显示 `[Codex]`、`[Claude]`、`[Cursor]` 来源标签。
+- picker 明确显示 `[Codex]`、`[Claude]`、`[Cursor]`、`[Kimi Code]`、`[Grok]` 来源标签。
 - 外部 session 被选中后，调用对应内置 resume Skill，只读提取对话上下文并在当前 Wukong session 中继续。
 - 损坏或无法识别的单个 transcript 会被跳过，不影响 Wukong 原生 session。
 
@@ -65,6 +65,8 @@ Wukong 当前具备：
 | Codex | 读取落盘历史，在当前 Wukong session 中继续 | 导入并继续 |
 | Claude Code | 读取落盘历史，在当前 Wukong session 中继续 | 导入并继续 |
 | Cursor | 读取可识别 transcript，在当前 Wukong session 中继续 | 导入并继续 |
+| Kimi Code | 读取本地 request history，在当前 Wukong session 中继续 | 导入并继续 |
+| Grok | 读取受支持格式的本地 chat history，在当前 Wukong session 中继续 | 导入并继续 |
 
 外部 session 可以导入：
 

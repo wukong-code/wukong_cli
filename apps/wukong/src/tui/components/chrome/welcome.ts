@@ -87,7 +87,11 @@ export class WelcomeComponent implements Component {
         ? 'Claude Code'
         : suggestion === 'cursor'
           ? 'Cursor'
-          : undefined;
+          : suggestion === 'kimi'
+            ? 'Kimi Code'
+            : suggestion === 'grok'
+              ? 'Grok'
+              : undefined;
     return [
       '',
       title,

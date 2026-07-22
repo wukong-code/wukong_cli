@@ -3,7 +3,7 @@
 > 最后更新: 2026-07-22
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 
-这份 ROADMAP 的当前已批准范围只到 0.0.17，产品保持 Free + BYOK。目前没有付费计划、Checkout、entitlement 或已批准的 0.1.0 商业范围。下列商业化文档只作历史探索，不是执行真相源：
+这份 ROADMAP 的当前已批准范围只到 0.0.18，产品保持 Free + BYOK。目前没有付费计划、Checkout、entitlement 或已批准的 0.1.0 商业范围。下列商业化文档只作历史探索，不是执行真相源：
 
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [Wukong 能力体系与商业化原则](docs/business/WUKONG_CAPABILITY_MODEL.md)
@@ -11,6 +11,7 @@
 - [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md)
 - [0.0.16 Loop Convergence](docs/design/0.0.16-loop-convergence.md)
 - [0.0.17 Command Surface Reliability](docs/design/0.0.17-command-surface-reliability.md)
+- [0.0.18 Loop-First Simplification](docs/design/0.0.18-loop-first-simplification.md)
 - [历史候选：0.1.0 Pro PR Gate 与 Billing](docs/design/0.1.0-pro-pr-gate.md)
 - [TODO.md](TODO.md)：本仓库执行层任务清单，按本 ROADMAP 的 milestone 拆解
 - `wukong_web/TODO.md`：官网与托管产品 TODO，位于 sibling web 仓库中
@@ -39,7 +40,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 | 层 | Wukong 能力 | 触发 | 停止 | 状态 |
 |---|---|---|---|---|
 | Turn-based | TUI 默认 agentic loop | 用户 prompt | agent 自判完成 | 已实现 |
-| Goal-based `/goal` | 单任务驱动 agent 多轮推进 | 实时手动 | agent 自评完成 or 回合/预算上限 or verification gate | 已实现（verification gate 已落地，归 M0.5） |
+| Goal-based `/goal` | Loop 内部执行引擎；0.0.18 默认命令面隐藏但保留直接调用 | 实时手动 | agent 自评完成 or 回合/预算上限 or verification gate | 已实现（verification gate 已落地，归 M0.5） |
 | Time-based `/loop` | 本机迭代驱动 agent 直到验证通过 | 手动启动，轮次自动衔接（`--every` 是 Goal-owned 可取消节流） | 停止条件满足 or 迭代上限 or 取消 | 已实现 |
 | Cloud routine `/schedule` | 云端例程，机器关了也跑 | 计划 | 任务达标退出，例程持续 | 待实现（归 hosted） |
 | Loop 内部检查层 | 项目命令、风险规则、交付判定 | 默认由 loop 调用；高级用户可直接调试 | 单次 | v1 命令已实现；0.0.12 从主入口降级 |
@@ -91,7 +92,7 @@ Wukong 当前只提供完整的本地 BYOK Loop。旧文档中的 PR Gate 付费
 ## 路线图原则
 
 1. 本地 BYOK `loop` 不受账号或月度额度限制；`verify`、`scan`、`proof` 是内部层和高级诊断命令。
-2. 不用人为额度制造升级压力；0.0.17 不新增 Web/D1 telemetry 产品指标后端。
+2. 不用人为额度制造升级压力；0.0.18 不新增 Web/D1 telemetry 产品指标后端。用户主动 `/feedback` 是显式产品反馈，不是 telemetry。
 3. 用户自带 API Key；当前不定义 Wukong 的付费权益。
 4. 默认不写文件、不上传；用户需要留档时显式保存到本地。
 5. 在 guard、redaction、audit、private runner 真正完成前，不宣传安全合规能力。
@@ -114,9 +115,10 @@ Wukong 当前只提供完整的本地 BYOK Loop。旧文档中的 PR Gate 付费
 | `0.0.15` | Loop Reliability + First Success | durable run lifecycle、completion outbox、重启恢复、preflight、简洁终态和隐私受限激活指标；保持免费/BYOK |
 | `0.0.16` | Loop Convergence | 固定 acceptance contract、prior blockers、anti-ratchet reviewer、stall strategist、reviewer model fallback、Resume 建议、Role contract、统一任务状态与有界 session 搜索；保持免费/BYOK |
 | `0.0.17` | Command Surface Reliability | 删除误导的 `--role`、`/role`、`/report`、`/yes`；保留可发现的 `/transform`；未知 slash 本地拦截；严格参数解析；CLI/TUI 命令契约与自动化回归一致；保持免费/BYOK |
+| `0.0.18` | Loop-First Simplification | 默认命令面只突出 Resume → Loop → Gate；其他实现隐藏但不删除；`/resume` 增加 Kimi Code/Grok；纯文本 `/feedback` 接入 Web API；CLI 发起登录并在网站确认，模型目录可为空；本地 Loop 保持免费/BYOK |
 | `0.1.0` | 未定义 | 没有已批准范围或日期；必须在真实 Free 用户验证后重新决策 |
 
-`0.0.17` 只完成现有命令面的可靠性收口，不增加新的产品层。`0.1.0` 没有已批准范围，不预建 invite-only 付费、Checkout 或 entitlement。
+`0.0.18` 继续收口现有产品层：命令只做默认可见性分层，不删除底层能力；Kimi Code/Grok Resume 只读本地会话；Feedback API 只接收用户确认的文本；`/login` 由 CLI 发起 device flow，用户在 Wukong 网站用 Google/GitHub 确认，CLI 获取 token 后读取 `200` 模型目录。当前没有 Wukong 模型，目录应诚实返回空数组，登录仍成功且不改变 BYOK 默认模型。最新托管模型与推理 endpoint 留给后续版本，在真实 backend、隐私和 E2E 就绪前不能发布 placeholder。`0.1.0` 没有已批准范围，不预建 invite-only 付费、Checkout 或 entitlement。
 
 ## Milestone 0: Public Install And Local Proof
 

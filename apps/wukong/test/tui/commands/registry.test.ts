@@ -10,6 +10,7 @@ import {
   pluginsArgumentCompletions,
   resumeArgumentCompletions,
   setExperimentalFeatures,
+  slashCommandTier,
   sortSlashCommands,
   swarmArgumentCompletions,
   transformArgumentCompletions,
@@ -50,9 +51,9 @@ describe('built-in slash command registry', () => {
     expect(findBuiltInSlashCommand('status')?.name).toBe('status');
     expect(findBuiltInSlashCommand('resume')?.name).toBe('resume');
     expect(findBuiltInSlashCommand('sessions')?.name).toBe('resume');
-    expect((findBuiltInSlashCommand('resume-codex') as WukongSlashCommand).hidden).toBe(true);
-    expect((findBuiltInSlashCommand('resume-claude') as WukongSlashCommand).hidden).toBe(true);
-    expect((findBuiltInSlashCommand('resume-cursor') as WukongSlashCommand).hidden).toBe(true);
+    expect(slashCommandTier(findBuiltInSlashCommand('resume-codex')!)).toBe('hidden');
+    expect(slashCommandTier(findBuiltInSlashCommand('resume-claude')!)).toBe('hidden');
+    expect(slashCommandTier(findBuiltInSlashCommand('resume-cursor')!)).toBe('hidden');
     expect(findBuiltInSlashCommand('usage')?.aliases).not.toContain('status');
     expect(findBuiltInSlashCommand('unknown')).toBeUndefined();
   });
@@ -72,11 +73,42 @@ describe('built-in slash command registry', () => {
     expect(isSlashCommandVisible(transform!)).toBe(true);
   });
 
+  it('keeps the default surface Loop-first while preserving advanced and hidden commands', () => {
+    const defaultNames = BUILTIN_SLASH_COMMANDS
+      .filter((command) => isSlashCommandVisible(command, 'core'))
+      .map((command) => command.name)
+      .toSorted();
+    expect(defaultNames).toEqual([
+      'exit',
+      'feedback',
+      'help',
+      'login',
+      'logout',
+      'loop',
+      'model',
+      'new',
+      'permission',
+      'provider',
+      'resume',
+      'settings',
+      'transform',
+    ]);
+    expect(isSlashCommandVisible(findBuiltInSlashCommand('verify')!, 'advanced')).toBe(true);
+    for (const name of ['goal', 'auto', 'yolo', 'resume-codex', 'resume-claude', 'resume-cursor']) {
+      const command = findBuiltInSlashCommand(name);
+      expect(command).toBeDefined();
+      expect(slashCommandTier(command!)).toBe('hidden');
+      expect(isSlashCommandVisible(command!, 'advanced')).toBe(false);
+    }
+  });
+
   it('offers resume source argument completions', () => {
     expect(resumeArgumentCompletions('')?.map((item) => item.value)).toEqual([
       'codex',
       'claude',
       'cursor',
+      'kimi',
+      'grok',
     ]);
     expect(resumeArgumentCompletions('co')?.map((item) => item.value)).toEqual(['codex']);
     expect(resumeArgumentCompletions('wu')).toBeNull();

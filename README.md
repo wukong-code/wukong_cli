@@ -29,14 +29,12 @@ background-task count, and local session-content search are included without add
 payment or managed model credits. See the
 [0.0.16 design](docs/design/0.0.16-loop-convergence.md).
 
-Version `0.0.17` is the next planned patch. It removes misleading role/report aliases,
-keeps `/transform list|status|off` discoverable, prevents unknown or disabled slash
-commands from reaching the model, and makes permission, Loop, export, Today, and
-roles argument handling strict and regression-tested. It also makes `/resume` canonical,
-keeps `/login` account-only, moves model-key setup to `/provider`, and migrates local
-Loop records to content-free lifecycle v2. It remains free and BYOK;
-the public package and download version stay at `0.0.16` until the release gates
-pass. See the [0.0.17 design](docs/design/0.0.17-command-surface-reliability.md).
+Version `0.0.18` makes the default TUI surface Loop-first while retaining advanced
+and compatibility implementations behind `/help advanced`. It adds read-only Kimi
+Code and Grok resume, explicit text-only `/feedback`, and website-confirmed Device
+Login with an authenticated catalog that may honestly be empty. Login does not
+replace a BYOK default model. See the
+[0.0.18 design](docs/design/0.0.18-loop-first-simplification.md).
 
 An older `0.1.0` document explored a Pro PR Gate experiment. It is not a current commitment: there is no paid plan, Checkout, or active entitlement work. Any commercial scope requires a new decision after real Free-user validation.
 
@@ -46,7 +44,10 @@ Loop returns one durable result: `PASS` (exit `0`), `NEEDS_WORK` (exit `1`), or 
 
 The experimental Role Profiles foundation is now implemented. Enable `experimental.role_profiles` in `~/.wukong/config.toml`, use `wukong roles list/show/init` to manage profiles, and inspect or switch the current TUI session with `/transform list|status|off` or `/transform <role>`.
 
-Inside the TUI, `/resume` opens Wukong sessions. Use `/resume codex`, `/resume claude`, or `/resume cursor` to continue a local session from another agent. Foreign history is imported into Wukong as read-only context; old tool calls are never replayed and the current workspace is checked again before work continues.
+Inside the TUI, `/resume` opens Wukong sessions. Use `/resume codex`, `/resume claude`,
+`/resume cursor`, `/resume kimi`, or `/resume grok` to continue a local session from
+another agent. Foreign history is imported into Wukong as read-only context; old tool
+calls are never replayed and the current workspace is checked again before work continues.
 
 Anonymous installer and CLI product telemetry is limited to install, first-run,
 Device Login outcome, and Loop lifecycle events; it excludes source, prompts, transcripts, repository

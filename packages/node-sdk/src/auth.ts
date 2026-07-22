@@ -16,8 +16,6 @@ import {
   type AuthManagedUsageResult,
   type AuthStatus,
   type BearerTokenProvider,
-  type FetchCompleteFeedbackUploadResult,
-  type FetchFeedbackUploadError,
   type FetchSubmitFeedbackResult,
   type WukongHostIdentity,
   type WukongOAuthLoginOptions,
@@ -28,54 +26,23 @@ import {
 import { mapOAuthTokenError } from '#/oauth-error';
 
 export interface WukongAuthSubmitFeedbackInput {
-  readonly content: string;
-  readonly sessionId: string;
+  readonly message: string;
+  readonly category: 'bug' | 'onboarding' | 'loop_result' | 'feature_request' | 'other';
   readonly version: string;
-  readonly os: string;
-  readonly model: string | null;
-  readonly contact?: string;
-  readonly info?: Record<string, unknown>;
+  readonly platform: 'darwin' | 'linux' | 'win32';
+  readonly arch: 'arm64' | 'x64';
+  readonly loopOutcome?: 'PASS' | 'NEEDS_WORK' | 'ERROR' | null;
+  readonly reasonCode?: string | null;
+  readonly contact?: string | null;
+  readonly idempotencyKey: string;
 }
-
-export interface WukongAuthCreateFeedbackUploadUrlInput {
-  readonly feedbackId: number;
-  readonly filename: string;
-  readonly size: number;
-  readonly sha256: string;
-}
-
-export interface WukongAuthCompleteFeedbackUploadPart {
-  readonly partNumber: number;
-  readonly etag: string;
-}
-
-export interface WukongAuthCompleteFeedbackUploadInput {
-  readonly uploadId: number;
-  readonly parts: readonly WukongAuthCompleteFeedbackUploadPart[];
-}
-
-export interface WukongAuthFeedbackUploadPart {
-  readonly partNumber: number;
-  readonly url: string;
-  readonly method: string;
-  readonly size: number;
-}
-
-export interface WukongAuthCreateFeedbackUploadUrlOk {
-  readonly kind: 'ok';
-  readonly uploadId: number;
-  readonly parts: readonly WukongAuthFeedbackUploadPart[];
-}
-
-export type WukongAuthCreateFeedbackUploadUrlResult =
-  | WukongAuthCreateFeedbackUploadUrlOk
-  | FetchFeedbackUploadError;
 
 export type WukongAuthLoginOptions = Omit<WukongOAuthLoginOptions, 'provisionConfig'>;
 
 export interface WukongAuthLoginResult {
   readonly providerName: string;
   readonly ok: true;
+  readonly modelCount: number;
 }
 
 export interface WukongAuthLogoutResult {
@@ -135,11 +102,14 @@ export class WukongAuthFacade {
       baseUrl: loginAuth.baseUrl,
       oauthHost: loginAuth.oauthHost,
       oauthRef: options.oauthRef ?? loginAuth.oauthRef,
-      provisionConfig: false,
+      provisionConfig: true,
     });
+    const updated = readConfigFile(this.options.configPath);
+    this.options.onConfigUpdated?.(updated);
     return {
       providerName: result.providerName,
       ok: true,
+      modelCount: result.provision?.models.length ?? 0,
     };
   }
 
@@ -166,73 +136,21 @@ export class WukongAuthFacade {
 
   async submitFeedback(
     input: WukongAuthSubmitFeedbackInput,
-    providerName?: string | undefined,
   ): Promise<FetchSubmitFeedbackResult> {
-    const auth = this.resolveRuntimeManagedAuth(providerName);
+    const auth = this.resolveRuntimeManagedAuth(WUKONG_CODE_PROVIDER_NAME);
     return this.toolkit.submitFeedback(
       {
-        session_id: input.sessionId,
-        content: input.content,
+        message: input.message,
+        category: input.category,
         version: input.version,
-        os: input.os,
-        model: input.model,
+        platform: input.platform,
+        arch: input.arch,
+        loop_outcome: input.loopOutcome,
+        reason_code: input.reasonCode,
         contact: input.contact,
-        info: input.info,
       },
-      providerName,
-      {
-        oauthRef: auth.oauthRef,
-        baseUrl: auth.baseUrl,
-      },
-    );
-  }
-
-  async createFeedbackUploadUrl(
-    input: WukongAuthCreateFeedbackUploadUrlInput,
-    providerName?: string | undefined,
-  ): Promise<WukongAuthCreateFeedbackUploadUrlResult> {
-    const auth = this.resolveRuntimeManagedAuth(providerName);
-    const result = await this.toolkit.createFeedbackUploadUrl(
-      {
-        file_hash: input.sha256,
-        file_name: input.filename,
-        file_size: input.size,
-        feedback_id: input.feedbackId,
-      },
-      providerName,
-      {
-        oauthRef: auth.oauthRef,
-        baseUrl: auth.baseUrl,
-      },
-    );
-    if (result.kind !== 'ok') return result;
-    return {
-      kind: 'ok',
-      uploadId: result.upload_id,
-      parts: result.parts.map((part) => ({
-        partNumber: part.part_number,
-        url: part.url,
-        method: part.method,
-        size: part.size,
-      })),
-    };
-  }
-
-  async completeFeedbackUpload(
-    input: WukongAuthCompleteFeedbackUploadInput,
-    providerName?: string | undefined,
-  ): Promise<FetchCompleteFeedbackUploadResult> {
-    const auth = this.resolveRuntimeManagedAuth(providerName);
-    return this.toolkit.completeFeedbackUpload(
-      {
-        upload_id: input.uploadId,
-        parts: input.parts.map((part) => ({ part_number: part.partNumber, etag: part.etag })),
-      },
-      providerName,
-      {
-        oauthRef: auth.oauthRef,
-        baseUrl: auth.baseUrl,
-      },
+      input.idempotencyKey,
+      { baseUrl: auth.baseUrl },
     );
   }
 

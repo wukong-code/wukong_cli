@@ -4,11 +4,10 @@
  *
  * Geometry mirrors `DeviceCodeBox` so the chrome stays consistent with
  * the OAuth login flow. The box embeds a `pi-tui` Input for the actual
- * text entry; cursor visibility tracks the dialog's `focused` flag.
+ * text entry; cursor visibility tracks the dialog's `focused` flag. The
+ * command shows a separate exact-payload confirmation before network I/O.
  *
- * This is stage 1 of the feedback flow: it collects the free-form text
- * only. Whether to attach diagnostic logs / codebase is decided in a
- * follow-up stage (see `promptFeedbackAttachment`).
+ * This is the text-collection stage only. No local files are read.
  */
 
 import {
@@ -29,6 +28,7 @@ export type FeedbackInputDialogResult =
 const TITLE = 'Send feedback to Wukong';
 const SUBTITLE_DEFAULT = "Tell us what's working or what's not.";
 const SUBTITLE_EMPTY = 'Feedback cannot be empty.';
+const SUBTITLE_TOO_LONG = 'Feedback must be 4096 characters or fewer.';
 const FOOTER = 'Enter to submit  ·  Esc to cancel';
 
 export class FeedbackInputDialogComponent extends Container implements Focusable {
@@ -38,6 +38,7 @@ export class FeedbackInputDialogComponent extends Container implements Focusable
   private readonly onDone: (result: FeedbackInputDialogResult) => void;
   private done = false;
   private emptyHinted = false;
+  private tooLongHinted = false;
 
   constructor(onDone: (result: FeedbackInputDialogResult) => void) {
     super();
@@ -60,6 +61,9 @@ export class FeedbackInputDialogComponent extends Container implements Focusable
     if (this.emptyHinted) {
       this.emptyHinted = false;
     }
+    if (this.tooLongHinted) {
+      this.tooLongHinted = false;
+    }
     this.input.handleInput(data);
   }
 
@@ -78,7 +82,11 @@ export class FeedbackInputDialogComponent extends Container implements Focusable
 
     const border = (s: string): string => currentTheme.fg('primary', s);
     const titleStyled = currentTheme.boldFg('textStrong', TITLE);
-    const subtitleText = this.emptyHinted ? SUBTITLE_EMPTY : SUBTITLE_DEFAULT;
+    const subtitleText = this.tooLongHinted
+      ? SUBTITLE_TOO_LONG
+      : this.emptyHinted
+        ? SUBTITLE_EMPTY
+        : SUBTITLE_DEFAULT;
     const subtitleStyled = currentTheme.fg('textDim', subtitleText);
     const footerStyled = currentTheme.fg('textDim', FOOTER);
 
@@ -125,6 +133,10 @@ export class FeedbackInputDialogComponent extends Container implements Focusable
     const trimmed = value.trim();
     if (trimmed.length === 0) {
       this.emptyHinted = true;
+      return;
+    }
+    if (trimmed.length > 4096) {
+      this.tooLongHinted = true;
       return;
     }
     this.done = true;

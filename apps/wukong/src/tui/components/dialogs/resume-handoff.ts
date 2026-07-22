@@ -7,6 +7,8 @@ const SOURCE_LABELS: Record<Exclude<SessionSource, 'wukong'>, string> = {
   codex: 'Codex',
   claude: 'Claude Code',
   cursor: 'Cursor',
+  kimi: 'Kimi Code',
+  grok: 'Grok',
 };
 
 export class ResumeHandoffComponent extends ChoicePickerComponent {
@@ -19,8 +21,9 @@ export class ResumeHandoffComponent extends ChoicePickerComponent {
     const sourceLabel = SOURCE_LABELS[options.source];
     super({
       title: `Continue ${sourceLabel} task in Wukong`,
-      notice:
-        'The source transcript is read-only. Wukong does not replay old tools, permissions, or test results.',
+      notice: options.source === 'kimi'
+        ? 'Only the selected Kimi Code request history is imported. Wukong does not replay old tools, permissions, or test results.'
+        : 'The source transcript is read-only. Wukong does not replay old tools, permissions, or test results.',
       options: [
         {
           value: 'continue',

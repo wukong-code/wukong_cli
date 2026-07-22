@@ -6,6 +6,8 @@ import {
   RESUME_CLAUDE_SKILL,
   RESUME_CODEX_SKILL,
   RESUME_CURSOR_SKILL,
+  RESUME_GROK_SKILL,
+  RESUME_KIMI_SKILL,
 } from './resume-foreign-session';
 import {
   SUB_SKILL_CONSOLIDATE,
@@ -24,6 +26,8 @@ export function registerBuiltinSkills(registry: SessionSkillRegistry): void {
   registry.registerBuiltinSkill(RESUME_CODEX_SKILL);
   registry.registerBuiltinSkill(RESUME_CLAUDE_SKILL);
   registry.registerBuiltinSkill(RESUME_CURSOR_SKILL);
+  registry.registerBuiltinSkill(RESUME_KIMI_SKILL);
+  registry.registerBuiltinSkill(RESUME_GROK_SKILL);
   registry.registerBuiltinSkill(SUB_SKILL_PARENT);
   registry.registerBuiltinSkill(SUB_SKILL_REVIEW);
   registry.registerBuiltinSkill(SUB_SKILL_CONSOLIDATE);
@@ -36,6 +40,8 @@ export {
   RESUME_CLAUDE_SKILL,
   RESUME_CODEX_SKILL,
   RESUME_CURSOR_SKILL,
+  RESUME_GROK_SKILL,
+  RESUME_KIMI_SKILL,
   SUB_SKILL_CONSOLIDATE,
   SUB_SKILL_PARENT,
   SUB_SKILL_REVIEW,

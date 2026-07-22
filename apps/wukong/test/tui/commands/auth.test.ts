@@ -25,6 +25,7 @@ function makeHost(overrides: HostOverrides = {}): SlashCommandHost {
         expiresIn: 900,
         interval: 5,
       });
+      return { providerName: DEFAULT_OAUTH_PROVIDER_NAME, ok: true as const, modelCount: 0 };
     }),
     logout: vi.fn(async () => ({ ok: true })),
     ...overrides.auth,
@@ -45,6 +46,7 @@ function makeHost(overrides: HostOverrides = {}): SlashCommandHost {
       removeProvider: vi.fn(async () => ({})),
     },
     authFlow: {
+      refreshAvailableModels: vi.fn(async () => {}),
       refreshConfigAfterLogin: vi.fn(async () => {}),
       refreshConfigAfterLogout: vi.fn(async () => {}),
       clearActiveSessionAfterLogout: vi.fn(async () => {}),
@@ -79,7 +81,7 @@ describe('handleLoginCommand', () => {
     expect(host.harness.removeProvider).not.toHaveBeenCalled();
     expect(host.authFlow.refreshConfigAfterLogin).not.toHaveBeenCalled();
     expect(host.showStatus).toHaveBeenCalledWith(
-      'Wukong account connected. Configure models with /provider.',
+      'Wukong account connected. No Wukong models are available yet; use /provider for BYOK models.',
     );
     expect(host.track).toHaveBeenCalledWith('login', {
       provider: DEFAULT_OAUTH_PROVIDER_NAME,
@@ -99,7 +101,9 @@ describe('handleLoginCommand', () => {
 
     await handleLoginCommand(host);
 
-    expect(host.showStatus).toHaveBeenCalledWith('Wukong account is already connected.');
+    expect(host.showStatus).toHaveBeenCalledWith(
+      'Wukong account connected. No Wukong models are available yet; use /provider for BYOK models.',
+    );
     expect(host.authFlow.refreshConfigAfterLogin).not.toHaveBeenCalled();
   });
 

@@ -6,7 +6,11 @@ import type { AutocompleteItem } from '@earendil-works/pi-tui';
 
 import { completeLeadingArg, type ArgCompletionSpec } from './complete-args';
 import { isExperimentalFlagEnabled } from './experimental-flags';
-import type { WukongSlashCommand, SlashCommandAvailability } from './types';
+import type {
+  WukongSlashCommand,
+  SlashCommandAvailability,
+  SlashCommandTier,
+} from './types';
 
 /** Subcommands offered when autocompleting `/goal <…>`. */
 const GOAL_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
@@ -84,6 +88,8 @@ const RESUME_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
   { value: 'codex', description: 'Show local Codex sessions' },
   { value: 'claude', description: 'Show local Claude Code sessions' },
   { value: 'cursor', description: 'Show local Cursor sessions' },
+  { value: 'kimi', description: 'Show local Kimi Code sessions' },
+  { value: 'grok', description: 'Show local Grok sessions' },
 ];
 
 /** Argument autocompletion for the `/goal` command (subcommands). */
@@ -230,7 +236,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'verify',
     aliases: [],
     description: 'Advanced: inspect the project checks used by Loop',
-    hidden: true,
+    tier: 'advanced',
     priority: 70,
     availability: 'idle-only',
   },
@@ -238,7 +244,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'scan',
     aliases: [],
     description: 'Advanced: inspect the risk rules used by Loop',
-    hidden: true,
+    tier: 'advanced',
     priority: 70,
     availability: 'idle-only',
   },
@@ -246,7 +252,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'proof',
     aliases: [],
     description: 'Advanced: inspect the Loop delivery gate',
-    hidden: true,
+    tier: 'advanced',
     priority: 70,
     availability: 'idle-only',
   },
@@ -254,6 +260,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'judge',
     aliases: [],
     description: 'Evaluate whether the workspace is safe to merge (deterministic)',
+    tier: 'advanced',
     priority: 70,
     availability: 'idle-only',
   },
@@ -275,6 +282,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'guard',
     aliases: [],
     description: 'Show Wukong guard status',
+    tier: 'advanced',
     priority: 70,
     argumentHint: '[status]',
     availability: 'always',
@@ -283,6 +291,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'yolo',
     aliases: [],
     description: 'Toggle auto-approve mode',
+    tier: 'hidden',
     priority: 100,
     argumentHint: '[on|off]',
     completeArgs: permissionToggleArgumentCompletions,
@@ -292,6 +301,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'auto',
     aliases: [],
     description: 'Toggle auto permission mode',
+    tier: 'hidden',
     priority: 100,
     argumentHint: '[on|off]',
     completeArgs: permissionToggleArgumentCompletions,
@@ -315,6 +325,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'plan',
     aliases: [],
     description: 'Toggle plan mode',
+    tier: 'advanced',
     priority: 100,
     argumentHint: '[on|off|clear]',
     completeArgs: planArgumentCompletions,
@@ -324,6 +335,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'swarm',
     aliases: [],
     description: 'Toggle swarm mode or run one task in swarm mode',
+    tier: 'advanced',
     priority: 100,
     argumentHint: '[on|off] | <task>',
     completeArgs: swarmArgumentCompletions,
@@ -359,6 +371,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'btw',
     aliases: [],
     description: 'Ask a forked side agent a question',
+    tier: 'advanced',
     priority: 90,
     argumentHint: '<question>',
     availability: 'always',
@@ -379,36 +392,38 @@ export const BUILTIN_SLASH_COMMANDS = [
   {
     name: 'resume',
     aliases: ['sessions'],
-    description: 'Resume Wukong, Codex, Claude Code, or Cursor sessions',
+    hiddenAliases: ['sessions'],
+    description: 'Resume Wukong or another local coding-agent task',
     priority: 80,
-    argumentHint: '[codex|claude|cursor]',
+    argumentHint: '[codex|claude|cursor|kimi|grok]',
     completeArgs: resumeArgumentCompletions,
   },
   {
     name: 'resume-codex',
     aliases: [],
     description: 'Resume a local Codex session in Wukong',
-    hidden: true,
+    tier: 'hidden',
     priority: 80,
   },
   {
     name: 'resume-claude',
     aliases: [],
     description: 'Resume a local Claude Code session in Wukong',
-    hidden: true,
+    tier: 'hidden',
     priority: 80,
   },
   {
     name: 'resume-cursor',
     aliases: [],
     description: 'Resume a local Cursor session in Wukong',
-    hidden: true,
+    tier: 'hidden',
     priority: 80,
   },
   {
     name: 'tasks',
     aliases: ['task'],
     description: 'Browse background tasks',
+    tier: 'advanced',
     priority: 80,
     availability: 'always',
   },
@@ -416,6 +431,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'mcp',
     aliases: [],
     description: 'Show MCP server status',
+    tier: 'advanced',
     priority: 60,
     availability: 'always',
   },
@@ -423,6 +439,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'plugins',
     aliases: [],
     description: 'Manage plugins',
+    tier: 'advanced',
     priority: 60,
     argumentHint: '[list|marketplace|install|info|enable|disable|remove|mcp|reload]',
     completeArgs: pluginsArgumentCompletions,
@@ -432,6 +449,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'add-dir',
     aliases: [],
     description: 'Add or list an additional workspace directory',
+    tier: 'advanced',
     priority: 60,
     availability: 'idle-only',
     argumentHint: '[list] | <path>',
@@ -441,6 +459,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'experiments',
     aliases: ['experimental'],
     description: 'Manage experimental features',
+    tier: 'advanced',
     priority: 60,
     availability: 'idle-only',
   },
@@ -448,6 +467,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'reload',
     aliases: [],
     description: 'Reload session and apply config.toml settings plus tui.toml UI preferences',
+    tier: 'advanced',
     priority: 60,
     availability: 'idle-only',
   },
@@ -455,6 +475,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'reload-tui',
     aliases: [],
     description: 'Reload only tui.toml UI preferences',
+    tier: 'advanced',
     priority: 60,
     availability: 'always',
   },
@@ -462,6 +483,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'compact',
     aliases: [],
     description: 'Compact the conversation context',
+    tier: 'advanced',
     priority: 80,
     argumentHint: '<instruction>',
   },
@@ -469,6 +491,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'goal',
     aliases: [],
     description: 'Start or manage an autonomous goal',
+    tier: 'hidden',
     priority: 80,
     argumentHint: '[status|pause|resume|cancel|replace|next] | <objective>',
     completeArgs: goalArgumentCompletions,
@@ -486,17 +509,20 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'init',
     aliases: [],
     description: 'Analyze the codebase and generate AGENTS.md',
+    tier: 'advanced',
   },
   {
     name: 'fork',
     aliases: [],
     description: 'Fork the current session',
+    tier: 'advanced',
     priority: 80,
   },
   {
     name: 'title',
     aliases: ['rename'],
     description: 'Set or show session title',
+    tier: 'advanced',
     priority: 60,
     argumentHint: '<title>',
     availability: 'always',
@@ -505,6 +531,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'usage',
     aliases: [],
     description: 'Show session tokens, context window, and provider usage',
+    tier: 'advanced',
     priority: 60,
     availability: 'always',
   },
@@ -512,6 +539,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'status',
     aliases: [],
     description: 'Show current session and runtime status',
+    tier: 'advanced',
     priority: 60,
     availability: 'always',
   },
@@ -526,6 +554,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'review',
     aliases: [],
     description: 'Manage project review policy and local finding feedback',
+    tier: 'advanced',
     priority: 70,
     argumentHint: 'init | feedback <finding-id> <action> | stats',
     completeArgs: reviewArgumentCompletions,
@@ -535,6 +564,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'undo',
     aliases: [],
     description: 'Withdraw the last prompt from the transcript',
+    tier: 'advanced',
     priority: 80,
     argumentHint: '[count]',
     availability: 'idle-only',
@@ -543,6 +573,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'editor',
     aliases: [],
     description: 'Set the external editor for Ctrl-G',
+    tier: 'advanced',
     priority: 60,
     availability: 'always',
   },
@@ -550,6 +581,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'theme',
     aliases: [],
     description: 'Set the terminal UI theme',
+    tier: 'advanced',
     priority: 60,
     availability: 'always',
   },
@@ -569,18 +601,23 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'export-md',
     aliases: [],
     description: 'Export current session as a Markdown file',
+    tier: 'advanced',
     priority: 40,
   },
   {
     name: 'export-debug-zip',
     aliases: ['export'],
     description: 'Export current session as a debug ZIP archive',
+    tier: 'advanced',
+    discoveryName: 'export',
+    hiddenAliases: ['export'],
     priority: 40,
   },
   {
     name: 'web',
     aliases: [],
     description: 'Open the current session in the Web UI and exit the terminal',
+    tier: 'advanced',
     priority: 40,
     availability: 'always',
   },
@@ -594,6 +631,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     name: 'version',
     aliases: [],
     description: 'Show version information',
+    tier: 'advanced',
     priority: 20,
     availability: 'always',
   },
@@ -617,9 +655,28 @@ export function resolveSlashCommandAvailability(
   return typeof availability === 'function' ? availability(args) : availability;
 }
 
-export function isSlashCommandVisible(command: WukongSlashCommand): boolean {
-  return command.hidden !== true &&
+export function slashCommandTier(command: WukongSlashCommand): SlashCommandTier {
+  if (command.hidden === true) return 'hidden';
+  return command.tier ?? 'core';
+}
+
+export function isSlashCommandVisible(
+  command: WukongSlashCommand,
+  surface: Exclude<SlashCommandTier, 'hidden'> = 'core',
+): boolean {
+  const tier = slashCommandTier(command);
+  const tierVisible = tier === 'core' || (surface === 'advanced' && tier === 'advanced');
+  return tierVisible &&
     (isExperimentalFlagEnabled(command.experimentalFlag) || command.visibleWhenDisabled === true);
+}
+
+export function slashCommandForDiscovery(command: WukongSlashCommand): WukongSlashCommand {
+  const hiddenAliases = new Set(command.hiddenAliases ?? []);
+  return {
+    ...command,
+    name: command.discoveryName ?? command.name,
+    aliases: command.aliases.filter((alias) => !hiddenAliases.has(alias)),
+  };
 }
 
 export function sortSlashCommands(commands: readonly WukongSlashCommand[]): WukongSlashCommand[] {

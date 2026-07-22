@@ -51,6 +51,7 @@ import {
   isSlashCommandVisible,
   setExperimentalFeatures,
   sortSlashCommands,
+  slashCommandForDiscovery,
   transformArgumentCompletions,
   type WukongSlashCommand,
   type SkillListSession,
@@ -377,13 +378,15 @@ export class WukongTUI {
   // Autocomplete & Skill Commands
   // =========================================================================
 
-  private getSlashCommands(): readonly WukongSlashCommand[] {
+  private getSlashCommands(tier: 'core' | 'advanced' = 'core'): readonly WukongSlashCommand[] {
     const builtins = sortSlashCommands(BUILTIN_SLASH_COMMANDS).filter(
-      isSlashCommandVisible,
-    );
-    const skills = this.skillCommands.filter(
-      (command) => findBuiltInSlashCommand(command.name) === undefined,
-    );
+      (command) => isSlashCommandVisible(command, tier),
+    ).map(slashCommandForDiscovery);
+    const skills = tier === 'advanced'
+      ? this.skillCommands.filter(
+          (command) => findBuiltInSlashCommand(command.name) === undefined,
+        )
+      : [];
     return [...builtins, ...skills];
   }
 
@@ -622,7 +625,6 @@ export class WukongTUI {
       }
       const seenFailures = new Set<string>();
       for (const f of result.failed) {
-        // Login-required is expected when managed:wukong is configured but unused.
         if (isProviderRefreshLoginRequired(f.reason)) continue;
         const key = `${f.provider}\0${f.reason}`;
         if (seenFailures.has(key)) continue;
@@ -2305,13 +2307,17 @@ export class WukongTUI {
   }
 
   showLoginAuthorizationPrompt(auth: DeviceAuthorization): LoginProgressSpinnerHandle {
-    openUrl(auth.verificationUriComplete);
+    try {
+      openUrl(auth.verificationUriComplete);
+    } catch {
+      // The URL and code remain visible for headless or browser-opener failures.
+    }
     this.state.transcriptContainer.addChild(
       new DeviceCodeBoxComponent({
-        title: 'Sign in to Wukong',
+        title: 'Confirm sign-in on the Wukong website',
         url: auth.verificationUriComplete,
         code: auth.userCode,
-        hint: 'Press Ctrl-C to cancel',
+        hint: 'Continue with Google or GitHub in your browser · Ctrl-C to cancel',
       }),
     );
     this.state.ui.requestRender();
@@ -2670,11 +2676,12 @@ export class WukongTUI {
     return result;
   }
 
-  showHelpPanel(): void {
+  showHelpPanel(tier: 'core' | 'advanced' = 'core'): void {
     this.state.activeDialog = 'help';
     this.mountEditorReplacement(
       new HelpPanelComponent({
-        commands: this.getSlashCommands(),
+        commands: this.getSlashCommands(tier),
+        tier,
         onClose: () => {
           this.hideHelpPanel();
         },

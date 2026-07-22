@@ -1,5 +1,15 @@
 # @wukong.today/code
 
+## 0.0.18
+
+### Patch Changes
+
+- Make the default TUI command surface Loop-first while retaining advanced and
+  compatibility commands, add read-only Kimi Code and Grok resume sources, and
+  connect explicit text-only feedback to the Wukong website. Complete website-
+  confirmed Device Login with an authenticated empty model catalog that preserves
+  the user's BYOK default until hosted Wukong models actually exist.
+
 ## 0.0.17
 
 ### Patch Changes

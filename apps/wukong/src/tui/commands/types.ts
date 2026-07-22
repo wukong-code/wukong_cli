@@ -2,14 +2,21 @@ import type { AutocompleteItem, SlashCommand } from '@earendil-works/pi-tui';
 import type { FlagId } from '@wukong/wukong-sdk';
 
 export type SlashCommandAvailability = 'always' | 'idle-only';
+export type SlashCommandTier = 'core' | 'advanced' | 'hidden';
 
 export interface WukongSlashCommand<Name extends string = string> extends SlashCommand {
   readonly name: Name;
   readonly aliases: readonly string[];
   readonly description: string;
   readonly priority?: number;
-  /** Keep the command executable by name while omitting it from help and autocomplete. */
+  /** @deprecated Use `tier: 'hidden'` for new entries. */
   readonly hidden?: boolean;
+  /** Discovery tier. All commands remain executable regardless of tier. */
+  readonly tier?: SlashCommandTier;
+  /** Aliases that remain executable but are omitted from help and autocomplete. */
+  readonly hiddenAliases?: readonly string[];
+  /** Optional public name used in help/autocomplete while keeping the canonical dispatch name. */
+  readonly discoveryName?: string;
   readonly availability?: SlashCommandAvailability | ((args: string) => SlashCommandAvailability);
   /** When set, the command is blocked unless this flag is enabled. */
   readonly experimentalFlag?: FlagId;

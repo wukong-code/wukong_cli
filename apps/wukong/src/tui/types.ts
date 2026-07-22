@@ -73,7 +73,7 @@ export interface AppState {
   /** Optional banner shown below the welcome panel; null means no banner to render. */
   banner?: BannerState | null;
   /** One bounded, workspace-matching external continuation suggestion. */
-  resumeSuggestionSource?: 'codex' | 'claude' | 'cursor';
+  resumeSuggestionSource?: 'codex' | 'claude' | 'cursor' | 'kimi' | 'grok';
 }
 
 export interface ToolCallBlockData {

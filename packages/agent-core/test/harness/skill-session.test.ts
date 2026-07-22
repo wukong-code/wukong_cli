@@ -115,6 +115,8 @@ describe('HarnessAPI session skills', () => {
       'resume-claude',
       'resume-codex',
       'resume-cursor',
+      'resume-grok',
+      'resume-kimi',
     ]);
     expect(resumeSkills.every((skill) => skill.disableModelInvocation === true)).toBe(true);
     expect(JSON.stringify(skills)).not.toContain('Your tool list contains one synthetic tool');

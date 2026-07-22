@@ -163,6 +163,108 @@ describe('discoverForeignSessionRows', () => {
     expect(rows).toEqual([]);
   });
 
+  it('discovers Kimi Code sessions from the bounded index and request history', async () => {
+    const sessionDir = join(home, '.kimi-code/sessions/kimi-id');
+    const history = join(home, '.kimi-code/user-history/kimi-id.jsonl');
+    await Promise.all([
+      mkdir(sessionDir, { recursive: true }),
+      mkdir(join(history, '..'), { recursive: true }),
+    ]);
+    await writeFile(
+      join(home, '.kimi-code/session_index.jsonl'),
+      JSON.stringify({ sessionId: 'kimi-id', sessionDir, workDir }),
+    );
+    await writeFile(
+      join(sessionDir, 'state.json'),
+      JSON.stringify({ title: 'Kimi title', lastPrompt: 'Newest Kimi request', updatedAt: 123 }),
+    );
+    await writeFile(history, JSON.stringify({ content: 'Initial Kimi request' }));
+
+    const rows = await discoverForeignSessionRows({ source: 'kimi', homeDir: home, workDir });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: 'external:kimi:kimi-id',
+      source: 'kimi',
+      title: 'Kimi title',
+      last_prompt: 'Newest Kimi request',
+      work_dir: workDir,
+    });
+  });
+
+  it('discovers only supported Grok chat history formats', async () => {
+    const validDir = join(home, '.grok/sessions/2026-07-22/grok-id');
+    const unsupportedDir = join(home, '.grok/sessions/2026-07-22/grok-v2');
+    await Promise.all([
+      mkdir(validDir, { recursive: true }),
+      mkdir(unsupportedDir, { recursive: true }),
+    ]);
+    await writeFile(
+      join(validDir, 'summary.json'),
+      JSON.stringify({
+        chat_format_version: 1,
+        generated_title: 'Grok title',
+        info: { id: 'grok-id', cwd: workDir },
+      }),
+    );
+    await writeFile(
+      join(validDir, 'chat_history.jsonl'),
+      `${JSON.stringify({ type: 'user', content: 'Initial Grok request' })}\n${JSON.stringify({ type: 'user', content: 'Newest Grok request' })}`,
+    );
+    await writeFile(
+      join(unsupportedDir, 'summary.json'),
+      JSON.stringify({ chat_format_version: 2, info: { id: 'grok-v2', cwd: workDir } }),
+    );
+    await writeFile(
+      join(unsupportedDir, 'chat_history.jsonl'),
+      JSON.stringify({ type: 'user', content: 'Unsupported request' }),
+    );
+
+    const rows = await discoverForeignSessionRows({ source: 'grok', homeDir: home, workDir });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]).toMatchObject({
+      id: 'external:grok:grok-id',
+      source: 'grok',
+      title: 'Grok title',
+      last_prompt: 'Newest Grok request',
+      work_dir: workDir,
+    });
+  });
+
+  it('rejects Kimi metadata and Grok summaries that escape their source roots', async () => {
+    const outsideKimi = join(home, 'outside-kimi');
+    const outsideGrok = join(home, 'outside-grok');
+    const grokLinkDir = join(home, '.grok/sessions/2026-07-22/linked');
+    await Promise.all([
+      mkdir(outsideKimi, { recursive: true }),
+      mkdir(outsideGrok, { recursive: true }),
+      mkdir(join(home, '.kimi-code'), { recursive: true }),
+      mkdir(join(grokLinkDir, '..'), { recursive: true }),
+    ]);
+    await writeFile(join(outsideKimi, 'state.json'), JSON.stringify({ title: 'Escaped' }));
+    await writeFile(
+      join(home, '.kimi-code/session_index.jsonl'),
+      JSON.stringify({ sessionId: 'escaped-kimi', sessionDir: outsideKimi, workDir }),
+    );
+    await writeFile(
+      join(outsideGrok, 'summary.json'),
+      JSON.stringify({ chat_format_version: 1, info: { id: 'escaped-grok', cwd: workDir } }),
+    );
+    await writeFile(
+      join(outsideGrok, 'chat_history.jsonl'),
+      JSON.stringify({ type: 'user', content: 'Escaped' }),
+    );
+    await symlink(outsideGrok, grokLinkDir);
+
+    await expect(
+      discoverForeignSessionRows({ source: 'kimi', homeDir: home, workDir }),
+    ).resolves.toEqual([]);
+    await expect(
+      discoverForeignSessionRows({ source: 'grok', homeDir: home, workDir }),
+    ).resolves.toEqual([]);
+  });
+
   it('skips malformed records without hiding valid sessions', async () => {
     const valid = join(home, '.claude/projects/project/valid.jsonl');
     const invalid = join(home, '.claude/projects/project/invalid.jsonl');

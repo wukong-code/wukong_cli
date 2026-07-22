@@ -16,7 +16,7 @@ Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal →
 
 `0.0.16` 为每个 Loop 冻结用户目标和显式完成标准，在复审中保留上轮 blocker，识别重复无进展循环，相同 blocker 持续时启动一次只读 strategist，并在显式 reviewer model 不可用时安全回退。本版也重构 Permission Mode：Auto 成为不提问但受 workspace/risk/capability 约束的自主模式，YOLO 明确为危险 approval bypass，且不能为 reviewer/strategist 等只读分身扩权。版本同时包含有界 Resume 建议、Role 任务契约、紧凑任务状态和本地 session 内容搜索，不增加支付或 managed model credits。完整范围见 [0.0.16 设计](docs/design/0.0.16-loop-convergence.md)。
 
-`0.0.17` 是下一个计划补丁版：删除误导的 Role/Report 别名，保留可发现的 `/transform list|status|off`，阻止未知或已禁用 slash command 进入模型，并严格校验 permission、Loop、export、Today 与 roles 参数；同时把 `/resume` 设为主命令、`/login` 收敛为可选账号连接、模型 Key 统一交给 `/provider`，并把本地 Loop record 迁移到无 quota/outbox 的 lifecycle v2。版本继续免费/BYOK；发布门槛通过前，公开 package 和下载版本仍保持 `0.0.16`。完整范围见 [0.0.17 设计](docs/design/0.0.17-command-surface-reliability.md)。
+`0.0.18` 把默认 TUI 命令面收口到 Loop 主流程，同时通过 `/help advanced` 保留高级工具和兼容实现；新增 Kimi Code/Grok 只读 Resume、显式确认的纯文本 `/feedback`，以及由 CLI 发起、在网站通过 Google/GitHub 确认的 Device Login。当前 Wukong 模型目录可以为空，登录仍成功且不会覆盖用户的 BYOK 默认模型。完整范围见 [0.0.18 设计](docs/design/0.0.18-loop-first-simplification.md)。
 
 旧 `0.1.0` 文档曾探索 Pro PR Gate 商业实验，但它不是当前承诺：目前没有付费计划、Checkout 或 entitlement 实施。任何商业化范围都需要在真实 Free 用户验证后重新决策。
 
@@ -26,7 +26,7 @@ Loop 只返回一个持久化结果：`PASS`（退出码 `0`）、`NEEDS_WORK`�
 
 Role Profiles 基础能力已经实现并处于实验阶段。在 `~/.wukong/config.toml` 启用 `experimental.role_profiles` 后，可用 `wukong roles list/show/init` 管理角色，并在 TUI 中通过 `/transform list|status|off` 或 `/transform <role>` 查看、切换和恢复。
 
-TUI 内的 `/resume` 用于恢复 Wukong 会话；需要继续其他 Agent 的本地会话时，使用 `/resume codex`、`/resume claude` 或 `/resume cursor`。外部历史只作为只读上下文导入 Wukong，不重放旧工具调用，并在继续前重新检查当前 workspace。
+TUI 内的 `/resume` 用于恢复 Wukong 会话；需要继续其他 Agent 的本地会话时，使用 `/resume codex`、`/resume claude`、`/resume cursor`、`/resume kimi` 或 `/resume grok`。外部历史只作为只读上下文导入 Wukong，不重放旧工具调用，并在继续前重新检查当前 workspace。
 
 安装器和 CLI 的匿名产品指标只记录安装、首次运行、Device Login 结果和 Loop 生命周期，不包含源码、prompt、transcript、仓库名或文件路径。设置 `WUKONG_TELEMETRY=0` 即可关闭，且不会影响本地 Loop。
 

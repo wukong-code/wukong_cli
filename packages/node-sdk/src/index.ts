@@ -88,12 +88,6 @@ export type {
 } from '@wukong/agent-core';
 
 export type {
-  WukongAuthCompleteFeedbackUploadInput,
-  WukongAuthCompleteFeedbackUploadPart,
-  WukongAuthCreateFeedbackUploadUrlInput,
-  WukongAuthCreateFeedbackUploadUrlOk,
-  WukongAuthCreateFeedbackUploadUrlResult,
-  WukongAuthFeedbackUploadPart,
   WukongAuthLoginResult,
   WukongAuthLogoutResult,
   WukongAuthSubmitFeedbackInput,

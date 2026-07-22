@@ -26,7 +26,7 @@ async function handleWukongCodeOAuthLogin(host: SlashCommandHost): Promise<void>
   };
   host.cancelInFlight = cancelLogin;
   try {
-    await host.harness.auth.login(DEFAULT_OAUTH_PROVIDER_NAME, {
+    const result = await host.harness.auth.login(DEFAULT_OAUTH_PROVIDER_NAME, {
       signal: controller.signal,
       onDeviceCode: (data) => {
         spinner = host.showLoginAuthorizationPrompt(data);
@@ -34,15 +34,20 @@ async function handleWukongCodeOAuthLogin(host: SlashCommandHost): Promise<void>
     });
     spinner?.stop({ ok: true, label: 'Logged in.' });
     spinner = undefined;
+    await host.authFlow.refreshAvailableModels();
     host.track('login', {
       provider: DEFAULT_OAUTH_PROVIDER_NAME,
       method: 'oauth',
       already_logged_in: alreadyLoggedIn,
     });
-    if (alreadyLoggedIn) {
-      host.showStatus('Wukong account is already connected.');
+    if (result.modelCount === 0) {
+      host.showStatus(
+        'Wukong account connected. No Wukong models are available yet; use /provider for BYOK models.',
+      );
+    } else if (alreadyLoggedIn) {
+      host.showStatus('Wukong account is already connected and its model catalog is up to date.');
     } else {
-      host.showStatus('Wukong account connected. Configure models with /provider.');
+      host.showStatus(`Wukong account connected. ${String(result.modelCount)} model(s) available.`);
     }
   } catch (error) {
     const cancelled = controller.signal.aborted;

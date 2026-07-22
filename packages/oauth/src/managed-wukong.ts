@@ -54,8 +54,8 @@ export interface ManagedWukongModelInfo {
 
 export interface ManagedWukongProvisionResult {
   readonly providerName: typeof WUKONG_CODE_PROVIDER_NAME;
-  readonly defaultModel: string;
-  readonly defaultThinking: boolean;
+  readonly defaultModel?: string;
+  readonly defaultThinking?: boolean;
   readonly models: readonly ManagedWukongModelInfo[];
   readonly configPath?: string | undefined;
 }
@@ -68,8 +68,8 @@ export interface FetchManagedWukongModelsOptions {
 }
 
 export interface ManagedWukongApplyResult {
-  readonly defaultModel: string;
-  readonly defaultThinking: boolean;
+  readonly defaultModel?: string;
+  readonly defaultThinking?: boolean;
 }
 
 export interface ManagedWukongCleanupResult {
@@ -481,9 +481,6 @@ export function applyManagedWukongConfig(
     readonly preserveDefaultModel?: boolean | undefined;
   },
 ): ManagedWukongApplyResult {
-  if (options.models.length === 0) {
-    throw new Error('No models available for Wukong.');
-  }
   for (const model of options.models) {
     assertPositiveContextLength(model);
   }
@@ -494,6 +491,34 @@ export function applyManagedWukongConfig(
       ? managedOAuthRef({ key: options.oauthKey, oauthHost: options.oauthHost })
       : resolveWukongOAuthRef({ baseUrl, oauthHost: options.oauthHost });
   const existingModels = config.models ?? {};
+  if (options.models.length === 0) {
+    config.providers[WUKONG_CODE_PROVIDER_NAME] = {
+      type: 'wukong',
+      baseUrl,
+      apiKey: '',
+      oauth,
+    };
+    let removedDefault = false;
+    for (const [key, model] of Object.entries(existingModels)) {
+      if (!isRecord(model) || model['provider'] !== WUKONG_CODE_PROVIDER_NAME) continue;
+      delete existingModels[key];
+      if (config.defaultModel === key) removedDefault = true;
+    }
+    config.models = existingModels;
+    if (removedDefault) {
+      config.defaultModel = undefined;
+      config.defaultThinking = undefined;
+    }
+    if (config.services !== undefined) {
+      delete config.services.wukongSearch;
+      delete config.services.wukongFetch;
+      if (Object.keys(config.services).length === 0) config.services = undefined;
+    }
+    return {
+      defaultModel: config.defaultModel,
+      defaultThinking: config.defaultThinking,
+    };
+  }
   const selectedDefault = selectDefaultModel(config, options.models, {
     preserveExisting: options.preserveDefaultModel === true,
   });
@@ -573,6 +598,7 @@ export function applyManagedWukongLogoutConfig(config: ManagedWukongConfigShape)
 
   if (removedDefaultModel) {
     config.defaultModel = undefined;
+    config.defaultThinking = undefined;
   }
 
   if (config['defaultProvider'] === WUKONG_CODE_PROVIDER_NAME) {

@@ -416,6 +416,8 @@ export async function refreshProviderModels(
             removed,
           });
         }
+      } else {
+        unchanged.push(WUKONG_CODE_PROVIDER_NAME);
       }
     } catch (error) {
       // Not logged in is expected for optional managed:wukong entries — skip
