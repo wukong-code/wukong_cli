@@ -23,9 +23,9 @@
 - [x] Web catalog 验证 access token；当前返回 `200 {data: []}`，不恢复 `wukong-for-coding` 或任何 placeholder（2026-07-22）
 - [x] 空 catalog 仍判定登录成功并保留 token；不创建 managed model alias、不覆盖 BYOK provider/default，显示“已连接账号，当前无 Wukong 模型”（2026-07-22）
 - [x] catalog 404/5xx 保留未来的 last-known-good 且明确报错；`200 data: []` 是正常空状态，只有 token 缺失时安静跳过 refresh（2026-07-22）
-- [ ] `/usage`、`/status` 显示真实 managed usage；无额度时为 null/empty，不虚构 Guest/Free 限制
+- [x] `/usage`、`/status` 在登录且 BYOK 模型仍为默认时也显示真实 managed usage；当前为 null/empty，不虚构 Guest/Free 限制（2026-07-22）
 - [x] `/logout` 只清理 Wukong token/provider/default alias，不删除其他 BYOK provider（2026-07-22）
-- [ ] Privacy 明确 0.0.18 没有 Wukong 托管推理或 prompt 上传，并完成 CLI login → 网站确认 → 空 catalog → BYOK 不变 → logout/re-login production smoke
+- [x] Privacy 明确 0.0.18 没有 Wukong 托管推理或 prompt 上传；production 已验证 device authorization → 网站确认页、有效 token → 空 catalog/空 usage，BYOK 保持测试与 logout/re-login 自动化通过（2026-07-22）
 
 ### P0：Cross-Agent Resume
 
@@ -46,11 +46,11 @@
 
 ### 发布门槛
 
-- [x] 命令分层、Resume、Feedback、网站确认 OAuth/空 catalog 的 targeted tests 和完整 test 通过；typecheck/lint 待最终版本面复跑（2026-07-22）
-- [ ] docs build、bundle/native SEA smoke 与真实 TUI smoke 通过
-- [ ] 六平台 assets/SHA、0.0.17 → 0.0.18 upgrade 和 0.0.18 fresh install 通过
-- [ ] 三仓 README/ROADMAP/TODO/release notes/Changelog/installer/manifest 一致
-- [ ] Web Feedback API、D1 retention/purge、Privacy/Terms 和 production E2E 通过
+- [x] 命令分层、Resume、Feedback、网站确认 OAuth/空 catalog 的 targeted tests 和完整 test、typecheck、lint 通过（2026-07-22）
+- [x] docs build、bundle/native SEA smoke 与真实 TUI smoke 通过（2026-07-22）
+- [x] 六平台 assets/SHA、0.0.17 → 0.0.18 upgrade 和 0.0.18 fresh install 通过（2026-07-22）
+- [x] 三仓 README/ROADMAP/TODO/release notes/Changelog/installer/manifest 一致（2026-07-22）
+- [x] Web Feedback API、D1 retention/purge、Privacy/Terms 和 production E2E 通过；测试反馈已精确清理（2026-07-22）
 
 ### 明确不做
 
