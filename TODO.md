@@ -71,7 +71,7 @@
 
 - 支付、GitHub PR 写入、Team、managed reviewer、默认多 reviewer、云端 `/schedule`、远程 session、Hosted Report、Agent/Persona 市场和自动 policy 修改均不进入 0.0.16。
 
-## 🚧 0.0.17 — Command Surface Reliability
+## ✅ 0.0.17 — Command Surface Reliability
 
 > 方案: [docs/design/0.0.17-command-surface-reliability.md](docs/design/0.0.17-command-surface-reliability.md)。本版继续免费/BYOK，只收口现有 CLI/TUI 命令契约，不新增 Agent 引擎、托管能力或商业功能。
 
@@ -100,9 +100,9 @@
 - [x] 真实 TUI `/loop` smoke PASS：writer 一轮完成，deterministic check 通过，fresh reviewer 仅使用 3 次 Read 返回结构化 PASS，终态释放且 `/loop status` 显示无 active Loop（2026-07-22）
 - [x] 完成剩余真实 TUI smoke：`/transform list|status|off`、实验指引、删除/未知 slash、本地 permission 错误与 ZIP/Markdown export；额外修复 `/role` 被误建议为 `/yolo`（2026-07-22）
 - [x] macOS arm64 bundle/native SEA smoke 与 ZIP SHA 生成通过（2026-07-22）
-- [ ] 完成六平台 ZIP/SHA assets、0.0.16 → 0.0.17 upgrade 与 0.0.17 fresh install；安装器不恢复 telemetry 提示行
+- [x] 六平台 ZIP/SHA assets、0.0.16 → 0.0.17 upgrade、0.0.17 fresh install 与线上 `curl | sh` 均通过；安装器未恢复 telemetry 提示行（2026-07-22）
 - [x] 增加 0.0.17 release notes，完成内部 CHANGELOG、README、用户指南和设计文档最终对账（2026-07-22）
-- [ ] 正式发布时才切换 package version、tag、公开 release、Web manifest、下载页、Changelog 与升级公告
+- [x] package version、`v0.0.17` tag、公开 release、Web manifest、下载页、Changelog 与仅面向 0.0.16 的升级公告已同步；Cloudflare production 与正式域名验收通过（2026-07-22）
 
 ### 明确不做
 
@@ -120,7 +120,7 @@
 - [ ] terminal completion reporting rate ≥ 90%
 - [ ] 至少 2 个用户在 7 天内重复完成 Loop
 - [ ] 至少取得 3 条可归因反馈，解释继续使用或放弃原因
-- [ ] 0.0.17 正式发布并完成升级、fresh install 与真实 TUI `/loop` smoke
+- [x] 0.0.17 正式发布并完成升级、fresh install 与真实 TUI `/loop` smoke（2026-07-22）
 
 ### P0：Entitlement 单点真相源
 
@@ -488,4 +488,4 @@
 
 ---
 
-**最后更新**: 2026-07-21（增加 0.0.17 Command Surface Reliability；0.1.0 商业边界不变）
+**最后更新**: 2026-07-22（0.0.17 四类发布门槛全部通过；0.1.0 商业边界不变）
