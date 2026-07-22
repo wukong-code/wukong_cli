@@ -4,43 +4,32 @@ on:
   push:
     tags:
       - 'v*'
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Existing semver tag to build and publish, for example v0.0.17'
+        required: true
+        type: string
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  native-artifacts:
-    name: Build native binaries
-    uses: ./.github/workflows/_native-build.yml
-    with:
-      upload-artifact-prefix: wukong-native
-      retention-days: 1
-      sign-macos: false
-
-  publish-native-assets:
-    name: Publish to public release repo
-    needs:
-      - native-artifacts
+  prepare-public-release:
+    name: Prepare public release
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
 
     steps:
       - name: Checkout
         uses: actions/checkout@v6
-
-      - name: Download native artifacts
-        uses: actions/download-artifact@v8
         with:
-          pattern: wukong-native-*
-          path: dist-native-release
-          merge-multiple: true
+          ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
 
       - name: Generate release notes
         id: notes
         env:
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
         run: |
           # Find the previous semver tag
           PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | awk -v cur="$RELEASE_TAG" '$0 != cur {print; exit}')
@@ -61,7 +50,7 @@ jobs:
       - name: Ensure public release exists
         env:
           GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
-          RELEASE_TAG: ${{ github.ref_name }}
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
         run: |
           if ! gh release view "$RELEASE_TAG" --repo mutnpc/wukong-code >/dev/null 2>&1; then
             gh release create "$RELEASE_TAG" \
@@ -74,8 +63,44 @@ jobs:
               --notes-file release-notes.md
           fi
 
-      - name: Upload assets to public release
+  native-artifacts:
+    name: Build and publish native binaries
+    needs:
+      - prepare-public-release
+    uses: ./.github/workflows/_native-build.yml
+    with:
+      upload-artifact-prefix: wukong-native
+      retention-days: 1
+      sign-macos: false
+      source-ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
+      publish-release-tag: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+      public-release-repo: mutnpc/wukong-code
+    secrets:
+      WUKONG_PUBLIC_RELEASE_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+
+  verify-public-release:
+    name: Verify public release assets
+    needs:
+      - native-artifacts
+    runs-on: ubuntu-latest
+    steps:
+      - name: Verify six ZIP and six SHA files
         env:
           GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
-          RELEASE_TAG: ${{ github.ref_name }}
-        run: gh release upload "$RELEASE_TAG" dist-native-release/* --clobber --repo mutnpc/wukong-code
+          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+        shell: bash
+        run: |
+          ASSETS="$(gh release view "$RELEASE_TAG" --repo mutnpc/wukong-code --json assets --jq '.assets[].name')"
+          TARGETS=(linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64)
+
+          for TARGET in "${TARGETS[@]}"; do
+            grep -Fxq "wukong-${TARGET}.zip" <<<"$ASSETS"
+            grep -Fxq "wukong-${TARGET}.zip.sha256" <<<"$ASSETS"
+          done
+
+          ASSET_COUNT="$(sed '/^$/d' <<<"$ASSETS" | wc -l | tr -d ' ')"
+          if [ "$ASSET_COUNT" -ne 12 ]; then
+            echo "error: expected 12 release assets, found $ASSET_COUNT"
+            printf '%s\n' "$ASSETS"
+            exit 1
+          fi
