@@ -2,7 +2,12 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Agent } from '../../src/agent';
 import { GoalMode } from '../../src/agent/goal';
+import { ErrorCodes, WukongError } from '../../src/errors';
 import { UpdateGoalTool } from '../../src/tools/builtin';
+import {
+  FRESH_REVIEWER_MAX_STEPS,
+  FRESH_REVIEWER_TIMEOUT_MS,
+} from '../../src/tools/builtin/goal/update-goal';
 import { executeTool } from './fixtures/execute-tool';
 
 const mocks = vi.hoisted(() => ({
@@ -253,8 +258,11 @@ describe('UpdateGoalTool verification gate', () => {
     expect(spawn).toHaveBeenCalledWith(expect.objectContaining({
       profileName: 'reviewer',
       runInBackground: false,
+      maxSteps: FRESH_REVIEWER_MAX_STEPS,
       prompt: expect.stringContaining('Objective: ship the change'),
     }));
+    const reviewerPrompt = (spawn.mock.calls[0]?.[0] as { readonly prompt: string }).prompt;
+    expect(reviewerPrompt).toContain('Do not attempt Bash, shell commands, or test execution.');
   });
 
   it('keeps non-blocking findings without making them Loop blockers', async () => {
@@ -605,6 +613,76 @@ VERDICT_JSON: ${JSON.stringify({
     });
   });
 
+  it('stops immediately when the fresh reviewer reaches its step safety limit', async () => {
+    const store = makeStore();
+    await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });
+    mocks.runProof.mockResolvedValue(proof('passed'));
+    const spawn = vi.fn().mockRejectedValue(new WukongError(
+      ErrorCodes.LOOP_MAX_STEPS_EXCEEDED,
+      `Turn exceeded maxSteps=${String(FRESH_REVIEWER_MAX_STEPS)}.`,
+      { details: { maxSteps: FRESH_REVIEWER_MAX_STEPS } },
+    ));
+    const agent = makeAgent(store);
+    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+    const result = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(result.stopTurn).toBe(true);
+    expect(store.getGoal().goal).toMatchObject({
+      status: 'blocked',
+      loopResult: {
+        status: 'ERROR',
+        reasonCode: 'reviewer_limit_exceeded',
+      },
+    });
+    expect(store.getGoal().goal?.terminalReason).toContain(
+      `Fresh reviewer exceeded the ${String(FRESH_REVIEWER_MAX_STEPS)}-step safety limit`,
+    );
+  });
+
+  it('stops the fresh reviewer after the shared safety timeout without retrying', async () => {
+    vi.useFakeTimers();
+    try {
+      const store = makeStore();
+      await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });
+      mocks.runProof.mockResolvedValue(proof('passed'));
+      const spawn = vi.fn().mockImplementation(async (options: { readonly signal: AbortSignal }) => ({
+        completion: new Promise<never>((_resolve, reject) => {
+          const rejectOnAbort = () => {
+            reject(options.signal.reason);
+          };
+          if (options.signal.aborted) rejectOnAbort();
+          else options.signal.addEventListener('abort', rejectOnAbort, { once: true });
+        }),
+      }));
+      const agent = makeAgent(store);
+      (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+
+      const running = executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+      await vi.waitFor(() => {
+        expect(spawn).toHaveBeenCalledOnce();
+      });
+      await vi.advanceTimersByTimeAsync(FRESH_REVIEWER_TIMEOUT_MS);
+      const result = await running;
+
+      expect(result.stopTurn).toBe(true);
+      expect(spawn).toHaveBeenCalledOnce();
+      expect(store.getGoal().goal).toMatchObject({
+        status: 'blocked',
+        loopResult: {
+          status: 'ERROR',
+          reasonCode: 'reviewer_limit_exceeded',
+        },
+      });
+      expect(store.getGoal().goal?.terminalReason).toContain(
+        `Fresh reviewer exceeded the ${String(FRESH_REVIEWER_TIMEOUT_MS / 1000)}-second safety timeout`,
+      );
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it('does not fall back after cancellation', async () => {
     const store = makeStore();
     await store.createGoal({
@@ -647,7 +725,9 @@ VERDICT_JSON: ${JSON.stringify({
       signal: controller.signal,
     });
 
-    await vi.waitFor(() => expect(mocks.runProof).toHaveBeenCalledOnce());
+    await vi.waitFor(() => {
+      expect(mocks.runProof).toHaveBeenCalledOnce();
+    });
     controller.abort();
 
     await expect(running).rejects.toMatchObject({ name: 'AbortError' });

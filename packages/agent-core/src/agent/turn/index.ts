@@ -54,6 +54,11 @@ interface BufferedSteer {
   readonly origin: PromptOrigin;
 }
 
+export interface AgentTurnLimits {
+  /** Hard ceiling for this turn, independent of the user's global config. */
+  readonly maxSteps?: number;
+}
+
 export interface TurnEndResult {
   readonly event: TurnEndedEvent;
   readonly stopReason?: LoopTurnStopReason;
@@ -137,13 +142,17 @@ export class TurnFlow {
   }
 
   // Returns the new turnId, or null if the turn was marked as resuming.
-  prompt(input: readonly ContentPart[], origin: PromptOrigin = USER_PROMPT_ORIGIN): number | null {
+  prompt(
+    input: readonly ContentPart[],
+    origin: PromptOrigin = USER_PROMPT_ORIGIN,
+    limits?: AgentTurnLimits,
+  ): number | null {
     this.agent.records.logRecord({
       type: 'turn.prompt',
       input,
       origin,
     });
-    return this.launch(input, origin);
+    return this.launch(input, origin, limits);
   }
 
   // Returns the new turnId, or null if the input was buffered as a steer
@@ -165,7 +174,11 @@ export class TurnFlow {
     return this.prompt([], { kind: 'retry', trigger });
   }
 
-  private launch(input: readonly ContentPart[], origin: PromptOrigin): number | null {
+  private launch(
+    input: readonly ContentPart[],
+    origin: PromptOrigin,
+    limits?: AgentTurnLimits,
+  ): number | null {
     if (this.activeTurn) {
       this.agent.emitEvent({
         type: 'error',
@@ -183,7 +196,7 @@ export class TurnFlow {
     // start/end pair per continuation turn rather than one mega-turn.
     const turnId = this.allocateTurnId();
     const controller = new AbortController();
-    const promise = this.turnWorker(turnId, input, origin, controller.signal);
+    const promise = this.turnWorker(turnId, input, origin, controller.signal, limits);
     const firstRequest = createControlledPromise<void>();
     this.activeTurn = {
       turnId,
@@ -324,6 +337,7 @@ export class TurnFlow {
     input: readonly ContentPart[],
     origin: PromptOrigin,
     signal: AbortSignal,
+    limits?: AgentTurnLimits,
   ): Promise<TurnEndResult> {
     const ownsActiveTurn = (): boolean =>
       this.activeTurn !== null &&
@@ -332,9 +346,9 @@ export class TurnFlow {
     try {
       const initialGoalStatus = this.agent.goal.getGoal().goal?.status;
       if (initialGoalStatus === 'active') {
-        return await this.driveGoal(firstTurnId, input, origin, signal);
+        return await this.driveGoal(firstTurnId, input, origin, signal, limits);
       }
-      const end = await this.runOneTurn(firstTurnId, input, origin, signal, true);
+      const end = await this.runOneTurn(firstTurnId, input, origin, signal, true, limits);
       // A goal can become active during an ordinary turn: the model creates one
       // with CreateGoal, or resumes a paused/blocked goal via UpdateGoal. Either
       // way, hand the now-active goal to the driver so it is actually pursued,
@@ -352,6 +366,7 @@ export class TurnFlow {
           [{ type: 'text', text: GOAL_CONTINUATION_PROMPT }],
           GOAL_CONTINUATION_ORIGIN,
           signal,
+          limits,
         );
       }
       return end;
@@ -377,6 +392,7 @@ export class TurnFlow {
     input: readonly ContentPart[],
     origin: PromptOrigin,
     signal: AbortSignal,
+    limits?: AgentTurnLimits,
   ): Promise<TurnEndResult> {
     let turnId = firstTurnId;
     let turnInput = input;
@@ -395,7 +411,7 @@ export class TurnFlow {
       // Wall-clock is tracked live by the store (anchored while `active`), so the
       // timer is correct even when the model completes mid-turn.
       await this.agent.goal.incrementTurn();
-      const end = await this.runOneTurn(turnId, turnInput, turnOrigin, signal, false);
+      const end = await this.runOneTurn(turnId, turnInput, turnOrigin, signal, false, limits);
 
       if (end.event.reason === 'cancelled') {
         await this.agent.goal.pauseOnInterrupt({ reason: 'Paused after interruption' });
@@ -505,6 +521,7 @@ export class TurnFlow {
     origin: PromptOrigin,
     signal: AbortSignal,
     standalone: boolean,
+    limits?: AgentTurnLimits,
   ): Promise<TurnEndResult> {
     this.currentStep = 0;
     this.stepToolCallKeys.clear();
@@ -531,7 +548,7 @@ export class TurnFlow {
         ended = promptHookEnded.event;
         blockedByUserPromptHook = promptHookEnded.blocked;
       } else {
-        const stopReason = await this.runStepLoop(turnId, signal);
+        const stopReason = await this.runStepLoop(turnId, signal, limits);
         completedStopReason = stopReason;
         const reason: TurnEndReason =
           stopReason === 'aborted' ? 'cancelled' : stopReason === 'filtered' ? 'filtered' : 'completed';
@@ -684,7 +701,11 @@ export class TurnFlow {
     return undefined;
   }
 
-  private async runStepLoop(turnId: number, signal: AbortSignal): Promise<LoopTurnStopReason> {
+  private async runStepLoop(
+    turnId: number,
+    signal: AbortSignal,
+    limits?: AgentTurnLimits,
+  ): Promise<LoopTurnStopReason> {
     let stopHookContinuationUsed = false;
     let goalOutcomeMessageContinuationUsed = false;
     const deduper = new ToolCallDeduplicator({ telemetry: this.agent.telemetry });
@@ -697,6 +718,7 @@ export class TurnFlow {
       signal.throwIfAborted();
       const model = this.agent.config.model;
       const loopControl = this.agent.wukongConfig?.loopControl;
+      const maxSteps = resolveMaxSteps(loopControl?.maxStepsPerTurn, limits?.maxSteps);
       let stopForGoalBudget = false;
       try {
         const result = await runTurn({
@@ -707,7 +729,7 @@ export class TurnFlow {
           dispatchEvent: this.buildDispatchEvent(turnId),
           tools: this.agent.tools.loopTools,
           log: this.agent.log,
-          maxSteps: loopControl?.maxStepsPerTurn,
+          maxSteps,
           maxRetryAttempts: loopControl?.maxRetriesPerStep,
           recordStepUsage: async (usage) => {
             try {
@@ -746,7 +768,7 @@ export class TurnFlow {
                 isGoalOutcomeReminderOrigin(this.agent.context.history.at(-1)?.origin)
               ) {
                 goalOutcomeMessageContinuationUsed = true;
-                if (!hasStepBudgetRemaining(loopControl?.maxStepsPerTurn, ctx.stepNumber)) {
+                if (!hasStepBudgetRemaining(maxSteps, ctx.stepNumber)) {
                   this.agent.context.popMatchedMessage(isGoalOutcomeReminderOrigin);
                   return { continue: false };
                 }
@@ -1035,6 +1057,17 @@ function isGoalOutcomeReminderOrigin(origin: PromptOrigin | undefined): boolean 
     (origin.name === GOAL_COMPLETION_REMINDER_NAME ||
       origin.name === GOAL_BLOCKED_REMINDER_NAME)
   );
+}
+
+function resolveMaxSteps(
+  configured: number | undefined,
+  hardCeiling: number | undefined,
+): number | undefined {
+  const configuredLimit = configured !== undefined && configured > 0 ? configured : undefined;
+  const ceilingLimit = hardCeiling !== undefined && hardCeiling > 0 ? hardCeiling : undefined;
+  if (configuredLimit === undefined) return ceilingLimit ?? configured;
+  if (ceilingLimit === undefined) return configuredLimit;
+  return Math.min(configuredLimit, ceilingLimit);
 }
 
 function hasStepBudgetRemaining(maxSteps: number | undefined, currentStep: number): boolean {

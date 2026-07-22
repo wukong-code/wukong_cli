@@ -1,5 +1,5 @@
 /**
- * Local stats event stream and Daily Proof Briefing builder.
+ * Local stats event stream and Local Loop Briefing builder.
  *
  * This module is intentionally scoped to the CLI app. If the event model grows
  * (hosted sync, richer schemas), it can be extracted into a package.

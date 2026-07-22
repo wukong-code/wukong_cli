@@ -48,7 +48,8 @@ describe('built-in slash command registry', () => {
     expect(findBuiltInSlashCommand('btw')?.name).toBe('btw');
     expect(findBuiltInSlashCommand('mcp')?.name).toBe('mcp');
     expect(findBuiltInSlashCommand('status')?.name).toBe('status');
-    expect(findBuiltInSlashCommand('resume')?.name).toBe('sessions');
+    expect(findBuiltInSlashCommand('resume')?.name).toBe('resume');
+    expect(findBuiltInSlashCommand('sessions')?.name).toBe('resume');
     expect((findBuiltInSlashCommand('resume-codex') as WukongSlashCommand).hidden).toBe(true);
     expect((findBuiltInSlashCommand('resume-claude') as WukongSlashCommand).hidden).toBe(true);
     expect((findBuiltInSlashCommand('resume-cursor') as WukongSlashCommand).hidden).toBe(true);
@@ -230,7 +231,7 @@ describe('built-in slash command registry', () => {
         'reload',
         'reload-tui',
         'scan',
-        'sessions',
+        'resume',
         'settings',
         'status',
         'theme',

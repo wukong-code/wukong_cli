@@ -31,7 +31,7 @@ import type {
 } from '@wukong/wukong-sdk';
 
 import { parseLoopTerminalReason } from '#/utils/loop-result';
-import { completeTrackedTuiLoop } from '#/cli/lib/loop-quota';
+import { completeTuiLoop } from '#/cli/lib/loop-lifecycle';
 
 import { MoonLoader } from '../components/chrome/moon-loader';
 import { buildGoalMarker } from '../components/messages/goal-markers';
@@ -684,7 +684,7 @@ export class SessionEventHandler {
     // record, so live and replayed completion cards stay identical.
     if (change.kind === 'completion' && event.snapshot !== null) {
       if (event.snapshot.loopResult !== undefined) {
-        void completeTrackedTuiLoop(
+        void completeTuiLoop(
           event.snapshot.goalId,
           event.snapshot.loopResult.status,
           event.snapshot.loopResult.iterations,
@@ -715,7 +715,7 @@ export class SessionEventHandler {
     // the goal active and are handled via UpdateGoal tool results.
     if (change.kind === 'lifecycle' && change.status === 'blocked') {
       if (event.snapshot?.loopResult !== undefined) {
-        void completeTrackedTuiLoop(
+        void completeTuiLoop(
           event.snapshot.goalId,
           event.snapshot.loopResult.status,
           event.snapshot.loopResult.iterations,

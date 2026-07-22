@@ -36,13 +36,13 @@ export class WelcomeComponent implements Component {
 
     if (safeWidth < 24) {
       const title = chalk.bold.hex(currentTheme.palette.primary)('Wukong Code');
-      const isLoggedOut = !this.state.model;
-      const prompt = isLoggedOut
-        ? chalk.hex(currentTheme.palette.warning)('Run /login or /provider to get started.')
+      const isModelMissing = !this.state.model;
+      const prompt = isModelMissing
+        ? chalk.hex(currentTheme.palette.warning)('Run /provider to configure your model API key.')
         : chalk.hex(currentTheme.palette.textDim)('Send /help for help information.');
       const activeModel = this.state.availableModels[this.state.model];
-      const model = isLoggedOut
-        ? chalk.hex(currentTheme.palette.warning)('not set, run /login or /provider')
+      const model = isModelMissing
+        ? chalk.hex(currentTheme.palette.warning)('not set, run /provider')
         : (activeModel?.displayName ?? activeModel?.model ?? this.state.model);
       return ['', title, prompt, `Model: ${model}`].map((line) =>
         truncateToWidth(line, safeWidth, '…'),
@@ -62,7 +62,7 @@ export class WelcomeComponent implements Component {
     const pad = '  ';
     const contentLines = [
       `${chalk.bold.hex(currentTheme.palette.primary)('Wukong Code')}  ${chalk.hex(currentTheme.palette.warning)('Setup required')}`,
-      chalk.hex(currentTheme.palette.textDim)('/login sign in  ·  /provider use your API key'),
+      chalk.hex(currentTheme.palette.textDim)('/provider configure model key  ·  /login optional account'),
     ];
     const lines = ['', primary('╭' + '─'.repeat(safeWidth - 2) + '╮')];
 
@@ -126,7 +126,7 @@ export class WelcomeComponent implements Component {
     const dim = chalk.hex(currentTheme.palette.textDim);
     const labelStyle = chalk.bold.hex(currentTheme.palette.textDim);
     const rightRow1 = truncateToWidth(
-      dim(isLoggedOut ? 'Run /login or /provider to get started.' : 'Send /help for help information.'),
+      dim(isLoggedOut ? 'Run /provider to configure your model API key.' : 'Send /help for help information.'),
       textWidth,
       '…',
     );
@@ -155,7 +155,7 @@ export class WelcomeComponent implements Component {
     }
 
     const modelValue = isLoggedOut
-      ? chalk.hex(currentTheme.palette.warning)('not set, run /login or /provider')
+      ? chalk.hex(currentTheme.palette.warning)('not set, run /provider')
       : (activeModel?.displayName ?? activeModel?.model ?? this.state.model);
 
     const infoLines = [

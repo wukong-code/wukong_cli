@@ -1,8 +1,8 @@
-# 登录与同步验收计划
+# 登录与同步历史验收记录
 
 > 适用范围: `wukong_cli` 新 Kimi-code base
-> 当前状态: `wukong login` 已存在，`wukong sync` 尚未作为 top-level CLI 命令实现。
-> 本文件是未来实现登录增强与同步能力时的验收计划，不是当前可直接运行的测试脚本。
+> 当前状态: `wukong login` 只连接可选账号；模型 Key 由 `/provider` 配置。未闭环的 Web sync 和 Companion 数据面已于 2026-07-22 删除。
+> 本文件只保留历史验收背景，不是当前待实现 contract 或可直接运行的测试脚本。
 
 ## 当前事实
 

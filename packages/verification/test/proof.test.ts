@@ -36,7 +36,9 @@ describe('runProof', () => {
       writeReport: false,
       signal: controller.signal,
     });
-    setTimeout(() => controller.abort(), 25);
+    setTimeout(() => {
+      controller.abort();
+    }, 25);
 
     await expect(running).rejects.toMatchObject({ name: 'AbortError' });
     expect(Date.now() - startedAt).toBeLessThan(2_000);

@@ -161,6 +161,12 @@ export interface SlashCommandHost {
 // Dispatch — entry point from handleUserInput
 // ---------------------------------------------------------------------------
 
+const REMOVED_SLASH_COMMAND_HINTS: Readonly<Record<string, string>> = {
+  role: 'Unknown slash command: /role. Use /transform to change the current session; manage profiles with `wukong roles`.',
+  report: 'Unknown slash command: /report. Use /export-md for Markdown or /export for a ZIP archive.',
+  yes: 'Unknown slash command: /yes. Use /yolo on only when you intentionally accept its risk.',
+};
+
 export function dispatchInput(host: SlashCommandHost, text: string): void {
   if (parseSlashInput(text) !== null) {
     void executeSlashCommand(host, text);
@@ -197,11 +203,10 @@ async function executeSlashCommand(host: SlashCommandHost, input: string): Promi
         reason: intent.reason,
         command: intent.commandName,
       });
-      host.showError(
-        intent.suggestions.length === 0
+      host.showError(REMOVED_SLASH_COMMAND_HINTS[intent.commandName]
+        ?? (intent.suggestions.length === 0
           ? `Unknown slash command: /${intent.commandName}. Run /help to list commands.`
-          : `Unknown slash command: /${intent.commandName}. Did you mean ${intent.suggestions.map((name) => `/${name}`).join(', ')}?`,
-      );
+          : `Unknown slash command: /${intent.commandName}. Did you mean ${intent.suggestions.map((name) => `/${name}`).join(', ')}?`));
       return;
     case 'skill': {
       const session = host.session;
@@ -253,7 +258,7 @@ async function handleBuiltInSlashCommand(
       await host.createNewSession();
       host.state.ui.requestRender();
       return;
-    case 'sessions': {
+    case 'resume': {
       const source = parseResumeSource(args);
       if (source === null) {
         host.showError('Usage: /resume [codex|claude|cursor]');

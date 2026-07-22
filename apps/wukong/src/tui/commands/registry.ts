@@ -342,7 +342,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     aliases: [],
     description: 'Transform the agent with a role profile',
     priority: 80,
-    argumentHint: '<role|off|list>',
+    argumentHint: '<role|list|status|off>',
     availability: 'idle-only',
     experimentalFlag: 'role_profiles',
     visibleWhenDisabled: true,
@@ -377,8 +377,8 @@ export const BUILTIN_SLASH_COMMANDS = [
     priority: 80,
   },
   {
-    name: 'sessions',
-    aliases: ['resume'],
+    name: 'resume',
+    aliases: ['sessions'],
     description: 'Resume Wukong, Codex, Claude Code, or Cursor sessions',
     priority: 80,
     argumentHint: '[codex|claude|cursor]',
@@ -504,7 +504,7 @@ export const BUILTIN_SLASH_COMMANDS = [
   {
     name: 'usage',
     aliases: [],
-    description: 'Show session tokens + context window + plan quotas',
+    description: 'Show session tokens, context window, and provider usage',
     priority: 60,
     availability: 'always',
   },
@@ -556,13 +556,13 @@ export const BUILTIN_SLASH_COMMANDS = [
   {
     name: 'logout',
     aliases: ['disconnect'],
-    description: 'Log out of a configured provider',
+    description: 'Disconnect the optional Wukong account',
     priority: 40,
   },
   {
     name: 'login',
     aliases: [],
-    description: 'Select a platform and authenticate',
+    description: 'Connect the optional Wukong account',
     priority: 40,
   },
   {

@@ -27,10 +27,9 @@ import { resolve } from 'pathe';
 
 import type { CLIOptions } from '#/cli/options';
 import {
-  cancelTrackedLoopRecord,
-  completeTrackedTuiLoop,
-  flushLoopCompletionOutbox,
-} from '#/cli/lib/loop-quota';
+  cancelLoopRecord,
+  completeTuiLoop,
+} from '#/cli/lib/loop-lifecycle';
 import {
   listActiveLoopRuns,
   type LoopRunRecord,
@@ -461,9 +460,6 @@ export class WukongTUI {
   async start(): Promise<void> {
     // Signal handlers must be installed before raw mode to avoid EIO loops.
     this.registerSignalHandlers();
-    // Completion accounting is best-effort and must not delay or block the UI.
-    // Persisted pending records make this safe across process restarts.
-    void flushLoopCompletionOutbox().catch(() => {});
     // Outer try rolls back signal listeners on startup failure.
     try {
       if (this.migrationPlan !== null) {
@@ -694,7 +690,7 @@ export class WukongTUI {
       ) {
         const outcome = goal.loopResult.status;
         const iterations = goal.loopResult.iterations;
-        const completion = await completeTrackedTuiLoop(goal.goalId, outcome, iterations);
+        const completion = await completeTuiLoop(goal.goalId, outcome, iterations);
         if (completion?.repeatedCompletedWithin7d) {
           this.track('loop_repeat_completed_7d');
         }
@@ -709,7 +705,7 @@ export class WukongTUI {
   private showActiveLoopRecovery(record: LoopRunRecord): void {
     this.mountEditorReplacement(new ChoicePickerComponent({
       title: 'Active Loop found',
-      notice: 'Resume it or end its accounting explicitly. No old check result will be reused.',
+      notice: 'Resume it or end its local lifecycle explicitly. No old check result will be reused.',
       noticeTone: 'warning',
       options: [
         {
@@ -721,7 +717,7 @@ export class WukongTUI {
           value: 'cancel',
           label: 'End as cancelled',
           tone: 'danger',
-          description: 'End this run without recording PASS, NEEDS_WORK, or ERROR.',
+          description: 'Close the local recovery record without recording a Gate outcome.',
         },
         {
           value: 'details',
@@ -749,7 +745,7 @@ export class WukongTUI {
         `Session   ${record.sessionId ?? 'unavailable'}`,
         `Workspace ${record.workspace ?? 'unavailable'}`,
         `Started   ${record.startedAt}`,
-        `Retry     ${String(record.sync.attempts)} attempt(s)`,
+        'Storage   local recovery only',
       ].join('\n'));
       this.showActiveLoopRecovery(record);
       return;
@@ -765,7 +761,7 @@ export class WukongTUI {
         iterations = currentGoal.iteration;
         await this.session?.cancelGoal().catch(() => {});
       }
-      await cancelTrackedLoopRecord(record, iterations);
+      await cancelLoopRecord(record, iterations);
       this.showNotice('Loop ended as cancelled. No Gate outcome was recorded.');
       return;
     }
@@ -794,7 +790,7 @@ export class WukongTUI {
         return;
       }
       if (goal.loopResult !== undefined) {
-        const completion = await completeTrackedTuiLoop(
+        const completion = await completeTuiLoop(
           goal.goalId,
           goal.loopResult.status,
           goal.loopResult.iterations,

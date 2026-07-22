@@ -2,11 +2,11 @@ import { ErrorCodes, isWukongError, type GoalSnapshot, type PermissionMode } fro
 
 import { parseLoopDuration } from '#/utils/duration';
 import {
-  beginLoopQuota,
-  completeLoopQuota,
-  completeTrackedTuiLoop,
-  registerTrackedTuiLoop,
-} from '#/cli/lib/loop-quota';
+  beginLoopRun,
+  completeLoopRun,
+  completeTuiLoop,
+  registerTuiLoop,
+} from '#/cli/lib/loop-lifecycle';
 import {
   formatLoopPreflightBlocked,
   formatLoopPreflightReady,
@@ -526,7 +526,7 @@ async function cancelGoal(host: SlashCommandHost): Promise<void> {
     const active = (await session.getGoal()).goal;
     await session.cancelGoal();
     if (active !== null) {
-      await completeTrackedTuiLoop(active.goalId, 'ERROR', active.iteration, 'cancelled');
+      await completeTuiLoop(active.goalId, 'ERROR', active.iteration, 'cancelled');
     }
     if (isStreaming(host)) await session.cancel();
   } catch (error) {
@@ -750,7 +750,7 @@ export async function handleLoopSlashCommand(host: SlashCommandHost, args: strin
       await cancelLoop(host);
       return;
     case 'create': {
-      let grant: Awaited<ReturnType<typeof beginLoopQuota>> | undefined;
+      let run: Awaited<ReturnType<typeof beginLoopRun>> | undefined;
       let preflight: LoopPreflightReady | undefined;
       await createGoal(
         host,
@@ -778,32 +778,24 @@ export async function handleLoopSlashCommand(host: SlashCommandHost, args: strin
               return false;
             }
             preflight = result;
-            grant = await beginLoopQuota();
-            if (grant.message !== undefined) {
-              if (grant.allowed) host.showStatus(grant.message);
-              else host.showError(grant.message);
-            }
-            if (!grant.allowed) return false;
-            const maxIterations = Math.min(parsed.maxIterations, grant.maxIterations);
-            host.showStatus(formatLoopPreflightReady(result, maxIterations));
-            return { maxIterations };
+            run = await beginLoopRun();
+            host.showStatus(formatLoopPreflightReady(result, parsed.maxIterations));
+            return { maxIterations: parsed.maxIterations };
           },
           afterCreate: async (snapshot) => {
-            if (grant !== undefined) {
-              await registerTrackedTuiLoop(
+            if (run !== undefined) {
+              await registerTuiLoop(
                 snapshot.goalId,
-                grant,
+                run,
                 host.requireSession().id,
                 preflight?.workspace,
               );
               host.track('loop_started');
-              if (grant.repeatedWithin7d === true) host.track('loop_repeat_started_7d');
+              if (run.repeatedWithin7d === true) host.track('loop_repeat_started_7d');
             }
           },
           onCreateError: async () => {
-            if (grant !== undefined) {
-              await completeLoopQuota(grant, 'ERROR', 0, fetch, 'cancelled');
-            }
+            if (run !== undefined) await completeLoopRun(run, 'ERROR', 0, 'cancelled');
           },
           sendInput: () => {
             // The loop objective is sent as a normal user input after goal creation.

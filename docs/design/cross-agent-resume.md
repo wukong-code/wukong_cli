@@ -42,7 +42,7 @@ Grok Build `0.2.100` 已在统一 session picker 中加入最近 Claude Code、C
 
 Wukong 当前具备：
 
-- TUI `/resume` 是 `/sessions` 的别名，打开现有 session picker。
+- TUI `/resume` 是主命令，`/sessions` 仅作为兼容别名，打开现有 session picker。
 - CLI 支持 `wukong --session [id]`，并兼容隐藏参数 `--resume [id]`。
 - `wukong --continue` 可以继续当前工作目录最近的 Wukong session。
 - agent-core 已有 session store、事件 replay、按工作目录索引和 legacy session migration。

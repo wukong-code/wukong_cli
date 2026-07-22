@@ -64,6 +64,21 @@ describe('roles command', () => {
     await expect(
       program.parseAsync(['node', 'wukong', 'roles', 'nope']),
     ).rejects.toThrow();
-    expect(errorOutput).toContain("unknown command 'nope'. See 'wukong roles --help'.");
+    expect(errorOutput).toContain(
+      "unknown command 'nope'. Valid commands: list, show, init. See 'wukong roles --help'.",
+    );
+  });
+
+  it('renders one command placeholder in help and lists the valid subcommands', () => {
+    const { program } = makeProgram();
+    const roles = program.commands.find((command) => command.name() === 'roles');
+
+    expect(roles).toBeDefined();
+    const help = roles!.helpInformation();
+    expect(help).toContain('Usage: wukong roles [options] [command]');
+    expect(help).not.toContain('[command] [command]');
+    expect(help).toContain('list');
+    expect(help).toContain('show <name>');
+    expect(help).toContain('init [options] <name>');
   });
 });

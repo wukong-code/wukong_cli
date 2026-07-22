@@ -8,6 +8,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import type { Agent, AgentOptions } from '../../src/agent';
 import { AGENT_WIRE_PROTOCOL_VERSION } from '../../src/agent/records';
+import { ErrorCodes } from '../../src/errors';
 import type { ResolvedAgentProfile } from '../../src/profile';
 import type { SDKSessionRPC } from '../../src/rpc';
 import { Session } from '../../src/session';
@@ -313,6 +314,37 @@ describe('SessionSubagentHost', () => {
         content: [{ type: 'text', text: 'Find the cause' }],
       },
     ]);
+  });
+
+  it('applies a hard maxSteps ceiling to a bounded child turn', async () => {
+    const parent = testAgent();
+    parent.configure();
+    await parent.rpc.setPermission({ mode: 'yolo' });
+    const child = testAgent({
+      type: 'sub',
+      permission: { parent: parent.agent.permission },
+    });
+    child.mockNextResponse(
+      { type: 'text', text: 'I will keep calling tools instead of returning a result.' },
+      bashCall(),
+    );
+    const host = new SessionSubagentHost(fakeSession(parent.agent, child.agent), 'main');
+
+    const handle = await host.spawn({
+      profileName: 'coder',
+      parentToolCallId: 'call_bounded_agent',
+      prompt: 'Inspect the workspace',
+      description: 'Bounded child',
+      runInBackground: false,
+      signal,
+      maxSteps: 1,
+    });
+
+    await expect(handle.completion).rejects.toMatchObject({
+      code: ErrorCodes.LOOP_MAX_STEPS_EXCEEDED,
+      details: { maxSteps: 1 },
+    });
+    expect(child.llmCalls).toHaveLength(1);
   });
 
   it('inherits user-tool registration without bypassing the child profile ceiling', async () => {

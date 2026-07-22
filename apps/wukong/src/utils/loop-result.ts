@@ -46,6 +46,7 @@ export function loopNextAction(reasonCode: string): string {
       return 'Stop other workspace writers, then rerun the Loop.';
     case 'reviewer_error':
     case 'reviewer_invalid_output':
+    case 'reviewer_limit_exceeded':
     case 'reviewer_unavailable':
     case 'verification_error':
       return 'Resolve the model or verification runtime error, then rerun the Loop.';

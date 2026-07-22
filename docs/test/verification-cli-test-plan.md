@@ -1,8 +1,8 @@
 # Verification CLI 自动化测试计划
 
 > 日期: 2026-07-14
-> 范围: 现有 verification v1 兼容回归，以及 0.0.12 Loop-first 状态机、fresh reviewer、session 额度和角色集成
-> 状态: v1 已实现；0.0.12 v2 主流程、Role Profiles 基础运行时、Loop quota 与真实 monorepo E2E 已实现。contract 以 [0.0.12 Trust Loop v2](../design/verification-loop-v2.md) 为准
+> 范围: 现有 verification v1 兼容回归，以及 Loop-first 状态机、fresh reviewer、本地 lifecycle 和角色集成
+> 状态: v1 与 0.0.12 v2 主流程已实现；0.0.12 的 Guest/Free quota contract 已在 0.0.17 移除，当前以本地 BYOK lifecycle 回归为准
 
 ## 0. 0.0.12 v2 发布测试门槛
 
@@ -13,7 +13,7 @@
 - 真实 nested npm monorepo：`packages/verification/test/monorepo-e2e.test.ts`
 - fresh reviewer、结构化反馈、max iterations：`packages/agent-core/test/tools/goal-gate.test.ts`
 - Role Profile 权限和 session：`packages/agent-core/test/role/*`、`packages/agent-core/test/harness/role-session.test.ts`
-- Guest/Free quota 与幂等 start/complete：`apps/wukong/test/cli/loop-quota.test.ts`、`wukong_web/test/api/loop-quota.test.ts`
+- 本地 lifecycle、终态和恢复：`apps/wukong/test/cli/loop-lifecycle.test.ts`
 
 ### Loop v2
 
@@ -31,14 +31,13 @@
 - `--every` 继续复用 agent-core scheduler，断言无第二套 timer。
 - 默认不生成中间或最终文件；显式保存/上传只生成最终 `type=loop` evidence。
 
-### Loop quota
+### 本地 Loop lifecycle
 
-- Guest 1 Loop session、最多 2 轮。
-- Free 10 Loop sessions/月且每个最多 5 轮；第 3 次起软提示 Pro，第 10 次后硬限制。
-- 内部 verify/scan/proof/reviewer 不计数；直接运行高级诊断命令也不计数。
-- 相同 idempotency key 的并发/retry start 只创建一个 run、增加一次 used。
-- 参数/plan/model 验证失败不计数；start 成功后的取消、失败或崩溃计入一次。
-- 月度重置、LIMIT_REACHED、SIGN_IN_REQUIRED、USAGE_UNAVAILABLE/exit 3 有覆盖，且它们不产生 Loop verdict；不存在 Checks/reservation/lease/AI credit 分支。
+- Loop 不要求登录，不读取 Guest trial，不调用远程 start/complete，也不受月度 quota 限制。
+- 默认单次最多 10 轮；用户显式 `--max-iterations` 不被账号 tier 收窄。
+- 参数、plan 或 model preflight 失败不创建本地 run record。
+- start 后的完成、取消、失败与崩溃恢复都写入 `0600` 本地 lifecycle record，不上传 objective、prompt、transcript、diff 或 provider key。
+- 可关闭的匿名 telemetry 只接收受控 lifecycle event；`WUKONG_TELEMETRY=0` 不改变本地 Loop 行为。
 
 ### 高级命令兼容
 

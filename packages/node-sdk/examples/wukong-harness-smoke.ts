@@ -16,7 +16,10 @@ async function main(): Promise<void> {
   });
   try {
     const config = await harness.getConfig();
-    const model = config.defaultModel ?? 'wukong/wukong-for-coding';
+    const model = process.env['WUKONG_SDK_SMOKE_MODEL'] ?? config.defaultModel;
+    if (model === undefined) {
+      throw new Error('No model configured. Set WUKONG_SDK_SMOKE_MODEL or configure a BYOK default model.');
+    }
 
     const session = await harness.createSession({ workDir, model });
     const created = (await harness.listSessions({ workDir })).find(

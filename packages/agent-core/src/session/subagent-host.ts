@@ -6,7 +6,7 @@ import {
 
 import type { Agent } from '../agent';
 import type { PromptOrigin } from '../agent/context';
-import { ErrorCodes, type WukongErrorPayload } from '../errors';
+import { ErrorCodes, fromWukongErrorPayload, type WukongErrorPayload } from '../errors';
 import { DenyAllPermissionPolicy } from '../agent/permission/policies/deny-all';
 import { InMemoryAgentRecordPersistence } from '../agent/records';
 import { isAbortError } from '../loop/errors';
@@ -78,6 +78,8 @@ export interface RunSubagentOptions {
   readonly signal: AbortSignal;
   readonly onReady?: () => void;
   readonly suppressRateLimitFailureEvent?: boolean;
+  /** Optional hard per-turn ceiling for bounded internal subagents such as reviewers. */
+  readonly maxSteps?: number;
 }
 
 export interface SpawnSubagentOptions extends RunSubagentOptions {
@@ -316,7 +318,11 @@ export class SessionSubagentHost {
     }
 
     this.emitSubagentStarted(parent, childId);
-    const turnId = child.turn.prompt([{ type: 'text', text: childPrompt }], SUBAGENT_PROMPT_ORIGIN);
+    const turnId = child.turn.prompt(
+      [{ type: 'text', text: childPrompt }],
+      SUBAGENT_PROMPT_ORIGIN,
+      { maxSteps: options.maxSteps },
+    );
     if (turnId === null) {
       throw new Error(`Agent instance "${childId}" could not start a turn`);
     }
@@ -342,7 +348,11 @@ export class SessionSubagentHost {
     while (remainingContinuations > 0 && result.length < SUMMARY_MIN_LENGTH) {
       remainingContinuations -= 1;
       options.signal.throwIfAborted();
-      child.turn.prompt([{ type: 'text', text: SUMMARY_CONTINUATION_PROMPT }], SUBAGENT_PROMPT_ORIGIN);
+      child.turn.prompt(
+        [{ type: 'text', text: SUMMARY_CONTINUATION_PROMPT }],
+        SUBAGENT_PROMPT_ORIGIN,
+        { maxSteps: options.maxSteps },
+      );
       await runChildTurnToCompletion(child, options.signal);
       result = lastAssistantText(child);
     }
@@ -494,10 +504,11 @@ async function runChildTurnToCompletion(child: Agent, signal: AbortSignal): Prom
     if (turnEnded.error?.code === ErrorCodes.PROVIDER_RATE_LIMIT) {
       throw providerRateLimitErrorFromPayload(turnEnded.error);
     }
+    if (turnEnded.error !== undefined) {
+      throw fromWukongErrorPayload(turnEnded.error);
+    }
     throw new Error(
-      turnEnded.error === undefined
-        ? `Subagent turn ${turnEnded.reason}`
-        : `[${turnEnded.error.code}] ${turnEnded.error.message}`,
+      `Subagent turn ${turnEnded.reason}`,
     );
   }
   if (completion.stopReason === 'max_tokens') {

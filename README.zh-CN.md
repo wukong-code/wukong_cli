@@ -8,7 +8,7 @@
 
 Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal → Write → Check → Review → Fix**。给 `/loop` 一个目标，它会持续修改，直到独立 reviewer 不再返回 blocking finding，或达到迭代上限。
 
-`0.0.13` 增加结构化多 findings、`.wukong/review-policy.md` 项目规则、本地 finding feedback 与诊断统计，以及可选的独立 reviewer model。本版本继续免费并由用户提供模型 API，不做支付；真实 Pro 权益延后到 `0.1.0`。
+`0.0.13` 增加结构化多 findings、`.wukong/review-policy.md` 项目规则、本地 finding feedback 与诊断统计，以及可选的独立 reviewer model。当前产品继续 Free + BYOK，没有付费计划或 entitlement。
 
 `0.0.14` 增加跨 Agent Resume、明确的 Resume → Loop 衔接、更清晰的 TUI Gate 结论和更多真实项目检查发现。本版本继续免费/BYOK，完整范围见 [0.0.14 设计](docs/design/0.0.14-resume-loop-polish.md)。
 
@@ -16,15 +16,15 @@ Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal →
 
 `0.0.16` 为每个 Loop 冻结用户目标和显式完成标准，在复审中保留上轮 blocker，识别重复无进展循环，相同 blocker 持续时启动一次只读 strategist，并在显式 reviewer model 不可用时安全回退。本版也重构 Permission Mode：Auto 成为不提问但受 workspace/risk/capability 约束的自主模式，YOLO 明确为危险 approval bypass，且不能为 reviewer/strategist 等只读分身扩权。版本同时包含有界 Resume 建议、Role 任务契约、紧凑任务状态和本地 session 内容搜索，不增加支付或 managed model credits。完整范围见 [0.0.16 设计](docs/design/0.0.16-loop-convergence.md)。
 
-`0.0.17` 是下一个计划补丁版：删除误导的 Role/Report 别名，保留可发现的 `/transform list|status|off`，阻止未知或已禁用 slash command 进入模型，并严格校验 permission、Loop、export、Today 与 roles 参数。版本继续免费/BYOK；发布门槛通过前，公开 package 和下载版本仍保持 `0.0.16`。完整范围见 [0.0.17 设计](docs/design/0.0.17-command-surface-reliability.md)。
+`0.0.17` 是下一个计划补丁版：删除误导的 Role/Report 别名，保留可发现的 `/transform list|status|off`，阻止未知或已禁用 slash command 进入模型，并严格校验 permission、Loop、export、Today 与 roles 参数；同时把 `/resume` 设为主命令、`/login` 收敛为可选账号连接、模型 Key 统一交给 `/provider`，并把本地 Loop record 迁移到无 quota/outbox 的 lifecycle v2。版本继续免费/BYOK；发布门槛通过前，公开 package 和下载版本仍保持 `0.0.16`。完整范围见 [0.0.17 设计](docs/design/0.0.17-command-surface-reliability.md)。
 
-`0.1.0` 已开始规划一个收窄的商业实验：完整的本地 BYOK Loop 继续免费，Pro 计划只新增把脱敏 Gate summary 和 commit status 发布到 GitHub Pull Request 的能力。真实 Loop 完成和工程门槛达到后才允许 invite-only RC；真实付款和重复发布门槛未达到前，公开 Checkout 继续关闭。完整范围见 [0.1.0 设计](docs/design/0.1.0-pro-pr-gate.md)。
+旧 `0.1.0` 文档曾探索 Pro PR Gate 商业实验，但它不是当前承诺：目前没有付费计划、Checkout 或 entitlement 实施。任何商业化范围都需要在真实 Free 用户验证后重新决策。
 
 `0.0.12` 建立了 Loop-first runtime。`verify`、`scan`、`proof` 仍保留为高级诊断命令，但只是 Loop 的内部层，不再各自形成产品或额度。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md) 和 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。
 
-Loop 只返回一个持久化结果：`PASS`（退出码 `0`）、`NEEDS_WORK`（退出码 `1`）或 `ERROR`（退出码 `2`）。未登录用户有 1 次、最多 2 轮的本地试用；登录后的 Free 用户每月 10 个 Loop session，每次最多 5 轮，内部检查不重复计数。额度服务暂时不可用时，CLI 会警告并按本地 5 轮安全上限继续。旧 `verify-pass`、`scan-clean`、`judge-pass` Goal records 和 flags 仍可读取，并迁移到统一 proof gate；详见 [兼容矩阵](docs/design/0.0.12-compatibility.md)。
+Loop 只返回一个持久化结果：`PASS`（退出码 `0`）、`NEEDS_WORK`（退出码 `1`）或 `ERROR`（退出码 `2`）。所有用户都可以在本地直接运行 BYOK Loop，不要求登录，不设置 Guest 试用或月度次数，也不请求 Wukong quota 服务。默认单次最多 10 轮，可用 `--max-iterations` 调整；reviewer step/time 上限和 `/loop stop` 继续作为失控保护。匿名产品指标仍遵守 `WUKONG_TELEMETRY=0`，且不参与 Loop 准入。旧 `verify-pass`、`scan-clean`、`judge-pass` Goal records 和 flags 仍可读取，并迁移到统一 proof gate；详见 [兼容矩阵](docs/design/0.0.12-compatibility.md)。
 
-Role Profiles 基础能力已经实现并处于实验阶段。在 `~/.wukong/config.toml` 启用 `experimental.role_profiles` 后，可用 `wukong roles list/show/init` 管理角色，并在 TUI 中通过 `/transform security` 与 `/transform off` 切换和恢复。
+Role Profiles 基础能力已经实现并处于实验阶段。在 `~/.wukong/config.toml` 启用 `experimental.role_profiles` 后，可用 `wukong roles list/show/init` 管理角色，并在 TUI 中通过 `/transform list|status|off` 或 `/transform <role>` 查看、切换和恢复。
 
 TUI 内的 `/resume` 用于恢复 Wukong 会话；需要继续其他 Agent 的本地会话时，使用 `/resume codex`、`/resume claude` 或 `/resume cursor`。外部历史只作为只读上下文导入 Wukong，不重放旧工具调用，并在继续前重新检查当前 workspace。
 
@@ -35,7 +35,7 @@ TUI 内的 `/resume` 用于恢复 Wukong 会话；需要继续其他 Agent 的�
 ```sh
 wukong                         # 启动交互式 TUI
 wukong -p "summarize this repo" # 执行一次非交互 prompt
-wukong provider                # 管理 LLM provider
+wukong provider                # 配置 BYOK 模型 provider 与 API Key
 wukong acp                     # 以 Agent Client Protocol server 运行
 wukong server                  # 启动本地 REST/WebSocket server
 wukong web                     # 打开本地 web UI
@@ -48,7 +48,7 @@ wukong review feedback <finding-id> accept
 wukong review stats            # 查看本地 feedback 数量
 wukong guard                   # 查看或运行 best-effort 命令风险 guard
 wukong judge                   # 只审不写的合并判定
-wukong login                   # 通过 device-code flow 登录
+wukong login                   # 连接可选 Wukong 账号，不配置模型
 wukong doctor                  # 校验配置文件
 wukong export [sessionId]      # 导出 session ZIP
 wukong vis [sessionId]         # 打开 session visualizer
@@ -58,7 +58,7 @@ wukong upgrade                 # 升级 Wukong Code
 
 高级诊断命令仍可直接用于 CI 和调试：`wukong verify`、`wukong scan`、`wukong proof`。Loop 会自动运行这些内部层，因此它们不再出现在主帮助入口。
 
-待实现命令：`wukong account`、`wukong pr gate`、`wukong ship`、`wukong schedule`（云端例程）。
+历史候选但尚未实现、也不是当前承诺的命令：`wukong account`、`wukong pr gate`、`wukong ship`、`wukong schedule`。
 
 完整参数以 `wukong --help` 为准。
 
@@ -101,9 +101,9 @@ pnpm build      # 构建所有包
 完整内部贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 更新检查、后台自动安装、TUI 公告和当前上线状态见 [CLI 更新与公告契约](docs/operations/updates-and-announcements.md)。
 
-## 商业化重构
+## 历史产品候选
 
-当前产品方向是把 Wukong Code 做成 **AI 写代码时代的 review 驱动控制循环**。实现计划见：
+以下文档记录旧产品假设，不覆盖当前 Free + BYOK 边界：
 
 - [产品路线图](ROADMAP.md)
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)

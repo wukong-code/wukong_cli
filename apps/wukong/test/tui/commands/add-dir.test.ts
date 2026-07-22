@@ -204,15 +204,19 @@ describe('slash command dispatch errors', () => {
     expect(host.sendNormalUserInput).not.toHaveBeenCalled();
   });
 
-  it.each(['/report', '/role list', '/yes'])(
-    'keeps removed command %s local instead of sending it to the model',
-    async (command) => {
+  it.each([
+    ['/role list', 'Unknown slash command: /role. Use /transform to change the current session; manage profiles with `wukong roles`.'],
+    ['/report', 'Unknown slash command: /report. Use /export-md for Markdown or /export for a ZIP archive.'],
+    ['/yes', 'Unknown slash command: /yes. Use /yolo on only when you intentionally accept its risk.'],
+  ])(
+    'keeps removed command %s local with a migration hint',
+    async (command, expectedHint) => {
       const { host } = makeHost();
 
       dispatchInput(host, command);
 
       await vi.waitFor(() => {
-        expect(host.showError).toHaveBeenCalledWith(expect.stringContaining('Unknown slash command'));
+        expect(host.showError).toHaveBeenCalledWith(expectedHint);
       });
       expect(host.sendNormalUserInput).not.toHaveBeenCalled();
     },

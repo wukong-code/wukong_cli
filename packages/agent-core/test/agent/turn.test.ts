@@ -1246,6 +1246,42 @@ describe('Agent turn flow', () => {
     );
   });
 
+  it('honors a hard per-turn maxSteps ceiling without global configuration', async () => {
+    const ctx = testAgent({ kaos: createCommandKaos('loop-output') });
+    ctx.configure({ tools: ['Bash'] });
+    await ctx.rpc.setPermission({ mode: 'yolo' });
+    ctx.newEvents();
+
+    const bashCall: ToolCall = {
+      id: 'call_bash',
+      type: 'function',
+      name: 'Bash',
+      arguments: '{"command":"printf loop-output","timeout":60}',
+    };
+    ctx.mockNextResponse(bashCall);
+
+    ctx.agent.turn.prompt(
+      [{ type: 'text', text: 'Run a command once' }],
+      undefined,
+      { maxSteps: 1 },
+    );
+    const events = await ctx.untilTurnEnd();
+
+    expect(ctx.llmCalls).toHaveLength(1);
+    expect(events).toContainEqual(
+      expect.objectContaining({
+        event: 'turn.ended',
+        args: expect.objectContaining({
+          reason: 'failed',
+          error: expect.objectContaining({
+            code: ErrorCodes.LOOP_MAX_STEPS_EXCEEDED,
+            details: expect.objectContaining({ maxSteps: 1 }),
+          }),
+        }),
+      }),
+    );
+  });
+
   it('force-refreshes OAuth credentials and replays the request on 401', async () => {
     const tokenCalls: Array<boolean | undefined> = [];
     const authKeys: string[] = [];

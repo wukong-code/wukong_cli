@@ -27,7 +27,7 @@ export const WORKING_TIPS: readonly ToolbarTip[] = [
     priority: 3,
   },
   { text: 'ask Wukong to schedule tasks, e.g. "remind me at 5pm"', solo: true, priority: 3 },
-  { text: '/sessions to browse and resume earlier sessions', solo: true },
+  { text: '/resume to browse and continue earlier sessions', solo: true },
   { text: '/loop <goal> to write, check, review, and fix until ready', priority: 3, solo: true },
   { text: '/loop status to inspect the active Loop', solo: true },
   { text: '/web: use the Web UI for a better experience', solo: true },

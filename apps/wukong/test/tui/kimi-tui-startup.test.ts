@@ -7,9 +7,9 @@ import type { MigrationPlan } from '@wukong/migration-legacy';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
-  cancelTrackedLoopRecord,
-  completeTrackedTuiLoop,
-} from '#/cli/lib/loop-quota';
+  cancelLoopRecord,
+  completeTuiLoop,
+} from '#/cli/lib/loop-lifecycle';
 import {
   listActiveLoopRuns,
   type LoopRunRecord,
@@ -46,18 +46,12 @@ vi.mock('#/tui/utils/foreign-sessions', () => ({
   discoverForeignSessionRows: vi.fn(async () => []),
   discoverForeignSessionSuggestion: vi.fn(async () => undefined),
 }));
-vi.mock('#/cli/lib/loop-quota', () => ({
-  beginLoopQuota: vi.fn(async () => ({
-    allowed: true,
-    requestId: 'resume-loop-request',
-    maxIterations: 10,
-    tracked: false,
-  })),
-  registerTrackedTuiLoop: vi.fn(async () => {}),
-  completeLoopQuota: vi.fn(async () => {}),
-  cancelTrackedLoopRecord: vi.fn(async () => {}),
-  completeTrackedTuiLoop: vi.fn(async () => {}),
-  flushLoopCompletionOutbox: vi.fn(async () => {}),
+vi.mock('#/cli/lib/loop-lifecycle', () => ({
+  beginLoopRun: vi.fn(async () => ({ runId: 'resume-loop-run' })),
+  registerTuiLoop: vi.fn(async () => {}),
+  completeLoopRun: vi.fn(async () => ({ repeatedCompletedWithin7d: false })),
+  cancelLoopRecord: vi.fn(async () => {}),
+  completeTuiLoop: vi.fn(async () => ({ repeatedCompletedWithin7d: false })),
 }));
 vi.mock('#/cli/lib/loop-preflight', () => ({
   runLoopPreflight: vi.fn(async (input: { objective: string; model: string; workspace: string }) => ({
@@ -77,8 +71,8 @@ const copyTextToClipboardMock = vi.mocked(copyTextToClipboard);
 const discoverForeignSessionRowsMock = vi.mocked(discoverForeignSessionRows);
 const discoverForeignSessionSuggestionMock = vi.mocked(discoverForeignSessionSuggestion);
 const listActiveLoopRunsMock = vi.mocked(listActiveLoopRuns);
-const cancelTrackedLoopRecordMock = vi.mocked(cancelTrackedLoopRecord);
-const completeTrackedTuiLoopMock = vi.mocked(completeTrackedTuiLoop);
+const cancelLoopRecordMock = vi.mocked(cancelLoopRecord);
+const completeTuiLoopMock = vi.mocked(completeTuiLoop);
 
 interface StartupDriver {
   state: TUIState;
@@ -1458,7 +1452,7 @@ describe('WukongTUI startup', () => {
     });
   });
 
-  it('preserves fresh startup yolo and plan intent after OAuth login', async () => {
+  it('keeps startup yolo and plan intent without provisioning a model after account login', async () => {
     const session = makeSession({
       getStatus: vi.fn(async () => ({
         model: 'k2',
@@ -1503,22 +1497,16 @@ describe('WukongTUI startup', () => {
       permission: 'yolo',
       planMode: true,
     });
-    expect(createSession).toHaveBeenNthCalledWith(2, {
-      workDir: '/tmp/proj-a',
-      model: 'k2',
-      thinking: 'off',
-      permission: 'yolo',
-      planMode: true,
-    });
+    expect(createSession).toHaveBeenCalledTimes(1);
     expect(driver.state.appState).toMatchObject({
-      sessionId: 'ses-1',
-      model: 'k2',
+      sessionId: '',
+      model: '',
       permissionMode: 'yolo',
       planMode: true,
     });
   });
 
-  it('does not force manual permission after OAuth login without --yolo', async () => {
+  it('does not create a model session after account login without --yolo', async () => {
     const session = makeSession({
       getStatus: vi.fn(async () => ({
         model: 'k2',
@@ -1550,19 +1538,15 @@ describe('WukongTUI startup', () => {
     vi.mocked(promptPlatformSelection).mockResolvedValue('wukong');
     await handleLoginCommand(driver as any);
 
-    expect(createSession).toHaveBeenNthCalledWith(2, {
-      workDir: '/tmp/proj-a',
-      model: 'k2',
-      thinking: 'off',
-      permission: undefined,
-      planMode: undefined,
-    });
+    expect(createSession).toHaveBeenCalledTimes(1);
     expect(driver.state.appState).toMatchObject({
-      permissionMode: 'auto',
+      sessionId: '',
+      model: '',
+      permissionMode: 'manual',
     });
   });
 
-  it('syncs configured thinking after OAuth login refreshes an active session', async () => {
+  it('does not change an active model or thinking level during account login', async () => {
     const session = makeSession();
     const harness = makeHarness(session, {
       getConfig: vi.fn(async () => ({
@@ -1581,13 +1565,9 @@ describe('WukongTUI startup', () => {
     vi.mocked(promptPlatformSelection).mockResolvedValue('wukong');
     await handleLoginCommand(driver as any);
 
-    expect(session.setModel).toHaveBeenCalledWith('k2');
-    expect(session.setThinking).toHaveBeenCalledWith('on');
-    expect(driver.state.appState).toMatchObject({
-      model: 'k2',
-      thinking: true,
-      maxContextTokens: 100,
-    });
+    expect(session.setModel).not.toHaveBeenCalled();
+    expect(session.setThinking).not.toHaveBeenCalled();
+    expect(driver.state.appState.thinking).toBe(false);
     expect(harness.track).toHaveBeenCalledWith('login', {
       provider: 'managed:wukong',
       method: 'oauth',
@@ -1710,7 +1690,7 @@ describe('WukongTUI startup', () => {
     expect(harness.track).toHaveBeenCalledWith('logout', { provider: 'managed:wukong' });
   });
 
-  it('keeps the active session when logging out a different provider', async () => {
+  it('ignores provider-picker mocks and only disconnects the Wukong account', async () => {
     const session = makeSession();
     const removeProvider = vi.fn(async () => {});
     const harness = makeHarness(session, {
@@ -1741,14 +1721,14 @@ describe('WukongTUI startup', () => {
     vi.mocked(promptLogoutProviderSelection).mockResolvedValue('openai');
     await handleLogoutCommand(driver as any);
 
-    expect(removeProvider).toHaveBeenCalledWith('openai');
-    expect(harness.auth.logout).not.toHaveBeenCalled();
-    expect(session.close).not.toHaveBeenCalled();
+    expect(removeProvider).not.toHaveBeenCalled();
+    expect(harness.auth.logout).toHaveBeenCalledWith('managed:wukong');
+    expect(session.close).toHaveBeenCalledOnce();
     expect(driver.state.appState).toMatchObject({
-      sessionId: 'ses-1',
-      model: 'k2',
+      sessionId: '',
+      model: '',
     });
-    expect(harness.track).toHaveBeenCalledWith('logout', { provider: 'openai' });
+    expect(harness.track).toHaveBeenCalledWith('logout', { provider: 'managed:wukong' });
   });
 
   it('can log out a stale managed entry even after the OAuth token is gone', async () => {
@@ -2086,14 +2066,13 @@ function uiContainsFooter(driver: StartupDriver): boolean {
 
 describe('WukongTUI active Loop recovery', () => {
   const activeRecord: LoopRunRecord = {
-    version: 1,
-    requestId: 'request-1',
+    version: 2,
+    runId: 'request-1',
     goalId: 'goal-1',
     sessionId: 'ses-1',
     workspace: '/tmp/proj-a',
     state: 'active',
     startedAt: '2026-07-20T08:00:00.000Z',
-    sync: { attempts: 0 },
   };
 
   type RecoveryDriver = StartupDriver & {
@@ -2104,8 +2083,8 @@ describe('WukongTUI active Loop recovery', () => {
 
   beforeEach(() => {
     listActiveLoopRunsMock.mockReset().mockResolvedValue([]);
-    cancelTrackedLoopRecordMock.mockReset().mockResolvedValue(undefined);
-    completeTrackedTuiLoopMock.mockReset().mockResolvedValue({ repeatedCompletedWithin7d: false });
+    cancelLoopRecordMock.mockReset().mockResolvedValue(undefined);
+    completeTuiLoopMock.mockReset().mockResolvedValue({ repeatedCompletedWithin7d: false });
   });
 
   it('offers resume, explicit cancellation, and details for a matching active Loop', async () => {
@@ -2135,8 +2114,8 @@ describe('WukongTUI active Loop recovery', () => {
     await driver.handleActiveLoopRecovery(activeRecord, 'cancel');
 
     expect(cancelGoal).toHaveBeenCalledOnce();
-    expect(cancelTrackedLoopRecordMock).toHaveBeenCalledWith(activeRecord, 3);
-    expect(completeTrackedTuiLoopMock).not.toHaveBeenCalled();
+    expect(cancelLoopRecordMock).toHaveBeenCalledWith(activeRecord, 3);
+    expect(completeTuiLoopMock).not.toHaveBeenCalled();
     expect(driver.state.editorContainer.children[0]).toBe(driver.state.editor);
   });
 
@@ -2185,7 +2164,7 @@ describe('WukongTUI active Loop recovery', () => {
     await driver.init();
     await driver.maybeOfferActiveLoopRecovery();
 
-    expect(completeTrackedTuiLoopMock).toHaveBeenCalledWith('goal-1', 'PASS', 2);
+    expect(completeTuiLoopMock).toHaveBeenCalledWith('goal-1', 'PASS', 2);
     expect(driver.state.editorContainer.render(100).join('\n')).not.toContain('Active Loop found');
   });
 });

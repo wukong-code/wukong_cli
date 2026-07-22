@@ -7,7 +7,7 @@
 
 ## 1. 定位
 
-**`today` = Daily Proof Briefing（今日简报 + 今日 Focus）**
+**`today` = Local Loop Briefing（本地 Loop 简报 + 今日 Focus）**
 
 一句话：**今天 AI 写了什么、验了什么、能不能合并、今天要交付什么。**
 

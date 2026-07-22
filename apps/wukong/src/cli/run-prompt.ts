@@ -35,12 +35,11 @@ import {
 import { createCliTelemetryBootstrap, initializeCliTelemetry } from './telemetry';
 import { createWukongCodeHostIdentity } from './version';
 import {
-  beginLoopQuota,
-  completeLoopQuota,
-  flushLoopCompletionOutbox,
-  registerTrackedTuiLoop,
-  type LoopQuotaGrant,
-} from './lib/loop-quota';
+  beginLoopRun,
+  completeLoopRun,
+  registerTuiLoop,
+  type LocalLoopRun,
+} from './lib/loop-lifecycle';
 import {
   formatLoopPreflightBlocked,
   formatLoopPreflightReady,
@@ -75,7 +74,6 @@ export async function runPrompt(
   io: PromptRunIO = {},
 ): Promise<void> {
   const startedAt = Date.now();
-  void flushLoopCompletionOutbox().catch(() => {});
   const stdout = io.stdout ?? process.stdout;
   const stderr = io.stderr ?? process.stderr;
   const promptProcess = io.process ?? process;
@@ -203,7 +201,7 @@ async function runHeadlessGoal(
   stderr: PromptOutput,
 ): Promise<void> {
   const resolvedModel = goal.kind === 'loop' ? configuredModel(model) : requireConfiguredModel(model);
-  let loopGrant: LoopQuotaGrant | undefined;
+  let loopRun: LocalLoopRun | undefined;
   if (goal.kind === 'loop') {
     const preflight = await runLoopPreflight({
       objective: goal.objective,
@@ -216,20 +214,13 @@ async function runHeadlessGoal(
       process.exitCode = 2;
       return;
     }
-    loopGrant = await beginLoopQuota();
-    if (loopGrant.message !== undefined) stderr.write(`${loopGrant.message}\n`);
-    if (!loopGrant.allowed) {
-      process.exitCode = 3;
-      return;
-    }
+    loopRun = await beginLoopRun();
     stderr.write(`${formatLoopPreflightReady(
       preflight,
-      Math.min(goal.maxIterations ?? loopGrant.maxIterations, loopGrant.maxIterations),
+      goal.maxIterations ?? 10,
     )}\n`);
   }
-  const maxIterations = loopGrant === undefined
-    ? goal.maxIterations
-    : Math.min(goal.maxIterations ?? loopGrant.maxIterations, loopGrant.maxIterations);
+  const maxIterations = goal.kind === 'loop' ? goal.maxIterations ?? 10 : goal.maxIterations;
   let createdGoal: GoalSnapshot;
   try {
     createdGoal = await session.createGoal({
@@ -241,21 +232,19 @@ async function runHeadlessGoal(
       ...(goal.minIntervalMs === undefined ? {} : { minIntervalMs: goal.minIntervalMs }),
     });
   } catch (error) {
-    if (loopGrant !== undefined) {
-      await completeLoopQuota(loopGrant, 'ERROR', 0, fetch, 'cancelled');
-    }
+    if (loopRun !== undefined) await completeLoopRun(loopRun, 'ERROR', 0, 'cancelled');
     throw error;
   }
-  if (loopGrant !== undefined) {
-    await registerTrackedTuiLoop(createdGoal.goalId, loopGrant, session.id, process.cwd());
+  if (loopRun !== undefined) {
+    await registerTuiLoop(createdGoal.goalId, loopRun, session.id, process.cwd());
     track('loop_started');
-    if (loopGrant.repeatedWithin7d === true) track('loop_repeat_started_7d');
+    if (loopRun.repeatedWithin7d === true) track('loop_repeat_started_7d');
   }
   let completedSnapshot: GoalSnapshot | null = null;
   let firstIterationTracked = false;
   const unsubscribeGoalEvents = session.onEvent((event) => {
     if (
-      loopGrant !== undefined
+      loopRun !== undefined
       && !firstIterationTracked
       && event.type === 'goal.updated'
       && event.agentId === 'main'
@@ -281,9 +270,9 @@ async function runHeadlessGoal(
     await runPromptTurn(session, goal.objective, outputFormat, stdout, stderr, createdGoal.goalId);
   } catch (error) {
     promptFailed = true;
-    if (loopGrant !== undefined) {
+    if (loopRun !== undefined) {
       const failedSnapshot = (await session.getGoal().catch(() => ({ goal: null }))).goal;
-      await completeLoopQuota(loopGrant, 'ERROR', failedSnapshot?.iteration ?? 0);
+      await completeLoopRun(loopRun, 'ERROR', failedSnapshot?.iteration ?? 0);
       track('loop_terminal', {
         outcome: 'ERROR',
         iterations: failedSnapshot?.iteration ?? 0,
@@ -305,9 +294,9 @@ async function runHeadlessGoal(
       // Map the terminal goal status to a distinct, non-fatal exit code. A turn
       // that threw (error / cancellation) already propagates its own exit path.
       if (goal.kind === 'loop') {
-        if (loopGrant !== undefined) {
+        if (loopRun !== undefined) {
           const result = loopSummaryJson(snapshot);
-          const completion = await completeLoopQuota(loopGrant, result.status, result.iterations);
+          const completion = await completeLoopRun(loopRun, result.status, result.iterations);
           if (completion?.repeatedCompletedWithin7d) track('loop_repeat_completed_7d');
           track('loop_terminal', {
             outcome: result.status,
@@ -452,7 +441,7 @@ function requireConfiguredModel(...models: readonly (string | undefined)[]): str
   const model = configuredModel(...models);
   if (model === undefined) {
     throw new Error(
-      'No model configured. Run `wukong` and use /login to sign in, then retry; or set default_model in config.toml.',
+      'No model configured. Run `wukong` and use /provider to add your model API key, then retry; or set default_model in config.toml.',
     );
   }
   return model;

@@ -122,15 +122,15 @@ describe('WelcomeComponent', () => {
     expect(idleOutput).toContain('/loop <goal>');
   });
 
-  it('shows a compact setup block instead of the full mascot for logged-out users', () => {
+  it('shows /provider as the required model setup and /login as optional', () => {
     const loggedOut = { ...appState, model: '' };
     const lines = new WelcomeComponent(loggedOut, fakeBriefing(), 'idle').render(80);
     const output = lines.join('\n');
 
     expect(lines.length).toBeLessThanOrEqual(6);
     expect(output).toContain('Setup required');
-    expect(output).toContain('/login sign in');
-    expect(output).toContain('/provider use your API key');
+    expect(output).toContain('/provider configure model key');
+    expect(output).toContain('/login optional account');
     expect(output).not.toContain('Today');
   });
 });

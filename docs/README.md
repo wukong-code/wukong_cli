@@ -9,7 +9,7 @@
 > **给 Wukong 一个目标，它会写、检查、审查并修复，直到没有 blocking finding。**
 > Wukong Code 是 review 驱动的 AI Coding Loop。
 
-长期品牌能力、产品术语、权限边界和 Free / Pro / Team 商业分层见 [Wukong 能力体系与商业化原则](business/WUKONG_CAPABILITY_MODEL.md)。核心关系是：Loop 是产品主流程，分身是执行结构，火眼金睛与 Gate 形成可信结论，Policy 与 Audit 形成团队付费价值。
+当前产品只有 Free + BYOK。历史商业文档中的 Free / Pro / Team 分层不属于当前 roadmap；当前核心关系是 Loop 为主流程、分身为执行结构、火眼金睛与 Gate 形成可信结论。
 
 命令分层对应 loop engineering：
 
@@ -34,11 +34,11 @@
 - [根 README](../README.md) / [中文 README](../README.zh-CN.md)
   面向仓库入口的当前能力说明。
 - [产品路线图](../ROADMAP.md)
-  记录从本地验证闭环到 loop 控制层、Pro Preview、PR gate、Team Pilot 的交付顺序和验收标准。
+  记录当前 Free + BYOK 的本地验证闭环与 loop 控制层；付费候选不属于当前计划。
 - [0.0.12 Trust Loop v2](design/verification-loop-v2.md)
 - [0.0.12 Goal 与 flags 兼容矩阵](design/0.0.12-compatibility.md)
 - [0.0.12 release notes / What's Changed](releases/0.0.12.md)
-  定义 Loop-first 状态机、独立 reviewer、Loop session 额度、Role Profiles，以及 verify/scan/proof 的内部层与兼容边界。
+  定义当时的 Loop-first 状态机、独立 reviewer、历史 Loop session 额度、Role Profiles，以及 verify/scan/proof 的内部层与兼容边界；其中 Guest/月度额度已在 0.0.17 移除。
 - [0.0.13 Review Learning Loop](design/review-learning-loop.md)
   定义多 finding Review Contract、项目 review policy、人工反馈和独立 reviewer model；自动 improver 与支付不在本版本。
 - [0.0.14 Cross-Agent Resume 与 Loop UX 收尾](design/0.0.14-resume-loop-polish.md)
@@ -55,7 +55,7 @@
 - [0.0.17 Command Surface Reliability](design/0.0.17-command-surface-reliability.md)
   定义 CLI/TUI 命令契约收口：删除误导入口、保留可发现的 `/transform`、未知 slash 本地拦截、严格参数解析与四层自动化回归；当前仍在实施，公开版本保持 0.0.16。
 - [0.1.0 Pro PR Gate 与 Billing](design/0.1.0-pro-pr-gate.md)
-  定义 Free 本地 BYOK 边界、Pro PR comment/status、capability entitlement、Stripe lifecycle、邀请制价格实验和正式发布门槛；当前仍是规划，公开 Checkout 保持关闭。
+  历史商业化候选，定义过 Free 本地 BYOK 边界与 PR Gate/Billing 验证门槛；当前没有付费计划、Checkout 或 entitlement 实施，不能把该文档当作版本承诺。
 - [跨 Agent Session Resume](design/cross-agent-resume.md)
   `/resume` 恢复 Wukong 会话；`/resume codex|claude|cursor` 显式发现对应 Agent 的本地会话，并通过内置 Skill 只读导入后在 Wukong 中继续。
 - [执行层 TODO](../TODO.md)
@@ -102,10 +102,10 @@ wukong upgrade
 - [产品设计文档](design/design.md)
   定义未来验证型产品的交互、成长体系和命令设计。
 - [today 命令设计](design/today.md)
-  定义 `wukong today` / `/today`：Daily Proof Briefing（今日简报 + focus 合并）。
+  定义 `wukong today` / `/today`：Local Loop Briefing（本地 Loop 简报 + focus 合并）。
 - [TUI 布局改造计划（Loop 驱动）](design/tui-layout-loop-driven.md)
   定义 TUI 对齐 Claude Code 底部 chrome、loop/proof 常驻轨、today 欢迎区与分阶段实施顺序。
-- [登录与同步验收计划](test/test-login-sync.md)
+- [登录与同步历史验收记录](test/test-login-sync.md)
   记录登录与同步能力进入实现阶段前应满足的验收条件。
 - [Verification CLI 自动化测试计划](test/verification-cli-test-plan.md)
   记录 `verify`、`scan`、`guard`、TUI slash commands 和 `wukong_verify` 的核心测试、CLI smoke 和后续测试 TODO。
@@ -121,4 +121,4 @@ wukong upgrade
 1. 0.0.12 Loop-first 已发布；继续保持 PASS/NEEDS_WORK/ERROR 和 deterministic checks + fresh reviewer 的内层交付闭环。
 2. 0.0.13 第一批实现结构化 findings、项目 policy、人工 feedback 和独立 reviewer model。
 3. Reviewer 不直接获得任意 Bash；额外检查只作为 next action 建议，不动态执行。
-4. 0.1.0 已收窄为 Pro PR Gate + Billing：本地 Loop 继续免费，Team policy 和 managed reviewer 后移；真实价格、Checkout 和 PR publish 在发布门槛前保持关闭。
+4. 0.1.0 尚未定义；旧 Pro PR Gate + Billing 文档只作历史候选，当前不实施付费、Checkout、entitlement 或 PR publish。

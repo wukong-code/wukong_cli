@@ -2,25 +2,20 @@ import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
-import { createWukongHarness, type WukongHarness } from '@wukong/wukong-sdk';
+import { createWukongHarness } from '@wukong/wukong-sdk';
 
-import { smokeIdentityFromEnv, runPromptToEnd } from './runtime-smoke-helpers';
+import { smokeIdentityFromEnv } from './runtime-smoke-helpers';
 
 const MANAGED_WUKONG_CODE_PROVIDER = 'managed:wukong';
 
 async function main(): Promise<void> {
   const explicitHomeDir = process.env['WUKONG_SDK_AUTH_SMOKE_HOME'];
-  const explicitWorkDir = process.env['WUKONG_SDK_AUTH_SMOKE_WORK_DIR'];
   const homeDir = explicitHomeDir ?? (await mkdtemp(join(tmpdir(), 'wukong-sdk-auth-smoke-home-')));
-  const workDir = explicitWorkDir ?? (await mkdtemp(join(tmpdir(), 'wukong-sdk-auth-smoke-work-')));
   const keepToken = shouldKeepToken(explicitHomeDir !== undefined);
   const forceLogin = process.env['WUKONG_SDK_AUTH_SMOKE_FORCE_LOGIN'] === '1';
-  const prompt =
-    process.env['WUKONG_SDK_AUTH_SMOKE_PROMPT'] ?? 'Reply with exactly: Wukong SDK auth smoke ok';
   const harness = createWukongHarness({ homeDir, identity: smokeIdentityFromEnv() });
 
   process.stdout.write(`home: ${homeDir}\n`);
-  process.stdout.write(`workDir: ${workDir}\n`);
 
   try {
     if (forceLogin) {
@@ -31,32 +26,16 @@ async function main(): Promise<void> {
     const login = await harness.auth.login(undefined, { onDeviceCode: printDeviceCode });
     const config = await harness.getConfig({ reload: true });
     const status = await harness.auth.status(MANAGED_WUKONG_CODE_PROVIDER);
-    const usage = await harness.auth.getManagedUsage(MANAGED_WUKONG_CODE_PROVIDER);
 
-    if (login.defaultModel === undefined || config.defaultModel === undefined) {
-      throw new Error('login did not provision a default model');
-    }
     if (status.providers[0]?.hasToken !== true) {
       throw new Error('status did not report a stored token after login');
     }
-    if (config.providers[MANAGED_WUKONG_CODE_PROVIDER]?.oauth?.key !== 'oauth/wukong') {
-      throw new Error('managed provider oauth config was not written');
+    if (config.providers[MANAGED_WUKONG_CODE_PROVIDER] !== undefined) {
+      throw new Error('account login unexpectedly provisioned a managed model provider');
     }
 
     process.stdout.write(`provider: ${login.providerName}\n`);
-    process.stdout.write(`default model: ${config.defaultModel}\n`);
-    printUsage(usage);
-
-    const session = await harness.createSession({
-      workDir,
-      model: config.defaultModel,
-    });
-    const ended = await runPromptToEnd(session, prompt);
-    if (ended.type !== 'turn.ended' || ended.reason !== 'completed') {
-      throw new Error(`Expected completed turn, got ${ended.type}`);
-    }
-
-    process.stdout.write(`auth smoke passed: ${session.id}\n`);
+    process.stdout.write('account-only auth smoke passed; configure models separately with /provider\n');
   } finally {
     if (!keepToken) {
       await harness.auth.logout(MANAGED_WUKONG_CODE_PROVIDER).catch(() => {});
@@ -64,9 +43,6 @@ async function main(): Promise<void> {
     await harness.close();
     if (explicitHomeDir === undefined && !keepToken) {
       await rm(homeDir, { recursive: true, force: true });
-    }
-    if (explicitWorkDir === undefined) {
-      await rm(workDir, { recursive: true, force: true });
     }
   }
 }
@@ -87,21 +63,6 @@ function printDeviceCode(auth: {
     ]
       .filter((line): line is string => line !== undefined)
       .join('\n'),
-  );
-}
-
-function printUsage(usage: Awaited<ReturnType<WukongHarness['auth']['getManagedUsage']>>): void {
-  if (usage.kind === 'error') {
-    process.stderr.write(`usage request returned: ${usage.message}\n`);
-    return;
-  }
-  const summary = usage.summary;
-  if (summary === null) {
-    process.stdout.write(`usage: no summary, limits=${String(usage.limits.length)}\n`);
-    return;
-  }
-  process.stdout.write(
-    `usage: ${summary.label} ${String(summary.used)}/${String(summary.limit)}\n`,
   );
 }
 

@@ -17,6 +17,24 @@ const LoopTerminalSchema = z.object({
 });
 
 const LoopRunRecordSchema = z.object({
+  version: z.literal(2),
+  runId: z.string().min(1),
+  goalId: z.string().min(1).optional(),
+  sessionId: z.string().min(1).optional(),
+  workspace: z.string().min(1).optional(),
+  state: z.enum(['active', 'terminal']),
+  startedAt: z.string(),
+  terminal: LoopTerminalSchema.optional(),
+}).superRefine((record, context) => {
+  if (record.state === 'terminal' && record.terminal === undefined) {
+    context.addIssue({ code: 'custom', message: 'terminal state requires terminal data' });
+  }
+  if (record.state === 'active' && record.terminal !== undefined) {
+    context.addIssue({ code: 'custom', message: 'active state cannot contain terminal data' });
+  }
+});
+
+const LegacyLoopRunRecordSchema = z.object({
   version: z.literal(1),
   requestId: z.string().min(1),
   goalId: z.string().min(1).optional(),
@@ -33,45 +51,74 @@ const LoopRunRecordSchema = z.object({
   }),
 });
 
+const StoredLoopRunRecordSchema = z.union([
+  LoopRunRecordSchema,
+  LegacyLoopRunRecordSchema,
+]);
+
 export type LoopRunRecord = z.infer<typeof LoopRunRecordSchema>;
+type StoredLoopRunRecord = z.infer<typeof StoredLoopRunRecordSchema>;
 
 function loopRunsDir(): string {
   return join(resolveWukongHome(), 'usage', 'loop-runs');
 }
 
-function loopRunPath(requestId: string): string {
-  return join(loopRunsDir(), `${encodeURIComponent(requestId)}.json`);
+function loopRunPath(runId: string): string {
+  return join(loopRunsDir(), `${encodeURIComponent(runId)}.json`);
 }
 
-async function readLoopRun(requestId: string): Promise<LoopRunRecord | undefined> {
-  return readJsonFile(loopRunPath(requestId), LoopRunRecordSchema.optional(), undefined);
+function migrateLoopRun(record: StoredLoopRunRecord): LoopRunRecord {
+  if (record.version === 2) return record;
+  const common = {
+    version: 2 as const,
+    runId: record.requestId,
+    ...(record.goalId === undefined ? {} : { goalId: record.goalId }),
+    ...(record.sessionId === undefined ? {} : { sessionId: record.sessionId }),
+    ...(record.workspace === undefined ? {} : { workspace: record.workspace }),
+    startedAt: record.startedAt,
+  };
+  if (record.terminal !== undefined) {
+    return { ...common, state: 'terminal', terminal: record.terminal };
+  }
+  return { ...common, state: 'active' };
+}
+
+async function readLoopRunFile(filePath: string): Promise<LoopRunRecord | undefined> {
+  const stored = await readJsonFile(filePath, StoredLoopRunRecordSchema.optional(), undefined);
+  if (stored === undefined) return undefined;
+  const record = migrateLoopRun(stored);
+  if (stored.version === 1) await writeLoopRun(record);
+  return record;
+}
+
+async function readLoopRun(runId: string): Promise<LoopRunRecord | undefined> {
+  return readLoopRunFile(loopRunPath(runId));
 }
 
 async function writeLoopRun(record: LoopRunRecord): Promise<void> {
-  const filePath = loopRunPath(record.requestId);
+  const filePath = loopRunPath(record.runId);
   await writeJsonFile(filePath, LoopRunRecordSchema, record);
   await chmod(filePath, 0o600);
 }
 
-export async function recordTrackedLoopStart(requestId: string): Promise<boolean> {
-  const existing = await readLoopRun(requestId);
+export async function recordTrackedLoopStart(runId: string): Promise<boolean> {
+  const existing = await readLoopRun(runId);
   if (existing !== undefined) return false;
   const repeatThreshold = Date.now() - 7 * 24 * 60 * 60 * 1000;
   const repeatedWithin7d = (await listLoopRuns()).some(
     (record) => Date.parse(record.startedAt) >= repeatThreshold,
   );
   await writeLoopRun({
-    version: 1,
-    requestId,
+    version: 2,
+    runId,
     state: 'active',
     startedAt: new Date().toISOString(),
-    sync: { attempts: 0 },
   });
   return repeatedWithin7d;
 }
 
 export async function hasPriorCompletedLoopWithin7d(
-  requestId: string,
+  runId: string,
   now: Date = new Date(),
 ): Promise<boolean> {
   const currentDayStart = Date.UTC(
@@ -81,7 +128,7 @@ export async function hasPriorCompletedLoopWithin7d(
   );
   const repeatThreshold = currentDayStart - 7 * 24 * 60 * 60 * 1000;
   return (await listLoopRuns()).some((record) => {
-    if (record.requestId === requestId || record.terminal?.status !== 'completed') return false;
+    if (record.runId === runId || record.terminal?.status !== 'completed') return false;
     if (record.terminal.outcome !== 'PASS' && record.terminal.outcome !== 'NEEDS_WORK') return false;
     const finishedAt = Date.parse(record.terminal.finishedAt);
     return finishedAt >= repeatThreshold && finishedAt < currentDayStart;
@@ -89,18 +136,17 @@ export async function hasPriorCompletedLoopWithin7d(
 }
 
 export async function bindTrackedLoopGoal(
-  requestId: string,
+  runId: string,
   goalId: string,
   sessionId?: string,
   workspace?: string,
 ): Promise<void> {
-  const existing = await readLoopRun(requestId);
+  const existing = await readLoopRun(runId);
   const record = existing ?? {
-    version: 1 as const,
-    requestId,
+    version: 2 as const,
+    runId,
     state: 'active' as const,
     startedAt: new Date().toISOString(),
-    sync: { attempts: 0 },
   };
   await writeLoopRun({
     ...record,
@@ -111,12 +157,12 @@ export async function bindTrackedLoopGoal(
 }
 
 export async function stageLoopTerminal(
-  requestId: string,
+  runId: string,
   status: LoopRunLifecycle,
   outcome: LoopStatus,
   iterations: number,
 ): Promise<LoopRunRecord> {
-  const existing = await readLoopRun(requestId);
+  const existing = await readLoopRun(runId);
   const terminal = {
     status,
     ...(status === 'completed' ? { outcome } : {}),
@@ -124,55 +170,17 @@ export async function stageLoopTerminal(
     finishedAt: new Date().toISOString(),
   } as const;
   const record: LoopRunRecord = {
-    version: 1,
-    requestId,
+    version: 2,
+    runId,
     ...(existing?.goalId === undefined ? {} : { goalId: existing.goalId }),
     ...(existing?.sessionId === undefined ? {} : { sessionId: existing.sessionId }),
     ...(existing?.workspace === undefined ? {} : { workspace: existing.workspace }),
-    state: 'pending_terminal',
+    state: 'terminal',
     startedAt: existing?.startedAt ?? terminal.finishedAt,
     terminal,
-    sync: existing?.sync ?? { attempts: 0 },
   };
   await writeLoopRun(record);
   return record;
-}
-
-export async function markLoopTerminalSynced(
-  requestId: string,
-  lastErrorCode?: string,
-): Promise<void> {
-  const record = await readLoopRun(requestId);
-  if (record === undefined) return;
-  await writeLoopRun({
-    ...record,
-    state: 'synced',
-    sync: {
-      attempts: record.sync.attempts + 1,
-      lastAttemptAt: new Date().toISOString(),
-      ...(lastErrorCode === undefined ? {} : { lastErrorCode }),
-    },
-  });
-}
-
-export async function markLoopTerminalPending(
-  requestId: string,
-  errorCode: string,
-): Promise<void> {
-  const record = await readLoopRun(requestId);
-  if (record === undefined) return;
-  const delayMs = Math.min(30_000 * (2 ** record.sync.attempts), 60 * 60 * 1000);
-  const attemptedAt = new Date();
-  await writeLoopRun({
-    ...record,
-    state: 'pending_terminal',
-    sync: {
-      attempts: record.sync.attempts + 1,
-      lastAttemptAt: attemptedAt.toISOString(),
-      lastErrorCode: errorCode,
-      nextAttemptAt: new Date(attemptedAt.getTime() + delayMs).toISOString(),
-    },
-  });
 }
 
 async function listLoopRuns(): Promise<LoopRunRecord[]> {
@@ -187,11 +195,7 @@ async function listLoopRuns(): Promise<LoopRunRecord[]> {
     .filter((filename) => filename.endsWith('.json'))
     .map(async (filename) => {
       try {
-        return await readJsonFile(
-          join(loopRunsDir(), filename),
-          LoopRunRecordSchema.optional(),
-          undefined,
-        );
+        return await readLoopRunFile(join(loopRunsDir(), filename));
       } catch {
         return undefined;
       }
@@ -201,18 +205,9 @@ async function listLoopRuns(): Promise<LoopRunRecord[]> {
 
 export async function findTrackedLoopByGoalId(goalId: string): Promise<LoopRunRecord | undefined> {
   const matches = (await listLoopRuns())
-    .filter((record) => record.goalId === goalId && record.state !== 'synced')
+    .filter((record) => record.goalId === goalId && record.state === 'active')
     .toSorted((left, right) => right.startedAt.localeCompare(left.startedAt));
   return matches[0];
-}
-
-export async function listPendingLoopTerminals(): Promise<LoopRunRecord[]> {
-  const now = new Date().toISOString();
-  return (await listLoopRuns()).filter(
-    (record) => record.state === 'pending_terminal'
-      && record.terminal !== undefined
-      && (record.sync.nextAttemptAt === undefined || record.sync.nextAttemptAt <= now),
-  );
 }
 
 export async function listActiveLoopRuns(): Promise<LoopRunRecord[]> {
@@ -221,6 +216,6 @@ export async function listActiveLoopRuns(): Promise<LoopRunRecord[]> {
     .toSorted((left, right) => right.startedAt.localeCompare(left.startedAt));
 }
 
-export async function readLoopRunForTests(requestId: string): Promise<LoopRunRecord | undefined> {
-  return readLoopRun(requestId);
+export async function readLoopRunForTests(runId: string): Promise<LoopRunRecord | undefined> {
+  return readLoopRun(runId);
 }

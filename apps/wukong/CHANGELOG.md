@@ -1,6 +1,6 @@
 # @wukong.today/code
 
-## 0.0.17 (Unreleased)
+## 0.0.17
 
 ### Patch Changes
 
@@ -13,6 +13,23 @@
   usage errors and suggestions; never submit them as model prompts.
 - Strictly validate permission, Loop, Today, roles, export, and no-argument
   commands so invalid input cannot silently change state.
+- Keep headless Loop alive through all continuation turns, enforce the Core
+  iteration cap, and make `--every` a cancellable Goal-owned delay without an
+  orphan cron task.
+- Remove the Guest trial, signed-in monthly Loop allowance, remote start/complete
+  accounting, and quota-service warning. Keep BYOK execution local with the
+  user-selected iteration limit, bounded reviewer safety, and durable local
+  crash recovery.
+- Make `/resume` the canonical session command and keep `/sessions` only as a
+  compatibility alias. Keep `/login` account-only; configure every model API
+  key through `/provider`.
+- Migrate quota-era local Loop records to content-free lifecycle v2 without
+  losing active recovery. Keep the existing optional telemetry boundary without
+  adding a Web or D1 metrics backend.
+- Tighten reviewer blocker reconciliation and cancellation-aware deterministic
+  checks, including non-Git workspace freshness detection. Align the fresh
+  reviewer prompt with its read-only tools and terminate it after 8 steps or 2
+  minutes with a distinct error instead of leaving Loop stuck in CHECK.
 - Add command-contract regression coverage across registry, resolution,
   dispatch, and real CLI boundaries.
 - Keep the release free and BYOK. Payments, PR Gate publishing, Team features,

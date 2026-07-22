@@ -1,9 +1,9 @@
 # Wukong Code 用户指南
 
 > 适用范围: 当前 `wukong_cli` 新 Kimi-code base
-> 更新时间: 2026-07-20
+> 更新时间: 2026-07-22
 > 定位: 给 Wukong 一个目标，通过 Goal → Write → Check → Review → Fix 循环直到没有 blocking finding。
-> 原则: 本文只写当前开发分支可执行的能力。Loop、冻结验收合同、prior blocker 复审、无进展 strategist、Permission Mode v2、结构化 review findings、项目 review policy、本地 feedback、独立 reviewer model 和高级诊断命令已实现；完整订阅管理、团队规则和 PR gate 仍未完成。
+> 原则: 本文只写当前开发分支可执行的能力。Loop、冻结验收合同、prior blocker 复审、无进展 strategist、Permission Mode v2、结构化 review findings、项目 review policy、本地 feedback、独立 reviewer model 和高级诊断命令已实现；当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
 
 ## 安装正式版
 
@@ -67,6 +67,8 @@ pnpm -C apps/wukong run dev:cli-only -- -p "summarize this repository"
 pnpm -C apps/wukong run dev:cli-only -- provider --help
 ```
 
+TUI 中使用 `/provider` 配置模型服务商和 API Key。`/login` 只连接可选 Wukong 账号，不会提供或配置模型。
+
 ### 5. 校验配置
 
 ```bash
@@ -114,7 +116,7 @@ wukong loop "完成 API 改动" --model fast --review-model slow
 wukong loop "完成 API 改动" --review-model reviewer
 ```
 
-Loop 的最终三态和退出码为 `PASS=0`、`NEEDS_WORK=1`、`ERROR=2`；登录或额度明确拒绝为 `3`，中断为 `130`。Guest 有 1 次最多 2 轮的本地试用；Free 登录用户每月 10 次、每次最多 5 轮。`verify`、`scan`、`proof` 是内部检查层，不单独计数。
+Loop 的最终三态和退出码为 `PASS=0`、`NEEDS_WORK=1`、`ERROR=2`，中断为 `130`。所有用户都可以直接运行本地 BYOK Loop，不要求登录，不设置 Guest 试用或月度次数，也不请求 Wukong quota 服务。默认单次最多 10 轮，可用 `--max-iterations` 调整；reviewer step/time 上限和 `/loop stop` 继续提供失控保护。`verify`、`scan`、`proof` 是内部检查层和高级诊断命令。
 
 0.0.16 会在 Loop 创建时冻结用户 objective 和显式 completion criterion。Reviewer 每轮必须先处理上一轮 blocker；同一 blocker 连续两轮不变时只启动一次只读 strategist。策略后仍无进展会返回 `NEEDS_WORK/no_progress`，不会继续空转或偷偷增加迭代额度。
 
@@ -155,7 +157,7 @@ Welcome 最多建议一条当前 workspace、30 天内的外部会话，可在 `
 |---|---|---|
 | `wukong` | 已实现 | 启动交互式 TUI |
 | `wukong -p <prompt>` | 已实现 | 执行一次 prompt 并输出结果 |
-| `wukong provider` | 已实现 | 管理 LLM provider |
+| `wukong provider` | 已实现 | 配置 BYOK LLM provider、API Key 与默认模型 |
 | `wukong acp` | 已实现 | 以 Agent Client Protocol server 运行 |
 | `wukong server` | 已实现 | 启动本地 REST/WebSocket server |
 | `wukong web` | 已实现 | 打开本地 web UI |
@@ -168,7 +170,7 @@ Welcome 最多建议一条当前 workspace、30 天内的外部会话，可在 `
 | `wukong review init` | 已实现 | 创建 `.wukong/review-policy.md` |
 | `wukong review feedback` | 已实现 | 将 finding 反馈追加到本地 JSONL，不上传源码或 reason |
 | `wukong review stats` | 已实现 | 查看本地反馈原始数量；样本少于 10 时隐藏质量比例 |
-| `wukong login` | 已实现 | 通过 device-code flow 登录 |
+| `wukong login` | 已实现 | 连接可选 Wukong 账号；不配置模型 |
 | `wukong doctor` | 已实现 | 校验配置文件 |
 | `wukong export` | 已实现 | 导出 session ZIP |
 | `wukong vis` | 已实现 | 打开 session visualizer |
@@ -201,7 +203,7 @@ Welcome 最多建议一条当前 workspace、30 天内的外部会话，可在 `
 | `wukong_verify` agent tool | 让 agent 在完成前调用验证 | 已实现，作为 builtin tool 接入 agent-core |
 | `/verify`、`/scan`、`/guard`、`/goal`、`/proof`、`/judge`、`/loop` | TUI 内验证、扫描、guard 状态及 goal/loop 驱动 | 已实现 |
 | `wukong sync` | 云同步 | 等待新 base API 与本地数据模型对齐 |
-| `wukong today` / `/today` | Daily Proof Briefing：本地统计 + focus，不依赖网络 | 已实现，见 [today 设计](design/today.md) |
+| `wukong today` / `/today` | Local Loop Briefing：本地统计 + focus，不依赖网络 | 已实现，见 [today 设计](design/today.md) |
 
 详见 [商业化重构技术实现方案](tech/commercial-refactor-implementation.md)。
 
@@ -239,5 +241,5 @@ pnpm -C apps/wukong run dev:cli-only -- login --help
 - `wukong_verify` 是内置 agent tool，不是 top-level shell command。
 - `/verify`、`/scan`、`/guard status`、`/proof`、`/judge`、`/goal`、`/loop` 是 TUI slash commands。
 - `wukong login --provider google --dev-email ...` 不是当前登录命令参数。
-- `wukong sync --push`、`wukong sync --pull` 尚未在当前 CLI 中实现。
+- `wukong sync` 与 Companion `journey` 已从当前产品范围移除，不是待发现的隐藏命令。
 - 文档站 `/en/guides/*`、`/zh/guides/*` 页面当前没有对应源文件，不应作为发布入口宣传。

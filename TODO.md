@@ -84,28 +84,33 @@
 - [x] `/auto`、`/yolo` 非法参数不改变 permission mode，`/settings` 只允许 idle 状态打开（2026-07-21）
 - [x] Loop 数值严格解析且 dry-run 显示 writer/reviewer model；`/export` 统一 ZIP、Markdown 使用 `/export-md`（2026-07-21）
 - [x] Today focus/clear 冲突在写入前拒绝，`wukong roles` 未知子命令返回明确 usage（2026-07-21）
+- [x] Fresh reviewer prompt 与 Read/Glob/Grep 只读工具集一致，并增加 8-step / 2-minute 硬上限；超限返回独立 ERROR，不让 Loop 永久停在 CHECK（2026-07-22）
+- [x] 删除 Guest trial、Free 月度 Loop quota、远程 start/complete 准入和 unavailable 警告；保留默认 10 轮、`--max-iterations`、reviewer 硬上限、`/loop stop` 与纯本地恢复记录（2026-07-22）
 
 ### P0：自动化回归
 
 - [x] 覆盖 registry/resolve/dispatch 的命令可见性、实验开关、idle gate、参数拒绝、建议和不会调用模型（2026-07-21）
 - [x] 覆盖 `--role` 删除、Loop 数值、Today 无副作用、roles 子命令和 permission mode 真实边界（2026-07-21）
-- [x] 9 个目标测试文件 129 项通过；完整 app 205 个 test files 通过、2 个跳过，2391 项通过、3 项跳过（2026-07-21）
+- [x] 命令回归覆盖新增的 roles help 与 transform list/status；完整 app 205 个 test files 通过、2 个跳过，2408 项通过、3 项跳过（2026-07-22）
+- [x] 覆盖 reviewer step/time 上限、结构化错误传播和取消语义；全仓 685 个 test files 通过、8 个跳过，9308 项通过、48 项跳过、2 项 todo（2026-07-22）
 - [x] app typecheck 与 oxlint 通过，0 warning / 0 error（2026-07-21）
 
 ### 发布门槛
 
-- [ ] 完成真实 TUI smoke：`/transform list|status|off`、实验指引、未知 slash、本地 permission 错误、ZIP/Markdown export 与真实 `/loop`
-- [ ] 完成 bundle/native smoke、六平台 ZIP/SHA assets、0.0.16 → 0.0.17 upgrade 与 0.0.17 fresh install；安装器不恢复 telemetry 提示行
-- [ ] 增加 0.0.17 release notes，完成内部 CHANGELOG、README、用户指南和设计文档最终对账
+- [x] 真实 TUI `/loop` smoke PASS：writer 一轮完成，deterministic check 通过，fresh reviewer 仅使用 3 次 Read 返回结构化 PASS，终态释放且 `/loop status` 显示无 active Loop（2026-07-22）
+- [x] 完成剩余真实 TUI smoke：`/transform list|status|off`、实验指引、删除/未知 slash、本地 permission 错误与 ZIP/Markdown export；额外修复 `/role` 被误建议为 `/yolo`（2026-07-22）
+- [x] macOS arm64 bundle/native SEA smoke 与 ZIP SHA 生成通过（2026-07-22）
+- [ ] 完成六平台 ZIP/SHA assets、0.0.16 → 0.0.17 upgrade 与 0.0.17 fresh install；安装器不恢复 telemetry 提示行
+- [x] 增加 0.0.17 release notes，完成内部 CHANGELOG、README、用户指南和设计文档最终对账（2026-07-22）
 - [ ] 正式发布时才切换 package version、tag、公开 release、Web manifest、下载页、Changelog 与升级公告
 
 ### 明确不做
 
 - 支付、GitHub PR 写入、entitlement、Team、managed reviewer、云端 `/schedule`、`/ship`、Hosted Report、同步闭环、默认多 reviewer、`--agent` judge mode、Role/Agent 市场、mascot 与 welcome 动画均不进入 0.0.17。
 
-## ⏳ 0.1.0 — Pro PR Gate + Billing
+## 历史候选：0.1.0 Pro PR Gate + Billing（非当前计划）
 
-> 方案: [docs/design/0.1.0-pro-pr-gate.md](docs/design/0.1.0-pro-pr-gate.md)。本版保留完整的本地 BYOK Loop，首个付费权益是把 Gate summary/comment 和 `wukong/gate` status 发布回 GitHub PR。候选 `$9/月` 只用于邀请制实验，不是公开价格承诺。
+> 方案: [docs/design/0.1.0-pro-pr-gate.md](docs/design/0.1.0-pro-pr-gate.md)。这是历史研究清单，不是当前 TODO。当前没有付费计划、Checkout、entitlement 或已批准的 0.1.0 范围；未经新的产品决策，不执行下列任务。
 >
 > 2026-07-20 生产基线：8 个注册用户、1 个 activated Loop user、0 个 completed users。支付决策门槛尚未满足；公开 Checkout 默认关闭。
 
@@ -119,8 +124,8 @@
 
 ### P0：Entitlement 单点真相源
 
-- [ ] 增加 capability-based `/api/v1/account` contract：Loop limits、`prGatePublish`、billing、usage 和 links
-- [ ] Web 实现统一 `resolveEntitlement()` 状态表；unknown fail-closed，Dashboard、quota、Checkout 和 webhook 不再各自解释 tier
+- [ ] 增加 capability-based `/api/v1/account` contract：`prGatePublish`、billing、usage 和 links；本地 BYOK Loop 不进入 entitlement
+- [ ] Web 实现统一 `resolveEntitlement()` 状态表；unknown fail-closed，Dashboard、Checkout 和 webhook 不再各自解释 tier
 - [ ] 清理 `pro = Team Pilot`、Founder 无限权益和假 `teamPolicyPacks/deepReviewCredits` 等当前语义漂移
 - [ ] CLI 实现 `wukong account` 与 `--json`；API 故障只保留 Free 本地能力，不离线授予 GitHub 写权限
 - [ ] 数据 migration：current subscription projection + append-only billing event ledger；user/customer/subscription/event 分别唯一，event 去重与 projection 更新原子
@@ -174,7 +179,7 @@
 - [x] headless/TUI 的 PASS、NEEDS_WORK、ERROR、cancel 和启动失败均写入 terminal record（2026-07-20）
 - [x] CLI 重启后发现 active Loop，支持 Resume / End as cancelled / View details；terminal SDK Goal 自动对账（2026-07-20）
 
-### P0：Completion Outbox
+### P0：Completion Outbox（0.0.17 已由纯本地 lifecycle 取代；以下为 0.0.15 历史实现）
 
 - [x] completion 网络失败写入 outbox，不改变本地 Gate 结论（2026-07-20）
 - [x] CLI/TUI 启动、session resume、today/doctor 和新 Loop 前 fail-open flush（2026-07-20）
@@ -184,8 +189,8 @@
 
 ### P0：Preflight 与首次成功
 
-- [x] provider/model、workspace、objective、active Goal 和 checks discovery 在 quota start 前完成（2026-07-20）
-- [x] preflight 失败不创建服务端 run、不消耗额度，并只显示 Reason + Next（2026-07-20）
+- [x] provider/model、workspace、objective、active Goal 和 checks discovery 在本地 lifecycle record 前完成（2026-07-20；2026-07-22 移除 quota start）
+- [x] preflight 失败不创建本地 lifecycle record，并只显示 Reason + Next（2026-07-20；2026-07-22 移除服务端准入）
 - [x] 初次 TUI 只突出 Continue a task / Start a Loop / Configure model（2026-07-20）
 - [x] 无 checks 返回 NEEDS_WORK + 配置指引，不误写为测试失败或 PASS（2026-07-20）
 - [x] 最终结果默认只显示 Gate、Iterations、Primary blocker 和 Next；高级诊断保留在 transcript（2026-07-20）
@@ -304,10 +309,10 @@
 
 > 方案: [docs/design/verification-loop-v2.md](docs/design/verification-loop-v2.md)。本版只向普通用户提供一个主产品：Loop。`verify`、`scan`、`proof` 降级为 Loop 内部检查层和高级调试命令，不再各自形成产品、额度或报告流程。
 
-### Loop contract 与额度
+### Loop contract 与额度（Guest/Free quota 为 0.0.12 历史，已在 0.0.17 移除）
 
 - [x] 冻结 Loop 状态机：INSPECT → WORK → CHECK → REVIEW → PASS / NEEDS_WORK / ERROR（2026-07-16）
-- [x] 用户结果只保留 PASS→0、NEEDS_WORK→1、ERROR→2；执行前 auth/quota→3，中断→130（2026-07-16）
+- [x] 用户结果只保留 PASS→0、NEEDS_WORK→1、ERROR→2；中断→130。历史 auth/quota→3 已随 0.0.17 的远程 Loop 准入移除（2026-07-16；2026-07-22 更新）
 - [x] 默认停止条件统一为 `proof-pass`；旧停止条件进入时统一归一化（2026-07-15）
 - [x] 只有顶层 Loop session 计额度；内部 verify/scan/proof 不重复计数（2026-07-16）
 - [x] Guest：1 个 Loop session、最多2轮；Free：10个 Loop sessions/月、每个最多5轮；第3次开始软提示 Pro，第10次后硬限制（2026-07-16）
@@ -363,7 +368,7 @@
 
 ## ✅ Milestone 0.5 — Loop 控制层 + Merge Proof
 
-实施顺序固定：`/proof` → `/judge` → `/goal` verification gate → `/loop`。不引入新引擎：proof/judge 复用 `@wukong/verification`，loop 执行核复用 `/goal`，`--every` 节流复用 agent-core cron scheduler。
+实施顺序固定：`/proof` → `/judge` → `/goal` verification gate → `/loop`。不引入新执行核：proof/judge 复用 `@wukong/verification`，loop 执行核复用 `/goal`，`--every` 节流由 Goal driver 持有可取消等待。
 
 ### 第 1 步: `/proof` Merge Proof Report（Wow Moment）
 
@@ -393,7 +398,7 @@
 
 - [x] `apps/wukong/src/cli/sub/loop.ts` + TUI `/loop`（含 `status/stop`；`pause/resume` 复用 `/goal`）
 - [x] 核心语义 iterate-until-verified: 默认紧循环，每轮注入带停止条件的 goal，gate 未过则反馈注入下一轮
-- [x] `--every` 可选轮间节流，复用 agent-core cron scheduler（支持 `<n>s/m/h/d`，最低 1 分钟）
+- [x] `--every` 可选轮间节流，由 Goal driver 持有可取消等待，不创建或遗留 cron task（支持 `<n>s/m/h/d`，最低 1 分钟）
 - [x] 失控防护: `--max-iterations`（默认 10）、单轮超时、`--dry-run`、人可随时 stop
 - [x] 达到迭代上限返回 `max-iterations` 状态，不假装成功
 - [x] 测试: 见测试计划 §6 第 4 步（含"停止判断不由 agent 自评"与"无第二套 timer"断言）
@@ -403,7 +408,7 @@
 - [x] README / 用户指南补充新命令（只写已实现的）
 - [x] 官网 hero 切换 loop control plane / proof-layer 叙事（协同 `wukong_web/TODO.md` P0）（2026-07-09）
 
-## 📋 P1: `wukong today` / `/today`（Daily Proof Briefing）
+## 📋 P1: `wukong today` / `/today`（Local Loop Briefing）
 
 > 方案: [docs/design/today.md](docs/design/today.md) — 今日简报与今日 focus 合并为一条命令；依赖 stats schema，在 proof/loop 稳定后实施。
 
@@ -465,7 +470,7 @@
 - [ ] `/schedule` 云端例程 — 归 hosted（Milestone 3+）；本机定时巡检用已实现的 cron 工具
 - [ ] `/ship` 发布 gate — 依赖 proof 先稳定（P1）
 - [ ] `wukong review` / `test` / `retro` — P1，构建在 `@wukong/verification` 上
-- [ ] `wukong sync` / `journey` — sync 见 [test-login-sync.md](docs/test/test-login-sync.md)；journey 归 P2
+- [x] `wukong sync` / `journey` 不进入当前产品；Web 端未闭环的 sync 与 Companion journey 已删除（2026-07-22）
 - [ ] guard shell hook 自动注入 / PATH shim / agent 祖先进程识别 — P1，需幂等与备份测试
 - [ ] `StopCondition.kind = 'skill'` 自定义验证 skill — 验证 skill 机制落地后接入（P0.5 末或 P1 初）
 

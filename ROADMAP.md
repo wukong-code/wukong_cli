@@ -1,9 +1,9 @@
 # Wukong Code Roadmap
 
-> 最后更新: 2026-07-21
+> 最后更新: 2026-07-22
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 
-这份 ROADMAP 是当前商业化方向的执行层文档。更细的商业模型和技术方案仍以这些文档为准：
+这份 ROADMAP 的当前已批准范围只到 0.0.17，产品保持 Free + BYOK。目前没有付费计划、Checkout、entitlement 或已批准的 0.1.0 商业范围。下列商业化文档只作历史探索，不是执行真相源：
 
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [Wukong 能力体系与商业化原则](docs/business/WUKONG_CAPABILITY_MODEL.md)
@@ -11,7 +11,7 @@
 - [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md)
 - [0.0.16 Loop Convergence](docs/design/0.0.16-loop-convergence.md)
 - [0.0.17 Command Surface Reliability](docs/design/0.0.17-command-surface-reliability.md)
-- [0.1.0 Pro PR Gate 与 Billing](docs/design/0.1.0-pro-pr-gate.md)
+- [历史候选：0.1.0 Pro PR Gate 与 Billing](docs/design/0.1.0-pro-pr-gate.md)
 - [TODO.md](TODO.md)：本仓库执行层任务清单，按本 ROADMAP 的 milestone 拆解
 - `wukong_web/TODO.md`：官网与托管产品 TODO，位于 sibling web 仓库中
 
@@ -32,7 +32,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 
 差异化叙事不再以"又一个 coding agent"为主，而是围绕 Loop Engineering：Wukong 是 AI Coding Loop 的控制层与验证层。
 
-长期产品层级遵循 [Wukong 能力体系与商业化原则](docs/business/WUKONG_CAPABILITY_MODEL.md)：Loop 是普通用户直接体验的产品；内置分身是可靠完成 Loop 的基础能力；Custom Specialist、Managed Gate、托管并行与团队治理只有在真实使用和成本证据成立后才进入付费版本。高级 entitlement 解锁编排、模型和治理，不扩大系统安全权限。
+当前产品层级只有 Free + BYOK。商业化文档中的 Custom Specialist、Managed Gate、托管并行、团队治理和 entitlement 都是未批准候选，不能据此推断未来版本。
 
 命令分层对应 loop engineering 的谱系（参考 Claude Code 的 loop 分类）：
 
@@ -40,20 +40,20 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 |---|---|---|---|---|
 | Turn-based | TUI 默认 agentic loop | 用户 prompt | agent 自判完成 | 已实现 |
 | Goal-based `/goal` | 单任务驱动 agent 多轮推进 | 实时手动 | agent 自评完成 or 回合/预算上限 or verification gate | 已实现（verification gate 已落地，归 M0.5） |
-| Time-based `/loop` | 本机迭代驱动 agent 直到验证通过 | 手动启动，轮次自动衔接（`--every` 复用 cron scheduler 节流） | 停止条件满足 or 迭代上限 or 取消 | 已实现 |
+| Time-based `/loop` | 本机迭代驱动 agent 直到验证通过 | 手动启动，轮次自动衔接（`--every` 是 Goal-owned 可取消节流） | 停止条件满足 or 迭代上限 or 取消 | 已实现 |
 | Cloud routine `/schedule` | 云端例程，机器关了也跑 | 计划 | 任务达标退出，例程持续 | 待实现（归 hosted） |
 | Loop 内部检查层 | 项目命令、风险规则、交付判定 | 默认由 loop 调用；高级用户可直接调试 | 单次 | v1 命令已实现；0.0.12 从主入口降级 |
 | 评估层 `/judge` | evaluator-only，只审不写，默认怀疑 | 手动/被 loop 调用 | 单次 | 已实现 |
 
 - `/loop` 的核心语义是**迭代直到验证通过**（iterate-until-verified）：上一轮验证未过就注入失败反馈立即开始下一轮；`--every` 只是可选的轮间最小间隔（节流），用于等 CI 等外部反馈的场景。**关机即停。**
 - 定时巡检型任务（"每小时 check PR"）不属于 `/loop`：本机由已实现的 agent-core cron 工具承载，云端归 `/schedule`（hosted，Milestone 3+）。
-- `/loop` 不新写引擎：时间触发复用 agent-core 已有的 cron scheduler，执行核复用 `/goal`。
+- `/loop` 不新写执行核：迭代复用 `/goal`，`--every` 由 Goal driver 持有可取消等待；独立定时巡检才使用 cron scheduler。
 - 停止判断不由写代码的 agent 自评。v1 `/goal` verification gate 已实现；0.0.12 将它收敛到统一 Proof gate 和 PASS/NEEDS_WORK/ERROR。
 - 0.0.12 之后的 Wow Moment 是 Loop 自己收敛并给出可信 Gate 结论；独立 verify/scan/proof 只是高级本地诊断能力。
 - `/judge` 只审不写：M0.5 默认是 deterministic 对抗性判定（复用 proof 引擎，BLOCK 倾向）；fresh-context 第二 agent 审查（`--agent`）落地前，不对外宣传"第二 agent reviewer"。
-- Hosted Report 与报告上传已经退出产品；PR gates、team rules、audit log 仍是更后续的团队付费候选能力。
+- Hosted Report 与报告上传已经退出产品；PR gates、team rules 和 audit log 均未排期。
 
-免费版负责提供完整的本地 BYOK Loop；0.1.0 的首个付费假设只验证把 Gate 结论发布回 GitHub PR。更多 Loop 只是次要 entitlement，托管 reviewer、团队角色、共享策略和审计继续后移。
+Wukong 当前只提供完整的本地 BYOK Loop。旧文档中的 PR Gate 付费假设不属于当前 roadmap。
 
 ## 当前基线
 
@@ -75,7 +75,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 | `/proof` 本地高级诊断 | v1 已实现 | 共享 snapshot、三态结论；默认不写报告，仅支持显式本地保存 |
 | `/judge` evaluator-only 判定 | 已实现 | deterministic 判定先行；`--agent` 第二-agent 审查后置 |
 | 公开官网 | 已实现 | `wukong.today`、download、docs、pricing、changelog |
-| Auth / billing 基础 | 部分实现 | Web auth 与 subscription 表已存在；Checkout 当前固定关闭，webhook 尚不满足生产 lifecycle |
+| 可选账号 Auth | 已实现 | Web/device auth 只连接账号，不配置模型或生成付费 entitlement；历史 subscription 表不再写入 |
 
 ### 未完成
 
@@ -83,18 +83,16 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 |---|---|---|
 | `/schedule` 云端例程 | 未实现 | 机器关了也跑的例程，归 hosted（Milestone 3+）；本机定时巡检先用已实现的 cron 工具 |
 | `/ship` 发布 gate | 未实现 | proof + 版本/changelog/dry-run，更靠后的发布前 gate |
-| Stripe portal + 完整 webhook 状态 | 未完成 | 用户需要管理订阅、取消和失败付款 |
-| GitHub PR comment / gate | 未实现 | 把个人工具变成团队工作流 |
-| Team rules | 未实现 | 团队愿意付费的核心原因之一 |
-| Audit log | 未实现 | 管理者、安全团队和企业采购需要 |
+| GitHub PR comment / gate | 未排期 | 历史候选，不属于当前版本计划 |
+| Team rules / Audit log | 未排期 | 没有已批准的团队或付费产品范围 |
 | Model-assisted review | BYOK 已实现 | 独立 reviewer model 已可用；managed credits 后移 |
 | Private runner / self-hosted path | 未实现 | 企业级承诺前必须具备的边界 |
 
 ## 路线图原则
 
-1. 只有顶层 `loop` session 受额度限制；`verify`、`scan`、`proof` 是内部层和不计额度的高级诊断命令。
-2. 免费额度用于让用户完成真实 Loop 并验证重复使用意愿；0.1.0 不把本地 Loop 限额作为核心付费点，首个 Pro 权益是 PR Gate 发布。
-3. 用户自带 API Key 时，模型成本归用户；Wukong 收 workflow、policy 和 collaboration 的钱。
+1. 本地 BYOK `loop` 不受账号或月度额度限制；`verify`、`scan`、`proof` 是内部层和高级诊断命令。
+2. 不用人为额度制造升级压力；0.0.17 不新增 Web/D1 telemetry 产品指标后端。
+3. 用户自带 API Key；当前不定义 Wukong 的付费权益。
 4. 默认不写文件、不上传；用户需要留档时显式保存到本地。
 5. 在 guard、redaction、audit、private runner 真正完成前，不宣传安全合规能力。
 6. 每个 milestone 必须有可见用户路径和验收方式，不能只完成路由或表结构。
@@ -102,7 +100,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 8. 不把 Loop Engineering 第三层（GitHub/CI/Sentry 外部反馈集成）写成已具备能力，集成未完成前只作为叙事。
 9. `/loop`（本机迭代，关机即停）和定时巡检拆开：迭代收敛归 `/loop`，本机巡检用已实现的 cron 工具，云端例程归 `/schedule`（hosted，Milestone 3+）。
 10. loop 的停止判断不由写代码的 agent 自评：用 deterministic verification 或独立 evaluator，也可挂载自定义验证 skill（借鉴 Claude Code 的 verify-skill 模式）。前提是先落地 `/goal` verification gate。
-11. 不重复造轮子：`/loop` 的时间触发复用 agent-core cron scheduler，执行核复用 `/goal`，proof/judge 复用 verification 引擎。
+11. 不重复造轮子：`/loop` 执行核复用 `/goal`，`--every` 使用 Goal-owned 可取消等待，proof/judge 复用 verification 引擎；独立定时巡检继续使用 cron scheduler。
 12. Reviewer 的长期改进必须来自可追溯的人工反馈和固定 eval；外层 improver 只生成 policy proposal，不能自动修改 active policy 或 reviewer skill。
 
 ## 版本发布序列
@@ -116,9 +114,9 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 | `0.0.15` | Loop Reliability + First Success | durable run lifecycle、completion outbox、重启恢复、preflight、简洁终态和隐私受限激活指标；保持免费/BYOK |
 | `0.0.16` | Loop Convergence | 固定 acceptance contract、prior blockers、anti-ratchet reviewer、stall strategist、reviewer model fallback、Resume 建议、Role contract、统一任务状态与有界 session 搜索；保持免费/BYOK |
 | `0.0.17` | Command Surface Reliability | 删除误导的 `--role`、`/role`、`/report`、`/yes`；保留可发现的 `/transform`；未知 slash 本地拦截；严格参数解析；CLI/TUI 命令契约与自动化回归一致；保持免费/BYOK |
-| `0.1.0` | Pro PR Gate + Billing | Free dry-run、Pro GitHub PR comment/status、capability entitlement 与支付生命周期可用；真实 Stripe+D1/GitHub E2E 通过；邀请制实验取得至少 3 个非关联付款用户和 1 个续费信号 |
+| `0.1.0` | 未定义 | 没有已批准范围或日期；必须在真实 Free 用户验证后重新决策 |
 
-`0.0.17` 先完成现有命令面的可靠性收口，不增加新的产品层。`0.1.0` 仍不设日期承诺：当前生产基线只有 1 位 activated Loop user、0 位 completed users，不满足商业决策门槛；代码可以先进入 `0.1.0-rc.N` + feature-flagged invite-only pilot，但使用、支付和真实 E2E 门槛未满足时不开放**公开 Checkout**，也不升正式 `0.1.0`。
+`0.0.17` 只完成现有命令面的可靠性收口，不增加新的产品层。`0.1.0` 没有已批准范围，不预建 invite-only 付费、Checkout 或 entitlement。
 
 ## Milestone 0: Public Install And Local Proof
 
@@ -172,7 +170,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 
 - `/loop` TUI slash command + `wukong loop` CLI subcommand。
 - 核心语义 iterate-until-verified：驱动 agent 朝目标推进 → goal gate 评估 → 未过则注入失败反馈立即开始下一轮，直到停止条件满足、达到迭代上限或人取消。**关机即停。**
-- `--every` 是可选的轮间最小间隔（节流，用于等 CI 等外部反馈），由 agent-core cron scheduler 驱动，不新写 timer。
+- `--every` 是可选的轮间最小间隔（节流，用于等 CI 等外部反馈），由 Goal driver 持有可取消等待，不创建 cron task。
 - 定时巡检型任务不塞进 `/loop`：本机用 cron 工具，云端归 `/schedule`（hosted，Milestone 3+）。
 
 **E. 文案**
@@ -183,7 +181,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 
 - 不做 `/ship` 发布 gate（更靠后，依赖 proof 先稳定）。
 - 不做 `/schedule` 云端例程（归 hosted，Milestone 3+）。
-- 不为 `/loop` 新写定时引擎（复用 cron scheduler）。
+- 不为 `/loop` 创建独立定时任务；`--every` 只在 Goal 生命周期内等待。
 
 验收：
 
@@ -191,7 +189,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 - 在含 placeholder/secret/失败测试的项目产出 BLOCKED 报告，并定位原因。
 - `wukong judge --assume-broken` 在不干净项目直接给 BLOCK。
 - 带停止条件的 `/goal`：agent 宣布完成但 verify 失败时，gate 拒绝完成并注入反馈继续，不由 agent 自评过关。
-- `wukong loop "<目标>" --until verify-pass` / `/loop` 持续驱动：agent 改代码 → gate 评估 → 未过则继续，直到停止条件满足、达到迭代上限或人取消；关机即停。`--every` 复用 cron scheduler 实现轮间 pacing。
+- `wukong loop "<目标>" --until verify-pass` / `/loop` 持续驱动：agent 改代码 → gate 评估 → 未过则继续，直到停止条件满足、达到迭代上限或人取消；关机即停。`--every` 由 Goal driver 实现可取消的轮间 pacing。
 - `/loop` 达到迭代上限时明确返回 max-iterations 状态，不假装成功。
 - 报告可被人读懂并定位失败原因。
 - 官网 hero 切换为 loop control plane / proof-layer 文案后，不出现任何未实现能力的承诺（尤其不宣称 `/schedule` 云端例程、CI 集成、第二-agent 审查已可用）。
@@ -213,6 +211,8 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 7. 增加轻量 Role Profiles：TUI `/transform`、内置与本地自定义角色，复用现有 agent；CLI `roles list/show/init` 只负责角色目录管理。
 
 免费初始额度：
+
+> 历史说明：以下是 0.0.12 发布时的额度设计。0.0.17 已删除 Guest、登录和月度 Loop 准入限制；当前只保留用户可控的本地单次运行安全上限。
 
 - 未登录：1 个 Loop session、最多 2 轮。
 - Free 账号：10 个 Loop sessions/月且每个最多 5 轮；第3次开始提示 Pro，第10次后硬限制。
@@ -365,7 +365,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 
 状态：实施中，尚未发布。完整 contract 见 [0.0.17 Command Surface Reliability](docs/design/0.0.17-command-surface-reliability.md)。
 
-目标：在 0.1.0 商业实验前，把 CLI/TUI 的现有命令面收敛为可发现、可预测、可自动回归的稳定契约；删除会制造错误预期的入口，不新增 Agent 引擎或托管能力。
+目标：把 CLI/TUI 的现有命令面收敛为可发现、可预测、可自动回归的稳定契约；删除会制造错误预期的入口，不新增 Agent 引擎、托管能力或商业功能。后续版本范围依据真实 Free 用户验证重新决策。
 
 交付项：
 
@@ -374,6 +374,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 - 未知、已禁用和当前不可用的 slash command 只返回本地错误与建议，不进入模型。
 - permission、Loop 数值、Today focus、roles 子命令和 export 参数严格解析，错误时不产生副作用。
 - registry、resolve、dispatch 与真实 CLI boundary 均有正向和负向自动化测试。
+- 删除 Guest trial、Free 月度 Loop quota 和 start/complete 网络依赖；Loop 不登录也能按本地 `--max-iterations` 运行，durable record 只用于本机恢复。
 - 发布前完成真实 TUI smoke、native build、六平台 assets、upgrade/fresh install 和三仓文档同步。
 
 不做：
@@ -381,16 +382,18 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 - 不做支付、PR Gate、Team、managed reviewer、云端 `/schedule`、Hosted Report、同步闭环或新的 Role/Agent 市场。
 - 不加入 mascot、welcome 动画或与命令可靠性无关的视觉功能。
 
-## Milestone 3: 0.1.0 Pro PR Gate + Billing
+## 历史探索：0.1.0 Pro PR Gate + Billing（非当前 Roadmap）
 
-完整 contract 见 [0.1.0 Pro PR Gate 与 Billing](docs/design/0.1.0-pro-pr-gate.md)。
+> 本节保留旧研究内容用于追溯，不代表已排期、已批准或正在实现。当前没有付费计划。
+
+历史 contract 见 [0.1.0 Pro PR Gate 与 Billing](docs/design/0.1.0-pro-pr-gate.md)。
 
 目标：保留完整的本地 BYOK Loop，并用一个可验证的付费能力——把 Gate 结论安全、幂等地发布回 GitHub PR——测试个人开发者付费意愿。
 
 交付项：
 
-- capability-based entitlement API；CLI、Dashboard、quota 和 Billing 共用同一 resolver，不再根据 tier 名称猜权限。
-- `wukong account`：显示 plan、billing 状态、Loop 用量/重置时间和管理入口。
+- capability-based entitlement API；CLI、Dashboard、PR Gate 和 Billing 共用同一 resolver，不再根据 tier 名称猜权限；本地 BYOK Loop 不进入 entitlement。
+- `wukong account`：显示 plan、billing 状态、PR Gate publish 权限和管理入口，不显示本地 Loop 月度用量。
 - `wukong pr gate --dry-run`：Free 可预览待发布 comment/status，不写 GitHub。
 - Pro `wukong pr gate`：使用现有 `gh` 登录或 token，更新一条稳定 marker comment，并写入 `wukong/gate` commit status。
 - 本地 redaction、stale snapshot/SHA 拒绝、首次确认和 CI `--yes`。
@@ -497,7 +500,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 
 近期工作：
 
-- 按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序实现 Milestone 0.5（`/loop` 为本机迭代 loop，复用 cron scheduler 与 goal gate）。
+- 按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序实现 Milestone 0.5（`/loop` 为本机迭代 loop，复用 goal gate，并由 Goal driver 持有可取消的节流等待）。
 - 公告与更新通道分离：公告 JSON 由 Web 静态文件维护，失败不阻塞 CLI。
 - 本地 report 保持 offline 可用。
 - 登录命令保持简单：OAuth first，不展示重复 platform choices。
@@ -508,7 +511,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 - 付费 evidence 工作流未成立前，不继续堆游戏化功能。
 - 不把本地 deterministic verification 放到付费墙后。
 - 不把 `/schedule`（云端例程）在本机做；`/loop`（本机迭代，关机即停）与定时巡检（本机 cron 工具 / 云端 `/schedule`）拆开，跨机器持续性归 hosted。
-- 不为 `/loop` 新写定时引擎；`--every` 节流必须复用 agent-core cron scheduler。
+- 不为 `/loop` 创建脱离 Goal 生命周期的定时任务；`--every` 节流必须由 Goal driver 持有并可取消。
 
 ## Commercial Readiness Gates
 
@@ -526,7 +529,7 @@ Pro 可以公开收费的最低条件：
 - 至少 20 个用户完成首个 Loop，累计至少 50 次 completed Loops。
 - 邀请制实验取得至少 3 个非关联真实付款用户，且每人至少成功发布一次 PR Gate。
 - 至少 2 位付费用户在 30 天内对不同 PR 重复发布，并出现至少 1 个续费信号。
-- 更高 Loop allowance 的使用单独统计，不能替代 PR publish 的付费证据。
+- 本地 Loop 使用只作为激活与留存信号，不能替代 PR publish 的付费证据，也不能重新变成账号额度墙。
 - Pricing copy、CLI account、Dashboard 和真实 entitlement logic 完全一致。
 
 Team design pilot 可以开始试点的最低条件：

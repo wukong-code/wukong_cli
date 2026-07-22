@@ -43,7 +43,7 @@ const SETTINGS_OPTIONS: readonly ChoiceOption[] = [
   {
     value: 'usage',
     label: 'Usage',
-    description: 'Show session tokens, context window, and plan quotas.',
+    description: 'Show session tokens, context window, and provider usage.',
   },
 ];
 

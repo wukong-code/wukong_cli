@@ -8,14 +8,14 @@
 
 Wukong Code is a terminal AI coding agent built around one primary workflow: **Goal → Write → Check → Review → Fix**. Give `/loop` a goal and Wukong keeps working until an independent reviewer has no blocking findings or the iteration limit is reached.
 
-Version `0.0.13` adds structured multi-finding reviews, project-specific rules in `.wukong/review-policy.md`, local finding feedback and diagnostics, plus an optional independent reviewer model. It remains free and bring-your-own-key; payments and real Pro entitlements are deferred to `0.1.0`.
+Version `0.0.13` added structured multi-finding reviews, project-specific rules in `.wukong/review-policy.md`, local finding feedback and diagnostics, plus an optional independent reviewer model. The current product remains Free and bring-your-own-key, with no paid plan or entitlement.
 
 Version `0.0.14` adds Cross-Agent Resume, an explicit Resume → Loop handoff, clearer TUI Gate results, and broader real-project check discovery. It remains free and BYOK; see the [0.0.14 design](docs/design/0.0.14-resume-loop-polish.md).
 
-Version `0.0.15` makes that Loop reliable across restarts and network failures:
-durable run records, a retryable completion outbox, active-Loop recovery,
-preflight before quota reservation, a shorter first-run surface, and real
-lifecycle states in the Dashboard. It remains free and BYOK; see the
+Version `0.0.15` made that Loop reliable across restarts with durable local run
+records, active-Loop recovery, preflight, and a shorter first-run surface.
+Version `0.0.17` removes the remote Loop allowance and completion outbox while
+keeping local recovery. It remains free and BYOK; see the
 [0.0.15 design](docs/design/0.0.15-loop-reliability.md).
 
 Version `0.0.16` freezes an acceptance contract for each Loop, carries prior blockers across reviews,
@@ -32,17 +32,19 @@ payment or managed model credits. See the
 Version `0.0.17` is the next planned patch. It removes misleading role/report aliases,
 keeps `/transform list|status|off` discoverable, prevents unknown or disabled slash
 commands from reaching the model, and makes permission, Loop, export, Today, and
-roles argument handling strict and regression-tested. It remains free and BYOK;
+roles argument handling strict and regression-tested. It also makes `/resume` canonical,
+keeps `/login` account-only, moves model-key setup to `/provider`, and migrates local
+Loop records to content-free lifecycle v2. It remains free and BYOK;
 the public package and download version stay at `0.0.16` until the release gates
 pass. See the [0.0.17 design](docs/design/0.0.17-command-surface-reliability.md).
 
-Version `0.1.0` is planned around one narrow commercial experiment: the local BYOK Loop remains complete and free, while Pro is planned to unlock publishing a redacted Gate summary and commit status to a GitHub pull request. Public Checkout remains closed; an invite-only RC can start only after activation and engineering gates are met. See the [0.1.0 design](docs/design/0.1.0-pro-pr-gate.md).
+An older `0.1.0` document explored a Pro PR Gate experiment. It is not a current commitment: there is no paid plan, Checkout, or active entitlement work. Any commercial scope requires a new decision after real Free-user validation.
 
 Version `0.0.12` established the Loop-first runtime. `verify`, `scan`, and `proof` remain available as advanced diagnostics, but they are internal Loop layers rather than separate products or quotas. See the [0.0.12 design contract](docs/design/verification-loop-v2.md) and the [0.0.13 review design](docs/design/review-learning-loop.md).
 
-Loop returns one durable result: `PASS` (exit `0`), `NEEDS_WORK` (exit `1`), or `ERROR` (exit `2`). Guests receive one two-iteration local trial; signed-in Free users receive 10 Loop sessions per month with up to five iterations each. Internal checks never consume additional quota. Temporary quota-service failures warn and continue locally with the five-iteration safety cap. Legacy `verify-pass`, `scan-clean`, and `judge-pass` Goal records and flags remain readable and migrate to the unified proof gate; see the [compatibility matrix](docs/design/0.0.12-compatibility.md).
+Loop returns one durable result: `PASS` (exit `0`), `NEEDS_WORK` (exit `1`), or `ERROR` (exit `2`). Every user can run BYOK Loops locally without a login, Guest trial, monthly allowance, or Wukong quota-service request. The default local limit is 10 iterations and can be changed with `--max-iterations`; reviewer step/time limits and `/loop stop` remain hard safety controls. Anonymous product metrics continue to respect `WUKONG_TELEMETRY=0` and never decide whether a Loop may run. Legacy `verify-pass`, `scan-clean`, and `judge-pass` Goal records and flags remain readable and migrate to the unified proof gate; see the [compatibility matrix](docs/design/0.0.12-compatibility.md).
 
-The experimental Role Profiles foundation is now implemented. Enable `experimental.role_profiles` in `~/.wukong/config.toml`, use `wukong roles list/show/init` to manage profiles, and switch the current TUI session with `/transform security` or `/transform off`.
+The experimental Role Profiles foundation is now implemented. Enable `experimental.role_profiles` in `~/.wukong/config.toml`, use `wukong roles list/show/init` to manage profiles, and inspect or switch the current TUI session with `/transform list|status|off` or `/transform <role>`.
 
 Inside the TUI, `/resume` opens Wukong sessions. Use `/resume codex`, `/resume claude`, or `/resume cursor` to continue a local session from another agent. Foreign history is imported into Wukong as read-only context; old tool calls are never replayed and the current workspace is checked again before work continues.
 
@@ -56,7 +58,7 @@ Loop behavior.
 ```sh
 wukong                         # start the interactive TUI
 wukong -p "summarize this repo" # run one non-interactive prompt
-wukong provider                # manage LLM providers
+wukong provider                # configure BYOK model providers and API keys
 wukong acp                     # run as an Agent Client Protocol server
 wukong server                  # run the local REST/WebSocket server
 wukong web                     # open the local web UI
@@ -69,7 +71,7 @@ wukong review feedback <finding-id> accept
 wukong review stats            # show local feedback counts
 wukong guard                   # inspect or run the best-effort command risk guard
 wukong judge                   # evaluator-only merge decision
-wukong login                   # authenticate through the device-code flow
+wukong login                   # connect an optional Wukong account; does not configure a model
 wukong doctor                  # validate configuration files
 wukong export [sessionId]      # export a session ZIP
 wukong vis [sessionId]         # open the session visualizer
@@ -79,7 +81,7 @@ wukong upgrade                 # upgrade Wukong Code
 
 Advanced diagnostics remain directly executable for CI and debugging: `wukong verify`, `wukong scan`, and `wukong proof`. Loop runs these layers automatically, so they are intentionally omitted from the primary help surface.
 
-Planned commands (not yet implemented): `wukong account`, `wukong pr gate`, `wukong ship`, and `wukong schedule` (cloud routine).
+Unimplemented historical candidates, not current commitments: `wukong account`, `wukong pr gate`, `wukong ship`, and `wukong schedule`.
 
 Run `wukong --help` for the complete option list.
 
@@ -122,9 +124,9 @@ pnpm build      # build all packages
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the internal contribution guide.
 Update checks, automatic installation, TUI announcements, and rollout status are documented in the [CLI updates and announcements contract](docs/operations/updates-and-announcements.md).
 
-## Commercial Refactor
+## Historical Product Candidates
 
-The current product direction is to make Wukong Code the **review-driven control loop for AI-written code**. The implementation plan is tracked in:
+These documents contain earlier product hypotheses. They do not override the current Free + BYOK boundary:
 
 - [Roadmap](ROADMAP.md)
 - [Commercial refactor plan](docs/business/COMMERCIAL_REFACTOR_PLAN.md)

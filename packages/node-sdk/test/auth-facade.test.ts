@@ -17,7 +17,6 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { createWukongHarness, ErrorCodes, WukongError } from '#/index';
 
-import { ProviderManager } from '../../agent-core/src/session/provider-manager';
 import { TEST_IDENTITY } from './test-identity';
 
 let homeDir: string;
@@ -203,7 +202,7 @@ oauth = { storage = "file", key = "${oauthKey}", oauth_host = "https://auth.dev.
     });
   });
 
-  it('provisions SDK config using an existing Wukong OAuth token', async () => {
+  it('connects an account without provisioning a managed model', async () => {
     await new FileTokenStorage(join(homeDir, 'credentials')).save('wukong', freshToken());
     const fetchMock = vi.fn<FetchMock>(
       async (_input, _init) =>
@@ -232,36 +231,11 @@ oauth = { storage = "file", key = "${oauthKey}", oauth_host = "https://auth.dev.
     expect(result).toMatchObject({
       providerName: WUKONG_CODE_PROVIDER_NAME,
       ok: true,
-      defaultModel: 'wukong/wukong-for-coding',
-      defaultThinking: true,
     });
-    expect(fetchMock).toHaveBeenCalledWith(
-      'https://wukong.today/api/v1/models',
-      expect.objectContaining({
-        headers: expect.objectContaining({
-          Authorization: 'Bearer oauth-access-token',
-        }),
-      }),
-    );
-    expect(config.defaultModel).toBe('wukong/wukong-for-coding');
-    expect(config.models?.['wukong/wukong-for-coding']).toMatchObject({
-      capabilities: ['thinking', 'image_in', 'video_in', 'tool_use'],
-      displayName: 'Wukong for Coding',
-    });
-    expect(new ProviderManager({ config }).resolveProviderConfig(config.defaultModel!)).toMatchObject({
-      modelCapabilities: {
-        tool_use: true,
-      },
-    });
-    expect(config.providers[WUKONG_CODE_PROVIDER_NAME]).toMatchObject({
-      type: 'wukong',
-      apiKey: '',
-      oauth: { storage: 'file', key: 'oauth.wukong' },
-    });
-    expect(config.services?.wukongSearch?.oauth).toEqual({
-      storage: 'file',
-      key: 'oauth.wukong',
-    });
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(config.defaultModel).toBeUndefined();
+    expect(config.models).toBeUndefined();
+    expect(config.providers[WUKONG_CODE_PROVIDER_NAME]).toBeUndefined();
   });
 
   it('logs in against the configured scoped OAuth host and base URL when env is absent', async () => {
@@ -329,7 +303,6 @@ oauth = { storage = "file", key = "${oauthKey}", oauth_host = "${oauthHost}" }
     await expect(harness.auth.login()).resolves.toMatchObject({
       providerName: WUKONG_CODE_PROVIDER_NAME,
       ok: true,
-      defaultModel: 'wukong/wukong-for-coding',
     });
     await expect(storage.load(storageName)).resolves.toMatchObject({
       accessToken: 'rotated-dev-access-token',
@@ -341,7 +314,6 @@ oauth = { storage = "file", key = "${oauthKey}", oauth_host = "${oauthHost}" }
     });
     expect(fetchMock.mock.calls.map((call) => fetchInputUrl(call[0]))).toEqual([
       `${oauthHost}/api/oauth/token`,
-      `${baseUrl}/models`,
     ]);
   });
 
@@ -387,14 +359,13 @@ oauth = { storage = "file", key = "oauth/wukong" }
     await expect(harness.auth.login()).resolves.toMatchObject({
       providerName: WUKONG_CODE_PROVIDER_NAME,
       ok: true,
-      defaultModel: 'wukong/wukong-for-coding',
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
     const config = await harness.getConfig({ reload: true });
     expect(config.providers[WUKONG_CODE_PROVIDER_NAME]).toMatchObject({
       baseUrl,
-      oauth: { storage: 'file', key: oauthKey, oauthHost: 'https://wukong.today' },
+      oauth: { storage: 'file', key: 'oauth/wukong' },
     });
   });
 
@@ -447,14 +418,13 @@ oauth = { storage = "file", key = "${configuredOauthKey}", oauth_host = "https:/
     await expect(harness.auth.login()).resolves.toMatchObject({
       providerName: WUKONG_CODE_PROVIDER_NAME,
       ok: true,
-      defaultModel: 'wukong/wukong-for-coding',
     });
 
-    expect(fetchMock).toHaveBeenCalledTimes(1);
+    expect(fetchMock).not.toHaveBeenCalled();
     const config = await harness.getConfig({ reload: true });
     expect(config.providers[WUKONG_CODE_PROVIDER_NAME]).toMatchObject({
-      baseUrl: envBaseUrl,
-      oauth: { storage: 'file', key: envOauthKey, oauthHost: envOauthHost },
+      baseUrl: configuredBaseUrl,
+      oauth: { storage: 'file', key: configuredOauthKey, oauthHost: 'https://wukong.today' },
     });
   });
 

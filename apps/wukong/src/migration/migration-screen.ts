@@ -327,7 +327,7 @@ export class MigrationScreenComponent extends Container implements Focusable {
       }
       // OAuth credentials are deliberately not migrated (refresh tokens cannot
       // safely be held by two installs at once). wukong's normal auth flow
-      // will prompt for /login when the user first picks a model — surfacing a
+      // will prompt for /provider when the user first picks a model — surfacing a
       // separate notice here reads as a migration limitation, which it is not.
       if (sum.config.droppedHooks > 0) {
         lines.push(

@@ -76,9 +76,6 @@ export type WukongAuthLoginOptions = Omit<WukongOAuthLoginOptions, 'provisionCon
 export interface WukongAuthLoginResult {
   readonly providerName: string;
   readonly ok: true;
-  readonly defaultModel: string;
-  readonly defaultThinking: boolean;
-  readonly configPath?: string | undefined;
 }
 
 export interface WukongAuthLogoutResult {
@@ -138,19 +135,11 @@ export class WukongAuthFacade {
       baseUrl: loginAuth.baseUrl,
       oauthHost: loginAuth.oauthHost,
       oauthRef: options.oauthRef ?? loginAuth.oauthRef,
-      provisionConfig: true,
+      provisionConfig: false,
     });
-    if (result.provision === undefined) {
-      throw new Error('Wukong auth login did not provision model config.');
-    }
-    const updated = readConfigFile(this.options.configPath);
-    this.options.onConfigUpdated?.(updated);
     return {
       providerName: result.providerName,
       ok: true,
-      defaultModel: result.provision.defaultModel,
-      defaultThinking: result.provision.defaultThinking,
-      configPath: result.provision.configPath,
     };
   }
 

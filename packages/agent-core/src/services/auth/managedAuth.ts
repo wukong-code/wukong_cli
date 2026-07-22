@@ -22,9 +22,6 @@ type ServicesAuthLoginOptions = Omit<WukongOAuthLoginOptions, 'provisionConfig'>
 interface ServicesAuthLoginResult {
   readonly providerName: string;
   readonly ok: true;
-  readonly defaultModel: string;
-  readonly defaultThinking: boolean;
-  readonly configPath?: string | undefined;
 }
 
 interface ServicesAuthLogoutResult {
@@ -81,17 +78,11 @@ class ServicesManagedAuthFacade implements ServicesAuthFacade {
       baseUrl: loginAuth.baseUrl,
       oauthHost: loginAuth.oauthHost,
       oauthRef: options.oauthRef ?? loginAuth.oauthRef,
-      provisionConfig: true,
+      provisionConfig: false,
     });
-    if (result.provision === undefined) {
-      throw new Error('Wukong auth login did not provision model config.');
-    }
     return {
       providerName: result.providerName,
       ok: true,
-      defaultModel: result.provision.defaultModel,
-      defaultThinking: result.provision.defaultThinking,
-      configPath: result.provision.configPath,
     };
   }
 
