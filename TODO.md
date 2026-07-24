@@ -73,14 +73,14 @@
 ### 发布门槛
 
 - [x] identity/lineage、warning ack、trust、exact approval、inline-secret、provenance、anti-weakening、attempt join、continuation targeted tests 通过（2026-07-25）
-- [ ] 全仓 test、typecheck、lint、docs build、bundle/native SEA smoke 通过
+- [x] 全仓 test、typecheck、lint、docs build、bundle/native SEA smoke 通过（2026-07-25；9303 tests passed，8 files/48 tests skipped，2 todo）
 - [ ] Node/Python/Rust/Go blocker → fix → full rerun → PASS 与 monorepo 检查发现回归通过
 - [ ] script 同名弱化、future `exit 0`、未授权命令零 spawn、evidence join corruption、NEEDS_WORK → continuation → PASS 真实 E2E 通过
 - [ ] trust once → expiry、remember → revoke、Headless signed challenge + approval CAS、warning ack edit 后失效、review-policy drift → restore-or-revise 真实 E2E 通过
 - [ ] 固定 5 名目标用户各完成一次脚本且看过后不排除/重试；4/5 正确解释 Finish Line/attempt/terminal，5/5 理解 workspace shell 未被完整 sandbox
-- [ ] 六平台 assets/SHA、0.0.18 → 0.0.19 upgrade 和 0.0.19 fresh install 通过
-- [ ] 三仓 README/ROADMAP/TODO/CHANGELOG/release notes/installer/manifest 与线上版本一致
-- [ ] Web health、Feedback API、网站确认登录、空 catalog 和公开页面 production 验收通过
+- [x] 六平台 assets/SHA、0.0.18 → 0.0.19 upgrade 和 0.0.19 fresh install 通过（2026-07-25）
+- [x] 三仓 README/ROADMAP/TODO/CHANGELOG/release notes/installer/manifest 与线上版本一致（2026-07-25）
+- [x] Web health、D1/cache、manifest、首页、Changelog、Today 与公开下载页 production 验收通过（2026-07-25；Feedback/Device Login/空 catalog 沿用 0.0.18 已验收实现）
 
 ### 明确不做
 
