@@ -354,11 +354,13 @@ export type {
 
 export interface CreateGoalPayload {
   readonly objective: string;
+  readonly completionCriterion?: string;
   readonly replace?: boolean;
   readonly stopCondition?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
   readonly reviewModel?: string;
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
+  readonly loopContract?: import('../agent/goal').LoopContractV2Input;
 }
 
 export interface GetWukongConfigPayload {

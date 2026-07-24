@@ -1,9 +1,19 @@
 # Wukong Code Roadmap
 
-> 最后更新: 2026-07-22
+> 最后更新: 2026-07-24
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 
-这份 ROADMAP 的当前已批准范围只到 0.0.18，产品保持 Free + BYOK。目前没有付费计划、Checkout、entitlement 或已批准的 0.1.0 商业范围。下列商业化文档只作历史探索，不是执行真相源：
+这份 ROADMAP 的当前已批准范围只到 0.0.20，产品保持 Free + BYOK。目前没有付费计划、Checkout、entitlement 或已批准的 0.1.0 商业范围。
+
+当前版本真相源：
+
+- [0.0.18 Loop-First Simplification](docs/design/0.0.18-loop-first-simplification.md)
+- [0.0.19 Explicit Finish Line](docs/design/0.0.19-explicit-finish-line.md)
+- [0.0.20 Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md)
+- [TODO.md](TODO.md)：本仓库执行层任务清单，按本 ROADMAP 的版本拆解
+- `wukong_web/TODO.md`：官网与托管产品 TODO，位于 sibling web 仓库中
+
+下列商业化或旧版本设计只作历史探索/追溯，不是当前执行真相源：
 
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [Wukong 能力体系与商业化原则](docs/business/WUKONG_CAPABILITY_MODEL.md)
@@ -11,10 +21,7 @@
 - [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md)
 - [0.0.16 Loop Convergence](docs/design/0.0.16-loop-convergence.md)
 - [0.0.17 Command Surface Reliability](docs/design/0.0.17-command-surface-reliability.md)
-- [0.0.18 Loop-First Simplification](docs/design/0.0.18-loop-first-simplification.md)
 - [历史候选：0.1.0 Pro PR Gate 与 Billing](docs/design/0.1.0-pro-pr-gate.md)
-- [TODO.md](TODO.md)：本仓库执行层任务清单，按本 ROADMAP 的 milestone 拆解
-- `wukong_web/TODO.md`：官网与托管产品 TODO，位于 sibling web 仓库中
 
 ## 产品判断
 
@@ -35,23 +42,25 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 
 当前产品层级只有 Free + BYOK。商业化文档中的 Custom Specialist、Managed Gate、托管并行、团队治理和 entitlement 都是未批准候选，不能据此推断未来版本。
 
-命令分层对应 loop engineering 的谱系（参考 Claude Code 的 loop 分类）：
+命令分层参考 loop engineering 的谱系，但 Wukong 不照搬 Claude Code 的命令命名：
 
 | 层 | Wukong 能力 | 触发 | 停止 | 状态 |
 |---|---|---|---|---|
 | Turn-based | TUI 默认 agentic loop | 用户 prompt | agent 自判完成 | 已实现 |
-| Goal-based `/goal` | Loop 内部执行引擎；0.0.18 默认命令面隐藏但保留直接调用 | 实时手动 | agent 自评完成 or 回合/预算上限 or verification gate | 已实现（verification gate 已落地，归 M0.5） |
-| Time-based `/loop` | 本机迭代驱动 agent 直到验证通过 | 手动启动，轮次自动衔接（`--every` 是 Goal-owned 可取消节流） | 停止条件满足 or 迭代上限 or 取消 | 已实现 |
+| Internal goal engine `/goal` | Loop 内部单任务执行核；默认隐藏但保留直接调用 | 实时手动 | agent 自评完成 or 回合/预算上限 or verification gate | 已实现 |
+| Wukong delivery `/loop` | goal-driven、iterate-until-verified 的本机交付循环 | 用户启动，轮次自动衔接 | Gate PASS or 迭代/预算上限 or 取消 | 已实现 |
+| Local recurring | agent-core cron 工具承载本机定时巡检 | 时间/计划 | 取消 or 任务规则结束 | 已实现；不占用 `/loop` 语义 |
 | Cloud routine `/schedule` | 云端例程，机器关了也跑 | 计划 | 任务达标退出，例程持续 | 待实现（归 hosted） |
 | Loop 内部检查层 | 项目命令、风险规则、交付判定 | 默认由 loop 调用；高级用户可直接调试 | 单次 | v1 命令已实现；0.0.12 从主入口降级 |
-| 评估层 `/judge` | evaluator-only，只审不写，默认怀疑 | 手动/被 loop 调用 | 单次 | 已实现 |
+| 评估层 | deterministic Proof + fresh-context read-only reviewer；`/judge` 保留为高级诊断 | 被 Loop 调用 | 单次 | 当前基础已实现；frozen checks 归 0.0.19，可复用 Skill criteria 归 0.0.20 |
 
 - `/loop` 的核心语义是**迭代直到验证通过**（iterate-until-verified）：上一轮验证未过就注入失败反馈立即开始下一轮；`--every` 只是可选的轮间最小间隔（节流），用于等 CI 等外部反馈的场景。**关机即停。**
+- Claude Code 把 `/loop` 用于时间间隔循环；Wukong 的公开文档、TUI 和 SEO 必须明确自身 `/loop` 是 goal-driven delivery loop，不能让用户误解成 scheduler。
 - 定时巡检型任务（"每小时 check PR"）不属于 `/loop`：本机由已实现的 agent-core cron 工具承载，云端归 `/schedule`（hosted，Milestone 3+）。
 - `/loop` 不新写执行核：迭代复用 `/goal`，`--every` 由 Goal driver 持有可取消等待；独立定时巡检才使用 cron scheduler。
 - 停止判断不由写代码的 agent 自评。v1 `/goal` verification gate 已实现；0.0.12 将它收敛到统一 Proof gate 和 PASS/NEEDS_WORK/ERROR。
 - 0.0.12 之后的 Wow Moment 是 Loop 自己收敛并给出可信 Gate 结论；独立 verify/scan/proof 只是高级本地诊断能力。
-- `/judge` 只审不写：M0.5 默认是 deterministic 对抗性判定（复用 proof 引擎，BLOCK 倾向）；fresh-context 第二 agent 审查（`--agent`）落地前，不对外宣传"第二 agent reviewer"。
+- 0.0.20 Verification Skill 只能提供 strict qualitative criteria；它不执行 Skill command、不能获得 PASS 决策权，也不能覆盖 frozen deterministic blocker。
 - Hosted Report 与报告上传已经退出产品；PR gates、team rules 和 audit log 均未排期。
 
 Wukong 当前只提供完整的本地 BYOK Loop。旧文档中的 PR Gate 付费假设不属于当前 roadmap。
@@ -94,13 +103,13 @@ Wukong 当前只提供完整的本地 BYOK Loop。旧文档中的 PR Gate 付费
 1. 本地 BYOK `loop` 不受账号或月度额度限制；`verify`、`scan`、`proof` 是内部层和高级诊断命令。
 2. 不用人为额度制造升级压力；0.0.18 不新增 Web/D1 telemetry 产品指标后端。用户主动 `/feedback` 是显式产品反馈，不是 telemetry。
 3. 用户自带 API Key；当前不定义 Wukong 的付费权益。
-4. 默认不写文件、不上传；用户需要留档时显式保存到本地。
+4. 只写恢复与 Gate 必需的本地 durable state，不默认生成报告或云端副本；不上传给 Wukong。模型所需内容只按 run-scoped consent 发送给 exact BYOK provider，本地导出仍由用户显式触发。
 5. 在 guard、redaction、audit、private runner 真正完成前，不宣传安全合规能力。
 6. 每个 milestone 必须有可见用户路径和验收方式，不能只完成路由或表结构。
 7. 优先做 Loop 自动收敛这一 Wow Moment；独立 `/proof`、`/judge` 不再占据普通用户心智。
 8. 不把 Loop Engineering 第三层（GitHub/CI/Sentry 外部反馈集成）写成已具备能力，集成未完成前只作为叙事。
 9. `/loop`（本机迭代，关机即停）和定时巡检拆开：迭代收敛归 `/loop`，本机巡检用已实现的 cron 工具，云端例程归 `/schedule`（hosted，Milestone 3+）。
-10. loop 的停止判断不由写代码的 agent 自评：用 deterministic verification 或独立 evaluator，也可挂载自定义验证 skill（借鉴 Claude Code 的 verify-skill 模式）。前提是先落地 `/goal` verification gate。
+10. loop 的停止判断不由写代码的 agent 自评：最终 PASS 由 frozen deterministic verification 与 fresh-context reviewer 共同决定；0.0.20 Verification Skill 只提供受控 qualitative criteria，不能执行命令或单独决定 PASS。
 11. 不重复造轮子：`/loop` 执行核复用 `/goal`，`--every` 使用 Goal-owned 可取消等待，proof/judge 复用 verification 引擎；独立定时巡检继续使用 cron scheduler。
 12. Reviewer 的长期改进必须来自可追溯的人工反馈和固定 eval；外层 improver 只生成 policy proposal，不能自动修改 active policy 或 reviewer skill。
 
@@ -116,9 +125,15 @@ Wukong 当前只提供完整的本地 BYOK Loop。旧文档中的 PR Gate 付费
 | `0.0.16` | Loop Convergence | 固定 acceptance contract、prior blockers、anti-ratchet reviewer、stall strategist、reviewer model fallback、Resume 建议、Role contract、统一任务状态与有界 session 搜索；保持免费/BYOK |
 | `0.0.17` | Command Surface Reliability | 删除误导的 `--role`、`/role`、`/report`、`/yes`；保留可发现的 `/transform`；未知 slash 本地拦截；严格参数解析；CLI/TUI 命令契约与自动化回归一致；保持免费/BYOK |
 | `0.0.18` | Loop-First Simplification | 默认命令面只突出 Resume → Loop → Gate；其他实现隐藏但不删除；`/resume` 增加 Kimi Code/Grok；纯文本 `/feedback` 接入 Web API；CLI 发起登录并在网站确认，模型目录可为空；本地 Loop 保持免费/BYOK |
+| `0.0.19` | Explicit Finish Line | Loop 启动前确认 Goal、可选 Done when、Must not 和必跑 checks；无损冻结 Acceptance Contract 与 check provenance；区分 Gate attempt/run terminal；NEEDS_WORK 通过幂等 continuation 继续；保持免费/BYOK |
+| `0.0.20` | Reusable Verification Criteria | 所有新 reviewer attempt 迁移到 bounded broker + exact BYOK provider consent；可选发现用户本机已有 Verification Skills 的 strict criteria sidecar，支持显式 standalone/有序多选且不执行 Skill command；保持免费/BYOK |
 | `0.1.0` | 未定义 | 没有已批准范围或日期；必须在真实 Free 用户验证后重新决策 |
 
 `0.0.18` 继续收口现有产品层：命令只做默认可见性分层，不删除底层能力；Kimi Code/Grok Resume 只读本地会话；Feedback API 只接收用户确认的文本；`/login` 由 CLI 发起 device flow，用户在 Wukong 网站用 Google/GitHub 确认，CLI 获取 token 后读取 `200` 模型目录。当前没有 Wukong 模型，目录应诚实返回空数组，登录仍成功且不改变 BYOK 默认模型。最新托管模型与推理 endpoint 留给后续版本，在真实 backend、隐私和 E2E 就绪前不能发布 placeholder。`0.1.0` 没有已批准范围，不预建 invite-only 付费、Checkout 或 entitlement。
+
+`0.0.19` 不扩张命令面和托管产品，只提高一次 Loop 的完成可信度：Acceptance Contract 冻结用户确认的 objective、可选 completion criterion、constraints 和 Gate Plan，模型、权限、轮次等运行设置与合同分离；必跑 checks 冻结命令、来源定位和定义摘要；中间 Gate attempt 与 terminal run 分开持久化；终态 Continue 创建幂等 continuation。详细合同与发布门槛见 [0.0.19 Explicit Finish Line](docs/design/0.0.19-explicit-finish-line.md)。
+
+`0.0.20` 只在 0.0.19 Gate Plan、approval CAS 和 durable PASS 完成后实施。它先把有/无 Skill 的所有新 reviewer attempt 统一迁移到去密、bounded、attempt-scoped evidence broker；workspace read trust 与发送给 exact BYOK provider 的 run-scoped consent 分离，raw/secret-bearing Gate evidence 不出站。其上再复用 Agent Skills 文件布局，只读取用户本机已存在、用户确认、digest-pinned 的 strict qualitative-criteria sidecar；真实 test/lint/typecheck/build 继续由 0.0.19 frozen project checks 执行。首版只支持 standalone 与有序扁平多选；deterministic suggestions 与 model advisory hints 分离。任何 Skill verdict 都不能覆盖 deterministic failure。命令型 recipe、sandbox、authoring、embedded/chained 后置。详细合同见 [0.0.20 Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md)。
 
 ## Milestone 0: Public Install And Local Proof
 
@@ -131,7 +146,7 @@ Wukong 当前只提供完整的本地 BYOK Loop。旧文档中的 PR Gate 付费
 - `wukong.today/download` 的稳定安装路径。
 - 公开 package name、binary distribution 和文档一致。
 - CLI welcome、login selector、终端文案统一为 `WuKong Code`。
-- `wukong verify`、`wukong scan`、`wukong guard` 被明确写成核心本地闭环。
+- `wukong verify`、`wukong scan`、`wukong guard` 作为历史交付的实现基础和高级本地诊断保留，不进入当前主命令面。
 - 官网首页和下载页只描述当前真实能力。
 
 验收：
@@ -418,7 +433,9 @@ Wukong 当前只提供完整的本地 BYOK Loop。旧文档中的 PR Gate 付费
 - Hosted Report、managed reviewer/credits、Team rules、audit log、SSO、private runner 或云端 `/schedule`。
 - 年付、终身版、多个付费 tier、seat billing 或复杂 overage。
 
-## Milestone 4: Team Rules And Audit Log
+## 历史探索：Milestone 4 Team Rules And Audit Log（未批准）
+
+> 以下 Milestone 4–6 只保留早期产品假设，不属于 0.0.19、0.0.20 或任何已批准后续版本。
 
 目标：从个人开发者工具变成团队交付流程。
 
@@ -438,7 +455,7 @@ Wukong 当前只提供完整的本地 BYOK Loop。旧文档中的 PR Gate 付费
 - Override 必须记录 actor、reason、timestamp 和 linked run。
 - Audit log 可以回答：谁验证、什么失败、谁 override、最后交付了什么。
 
-## Milestone 5: Deep Review And Managed Credits
+## 历史探索：Milestone 5 Deep Review And Managed Credits（未批准）
 
 目标：增加模型/API 支持的付费能力，但不把 Wukong 做成原样模型 proxy。
 
@@ -459,7 +476,7 @@ Wukong 当前只提供完整的本地 BYOK Loop。旧文档中的 PR Gate 付费
 - 模型调用失败可见，且计费状态正确。
 - 产品文案不把第三方 API 转售包装成核心价值。
 
-## Milestone 6: Enterprise Readiness
+## 历史探索：Milestone 6 Enterprise Readiness（未批准）
 
 目标：为严肃 team pilot 和企业沟通准备真实边界。
 
@@ -487,9 +504,9 @@ Wukong 当前只提供完整的本地 BYOK Loop。旧文档中的 PR Gate 付费
 
 - 首页继续聚焦 Resume → Loop → Gate 和 CLI 下载，不把 BYOK 写成本地模型。
 - `/download` 保持短、准、可安装。
-- `/pricing` 必须绑定真实 capability entitlement；发布门槛前继续 `Coming soon`，不展示候选实验价格。
-- 使用真实本地 Loop 输出作为 docs / pricing 演示素材，不制作 placeholder。
-- Dashboard 围绕真实账号、平台和 Loop 状态优化。
+- `/pricing` 只陈述当前 Free + BYOK、无月度 Loop 次数限制和无付费计划；没有新批准与真实 entitlement 前不展示候选价格、Checkout 或 Pro/Team 承诺。
+- 使用真实本地 Loop 输出作为 docs 演示素材，不制作付费能力 placeholder。
+- Dashboard 只围绕真实账号连接状态和已上线能力优化，不恢复 quota、billing 或 Hosted Terminal。
 - changelog 保持和公开 release 同步。
 
 不要做：
@@ -502,9 +519,10 @@ Wukong 当前只提供完整的本地 BYOK Loop。旧文档中的 PR Gate 付费
 
 近期工作：
 
-- 按 `/proof` → `/judge` → `/goal` verification gate → `/loop` 的顺序实现 Milestone 0.5（`/loop` 为本机迭代 loop，复用 goal gate，并由 Goal driver 持有可取消的节流等待）。
+- 0.0.19 先完成 Explicit Finish Line、frozen Gate checks、approval CAS、durable attempt/terminal 与 continuation。
+- 0.0.20 先把有/无 Skill 的所有新 reviewer attempt 统一到 broker trust + run-scoped BYOK provider consent，再可选接入已有 Verification Skill 的 strict qualitative criteria；不执行 Skill command，也不新增顶层命令。
 - 公告与更新通道分离：公告 JSON 由 Web 静态文件维护，失败不阻塞 CLI。
-- 本地 report 保持 offline 可用。
+- `/report` 和 Hosted Report/上传路径保持删除；本地 Gate 结果只在已有显式保存能力下留档。
 - 登录命令保持简单：OAuth first，不展示重复 platform choices。
 - 终端 UI 保持紧凑、产品导向。
 
@@ -515,7 +533,9 @@ Wukong 当前只提供完整的本地 BYOK Loop。旧文档中的 PR Gate 付费
 - 不把 `/schedule`（云端例程）在本机做；`/loop`（本机迭代，关机即停）与定时巡检（本机 cron 工具 / 云端 `/schedule`）拆开，跨机器持续性归 hosted。
 - 不为 `/loop` 创建脱离 Goal 生命周期的定时任务；`--every` 节流必须由 Goal driver 持有并可取消。
 
-## Commercial Readiness Gates
+## 历史探索：Commercial Readiness Gates（未批准）
+
+> 以下收费门槛不构成当前任务、发布日期或定价承诺；当前产品没有付费计划。只有未来重新批准商业范围后才能重新验证并启用。
 
 Pro invite-only pilot 可以开始收费的最低条件：
 
@@ -541,9 +561,9 @@ Team design pilot 可以开始试点的最低条件：
 - Audit log 捕获 loop、gate 和 override events。
 - 至少一个 design partner 能在真实 repo 上跑完整流程。
 
-## Metrics
+## 历史探索：Commercial Metrics（未启用）
 
-先追踪这些指标，再优化增长：
+以下是旧商业假设中的候选指标。0.0.19/0.0.20 不建设 telemetry 指标后端，也不据此收集远端行为；当前发布门槛只使用设计文档明确的自动化、真实 smoke 和一次性用户研究证据。
 
 - Install completion rate。
 - 24 小时内首次 completed Loop。

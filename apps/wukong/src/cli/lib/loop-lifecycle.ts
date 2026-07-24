@@ -23,12 +23,12 @@ export interface LoopCompletionResult {
 const activeTuiLoops = new Map<string, LocalLoopRun>();
 
 /**
- * Start a local lifecycle record used only for crash recovery and opt-out-aware
- * telemetry aggregation. This never contacts Wukong services and never gates a
- * BYOK Loop.
+ * Start a local UI/lifecycle index for the authoritative core Loop run id.
+ * Durable contract, attempt, evidence, and terminal truth lives in the agent
+ * record log; this convenience index never gates a BYOK Loop.
  */
-export async function beginLoopRun(): Promise<LocalLoopRun> {
-  const runId = randomUUID().replaceAll('-', '');
+export async function beginLoopRun(authoritativeRunId?: string): Promise<LocalLoopRun> {
+  const runId = authoritativeRunId ?? randomUUID().replaceAll('-', '');
   const repeatedWithin7d = await recordTrackedLoopStart(runId).catch(() => false);
   return repeatedWithin7d ? { runId, repeatedWithin7d: true } : { runId };
 }

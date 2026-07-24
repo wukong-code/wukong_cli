@@ -11,3 +11,4 @@ export * from './scan';
 export * from './proof';
 export * from './judge';
 export * from './report';
+export * from './finish-line';

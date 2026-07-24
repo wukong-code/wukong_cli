@@ -7,6 +7,7 @@ import type {
 } from '@wukong/wukong-sdk';
 
 import { EditorSelectorComponent } from '../components/dialogs/editor-selector';
+import { ChoicePickerComponent } from '../components/dialogs/choice-picker';
 import {
   ExperimentsSelectorComponent,
   type ExperimentalFeatureDraftChange,
@@ -24,6 +25,10 @@ import { formatErrorMessage } from '../utils/event-payload';
 import { showUsage } from './info';
 import { setExperimentalFeatures } from './experimental-flags';
 import type { SlashCommandHost } from './dispatch';
+import {
+  listWorkspaceTrustGrants,
+  revokeWorkspaceTrust,
+} from '#/cli/lib/workspace-trust';
 
 // ---------------------------------------------------------------------------
 // Plan / Config commands
@@ -656,7 +661,56 @@ function handleSettingsSelection(host: SlashCommandHost, value: SettingsSelectio
     case 'theme': showThemePicker(host); return;
     case 'editor': showEditorPicker(host); return;
     case 'experiments': void showExperimentsPanel(host); return;
+    case 'workspace-trust': void showWorkspaceTrustSettings(host); return;
     case 'upgrade': showUpdatePreferencePicker(host); return;
     case 'usage': void showUsage(host); return;
   }
+}
+
+async function showWorkspaceTrustSettings(host: SlashCommandHost): Promise<void> {
+  let grants;
+  try {
+    grants = await listWorkspaceTrustGrants();
+  } catch (error) {
+    host.showError(`Failed to read trusted workspaces: ${formatErrorMessage(error)}`);
+    return;
+  }
+  host.mountEditorReplacement(
+    new ChoicePickerComponent({
+      title: 'Trusted workspaces',
+      hint: grants.length === 0
+        ? 'Enter or Esc back'
+        : '↑↓ navigate · Enter revoke · Esc back',
+      notice: grants.length === 0
+        ? 'No active workspace trust grants.'
+        : 'Selecting a grant revokes it immediately. A future Loop will ask again.',
+      noticeTone: grants.length === 0 ? 'success' : 'warning',
+      options: grants.length === 0
+        ? [{
+            value: 'back',
+            label: 'Back to settings',
+            description: 'No remembered or session-only grants are active.',
+          }]
+        : grants.map((grant) => ({
+            value: grant.trustGrantId,
+            label: grant.canonicalRealpath,
+            description: `${grant.persistence} · ${grant.workspaceIdentityDigest.slice(0, 24)}…`,
+          })),
+      onSelect: (value) => {
+        if (value === 'back') {
+          showSettingsSelector(host);
+          return;
+        }
+        void revokeWorkspaceTrust(value).then((revoked) => {
+          host.showStatus(revoked ? 'Workspace trust revoked.' : 'Workspace trust grant no longer exists.');
+          return showWorkspaceTrustSettings(host);
+        }).catch((error: unknown) => {
+          host.showError(`Failed to revoke workspace trust: ${formatErrorMessage(error)}`);
+        });
+      },
+      onCancel: () => {
+        showSettingsSelector(host);
+      },
+    }),
+  );
 }

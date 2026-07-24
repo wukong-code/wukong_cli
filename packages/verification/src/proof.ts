@@ -4,7 +4,13 @@ import { renderMergeProofReport, writeReport } from './report';
 import { runScan } from './scan';
 import { selectVerificationCommands } from './scripts';
 import { createWorkspaceSnapshot, workspaceSnapshotMatches } from './snapshot';
-import type { ScanResult, VerificationResult, VerificationRisk, WorkspaceSnapshot } from './types';
+import type {
+  ScanResult,
+  VerificationCommand,
+  VerificationResult,
+  VerificationRisk,
+  WorkspaceSnapshot,
+} from './types';
 import { runVerification } from './verify';
 
 export type ProofStatus = 'passed' | 'blocked';
@@ -12,6 +18,9 @@ export type ProofStatus = 'passed' | 'blocked';
 export interface ProofOptions {
   readonly cwd?: string;
   readonly commands?: readonly string[];
+  /** Exact frozen selection. An empty array intentionally means no commands. */
+  readonly selectedCommands?: readonly VerificationCommand[];
+  readonly retryOnWorkspaceChange?: boolean;
   readonly strict?: boolean;
   readonly writeReport?: boolean;
   readonly reportPath?: string;
@@ -62,6 +71,7 @@ export async function runProof(options: ProofOptions = {}): Promise<ProofResult>
   const cwd = resolve(options.cwd ?? process.cwd());
   let attempt = await runProofAttempt(cwd, options);
   if (!workspaceSnapshotMatches(attempt.snapshot, attempt.after)) {
+    if (options.retryOnWorkspaceChange === false) throw new WorkspaceChangedError();
     attempt = await runProofAttempt(cwd, options);
     if (!workspaceSnapshotMatches(attempt.snapshot, attempt.after)) {
       throw new WorkspaceChangedError();
@@ -113,21 +123,21 @@ async function runProofAttempt(cwd: string, options: ProofOptions): Promise<{
   readonly rawVerification: VerificationResult;
   readonly scan: ScanResult;
 }> {
-  const selectedCommands = await selectVerificationCommands({
-    cwd,
-    commands: options.commands,
-  });
+  const selectedCommands = options.selectedCommands === undefined
+    ? await selectVerificationCommands({
+        cwd,
+        commands: options.commands,
+      })
+    : [...options.selectedCommands];
   const snapshot = await createWorkspaceSnapshot({ cwd, commands: selectedCommands });
-  const [rawVerification, scan] = await Promise.all([
-    runVerification({
-      cwd,
-      selectedCommands,
-      snapshot,
-      writeReport: false,
-      signal: options.signal,
-    }),
-    runScan({ cwd, snapshot, writeReport: false }),
-  ]);
+  const rawVerification = await runVerification({
+    cwd,
+    selectedCommands,
+    snapshot,
+    writeReport: false,
+    signal: options.signal,
+  });
+  const scan = await runScan({ cwd, snapshot, writeReport: false });
   const after = await createWorkspaceSnapshot({ cwd, commands: selectedCommands });
   return { snapshot, after, rawVerification, scan };
 }

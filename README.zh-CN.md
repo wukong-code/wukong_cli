@@ -8,6 +8,8 @@
 
 Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal → Write → Check → Review → Fix**。给 `/loop` 一个目标，它会持续修改，直到独立 reviewer 不再返回 blocking finding，或达到迭代上限。
 
+`0.0.19` 在每个新 Loop 开始前增加明确的 Finish Line。TUI 会先让用户查看并确认 Goal、可选 Done when、Must not constraints、冻结的项目 checks 和本 run 轮次上限；Headless 可用 `wukong loop "<目标>" --dry-run` 查看同一份合同，再确认精确的 warning、Gate approval 与 workspace trust digest。check 定义和 evidence 只在本地冻结，Agent 不能静默降低 Gate；终态继续会创建新的可追溯 run，修改合同则创建 Revised Loop。完整范围见 [0.0.19 设计](docs/design/0.0.19-explicit-finish-line.md)和[发布说明](docs/releases/0.0.19.md)。
+
 `0.0.13` 增加结构化多 findings、`.wukong/review-policy.md` 项目规则、本地 finding feedback 与诊断统计，以及可选的独立 reviewer model。当前产品继续 Free + BYOK，没有付费计划或 entitlement。
 
 `0.0.14` 增加跨 Agent Resume、明确的 Resume → Loop 衔接、更清晰的 TUI Gate 结论和更多真实项目检查发现。本版本继续免费/BYOK，完整范围见 [0.0.14 设计](docs/design/0.0.14-resume-loop-polish.md)。
@@ -40,6 +42,8 @@ wukong acp                     # 以 Agent Client Protocol server 运行
 wukong server                  # 启动本地 REST/WebSocket server
 wukong web                     # 打开本地 web UI
 wukong loop "完成当前改动"      # 迭代直到独立交付 gate 通过
+wukong loop "完成当前改动" --dry-run
+wukong loop "修复登录" --done-when "登录测试通过" --constraint "不修改公开 API"
 wukong loop "修复测试" --model fast --review-model slow
 wukong loop "修复测试" --review-model reviewer
 wukong loop "修复测试" --max-iterations 5 --every 1m

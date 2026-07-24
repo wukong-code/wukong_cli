@@ -1,6 +1,6 @@
 {
   "name": "@wukong/monorepo",
-  "version": "0.0.18",
+  "version": "0.0.19",
   "private": true,
   "license": "UNLICENSED",
   "type": "module",

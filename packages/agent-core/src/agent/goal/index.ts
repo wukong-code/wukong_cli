@@ -1,5 +1,20 @@
 import { randomUUID } from 'node:crypto';
 
+import {
+  canonicalDigest,
+  canonicalJson,
+  containsInlineSecret,
+  BUILTIN_RISK_SCAN_POLICY_VERSION,
+  FINISH_LINE_WARNING_POLICY_VERSION,
+  GATE_GUARD_POLICY_VERSION,
+  validateFrozenGatePlan,
+  type FinishLineReview,
+  type GateApprovalBinding,
+  type GatePlan,
+  type ReviewPolicyBinding,
+  type WorkspaceIdentity,
+  type WorkspaceTrustBinding,
+} from '@wukong/verification';
 import { ErrorCodes, WukongError } from '#/errors';
 import type { Agent } from '..';
 import type { AgentRecordOf } from '../records/types';
@@ -141,7 +156,7 @@ export interface LoopResultFinding {
 export interface LoopAcceptanceCriterion {
   readonly id: string;
   readonly text: string;
-  readonly source: 'objective' | 'completion_criterion' | 'derived';
+  readonly source: 'objective' | 'completion_criterion' | 'constraint' | 'derived';
 }
 
 export interface LoopVerificationStep {
@@ -151,8 +166,8 @@ export interface LoopVerificationStep {
   readonly blocking: boolean;
 }
 
-/** Immutable acceptance contract used by every reviewer cycle of a Goal. */
-export interface LoopContract {
+/** Legacy immutable acceptance contract used by 0.0.18 and earlier sessions. */
+export interface LoopContractV1 {
   readonly schemaVersion: 1;
   readonly goalId: string;
   readonly objective: string;
@@ -161,6 +176,257 @@ export interface LoopContract {
   readonly verificationPlan: readonly LoopVerificationStep[];
   readonly source: 'user' | 'planner' | 'fallback';
   readonly createdAt: number;
+}
+
+/** Frozen 0.0.19 Finish Line used by every run and reviewer cycle. */
+export interface LoopContractV2 {
+  readonly schemaVersion: 2;
+  readonly contractId: string;
+  readonly supersedesContractId?: string;
+  readonly supersedesGoalId?: string;
+  readonly goalId: string;
+  readonly objective: string;
+  readonly completionCriterion?: string;
+  readonly constraints: readonly {
+    readonly id: string;
+    readonly text: string;
+  }[];
+  readonly finishLineReview: FinishLineReview;
+  readonly workspaceIdentity: WorkspaceIdentity;
+  readonly workspaceTrust?: WorkspaceTrustBinding;
+  readonly gateApproval: GateApprovalBinding;
+  readonly acceptanceCriteria: readonly LoopAcceptanceCriterion[];
+  readonly verificationPlan: readonly LoopVerificationStep[];
+  readonly gatePlan: GatePlan;
+  readonly reviewPolicy: ReviewPolicyBinding;
+  readonly source: 'user' | 'planner' | 'fallback';
+  readonly createdAt: number;
+}
+
+export type LoopContract = LoopContractV1 | LoopContractV2;
+
+export interface LoopContractV2Input {
+  readonly schemaVersion: 2;
+  readonly objective: string;
+  readonly completionCriterion?: string;
+  readonly constraints: readonly {
+    readonly id: string;
+    readonly text: string;
+  }[];
+  readonly finishLineReview: FinishLineReview;
+  readonly workspaceIdentity: WorkspaceIdentity;
+  readonly workspaceTrust?: WorkspaceTrustBinding;
+  readonly gateApproval: GateApprovalBinding;
+  readonly gatePlan: GatePlan;
+  readonly reviewPolicy: ReviewPolicyBinding;
+  readonly source: 'user';
+  readonly supersedesContractId?: string;
+  readonly supersedesGoalId?: string;
+}
+
+export interface LoopRunSettings {
+  readonly writerModel?: string;
+  readonly reviewerModel?: string;
+  readonly permissionMode: 'manual' | 'auto' | 'yolo';
+  readonly maxIterations: number;
+  readonly minIntervalMs?: number;
+}
+
+export interface LoopRunCreatedV1 {
+  readonly schemaVersion: 1;
+  readonly runId: string;
+  readonly goalId: string;
+  readonly contractId: string;
+  readonly continuedFromRunId?: string;
+  readonly carriedBlockerKeys: readonly string[];
+  readonly runSettings: LoopRunSettings;
+  readonly runDigest: string;
+  readonly createdAt: number;
+}
+
+export interface ContinuationPolicyV1 {
+  readonly mode: 'same-contract' | 'restore-or-revise' | 'revised-loop' | 'blocked';
+  readonly automaticRetry: false;
+  readonly requiresPreflightRevalidation: true;
+}
+
+export interface LoopRunTerminalV1 {
+  readonly schemaVersion: 1;
+  readonly runId: string;
+  readonly contractId: string;
+  readonly status: 'PASS' | 'NEEDS_WORK' | 'ERROR';
+  readonly reasonCode: string;
+  readonly continuationPolicy: ContinuationPolicyV1;
+  readonly blockerKeys: readonly string[];
+  readonly terminalAttemptId?: string;
+  readonly attemptResultDigest?: string;
+  readonly terminalDigest: string;
+  readonly createdAt: number;
+}
+
+export interface LoopContinuationCreatedV1 {
+  readonly schemaVersion: 1;
+  readonly continuationId: string;
+  readonly priorRunId: string;
+  readonly nextRunId: string;
+  readonly contractId: string;
+  readonly carriedBlockerKeys: readonly string[];
+  readonly continuationDigest: string;
+  readonly createdAt: number;
+}
+
+export interface GateAttemptCreatedV1 {
+  readonly schemaVersion: 1;
+  readonly attemptId: string;
+  readonly runId: string;
+  readonly contractId: string;
+  readonly sequence: number;
+  readonly planDigest: string;
+  readonly gateApprovalDigest: string;
+  readonly workspaceBefore: string;
+  readonly carriedBlockerSetDigest: string;
+  readonly attemptDigest: string;
+  readonly createdAt: number;
+}
+
+export interface GateCheckResultRecordedV1 {
+  readonly schemaVersion: 1;
+  readonly checkResultRef: string;
+  readonly attemptId: string;
+  readonly runId: string;
+  readonly contractId: string;
+  readonly planDigest: string;
+  readonly checkId: string;
+  readonly commandDigest: string;
+  readonly definitionDigest?: string;
+  readonly workspaceFingerprint: string;
+  readonly status: 'passed' | 'failed' | 'unresolved' | 'unavailable' | 'blocked' | 'error';
+  readonly exitCode?: number;
+  readonly stdoutDigest?: string;
+  readonly stderrDigest?: string;
+  readonly redactionVersion: string;
+  readonly checkResultDigest: string;
+  readonly createdAt: number;
+}
+
+export interface BuiltinRiskScanResultRecordedV1 {
+  readonly schemaVersion: 1;
+  readonly scanResultRef: string;
+  readonly attemptId: string;
+  readonly runId: string;
+  readonly contractId: string;
+  readonly planDigest: string;
+  readonly scanPolicyVersion: string;
+  readonly workspaceFingerprint: string;
+  readonly status: 'clean' | 'blocking' | 'error';
+  readonly findings: readonly {
+    readonly findingRef: string;
+    readonly findingDigest: string;
+    readonly severity: 'blocking' | 'important' | 'note';
+  }[];
+  readonly scanResultDigest: string;
+  readonly createdAt: number;
+}
+
+export interface ReviewerResultRecordedV1 {
+  readonly schemaVersion: 1;
+  readonly reviewerResultRef: string;
+  readonly attemptId: string;
+  readonly runId: string;
+  readonly contractId: string;
+  readonly planDigest: string;
+  readonly reviewerInputDigest: string;
+  readonly reviewerPayloadDigest: string;
+  readonly reviewerResultDigest: string;
+  readonly status: 'PASS' | 'NEEDS_WORK' | 'INCONCLUSIVE';
+  readonly createdAt: number;
+}
+
+export interface ProofAggregateRecordedV1 {
+  readonly schemaVersion: 1;
+  readonly proofAggregateResultRef: string;
+  readonly attemptId: string;
+  readonly runId: string;
+  readonly contractId: string;
+  readonly planDigest: string;
+  readonly orderedCheckResultDigests: readonly string[];
+  readonly builtinRiskScanResultRef: string;
+  readonly builtinRiskScanResultDigest: string;
+  readonly builtinRiskScanPolicyVersion: string;
+  readonly reviewerResultDigest: string;
+  readonly carriedBlockerSetDigest: string;
+  readonly status: 'PASS' | 'NEEDS_WORK' | 'ERROR';
+  readonly reasonCode: string;
+  readonly blockerKeys: readonly string[];
+  readonly proofAggregateDigest: string;
+  readonly createdAt: number;
+}
+
+export interface LoopEvidenceSnapshotCreatedV1 {
+  readonly schemaVersion: 1;
+  readonly evidenceSnapshotId: string;
+  readonly attemptId: string;
+  readonly runId: string;
+  readonly contractId: string;
+  readonly planDigest: string;
+  readonly gateApprovalDigest: string;
+  readonly workspaceTrustGrantId?: string;
+  readonly workspaceFingerprint: string;
+  readonly orderedCheckResults: readonly {
+    readonly checkId: string;
+    readonly resultRef: string;
+    readonly resultDigest: string;
+    readonly status: GateCheckResultRecordedV1['status'];
+  }[];
+  readonly reviewerResultRef: string;
+  readonly reviewerResultDigest: string;
+  readonly builtinRiskScanResultRef: string;
+  readonly builtinRiskScanResultDigest: string;
+  readonly builtinRiskScanPolicyVersion: string;
+  readonly proofAggregateResultRef: string;
+  readonly proofAggregateDigest: string;
+  readonly evidenceDigest: string;
+  readonly createdAt: number;
+}
+
+export interface GateAttemptCompletedV1 {
+  readonly schemaVersion: 1;
+  readonly attemptId: string;
+  readonly runId: string;
+  readonly contractId: string;
+  readonly planDigest: string;
+  readonly gateApprovalDigest: string;
+  readonly sequence: number;
+  readonly status: 'PASS' | 'NEEDS_WORK' | 'ERROR';
+  readonly reasonCode: string;
+  readonly evidenceSnapshotId: string;
+  readonly evidenceDigest: string;
+  readonly resultDigest: string;
+  readonly createdAt: number;
+}
+
+export interface LoopGateAttemptInput {
+  readonly status: 'PASS' | 'NEEDS_WORK' | 'ERROR';
+  readonly reasonCode: string;
+  readonly workspaceFingerprint: string;
+  readonly checks: readonly {
+    readonly command: string;
+    readonly status: 'passed' | 'failed' | 'timed_out' | 'unavailable';
+    readonly exitCode: number | null;
+    readonly stdout?: string;
+    readonly stderr?: string;
+  }[];
+  readonly scanFindings: readonly {
+    readonly id: string;
+    readonly severity: 'low' | 'medium' | 'high';
+    readonly message: string;
+    readonly file?: string;
+    readonly line?: number;
+  }[];
+  readonly reviewerStatus: 'PASS' | 'NEEDS_WORK' | 'INCONCLUSIVE';
+  readonly reviewerPayload: unknown;
+  readonly blockerKeys: readonly string[];
+  readonly workspaceTrustGrantId?: string;
 }
 
 export type PriorBlockerDispositionStatus = 'resolved' | 'still_open' | 'replaced_by';
@@ -252,8 +518,24 @@ interface GoalState {
   terminalReason?: string;
   loopResult?: LoopResult;
   loopContract?: LoopContract;
+  legacyContractId?: string;
+  currentLoopRun?: LoopRunCreatedV1;
+  loopRunTerminals: Map<string, LoopRunTerminalV1>;
+  gateAttemptCompletions: Map<string, GateAttemptCompletedV1>;
+  restoredGateAudits: Map<string, RestoredGateAudit>;
+  gateCheckHistory: GateCheckResultRecordedV1[];
+  loopChainIterations: number;
   reviewHistory: LoopReviewAttempt[];
   strategyHistory: LoopStrategyAttempt[];
+}
+
+interface RestoredGateAudit {
+  attempt: GateAttemptCreatedV1;
+  checks: GateCheckResultRecordedV1[];
+  scan?: BuiltinRiskScanResultRecordedV1;
+  reviewer?: ReviewerResultRecordedV1;
+  aggregate?: ProofAggregateRecordedV1;
+  snapshot?: LoopEvidenceSnapshotCreatedV1;
 }
 
 /** Computed budget view exposed through snapshots and tools. */
@@ -288,6 +570,10 @@ export interface GoalSnapshot {
   readonly terminalReason?: string;
   readonly loopResult?: LoopResult;
   readonly loopContract?: LoopContract;
+  readonly legacyContractId?: string;
+  readonly loopRunId?: string;
+  readonly loopChainIterations?: number;
+  readonly loopTerminal?: LoopRunTerminalV1;
   readonly convergence?: LoopConvergenceSummary;
 }
 
@@ -333,6 +619,7 @@ export interface CreateGoalInput {
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
   readonly replace?: boolean;
+  readonly loopContract?: LoopContractV2Input;
 }
 
 interface GoalReasonInput {
@@ -360,6 +647,7 @@ interface GoalReasonInput {
  */
 export class GoalMode {
   private state: GoalState | undefined;
+  private resumeInFlight?: Promise<GoalSnapshot>;
 
   constructor(private readonly agent: Agent) {
   }
@@ -378,6 +666,15 @@ export class GoalMode {
     if (state === undefined) return;
 
     state.wallClockResumedAt = undefined;
+    if (state.loopContract?.schemaVersion === 1 && state.legacyContractId === undefined) {
+      state.legacyContractId = randomUUID();
+      this.agent.records.logRecord({
+        type: 'goal.contract.identity.assign',
+        goalId: state.goalId,
+        contractRecordIdentity: legacyContractRecordIdentity(state),
+        contractId: state.legacyContractId,
+      });
+    }
 
     if (state.status === 'complete') {
       this.clearInternal('runtime', { emit: false, track: false });
@@ -413,6 +710,11 @@ export class GoalMode {
       tokensUsed: 0,
       wallClockMs: 0,
       budgetLimits: {},
+      loopRunTerminals: new Map(),
+      gateAttemptCompletions: new Map(),
+      restoredGateAudits: new Map(),
+      gateCheckHistory: [],
+      loopChainIterations: 0,
       reviewHistory: [],
       strategyHistory: [],
     };
@@ -473,6 +775,26 @@ export class GoalMode {
     state.loopContract = record.contract;
   }
 
+  restoreContractIdentityAssign(
+    record: AgentRecordOf<'goal.contract.identity.assign'>,
+  ): void {
+    const state = this.state;
+    if (
+      state === undefined
+      || state.goalId !== record.goalId
+      || state.loopContract?.schemaVersion !== 1
+      || record.contractRecordIdentity !== legacyContractRecordIdentity(state)
+    ) {
+      return;
+    }
+    state.legacyContractId ??= record.contractId;
+  }
+
+  restoreGoalLineage(_record: AgentRecordOf<'goal.lineage.create'>): void {
+    // Lineage is immutable historical metadata. The active V2 contract already
+    // carries the forward supersedes references needed by the current run.
+  }
+
   restoreReviewRecord(record: AgentRecordOf<'goal.review.record'>): void {
     const state = this.state;
     if (state === undefined || state.goalId !== record.goalId) return;
@@ -527,10 +849,18 @@ export class GoalMode {
     if (objective.length === 0) {
       throw new WukongError(ErrorCodes.GOAL_OBJECTIVE_EMPTY, 'Goal objective cannot be empty');
     }
-    if (objective.length > MAX_GOAL_OBJECTIVE_LENGTH) {
+    const maxObjectiveLength = input.loopContract === undefined ? MAX_GOAL_OBJECTIVE_LENGTH : 8_000;
+    if (objective.length > maxObjectiveLength) {
       throw new WukongError(
         ErrorCodes.GOAL_OBJECTIVE_TOO_LONG,
-        `Goal objective cannot exceed ${MAX_GOAL_OBJECTIVE_LENGTH} characters`,
+        `Goal objective cannot exceed ${String(maxObjectiveLength)} characters`,
+      );
+    }
+    if (input.loopContract !== undefined) {
+      validateLoopContractInput(
+        input.loopContract,
+        objective,
+        normalizeCompletionCriterion(input.completionCriterion),
       );
     }
     if (
@@ -550,6 +880,19 @@ export class GoalMode {
         throw new WukongError(
           ErrorCodes.GOAL_ALREADY_EXISTS,
           'A goal already exists; use replace to start a new one',
+        );
+      }
+      if (
+        input.loopContract?.supersedesGoalId !== undefined
+        && (
+          existing.goalId !== input.loopContract.supersedesGoalId
+          || existing.loopContract?.schemaVersion !== 2
+          || existing.loopContract.contractId !== input.loopContract.supersedesContractId
+        )
+      ) {
+        throw new WukongError(
+          ErrorCodes.REQUEST_INVALID,
+          'Revised Loop lineage does not match the Goal being replaced',
         );
       }
       // Clear the previous goal through the same internal clear path so records
@@ -577,6 +920,11 @@ export class GoalMode {
       wallClockMs: 0,
       wallClockResumedAt: Date.now(),
       budgetLimits: {},
+      loopRunTerminals: new Map(),
+      gateAttemptCompletions: new Map(),
+      restoredGateAudits: new Map(),
+      gateCheckHistory: [],
+      loopChainIterations: 0,
       reviewHistory: [],
       strategyHistory: [],
     };
@@ -593,8 +941,461 @@ export class GoalMode {
       minIntervalMs: state.minIntervalMs,
     });
     this.trackGoalCreated(actor, input.replace === true);
-    if (state.stopCondition !== undefined) this.ensureLoopContract('user');
+    if (input.loopContract !== undefined) {
+      this.createLoopContractV2(state, input.loopContract);
+    } else if (state.stopCondition !== undefined) {
+      this.ensureLoopContract('user');
+    }
     return this.toSnapshot(state);
+  }
+
+  private createLoopContractV2(
+    state: GoalState,
+    input: LoopContractV2Input,
+  ): LoopContractV2 {
+    const criteria: LoopAcceptanceCriterion[] = [
+      { id: 'objective', text: state.objective, source: 'objective' },
+    ];
+    if (state.completionCriterion !== undefined) {
+      criteria.push({
+        id: 'completion-criterion',
+        text: state.completionCriterion,
+        source: 'completion_criterion',
+      });
+    }
+    for (const constraint of input.constraints) {
+      criteria.push({
+        id: constraint.id,
+        text: constraint.text,
+        source: 'constraint',
+      });
+    }
+    const contract: LoopContractV2 = {
+      schemaVersion: 2,
+      contractId: randomUUID(),
+      supersedesContractId: input.supersedesContractId,
+      supersedesGoalId: input.supersedesGoalId,
+      goalId: state.goalId,
+      objective: state.objective,
+      completionCriterion: state.completionCriterion,
+      constraints: input.constraints,
+      finishLineReview: input.finishLineReview,
+      workspaceIdentity: input.workspaceIdentity,
+      workspaceTrust: input.workspaceTrust,
+      gateApproval: input.gateApproval,
+      acceptanceCriteria: criteria,
+      verificationPlan: [
+        {
+          id: 'project-checks',
+          kind: 'project_check',
+          description: 'Run the frozen deterministic Gate Plan in order.',
+          blocking: true,
+        },
+        {
+          id: 'fresh-review',
+          kind: 'review',
+          description: 'Use a fresh read-only reviewer against every acceptance criterion.',
+          blocking: true,
+        },
+      ],
+      gatePlan: input.gatePlan,
+      reviewPolicy: input.reviewPolicy,
+      source: input.source,
+      createdAt: Date.now(),
+    };
+    state.loopContract = contract;
+    this.agent.records.logRecord({
+      type: 'goal.contract.create',
+      goalId: state.goalId,
+      contract,
+    });
+    const run = this.createLoopRun(state, contract);
+    state.currentLoopRun = run;
+    this.agent.records.logRecord({ type: 'loop.run.create', run });
+    if (contract.supersedesContractId !== undefined && contract.supersedesGoalId !== undefined) {
+      this.agent.records.logRecord({
+        type: 'goal.lineage.create',
+        goalId: state.goalId,
+        supersedesGoalId: contract.supersedesGoalId,
+        contractId: contract.contractId,
+        supersedesContractId: contract.supersedesContractId,
+      });
+    }
+    this.track('loop_contract_created', {
+      contract_source: contract.source,
+      criteria_count: contract.acceptanceCriteria.length,
+      contract_schema_version: 2,
+    });
+    this.persistState(state);
+    return contract;
+  }
+
+  recordGateAttempt(input: LoopGateAttemptInput): GateAttemptCompletedV1 | null {
+    const state = this.state;
+    const contract = state?.loopContract;
+    const run = state?.currentLoopRun;
+    if (state === undefined || contract?.schemaVersion !== 2 || run === undefined) return null;
+    if (state.loopRunTerminals.has(run.runId)) {
+      throw new WukongError(
+        ErrorCodes.REQUEST_INVALID,
+        'Cannot append a Gate attempt after the current Loop run is terminal',
+      );
+    }
+    const attemptId = randomUUID();
+    const sequence = state.gateAttemptCompletions.size + 1;
+    const now = Date.now();
+    const carriedBlockerSetDigest = canonicalDigest(
+      'wukong/carried-blocker-set/v1',
+      run.carriedBlockerKeys.toSorted(),
+    );
+    const attemptBase = {
+      schemaVersion: 1 as const,
+      attemptId,
+      runId: run.runId,
+      contractId: contract.contractId,
+      sequence,
+      planDigest: contract.gatePlan.planDigest,
+      gateApprovalDigest: contract.gateApproval.approvalSetDigest,
+      workspaceBefore: input.workspaceFingerprint,
+      carriedBlockerSetDigest,
+      createdAt: now,
+    };
+    const attempt: GateAttemptCreatedV1 = {
+      ...attemptBase,
+      attemptDigest: canonicalDigest('wukong/gate-attempt/v1', attemptBase),
+    };
+    this.agent.records.logRecord({ type: 'loop.gate-attempt.create', attempt });
+
+    const checkResults: GateCheckResultRecordedV1[] = [];
+    for (let index = 0; index < contract.gatePlan.requiredChecks.length; index += 1) {
+      const frozen = contract.gatePlan.requiredChecks[index]!;
+      const observed = input.checks[index];
+      const base = {
+        schemaVersion: 1 as const,
+        checkResultRef: randomUUID(),
+        attemptId,
+        runId: run.runId,
+        contractId: contract.contractId,
+        planDigest: contract.gatePlan.planDigest,
+        checkId: frozen.id,
+        commandDigest: frozen.commandDigest,
+        definitionDigest: frozen.resolution === 'resolved' ? frozen.definitionDigest : undefined,
+        workspaceFingerprint: input.workspaceFingerprint,
+        status: frozen.resolution === 'expected-unresolved'
+          ? 'unresolved' as const
+          : normalizeGateCheckStatus(observed?.status),
+        exitCode: observed?.exitCode ?? undefined,
+        stdoutDigest: observed?.stdout === undefined
+          ? undefined
+          : canonicalDigest('wukong/redacted-stdout/v1', observed.stdout),
+        stderrDigest: observed?.stderr === undefined
+          ? undefined
+          : canonicalDigest('wukong/redacted-stderr/v1', observed.stderr),
+        redactionVersion: 'loop-output-redaction/1',
+        createdAt: now,
+      };
+      const record: GateCheckResultRecordedV1 = {
+        ...base,
+        checkResultDigest: canonicalDigest('wukong/gate-check-result/v1', base),
+      };
+      checkResults.push(record);
+      this.agent.records.logRecord({ type: 'loop.gate-check-result.create', result: record });
+    }
+
+    const scanFindings = input.scanFindings.map((finding) => {
+      const payload = {
+        id: finding.id,
+        severity: finding.severity,
+        message: finding.message,
+        file: finding.file,
+        line: finding.line,
+      };
+      return {
+        findingRef: randomUUID(),
+        findingDigest: canonicalDigest('wukong/builtin-risk-finding/v1', payload),
+        severity: finding.severity === 'high'
+          ? 'blocking' as const
+          : finding.severity === 'medium'
+            ? 'important' as const
+            : 'note' as const,
+      };
+    });
+    const scanBase = {
+      schemaVersion: 1 as const,
+      scanResultRef: randomUUID(),
+      attemptId,
+      runId: run.runId,
+      contractId: contract.contractId,
+      planDigest: contract.gatePlan.planDigest,
+      scanPolicyVersion: contract.gatePlan.builtinRiskScanPolicyVersion,
+      workspaceFingerprint: input.workspaceFingerprint,
+      status: scanFindings.some((finding) => finding.severity === 'blocking')
+        ? 'blocking' as const
+        : 'clean' as const,
+      findings: scanFindings,
+      createdAt: now,
+    };
+    const scan: BuiltinRiskScanResultRecordedV1 = {
+      ...scanBase,
+      scanResultDigest: canonicalDigest('wukong/builtin-risk-scan-result/v1', scanBase),
+    };
+    this.agent.records.logRecord({ type: 'loop.builtin-risk-scan-result.create', result: scan });
+    const unstableCheckIds = checkResults
+      .filter((current) => state.gateCheckHistory.some((prior) => (
+        prior.workspaceFingerprint === current.workspaceFingerprint
+        && prior.checkId === current.checkId
+        && prior.commandDigest === current.commandDigest
+        && (prior.status === 'passed') !== (current.status === 'passed')
+      )))
+      .map((current) => current.checkId);
+    state.gateCheckHistory.push(...checkResults);
+
+    const reviewerInputDigest = canonicalDigest('wukong/reviewer-input/v1', {
+      attemptId,
+      contractId: contract.contractId,
+      planDigest: contract.gatePlan.planDigest,
+      workspaceFingerprint: input.workspaceFingerprint,
+      orderedCheckResultDigests: checkResults.map((result) => result.checkResultDigest),
+      scanResultDigest: scan.scanResultDigest,
+      carriedBlockerSetDigest,
+      reviewPolicyBinding: contract.reviewPolicy,
+    });
+    const reviewerPayloadDigest = canonicalDigest(
+      'wukong/reviewer-payload/v1',
+      input.reviewerPayload,
+    );
+    const reviewerBase = {
+      schemaVersion: 1 as const,
+      reviewerResultRef: randomUUID(),
+      attemptId,
+      runId: run.runId,
+      contractId: contract.contractId,
+      planDigest: contract.gatePlan.planDigest,
+      reviewerInputDigest,
+      reviewerPayloadDigest,
+      status: input.reviewerStatus,
+      createdAt: now,
+    };
+    const reviewer: ReviewerResultRecordedV1 = {
+      ...reviewerBase,
+      reviewerResultDigest: canonicalDigest('wukong/reviewer-result-record/v1', reviewerBase),
+    };
+    this.agent.records.logRecord({ type: 'loop.reviewer-result.create', result: reviewer });
+
+    const allChecksPassed = checkResults.length === contract.gatePlan.requiredChecks.length
+      && checkResults.every((result) => result.status === 'passed');
+    const canPass = input.status === 'PASS'
+      && allChecksPassed
+      && scan.status === 'clean'
+      && reviewer.status === 'PASS'
+      && unstableCheckIds.length === 0
+      && input.blockerKeys.length === 0;
+    const aggregateStatus: ProofAggregateRecordedV1['status'] = canPass
+      ? 'PASS'
+      : input.status === 'ERROR' || unstableCheckIds.length > 0
+        ? 'ERROR'
+        : 'NEEDS_WORK';
+    const aggregateBase = {
+      schemaVersion: 1 as const,
+      proofAggregateResultRef: randomUUID(),
+      attemptId,
+      runId: run.runId,
+      contractId: contract.contractId,
+      planDigest: contract.gatePlan.planDigest,
+      orderedCheckResultDigests: checkResults.map((result) => result.checkResultDigest),
+      builtinRiskScanResultRef: scan.scanResultRef,
+      builtinRiskScanResultDigest: scan.scanResultDigest,
+      builtinRiskScanPolicyVersion: scan.scanPolicyVersion,
+      reviewerResultDigest: reviewer.reviewerResultDigest,
+      carriedBlockerSetDigest,
+      status: aggregateStatus,
+      reasonCode: canPass
+        ? 'passed'
+        : unstableCheckIds.length > 0
+          ? 'check_unstable'
+          : input.reasonCode,
+      blockerKeys: [
+        ...input.blockerKeys,
+        ...unstableCheckIds.map((checkId) => `check:${checkId}:unstable`),
+      ].toSorted(),
+      createdAt: now,
+    };
+    const aggregate: ProofAggregateRecordedV1 = {
+      ...aggregateBase,
+      proofAggregateDigest: canonicalDigest('wukong/proof-aggregate/v1', aggregateBase),
+    };
+    this.agent.records.logRecord({ type: 'loop.proof-aggregate.create', result: aggregate });
+
+    const snapshotBase = {
+      schemaVersion: 1 as const,
+      evidenceSnapshotId: randomUUID(),
+      attemptId,
+      runId: run.runId,
+      contractId: contract.contractId,
+      planDigest: contract.gatePlan.planDigest,
+      gateApprovalDigest: contract.gateApproval.approvalSetDigest,
+      workspaceTrustGrantId: input.workspaceTrustGrantId
+        ?? contract.workspaceTrust?.trustGrantId,
+      workspaceFingerprint: input.workspaceFingerprint,
+      orderedCheckResults: checkResults.map((result) => ({
+        checkId: result.checkId,
+        resultRef: result.checkResultRef,
+        resultDigest: result.checkResultDigest,
+        status: result.status,
+      })),
+      reviewerResultRef: reviewer.reviewerResultRef,
+      reviewerResultDigest: reviewer.reviewerResultDigest,
+      builtinRiskScanResultRef: scan.scanResultRef,
+      builtinRiskScanResultDigest: scan.scanResultDigest,
+      builtinRiskScanPolicyVersion: scan.scanPolicyVersion,
+      proofAggregateResultRef: aggregate.proofAggregateResultRef,
+      proofAggregateDigest: aggregate.proofAggregateDigest,
+      createdAt: now,
+    };
+    const snapshot: LoopEvidenceSnapshotCreatedV1 = {
+      ...snapshotBase,
+      evidenceDigest: canonicalDigest('wukong/loop-evidence-snapshot/v1', snapshotBase),
+    };
+    this.agent.records.logRecord({ type: 'loop.evidence-snapshot.create', snapshot });
+
+    const completedBase = {
+      schemaVersion: 1 as const,
+      attemptId,
+      runId: run.runId,
+      contractId: contract.contractId,
+      planDigest: contract.gatePlan.planDigest,
+      gateApprovalDigest: contract.gateApproval.approvalSetDigest,
+      sequence,
+      status: aggregate.status,
+      reasonCode: aggregate.reasonCode,
+      evidenceSnapshotId: snapshot.evidenceSnapshotId,
+      evidenceDigest: snapshot.evidenceDigest,
+      createdAt: now,
+    };
+    const completed: GateAttemptCompletedV1 = {
+      ...completedBase,
+      resultDigest: canonicalDigest('wukong/gate-attempt-result/v1', completedBase),
+    };
+    state.gateAttemptCompletions.set(attemptId, completed);
+    this.agent.records.logRecord({ type: 'loop.gate-attempt.complete', attempt: completed });
+    this.persistState(state, { silent: true });
+    return completed;
+  }
+
+  recordLoopTerminal(input: {
+    readonly status: 'PASS' | 'NEEDS_WORK' | 'ERROR';
+    readonly reasonCode: string;
+    readonly blockerKeys?: readonly string[];
+    readonly attempt?: GateAttemptCompletedV1 | null;
+  }): LoopRunTerminalV1 | null {
+    const state = this.state;
+    const contract = state?.loopContract;
+    const run = state?.currentLoopRun;
+    if (state === undefined || contract?.schemaVersion !== 2 || run === undefined) return null;
+    const existing = state.loopRunTerminals.get(run.runId);
+    if (existing !== undefined) return existing;
+    const policy = continuationPolicyFor(input.status, input.reasonCode);
+    const base = {
+      schemaVersion: 1 as const,
+      runId: run.runId,
+      contractId: contract.contractId,
+      status: input.status,
+      reasonCode: input.reasonCode,
+      continuationPolicy: policy,
+      blockerKeys: [...new Set(input.blockerKeys ?? [])].toSorted(),
+      terminalAttemptId: input.attempt?.attemptId,
+      attemptResultDigest: input.attempt?.resultDigest,
+      createdAt: Date.now(),
+    };
+    if (input.status === 'PASS' && input.attempt?.status !== 'PASS') {
+      throw new WukongError(ErrorCodes.REQUEST_INVALID, 'PASS terminal requires a complete PASS Gate attempt');
+    }
+    const terminal: LoopRunTerminalV1 = {
+      ...base,
+      terminalDigest: canonicalDigest('wukong/loop-terminal/v1', base),
+    };
+    state.loopRunTerminals.set(run.runId, terminal);
+    this.agent.records.logRecord({ type: 'loop.run.terminal', terminal });
+    this.persistState(state, { silent: true });
+    return terminal;
+  }
+
+  restoreLoopRunCreate(record: AgentRecordOf<'loop.run.create'>): void {
+    const state = this.state;
+    if (state === undefined || state.goalId !== record.run.goalId) return;
+    const { runDigest, ...base } = record.run;
+    if (canonicalDigest('wukong/loop-run/v1', base) !== runDigest) {
+      throw new Error('Loop record replay failed: run digest mismatch');
+    }
+    state.currentLoopRun = record.run;
+  }
+
+  restoreLoopRunTerminal(record: AgentRecordOf<'loop.run.terminal'>): void {
+    const state = this.state;
+    if (state === undefined) return;
+    const { terminalDigest, ...base } = record.terminal;
+    if (canonicalDigest('wukong/loop-terminal/v1', base) !== terminalDigest) {
+      throw new Error('Loop record replay failed: terminal digest mismatch');
+    }
+    if (
+      record.terminal.status === 'PASS'
+      && (
+        record.terminal.terminalAttemptId === undefined
+        || state.gateAttemptCompletions.get(record.terminal.terminalAttemptId)?.status !== 'PASS'
+      )
+    ) {
+      throw new Error('Loop record replay failed: PASS terminal lacks a complete PASS attempt');
+    }
+    state.loopRunTerminals.set(record.terminal.runId, record.terminal);
+  }
+
+  restoreGateAttemptComplete(record: AgentRecordOf<'loop.gate-attempt.complete'>): void {
+    const state = this.state;
+    if (state === undefined) return;
+    validateRestoredGateAttempt(state, record.attempt);
+    state.gateAttemptCompletions.set(record.attempt.attemptId, record.attempt);
+  }
+
+  restoreLoopAuditRecord(record: AgentRecordOf<
+    | 'loop.gate-attempt.create'
+    | 'loop.gate-check-result.create'
+    | 'loop.builtin-risk-scan-result.create'
+    | 'loop.reviewer-result.create'
+    | 'loop.proof-aggregate.create'
+    | 'loop.evidence-snapshot.create'
+    | 'loop.continuation.create'
+  >): void {
+    const state = this.state;
+    if (state === undefined) return;
+    restoreGateAuditRecord(state, record);
+  }
+
+  private createLoopRun(
+    state: GoalState,
+    contract: LoopContractV2,
+    continuedFromRunId?: string,
+    carriedBlockerKeys: readonly string[] = [],
+  ): LoopRunCreatedV1 {
+    const base = {
+      schemaVersion: 1 as const,
+      runId: randomUUID(),
+      goalId: state.goalId,
+      contractId: contract.contractId,
+      continuedFromRunId,
+      carriedBlockerKeys: [...new Set(carriedBlockerKeys)].toSorted(),
+      runSettings: {
+        writerModel: this.agent.config.modelAlias,
+        reviewerModel: state.reviewModel,
+        permissionMode: this.agent.permission.mode,
+        maxIterations: state.maxIterations ?? 10,
+        minIntervalMs: state.minIntervalMs,
+      },
+      createdAt: Date.now(),
+    };
+    return {
+      ...base,
+      runDigest: canonicalDigest('wukong/loop-run/v1', base),
+    };
   }
 
   /**
@@ -731,6 +1532,20 @@ export class GoalMode {
   }
 
   async resumeGoal(input: GoalReasonInput = {}, actor: GoalActor = 'user'): Promise<GoalSnapshot> {
+    if (this.resumeInFlight !== undefined) return this.resumeInFlight;
+    const pending = this.resumeGoalInternal(input, actor);
+    this.resumeInFlight = pending;
+    try {
+      return await pending;
+    } finally {
+      if (this.resumeInFlight === pending) this.resumeInFlight = undefined;
+    }
+  }
+
+  private async resumeGoalInternal(
+    input: GoalReasonInput,
+    actor: GoalActor,
+  ): Promise<GoalSnapshot> {
     const state = this.requireState();
     if (state.status === 'active') return this.toSnapshot(state);
     if (state.status !== 'paused' && state.status !== 'blocked') {
@@ -738,6 +1553,54 @@ export class GoalMode {
         ErrorCodes.GOAL_NOT_RESUMABLE,
         `Cannot resume a goal in status "${state.status}"`,
       );
+    }
+    const contract = state.loopContract;
+    const currentRun = state.currentLoopRun;
+    const terminal = currentRun === undefined
+      ? undefined
+      : state.loopRunTerminals.get(currentRun.runId);
+    if (
+      state.status === 'blocked'
+      && contract?.schemaVersion === 2
+      && currentRun !== undefined
+      && terminal !== undefined
+    ) {
+      if (terminal.continuationPolicy.mode !== 'same-contract') {
+        throw new WukongError(
+          ErrorCodes.GOAL_NOT_RESUMABLE,
+          'This Loop requires restoring the approved workspace or starting a Revised Loop.',
+        );
+      }
+      const revalidation = await validateFrozenGatePlan(this.agent.config.cwd, contract);
+      if (!revalidation.ok) {
+        throw new WukongError(
+          ErrorCodes.GOAL_NOT_RESUMABLE,
+          revalidation.message ?? 'The frozen Loop contract no longer matches this workspace.',
+        );
+      }
+      const nextRun = this.createLoopRun(
+        state,
+        contract,
+        currentRun.runId,
+        terminal.blockerKeys,
+      );
+      const continuationBase = {
+        schemaVersion: 1 as const,
+        continuationId: randomUUID(),
+        priorRunId: currentRun.runId,
+        nextRunId: nextRun.runId,
+        contractId: contract.contractId,
+        carriedBlockerKeys: terminal.blockerKeys,
+        createdAt: Date.now(),
+      };
+      const continuation: LoopContinuationCreatedV1 = {
+        ...continuationBase,
+        continuationDigest: canonicalDigest('wukong/loop-continuation/v1', continuationBase),
+      };
+      state.currentLoopRun = nextRun;
+      state.iteration = 0;
+      this.agent.records.logRecord({ type: 'loop.continuation.create', continuation });
+      this.agent.records.logRecord({ type: 'loop.run.create', run: nextRun });
     }
     // Resuming is a fresh attempt: clear the stop reason so a re-activated goal
     // starts clean.
@@ -803,6 +1666,16 @@ export class GoalMode {
   ): Promise<GoalSnapshot | null> {
     const state = this.state;
     if (state === undefined || state.status !== 'active') return null;
+    if (
+      state.loopContract?.schemaVersion === 2
+      && state.currentLoopRun !== undefined
+      && !state.loopRunTerminals.has(state.currentLoopRun.runId)
+    ) {
+      this.recordLoopTerminal({
+        status: 'NEEDS_WORK',
+        reasonCode: blockedReasonCode(input.reason),
+      });
+    }
     this.applyStatus(state, 'blocked');
     state.terminalReason = input.reason;
     this.persistState(state, {
@@ -825,6 +1698,18 @@ export class GoalMode {
   ): Promise<GoalSnapshot | null> {
     const state = this.state;
     if (state === undefined || state.status !== 'active') return null;
+    if (
+      state.loopContract?.schemaVersion === 2
+      && (
+        state.currentLoopRun === undefined
+        || state.loopRunTerminals.get(state.currentLoopRun.runId)?.status !== 'PASS'
+      )
+    ) {
+      throw new WukongError(
+        ErrorCodes.REQUEST_INVALID,
+        'A V2 Loop cannot complete without a durable PASS terminal.',
+      );
+    }
     this.applyStatus(state, 'complete');
     state.terminalReason = input.reason;
     const snapshot = this.toSnapshot(state);
@@ -884,6 +1769,7 @@ export class GoalMode {
     const state = this.state;
     if (state === undefined || state.status !== 'active') return null;
     state.iteration += 1;
+    state.loopChainIterations += 1;
     this.persistState(state);
     this.appendGoalUpdate({ iteration: state.iteration });
     return this.toSnapshot(state);
@@ -1030,6 +1916,12 @@ export class GoalMode {
       terminalReason: state.terminalReason,
       loopResult: state.loopResult,
       loopContract: state.loopContract,
+      legacyContractId: state.legacyContractId,
+      loopRunId: state.currentLoopRun?.runId,
+      loopChainIterations: state.loopChainIterations,
+      loopTerminal: state.currentLoopRun === undefined
+        ? undefined
+        : state.loopRunTerminals.get(state.currentLoopRun.runId),
       convergence: state.reviewHistory.length === 0 && state.strategyHistory.length === 0
         ? undefined
         : {
@@ -1038,6 +1930,160 @@ export class GoalMode {
             strategyAttempts: state.strategyHistory.length,
           },
     };
+  }
+}
+
+function restoreGateAuditRecord(
+  state: GoalState,
+  record: AgentRecordOf<
+    | 'loop.gate-attempt.create'
+    | 'loop.gate-check-result.create'
+    | 'loop.builtin-risk-scan-result.create'
+    | 'loop.reviewer-result.create'
+    | 'loop.proof-aggregate.create'
+    | 'loop.evidence-snapshot.create'
+    | 'loop.continuation.create'
+  >,
+): void {
+  if (record.type === 'loop.continuation.create') {
+    const { continuationDigest, ...base } = record.continuation;
+    if (canonicalDigest('wukong/loop-continuation/v1', base) !== continuationDigest) {
+      throw new Error('Loop record replay failed: continuation digest mismatch');
+    }
+    return;
+  }
+  if (record.type === 'loop.gate-attempt.create') {
+    const { attemptDigest, ...base } = record.attempt;
+    if (canonicalDigest('wukong/gate-attempt/v1', base) !== attemptDigest) {
+      throw new Error('Loop record replay failed: Gate attempt digest mismatch');
+    }
+    const contract = state.loopContract;
+    if (
+      contract?.schemaVersion !== 2
+      || contract.contractId !== record.attempt.contractId
+      || contract.gatePlan.planDigest !== record.attempt.planDigest
+      || contract.gateApproval.approvalSetDigest !== record.attempt.gateApprovalDigest
+      || state.restoredGateAudits.has(record.attempt.attemptId)
+    ) {
+      throw new Error('Loop record replay failed: Gate attempt binding mismatch');
+    }
+    state.restoredGateAudits.set(record.attempt.attemptId, {
+      attempt: record.attempt,
+      checks: [],
+    });
+    return;
+  }
+
+  const payload = record.type === 'loop.evidence-snapshot.create'
+    ? record.snapshot
+    : record.result;
+  const audit = state.restoredGateAudits.get(payload.attemptId);
+  if (audit === undefined) {
+    throw new Error('Loop record replay failed: audit record precedes its Gate attempt');
+  }
+  if (
+    payload.runId !== audit.attempt.runId
+    || payload.contractId !== audit.attempt.contractId
+    || payload.planDigest !== audit.attempt.planDigest
+  ) {
+    throw new Error('Loop record replay failed: Gate audit binding mismatch');
+  }
+
+  switch (record.type) {
+    case 'loop.gate-check-result.create': {
+      const { checkResultDigest, ...base } = record.result;
+      if (canonicalDigest('wukong/gate-check-result/v1', base) !== checkResultDigest) {
+        throw new Error('Loop record replay failed: check result digest mismatch');
+      }
+      audit.checks.push(record.result);
+      state.gateCheckHistory.push(record.result);
+      return;
+    }
+    case 'loop.builtin-risk-scan-result.create': {
+      const { scanResultDigest, ...base } = record.result;
+      if (
+        audit.scan !== undefined
+        || canonicalDigest('wukong/builtin-risk-scan-result/v1', base) !== scanResultDigest
+      ) {
+        throw new Error('Loop record replay failed: risk scan result mismatch');
+      }
+      audit.scan = record.result;
+      return;
+    }
+    case 'loop.reviewer-result.create': {
+      const { reviewerResultDigest, ...base } = record.result;
+      if (
+        audit.reviewer !== undefined
+        || canonicalDigest('wukong/reviewer-result-record/v1', base) !== reviewerResultDigest
+      ) {
+        throw new Error('Loop record replay failed: reviewer result mismatch');
+      }
+      audit.reviewer = record.result;
+      return;
+    }
+    case 'loop.proof-aggregate.create': {
+      const { proofAggregateDigest, ...base } = record.result;
+      if (
+        audit.aggregate !== undefined
+        || canonicalDigest('wukong/proof-aggregate/v1', base) !== proofAggregateDigest
+      ) {
+        throw new Error('Loop record replay failed: proof aggregate mismatch');
+      }
+      audit.aggregate = record.result;
+      return;
+    }
+    case 'loop.evidence-snapshot.create': {
+      const { evidenceDigest, ...base } = record.snapshot;
+      if (
+        audit.snapshot !== undefined
+        || canonicalDigest('wukong/loop-evidence-snapshot/v1', base) !== evidenceDigest
+      ) {
+        throw new Error('Loop record replay failed: evidence snapshot mismatch');
+      }
+      audit.snapshot = record.snapshot;
+      return;
+    }
+  }
+}
+
+function validateRestoredGateAttempt(
+  state: GoalState,
+  completed: GateAttemptCompletedV1,
+): void {
+  const { resultDigest, ...base } = completed;
+  if (canonicalDigest('wukong/gate-attempt-result/v1', base) !== resultDigest) {
+    throw new Error('Loop record replay failed: Gate completion digest mismatch');
+  }
+  const audit = state.restoredGateAudits.get(completed.attemptId);
+  const contract = state.loopContract;
+  if (
+    audit === undefined
+    || contract?.schemaVersion !== 2
+    || audit.scan === undefined
+    || audit.reviewer === undefined
+    || audit.aggregate === undefined
+    || audit.snapshot === undefined
+    || audit.checks.length !== contract.gatePlan.requiredChecks.length
+  ) {
+    throw new Error('Loop record replay failed: Gate completion has missing evidence');
+  }
+  const checkDigests = audit.checks.map((check) => check.checkResultDigest);
+  if (
+    completed.runId !== audit.attempt.runId
+    || completed.contractId !== audit.attempt.contractId
+    || completed.planDigest !== audit.attempt.planDigest
+    || completed.gateApprovalDigest !== audit.attempt.gateApprovalDigest
+    || completed.evidenceSnapshotId !== audit.snapshot.evidenceSnapshotId
+    || completed.evidenceDigest !== audit.snapshot.evidenceDigest
+    || audit.aggregate.status !== completed.status
+    || audit.aggregate.proofAggregateDigest !== audit.snapshot.proofAggregateDigest
+    || audit.scan.scanResultDigest !== audit.snapshot.builtinRiskScanResultDigest
+    || audit.reviewer.reviewerResultDigest !== audit.snapshot.reviewerResultDigest
+    || canonicalJson(checkDigests) !== canonicalJson(audit.aggregate.orderedCheckResultDigests)
+    || canonicalJson(checkDigests)
+      !== canonicalJson(audit.snapshot.orderedCheckResults.map((check) => check.resultDigest))
+  ) {
+    throw new Error('Loop record replay failed: Gate evidence join mismatch');
   }
 }
 
@@ -1119,6 +2165,250 @@ function normalizeStopCondition(value: string | undefined): GoalStopCondition | 
 function normalizeReviewModel(value: string | undefined): string | undefined {
   const trimmed = value?.trim();
   return trimmed?.length ? trimmed : undefined;
+}
+
+function validateLoopContractInput(
+  input: LoopContractV2Input,
+  objective: string,
+  completionCriterion: string | undefined,
+): void {
+  if (input.schemaVersion !== 2 || input.objective.trim() !== objective) {
+    throw new WukongError(
+      ErrorCodes.REQUEST_INVALID,
+      'Loop Finish Line does not match the requested objective',
+    );
+  }
+  if (
+    (input.supersedesContractId === undefined)
+      !== (input.supersedesGoalId === undefined)
+  ) {
+    throw new WukongError(
+      ErrorCodes.REQUEST_INVALID,
+      'A Revised Loop must bind both the superseded Goal and contract',
+    );
+  }
+  if (normalizeCompletionCriterion(input.completionCriterion) !== completionCriterion) {
+    throw new WukongError(
+      ErrorCodes.REQUEST_INVALID,
+      'Loop Finish Line completion criterion does not match the Goal request',
+    );
+  }
+  if (
+    input.completionCriterion !== undefined
+    && (
+      normalizeCompletionCriterion(input.completionCriterion) === undefined
+      || input.completionCriterion.length > 8_000
+      || /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u.test(input.completionCriterion)
+    )
+  ) {
+    throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Invalid Loop completion criterion');
+  }
+  if (
+    input.finishLineReview.warnings.length > 0
+    && (
+      input.finishLineReview.acknowledgedWarningIds.length
+        !== input.finishLineReview.warnings.length
+      || input.finishLineReview.warnings.some(
+        (warning) => !input.finishLineReview.acknowledgedWarningIds.includes(warning.id),
+      )
+    )
+  ) {
+    throw new WukongError(
+      ErrorCodes.REQUEST_INVALID,
+      'Finish Line warnings must be acknowledged before starting the Loop',
+    );
+  }
+  const hasExecutableChecks = input.gatePlan.requiredChecks.some(
+    (check) => check.resolution === 'resolved',
+  );
+  if (
+    hasExecutableChecks !== input.gateApproval.hasExecutableChecks
+    || input.gateApproval.gatePlanDigest !== input.gatePlan.planDigest
+      || input.gateApproval.warningSetDigest !== input.finishLineReview.warningSetDigest
+      || input.gateApproval.guardPolicyVersion !== GATE_GUARD_POLICY_VERSION
+      || input.gatePlan.builtinRiskScanPolicyVersion !== BUILTIN_RISK_SCAN_POLICY_VERSION
+      || input.finishLineReview.warningPolicyVersion !== FINISH_LINE_WARNING_POLICY_VERSION
+    || input.gateApproval.orderedChecks.length !== input.gatePlan.requiredChecks.length
+  ) {
+    throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Loop Gate approval does not match the frozen plan');
+  }
+  if (hasExecutableChecks) {
+    if (
+      input.workspaceTrust === undefined
+      || input.gateApproval.workspaceIdentityDigest
+        !== input.workspaceTrust.workspaceIdentityDigest
+      || input.workspaceTrust.workspaceIdentityDigest
+        !== input.workspaceIdentity.workspaceIdentityDigest
+    ) {
+      throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Executable Loop checks require exact workspace trust');
+    }
+  } else if (input.workspaceTrust !== undefined) {
+    throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Non-executable Loop plans cannot carry workspace trust');
+  }
+  for (let index = 0; index < input.gatePlan.requiredChecks.length; index += 1) {
+    const check = input.gatePlan.requiredChecks[index]!;
+    const approval = input.gateApproval.orderedChecks[index]!;
+    if (
+      check.id !== approval.checkId
+      || check.resolution !== approval.resolution
+      || check.commandDigest !== approval.commandDigest
+      || containsInlineSecret(check.executionCommand)
+    ) {
+      throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Loop Gate approval check snapshot is invalid');
+    }
+  }
+  const gatePlanWithoutDigest = {
+    schemaVersion: input.gatePlan.schemaVersion,
+    stopCondition: input.gatePlan.stopCondition,
+    requiredChecks: input.gatePlan.requiredChecks,
+    excludedChecks: input.gatePlan.excludedChecks,
+    builtinRiskScanPolicyVersion: input.gatePlan.builtinRiskScanPolicyVersion,
+  };
+  if (
+    canonicalDigest('wukong/gate-plan/v1', gatePlanWithoutDigest)
+      !== input.gatePlan.planDigest
+  ) {
+    throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Loop Gate Plan digest is invalid');
+  }
+  const finishLineCore = {
+    objective,
+    completionCriterion: completionCriterion ?? null,
+    constraints: input.constraints,
+    gatePlanDigest: input.gatePlan.planDigest,
+  };
+  if (
+    canonicalDigest('wukong/finish-line/v1', finishLineCore)
+      !== input.finishLineReview.finishLineDigest
+  ) {
+    throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Loop Finish Line digest is invalid');
+  }
+  const warningCore = {
+    warningPolicyVersion: input.finishLineReview.warningPolicyVersion,
+    finishLineDigest: input.finishLineReview.finishLineDigest,
+    warnings: input.finishLineReview.warnings,
+  };
+  if (
+    canonicalDigest('wukong/finish-line-warnings/v1', warningCore)
+      !== input.finishLineReview.warningSetDigest
+  ) {
+    throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Loop warning-set digest is invalid');
+  }
+  const approvalCore = {
+    schemaVersion: input.gateApproval.schemaVersion,
+    gatePlanDigest: input.gateApproval.gatePlanDigest,
+    warningSetDigest: input.gateApproval.warningSetDigest,
+    guardPolicyVersion: input.gateApproval.guardPolicyVersion,
+    orderedChecks: input.gateApproval.orderedChecks,
+    hasExecutableChecks: input.gateApproval.hasExecutableChecks,
+    ...(input.gateApproval.hasExecutableChecks
+      ? { workspaceIdentityDigest: input.gateApproval.workspaceIdentityDigest }
+      : {}),
+  };
+  if (
+    canonicalDigest('wukong/gate-approval/v1', approvalCore)
+      !== input.gateApproval.approvalSetDigest
+  ) {
+    throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Loop Gate approval digest is invalid');
+  }
+  const identityCore = {
+    canonicalRealpath: input.workspaceIdentity.canonicalRealpath,
+    filesystemIdentity: input.workspaceIdentity.filesystemIdentity,
+    gitCommonDirIdentity: input.workspaceIdentity.gitCommonDirIdentity ?? null,
+  };
+  if (
+    canonicalDigest('wukong/workspace-identity/v1', identityCore)
+      !== input.workspaceIdentity.workspaceIdentityDigest
+  ) {
+    throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Loop workspace identity digest is invalid');
+  }
+}
+
+function normalizeGateCheckStatus(
+  status: LoopGateAttemptInput['checks'][number]['status'] | undefined,
+): GateCheckResultRecordedV1['status'] {
+  switch (status) {
+    case 'passed':
+      return 'passed';
+    case 'failed':
+      return 'failed';
+    case 'timed_out':
+      return 'error';
+    case 'unavailable':
+    case undefined:
+      return 'unavailable';
+  }
+}
+
+function continuationPolicyFor(
+  status: LoopRunTerminalV1['status'],
+  reasonCode: string,
+): ContinuationPolicyV1 {
+  if (status === 'PASS') {
+    return {
+      mode: 'blocked',
+      automaticRetry: false,
+      requiresPreflightRevalidation: true,
+    };
+  }
+  if (
+    reasonCode === 'max_iterations'
+    || reasonCode === 'budget_exhausted'
+    || reasonCode === 'model_blocked'
+    || reasonCode === 'no_progress'
+  ) {
+    return {
+      mode: 'same-contract',
+      automaticRetry: false,
+      requiresPreflightRevalidation: true,
+    };
+  }
+  if (
+    reasonCode === 'workspace_mismatch'
+    || reasonCode === 'workspace_trust_mismatch'
+    || reasonCode === 'gate_plan_drift'
+    || reasonCode === 'gate_plan_changed'
+    || reasonCode === 'frozen_check_missing'
+    || reasonCode === 'review_policy_changed'
+    || reasonCode === 'trust_revoked'
+  ) {
+    return {
+      mode: 'restore-or-revise',
+      automaticRetry: false,
+      requiresPreflightRevalidation: true,
+    };
+  }
+  if (reasonCode === 'contract_update_required') {
+    return {
+      mode: 'revised-loop',
+      automaticRetry: false,
+      requiresPreflightRevalidation: true,
+    };
+  }
+  return {
+    mode: 'blocked',
+    automaticRetry: false,
+    requiresPreflightRevalidation: true,
+  };
+}
+
+function blockedReasonCode(reason: string | undefined): string {
+  const normalized = reason?.toLowerCase() ?? '';
+  if (normalized.includes('budget')) return 'budget_exhausted';
+  if (normalized.includes('permission') || normalized.includes('denied')) {
+    return 'permission_denied';
+  }
+  if (normalized.includes('hook')) return 'hook_blocked';
+  return 'runtime_blocked';
+}
+
+function legacyContractRecordIdentity(state: GoalState): string {
+  const contract = state.loopContract;
+  if (contract === undefined || contract.schemaVersion !== 1) return `goal:${state.goalId}:none`;
+  return canonicalDigest('wukong/legacy-contract-record/v1', {
+    goalId: state.goalId,
+    objective: contract.objective,
+    createdAt: contract.createdAt,
+  });
 }
 
 function normalizeStrategyAttempt(attempt: LoopStrategyAttempt): LoopStrategyAttempt {

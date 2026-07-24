@@ -72,10 +72,22 @@ export class BlobStore {
       case "full_compaction.complete":
       case "goal.clear":
       case "goal.contract.create":
+      case "goal.contract.identity.assign":
       case "goal.create":
+      case "goal.lineage.create":
       case "goal.review.record":
       case "goal.strategy.record":
       case "goal.update":
+      case "loop.builtin-risk-scan-result.create":
+      case "loop.continuation.create":
+      case "loop.evidence-snapshot.create":
+      case "loop.gate-attempt.complete":
+      case "loop.gate-attempt.create":
+      case "loop.gate-check-result.create":
+      case "loop.proof-aggregate.create":
+      case "loop.reviewer-result.create":
+      case "loop.run.create":
+      case "loop.run.terminal":
       case "metadata":
       case "micro_compaction.apply":
       case "permission.record_approval_result":
@@ -134,10 +146,22 @@ export class BlobStore {
       case "full_compaction.complete":
       case "goal.clear":
       case "goal.contract.create":
+      case "goal.contract.identity.assign":
       case "goal.create":
+      case "goal.lineage.create":
       case "goal.review.record":
       case "goal.strategy.record":
       case "goal.update":
+      case "loop.builtin-risk-scan-result.create":
+      case "loop.continuation.create":
+      case "loop.evidence-snapshot.create":
+      case "loop.gate-attempt.complete":
+      case "loop.gate-attempt.create":
+      case "loop.gate-check-result.create":
+      case "loop.proof-aggregate.create":
+      case "loop.reviewer-result.create":
+      case "loop.run.create":
+      case "loop.run.terminal":
       case "metadata":
       case "micro_compaction.apply":
       case "permission.record_approval_result":

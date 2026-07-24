@@ -158,6 +158,28 @@ describe('runProof', () => {
     expect(result.verification.risks).toEqual([]);
   });
 
+  it('honors an explicitly frozen empty command selection without rediscovery', async () => {
+    const cwd = await makeTempRepo('wukong-proof-frozen-empty-');
+    await writeJson(join(cwd, 'package.json'), {
+      scripts: {
+        test: 'node -e "process.exit(9)"',
+      },
+    });
+    await writeRepoFile(cwd, 'README.md', '# Docs only\n');
+    await gitAdd(cwd);
+
+    const result = await runProof({
+      cwd,
+      selectedCommands: [],
+      retryOnWorkspaceChange: false,
+      writeReport: false,
+    });
+
+    expect(result.verification.selectedCommands).toEqual([]);
+    expect(result.verification.commandResults).toEqual([]);
+    expect(result.status).toBe('passed');
+  });
+
   it('escalates warnings to blocked in strict mode', async () => {
     const cwd = await makeTempRepo('wukong-proof-strict-');
     await writeRepoFile(cwd, 'src/feature.ts', 'export const feature = () => 1;\n');

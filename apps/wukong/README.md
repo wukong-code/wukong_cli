@@ -16,6 +16,9 @@ wukong web
 wukong verify
 wukong scan
 wukong guard
+wukong proof
+wukong judge
+wukong loop "ship the change"
 wukong login
 wukong doctor
 wukong export [sessionId]
@@ -24,7 +27,14 @@ wukong migrate
 wukong upgrade
 ```
 
-`verify`, `scan`, `guard`, matching TUI slash commands (`/verify`, `/scan`, `/guard`, `/goal`), and the `wukong_verify` builtin agent tool are implemented as the local P0 commercial refactor loop. The next milestone (P0.5) adds `/loop` (local interval), `/proof`, and `/judge`; `/schedule` (cloud routine) follows with hosted execution. `sync`, billing, team rules, and deep review remain planned follow-up work.
+The normal interactive path is `/resume` → `/loop` → Gate. In 0.0.19 every
+new Loop first confirms an explicit Finish Line and freezes exact project-check
+provenance, workspace trust, and Gate approval. `wukong loop --dry-run` previews
+the same contract without creating local state. `verify`, `scan`, `proof`,
+`judge`, and their TUI equivalents remain advanced local diagnostics; `/goal`
+is the hidden compatibility execution engine behind Loop. The package remains
+free, local-first, and BYOK. It does not provide hosted inference, payment,
+quota, cloud session/evidence sync, PR Gate, or a complete shell sandbox.
 
 ## Development
 

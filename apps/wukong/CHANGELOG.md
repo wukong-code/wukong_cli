@@ -1,5 +1,11 @@
 # @wukong.today/code
 
+## 0.0.19
+
+### Patch Changes
+
+- Add explicit Loop finish lines with frozen project checks, workspace trust, durable Gate evidence, and traceable continuation runs. Use `/loop` or `wukong loop --dry-run` to review the contract before starting.
+
 ## 0.0.18
 
 ### Patch Changes

@@ -19,12 +19,20 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { createWorkspaceSnapshot, runJudge, runProof, runScan, runVerification } from '@wukong/verification';
+import {
+  createWorkspaceSnapshot,
+  runJudge,
+  runProof,
+  runScan,
+  runVerification,
+  validateFrozenGatePlan,
+} from '@wukong/verification';
 import type { ProofBlocker, ProofResult } from '@wukong/verification';
 import type { Agent } from '#/agent';
 import { z } from 'zod';
 
 import type {
+  GateAttemptCompletedV1,
   GoalStopCondition,
   LoopContract,
   LoopResult,
@@ -155,6 +163,10 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
                 checks: [],
                 blockers: [],
               });
+              goal.recordLoopTerminal({
+                status: 'NEEDS_WORK',
+                reasonCode: 'max_iterations',
+              });
               const blocked = await goal.markBlocked(
                 { reason: loopTerminalReason('NEEDS_WORK', 'max_iterations', 'Maximum Loop iterations reached.') },
                 'system',
@@ -206,10 +218,29 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
                 goal.recordStrategyAttempt(gate.strategyAttempt);
               }
             }
+            const gateAttempt = recordGateAudit(goal, gate);
+            if (gate.passed && gateAttempt !== null && gateAttempt.status !== 'PASS') {
+              gate = {
+                ...gate,
+                passed: false,
+                terminal: true,
+                terminalStatus: 'ERROR',
+                reasonCode: gateAttempt.reasonCode,
+                reason: gateAttempt.reasonCode === 'check_unstable'
+                  ? 'The same frozen check produced contradictory results on the same workspace snapshot.'
+                  : 'The durable Gate aggregate rejected the apparent PASS result.',
+              };
+            }
             if (!gate.passed) {
               if (gate.terminal === true) {
                 const terminalStatus = gate.terminalStatus ?? 'ERROR';
                 goal.recordLoopResult(loopResultFromGate(terminalStatus, gate));
+                goal.recordLoopTerminal({
+                  status: terminalStatus,
+                  reasonCode: gate.reasonCode ?? 'verification_error',
+                  blockerKeys: blockerKeysFromGate(gate),
+                  attempt: gateAttempt,
+                });
                 await goal.markBlocked({
                   reason: loopTerminalReason(terminalStatus, gate.reasonCode ?? 'verification_error', gate.reason),
                 }, 'system');
@@ -230,6 +261,12 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
                   reason: `Maximum Loop iterations reached. Last blocker: ${gate.reason}`,
                 };
                 goal.recordLoopResult(loopResultFromGate('NEEDS_WORK', maxResult));
+                goal.recordLoopTerminal({
+                  status: 'NEEDS_WORK',
+                  reasonCode: 'max_iterations',
+                  blockerKeys: blockerKeysFromGate(maxResult),
+                  attempt: gateAttempt,
+                });
                 await goal.markBlocked({
                   reason: loopTerminalReason('NEEDS_WORK', 'max_iterations', maxResult.reason),
                 }, 'system');
@@ -253,6 +290,11 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
               };
             }
             goal.recordLoopResult(loopResultFromGate('PASS', gate));
+            goal.recordLoopTerminal({
+              status: 'PASS',
+              reasonCode: gate.reasonCode ?? 'passed',
+              attempt: gateAttempt,
+            });
             completionReason = loopTerminalReason('PASS', gate.reasonCode ?? 'passed', gate.reason);
           }
           const completed = await goal.markComplete({ reason: completionReason }, 'model');
@@ -280,6 +322,10 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
               summary: 'The writer reported that the Loop cannot continue.',
               checks: [],
               blockers: [],
+            });
+            goal.recordLoopTerminal({
+              status: 'NEEDS_WORK',
+              reasonCode: 'model_blocked',
             });
           }
           const blocked = await goal.markBlocked(
@@ -314,6 +360,7 @@ interface GateResult {
   readonly terminalStatus?: 'NEEDS_WORK' | 'ERROR';
   readonly reviewAttempt?: LoopReviewAttempt;
   readonly strategyAttempt?: LoopStrategyAttempt;
+  readonly proof?: ProofResult;
 }
 
 async function runGoalGate(
@@ -329,7 +376,77 @@ async function runGoalGate(
   const cwd = agent.config.cwd;
   switch (stopCondition) {
     case 'proof-pass': {
-      const proof = await runProof({ cwd, writeReport: false, signal });
+      if (contract.schemaVersion === 2) {
+        const precheck = await validateFrozenGatePlan(cwd, contract);
+        if (!precheck.ok) {
+          return {
+            passed: false,
+            terminal: true,
+            terminalStatus: precheck.reasonCode === 'contract_update_required'
+              || precheck.reasonCode === 'gate_plan_changed'
+              || precheck.reasonCode === 'frozen_check_missing'
+              || precheck.reasonCode === 'review_policy_changed'
+              ? 'NEEDS_WORK'
+              : 'ERROR',
+            reasonCode: precheck.reasonCode ?? 'verification_error',
+            reason: precheck.message ?? 'The frozen Gate Plan could not be validated.',
+          };
+        }
+        const unresolved = contract.gatePlan.requiredChecks.find(
+          (check) => check.resolution === 'expected-unresolved',
+        );
+        if (unresolved !== undefined) {
+          return {
+            passed: false,
+            reasonCode: 'check_definition_unresolved',
+            reason: `Required check is not defined yet: ${unresolved.displayCommand}`,
+            blockers: [{
+              id: 'check_definition_unresolved',
+              kind: 'check',
+              summary: `Required check is not defined yet: ${unresolved.displayCommand}`,
+              command: unresolved.displayCommand,
+              nextAction: 'Define the check, then start a Revised Loop to review and freeze its real definition.',
+            }],
+          };
+        }
+      }
+      const frozenCommands = contract.schemaVersion === 2
+        ? contract.gatePlan.requiredChecks.flatMap(
+            (check) => check.resolution === 'resolved' ? [check.executionCommand] : [],
+          )
+        : undefined;
+      const selectedCommands = contract.schemaVersion === 2
+        ? contract.gatePlan.requiredChecks.flatMap((check) => check.resolution === 'resolved'
+          ? [{
+              id: check.id,
+              command: check.executionCommand,
+              source: check.source,
+              sourceLocator: check.sourceLocator,
+            }]
+          : [])
+        : undefined;
+      const proof = await runProof({
+        cwd,
+        commands: frozenCommands,
+        selectedCommands,
+        retryOnWorkspaceChange: contract.schemaVersion === 2 ? false : undefined,
+        writeReport: false,
+        signal,
+      });
+      if (contract.schemaVersion === 2) {
+        const postcheck = await validateFrozenGatePlan(cwd, contract);
+        if (!postcheck.ok) {
+          return {
+            passed: false,
+            terminal: true,
+            terminalStatus: 'NEEDS_WORK',
+            reasonCode: postcheck.reasonCode ?? 'workspace_changed',
+            reason: postcheck.message ?? 'The frozen Gate Plan changed while checks were running.',
+            checks: proofChecks(proof),
+            proof,
+          };
+        }
+      }
       if (proof.status === 'blocked') {
         return {
           passed: false,
@@ -343,9 +460,10 @@ async function runGoalGate(
             priorReview,
             agent.config.modelAlias,
           ),
+          proof,
         };
       }
-      return runFreshReviewer(
+      const reviewed = await runFreshReviewer(
         agent,
         objective,
         reviewModel,
@@ -355,6 +473,7 @@ async function runGoalGate(
         parentToolCallId,
         signal,
       );
+      return { ...reviewed, proof };
     }
     case 'verify-pass': {
       const result = await runVerification({ cwd, writeReport: false, signal });
@@ -928,6 +1047,47 @@ function proofChecks(proof: ProofResult): LoopResult['checks'] {
     exitCode: result.exitCode,
     durationMs: result.durationMs,
   }));
+}
+
+function blockerKeysFromGate(gate: GateResult): string[] {
+  const reviewKeys = gate.reviewAttempt?.blockerKeys ?? [];
+  const proofKeys = (gate.blockers ?? []).map((blocker) => (
+    blocker.kind === 'check'
+      ? checkBlockerKey(
+          blocker.command ?? blocker.id,
+          blocker.id === 'check_unavailable' ? 'unavailable' : 'failed',
+        )
+      : `proof:${normalizeKeyPart(blocker.kind)}:${normalizeKeyPart(blocker.id)}:${normalizeFile(blocker.file)}`
+  ));
+  return [...new Set([...reviewKeys, ...proofKeys])].toSorted();
+}
+
+function recordGateAudit(
+  goal: Agent['goal'],
+  gate: GateResult,
+): GateAttemptCompletedV1 | null {
+  const proof = gate.proof;
+  if (proof === undefined) return null;
+  const reviewerStatus = gate.passed
+    ? 'PASS' as const
+    : gate.reviewAttempt === undefined
+      ? 'INCONCLUSIVE' as const
+      : 'NEEDS_WORK' as const;
+  return goal.recordGateAttempt({
+    status: gate.passed ? 'PASS' : gate.terminalStatus ?? 'NEEDS_WORK',
+    reasonCode: gate.reasonCode ?? (gate.passed ? 'passed' : 'verification_error'),
+    workspaceFingerprint: workspaceFingerprint(proof),
+    checks: proof.verification.commandResults,
+    scanFindings: proof.scan.risks,
+    reviewerStatus,
+    reviewerPayload: {
+      status: reviewerStatus,
+      summary: gate.reason,
+      findings: gate.findings ?? [],
+      reviewAttempt: gate.reviewAttempt,
+    },
+    blockerKeys: blockerKeysFromGate(gate),
+  });
 }
 
 function loopResultFromGate(

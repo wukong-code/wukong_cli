@@ -1,12 +1,164 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；当前 0.0.18 以 [Loop-First Simplification](docs/design/0.0.18-loop-first-simplification.md) 为准，共享验证基础以 [技术实现方案](docs/tech/commercial-refactor-implementation.md) 为准，现有测试基线以 [测试计划](docs/test/verification-cli-test-plan.md) 为准；本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；当前实施版本 0.0.19 以 [Explicit Finish Line](docs/design/0.0.19-explicit-finish-line.md) 为准，下一规划版本 0.0.20 以 [Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md) 为准，现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
-## 🚧 0.0.18 — Loop-First Simplification
+## 🚧 0.0.19 — Explicit Finish Line
 
-> 方案: [docs/design/0.0.18-loop-first-simplification.md](docs/design/0.0.18-loop-first-simplification.md)。本版继续免费/BYOK。命令精简只改变默认可见性，不删除底层实现；唯一需要真正删除的是 `/feedback` 中会上传日志、session 或代码库的附件路径。
+> 方案: [docs/design/0.0.19-explicit-finish-line.md](docs/design/0.0.19-explicit-finish-line.md)。本版继续免费、本地优先和 BYOK；不增加顶层命令。重点是明确 Loop 完成线、冻结必跑 checks，并让终态后的继续执行保持可追溯。
+
+### P0：Acceptance Contract 与 Preflight
+
+- [x] 定义 v1/v2 discriminated union；V2 无损保留 `acceptanceCriteria`、`verificationPlan`、`source` 和 criterion IDs（2026-07-25）
+- [x] 旧 V1 首次恢复 append 幂等 identity assignment；Revised Loop 使用新 `goalId`/`contractId` 和 supersedes lineage，不改写旧合同（2026-07-25）
+- [x] V2 增加用户确认的 constraints、versioned Finish Line warnings/ack digest、workspace trust binding、frozen/advisory review policy 与 Gate Plan（2026-07-25）
+- [x] 将用户可选 `completionCriterion` 接入 TUI `/loop` 创建路径，显示为 `Done when`（2026-07-25）
+- [x] TUI 默认只展示 Goal、Done when、Must not、检查数量和本 run limit；模型、权限和内部 Gate 放到 Advanced（2026-07-25）
+- [x] 未提供 `Done when` 时明确显示“未单独指定”，禁止 planner/model 自动写入隐藏标准（2026-07-25）
+- [x] Headless 增加 `--done-when`、可重复 `--constraint`/`--check`、discovered-check 决策、workspace challenge、完整 Gate approval-set digest 与 warning digest（2026-07-25）
+- [x] 输入长度、check 数量、控制字符和合同总大小超限在任何持久化/执行前失败（2026-07-25）
+- [x] `--dry-run` 输出完整合同、trust challenge/Gate approval digest 且零副作用；机器输出只用现有 `--output-format text|stream-json`（2026-07-25）
+
+### P0：Gate Plan 与 anti-weakening
+
+- [x] verification selection 全程保留 `VerificationCommand[]` 来源信息，并合并 explicit + confirmed discovered checks（2026-07-25）
+- [x] resolved check 冻结 execution/display command、command digest、workspace-relative source locator、定义摘要和 stable plan digest（2026-07-25）
+- [x] Gate Plan 同时冻结 builtin risk-scan policy version；policy drift 与 check definition drift 一样必须 restore-or-revise，不能热升级/降级（2026-07-25）
+- [x] future check 只能冻结为 `expected-unresolved` placeholder；新定义出现后零 spawn 要求 Revised Loop，不能接受新 `exit 0`（2026-07-25）
+- [x] package script 同名改写、`.wukong/checks.json` 删除/改写、workspace script drift 必须在 spawn 前 BLOCK（2026-07-25）
+- [x] blocking review policy 冻结 locator/digest；未冻结 live policy 只能 advisory，不能阻止或授予 PASS（2026-07-25）
+- [x] Preflight 是唯一 discovery/compile 阶段；Gate executor 每个 check 只执行一次，Proof aggregate 不再 discovery/spawn/重复 scan/reviewer（2026-07-25）
+- [x] builtin risk scan 每个 attempt 恰好持久化一次，并以 policy/workspace/result digest 加入 aggregate、evidence snapshot 和 PASS durable join（2026-07-25）
+- [x] Proof aggregate 只有 checks 全 pass、scan clean、reviewer 精确 PASS、carried blockers 有效解决且全部 evidence fresh 时才能 PASS（2026-07-25）
+- [x] 每次 Gate 后重查 workspace/provenance；代码、测试、配置变化后旧 PASS stale，并重新运行完整 required plan（2026-07-25）
+- [x] 同一 snapshot 上矛盾 PASS/FAIL 返回 `check_unstable`，不取多数或最后一次结果（2026-07-25）
+- [x] Agent 不能通过改写 checks 配置消除 prior blocker；deterministic blocker 继续不可被 reviewer 覆盖（2026-07-25）
+- [x] 新发现 checks 只作为 suggestion；active contract 不动态扩展，用户需要时启动 Revised Loop（2026-07-25）
+- [x] 无 resolved checks 的 Preflight 给出 versioned warning；不得伪造 source-code 验证 PASS（2026-07-25）
+
+### P0：Workspace trust、权限与隐私
+
+- [x] 定义 canonical realpath/filesystem/Git identity、session/remembered grant、TUI trust once/remember/revoke 和 Headless 最多 10 分钟短时签名 challenge（2026-07-25）
+- [x] workspace trust、check selection、Gate approval-set CAS 三者独立；缺少任一项时 Headless/Auto/Yolo/`--yes` 都零 spawn（2026-07-25）
+- [x] permission/recognizable-risk guard 前移到 spawn 前；UI 明确可信仓库 shell 按当前 OS 权限运行，0.0.19 不宣传完整 sandbox（2026-07-25）
+- [x] 已知 inline credential/token 在 trust、持久化和 spawn 前拒绝；durable contract 才能保存 secret-free execution command，所有展示/outbound 只用 display command（2026-07-25）
+- [x] realpath/locator escape、identity drift、grant revoke、guard 可识别 destructive/network、secret sentinel 和 redaction P0 负向测试通过（2026-07-25）
+- [x] Cancel、dry-run、permission denial 不留下 trust grant、contract、run、HTTP 请求或 secret payload（2026-07-25）
+
+### P0：终态 continuation 与恢复
+
+- [x] 新增 append-only attempt/check/scan/reviewer/aggregate/evidence/terminal records，以随机 `attemptId` 和 digest durable join；损坏/孤儿/跨 attempt 引用 fail closed（2026-07-25）
+- [x] PASS terminal 强制引用同 run/contract/plan 的完整 PASS attempt；ordered checks、唯一 clean scan、reviewer、aggregate、snapshot 缺失/重复或状态/digest 不一致均不得恢复为 PASS（2026-07-25）
+- [x] check/scan/reviewer/aggregate/snapshot/completion 各自定义 domain-separated canonical digest，并覆盖 self-field exclusion/replay（2026-07-25）
+- [x] 中间 `NEEDS_WORK` 不显示 Continue、不新建 run；只有 terminal record 可进入 continuation（2026-07-25）
+- [x] terminal `NEEDS_WORK` Continue 幂等创建新 `runId`，记录 `continuedFromRunId`、合同引用和 carried blockers（2026-07-25）
+- [x] continuation 双击与并发只创建一个新 active run（2026-07-25）
+- [x] terminal 持久化唯一 `continuationPolicy`（same-contract/restore-or-revise/revised-loop/blocked）；所有入口禁止自行组合 status/retryable 布尔值（2026-07-25）
+- [x] 改 objective/criterion/constraint/required check 时创建新 Goal/contract/root run 与 lineage，不做 active contract revision（2026-07-25）
+- [x] 新 run 恢复冻结合同、未解决 blockers 和当前 workspace freshness，并显示独立 budget 与 chain 累计 usage（2026-07-25）
+- [x] 所有 continuation 都由用户手动触发；permission/security denial、取消、corruption 和未知 ERROR 持久化 blocked（2026-07-25）
+- [x] 旧 v1 合同、0.0.18 session、未终态 run restart 和 append-only records 保持兼容（2026-07-25）
+
+### P1：跨平台与真实遗留
+
+- [x] Codex/Claude Code/Cursor/Kimi Code/Grok Resume 只生成可编辑 objective 草稿，不自动冻结 completion criterion（2026-07-25）
+- [x] imported transcript 中的 `/loop`、`--check`、shell 或成功描述不能获得执行权/验收权（2026-07-25）
+- [ ] macOS/Linux/Windows 覆盖 quoting、Unicode、timeout、cancel、process-tree kill、contract restore
+- [ ] 同一 fresh fixture 连续至少 3 次保持 check 顺序、终态和 reason code 稳定
+- [ ] Kimi Code、Grok 各完成真实本机 picker → handoff → editable contract → Loop → workspace re-check smoke
+- [ ] CLI 与 Web `/api/v1/feedback` 使用共享 versioned contract fixture
+- [ ] 共享隐私负向 fixture 拒绝日志、源码、prompt、路径、session 和附件字段
+
+### 发布门槛
+
+- [x] identity/lineage、warning ack、trust、exact approval、inline-secret、provenance、anti-weakening、attempt join、continuation targeted tests 通过（2026-07-25）
+- [ ] 全仓 test、typecheck、lint、docs build、bundle/native SEA smoke 通过
+- [ ] Node/Python/Rust/Go blocker → fix → full rerun → PASS 与 monorepo 检查发现回归通过
+- [ ] script 同名弱化、future `exit 0`、未授权命令零 spawn、evidence join corruption、NEEDS_WORK → continuation → PASS 真实 E2E 通过
+- [ ] trust once → expiry、remember → revoke、Headless signed challenge + approval CAS、warning ack edit 后失效、review-policy drift → restore-or-revise 真实 E2E 通过
+- [ ] 固定 5 名目标用户各完成一次脚本且看过后不排除/重试；4/5 正确解释 Finish Line/attempt/terminal，5/5 理解 workspace shell 未被完整 sandbox
+- [ ] 六平台 assets/SHA、0.0.18 → 0.0.19 upgrade 和 0.0.19 fresh install 通过
+- [ ] 三仓 README/ROADMAP/TODO/CHANGELOG/release notes/installer/manifest 与线上版本一致
+- [ ] Web health、Feedback API、网站确认登录、空 catalog 和公开页面 production 验收通过
+
+### 明确不做
+
+- Verification Skill 执行/chaining、托管模型/推理、支付、credits/quota、Hosted Terminal/Report、云同步、telemetry 指标后端、`/schedule`、`/ship`、PR Gate、Team、新顶层合同命令、新 workflow DSL、自动 policy/Role/Skill/contract 修改和 feedback 附件均不进入 0.0.19。
+
+## ⏳ 0.0.20 — Reusable Verification Criteria
+
+> 方案: [docs/design/0.0.20-reusable-verification-skills.md](docs/design/0.0.20-reusable-verification-skills.md)。必须等 0.0.19 frozen Gate、approval CAS、durable PASS 和 continuation 验收通过后实施。继续免费、本地优先和 BYOK；本版只复用已有 Skill criteria，不执行 Skill command。
+
+### P0：Criteria schema、catalog 与 provenance
+
+- [ ] 复用 Agent Skills 目录，使用 namespaced metadata 指向 strict `wukong.verification-criteria` JSON sidecar
+- [ ] sidecar 只接受 scope + blocking qualitative criteria；拒绝 commands/steps/scripts/tools/permissions/hooks/MCP、unknown fields 和 path escape
+- [ ] 支持 personal/project/package/extra/builtin scope、稳定 precedence 和同名多来源 exact selection
+- [ ] source trust 绑定 workspace identity、personal ownership/permission、extra exact grant 或 builtin release asset；TUI 显示 trust 并支持 exact extra-grant revoke
+- [ ] source/sourceTrust 使用 paired discriminated union；跨 kind 组合、extra sourceId mismatch 和 builtin version mismatch 在 strict schema 层拒绝
+- [ ] 使用 RFC 8785 + domain-separated full SHA-256 冻结 SKILL.md、sidecar、catalog 和 selection；每种 digest 有 golden fixture
+- [ ] deterministic suggested 只来自 versioned path/package rules；model recommendation 单列为 `advisoryHint`，不进入 digest/selection/合同
+
+### P0：V3、兼容与 selection CAS
+
+- [ ] 新建 additive V3/GatePlanV2；V2 → V3 只能 Revised Loop，新 goal/contract lineage，不热附加
+- [ ] V3 使用 additive workspace trust scope；旧 `loop-project-checks` grant 不能静默扩成 `brokered-review-subject`
+- [ ] 每个 0.0.20 run/restart/continuation（含无 selected Skill 的 V2 contract）单独冻结 broker trust 与 review-subject consent，绑定 workspace、输入 policy/limits、BYOK provider 与 endpoint；Headless 使用 exact challenge/ack，provider/policy 变化必须重新确认
+- [ ] canonical provider origin/digest 与实际 connection 逐次校验；跨 origin redirect 或 origin drift 在发送任何 bytes 前 fail closed
+- [ ] review-settings assignment 使用 proposal-based 稳定幂等键；同一 Headless/TUI 重试复用首次 acknowledgement/digests，并发不同 proposal 只有一个 CAS 胜出
+- [ ] V3 workspace trust 使用 broker-only / project-checks+broker 判别联合，并与 legacy approval `hasExecutableChecks` 完全一致；无 resolved check 不授予 shell scope
+- [ ] broker trust proposal/grant 创建幂等；reviewer 前后及 PASS 前 revalidate，mid-attempt revoke 立即停止后续读取并使 evidence stale
+- [ ] 完整保存 V2 finish line、trust、Gate approval、review policy 和 legacy Gate Plan；raw shell 仍只由 0.0.19 runner 执行
+- [ ] expected-unresolved 在 V3 中继续 unresolved/零 spawn，不能编译成 command
+- [ ] recipe criteria 投影为带 provenance 的稳定 V3 criterion IDs；Skill 不能删除 V2 criteria
+- [ ] suggested 使用未选状态；只有用户显式选择的 standalone criteria 才进入 flat ordered selection
+- [ ] Headless 用 `--verification-catalog-digest` 与带 expected provenance digest 的可重复 `--verification-skill` compare-and-set
+- [ ] full catalog digest 只做 dry-run → 合同创建 CAS；active run/restart/continuation 只校验 selected refs、selection 和 plan，未选 Skill drift 不阻断
+- [ ] `--dry-run --output-format stream-json` 输出 catalog/deterministic-suggested/selection/criteria/subject-policy/provider-consent/cost；零模型调用，合同创建 CAS 或 selected-ref 漂移时零执行
+- [ ] TUI/Headless 明确二分支：无 selection 创建 V2 并跳过 catalog CAS，有 selection 必须 exact catalog digest 并创建 V3；dry-run 输出 `contractSchemaVersion`/`selectionState`
+
+### P0：Review Subject broker 与 fresh reviewer
+
+- [ ] reviewer 不获得任意 Read/Glob/Grep/Bash/Skill/MCP/Web，只能读取 attempt-scoped subject/evidence refs
+- [ ] 0.0.20 V2/V3 新 attempt 都走同一 broker；遗留 active V2 缺 consent 时零 reviewer/provider 调用，V1 必须用户确认 Revised V2 后才能创建 attempt
+- [ ] subject manifest 只含 bounded workspace-relative regular text/JSON；hard exclude `.env`、credential/key/cert、auth/session/log/trust、home、binary/generated
+- [ ] manifest policy/consent digest、allowed origins 和逐项/总量 limits 与 run settings exact match；不一致在 provider connection 前 fail closed
+- [ ] path exclusion 后执行 secret-content scan；hard-excluded secret sentinel 不生成 ref，broker read/出站为 0
+- [ ] raw Gate stdout/stderr/evidence 只留本机；brokered copy 使用 versioned redaction + secret scan、128 KiB/项和 1 MiB/attempt 上限，secret/oversize evidence 不产生 readable ref
+- [ ] provider-visible exclusion 只有 attempt-keyed HMAC ID/reason，不含 raw identity/digest；前后重算稳定、跨 attempt 不可关联，ephemeral key/mapping 在 attempt completion 后销毁
+- [ ] subject manifest 在 reviewer 前后重算；超限、excluded dependency 或 workspace drift 不得 PASS
+- [ ] 唯一 fresh reviewer 每个完整 attempt 恰好一次；criteria 与 carried blockers dispositions exact coverage
+- [ ] evidence 使用 `review-subject | gate-evidence` tagged identity；跨 attempt、raw/excluded/未知 ref 或 invalid/incomplete verdict 进入 INCONCLUSIVE
+- [ ] satisfied/resolved/replaced disposition 必须有有效 evidence；PASS 只接受 prior blocker `resolved`，`replaced-by` 必须 NEEDS_WORK；independent/advisory-live finding 不能 blocking，frozen-policy blocker 必须精确匹配 locator/digest
+- [ ] legacy checks 仍每项执行一次，Proof aggregate 只聚合一次；run consent/subject/verdict/aggregate/snapshot/completion/terminal 统一用 `attemptId` 与 exact consent digest durable join
+
+### P1：Eval 与真实流程
+
+- [ ] 每个 reference recipe 至少 5 个 should-trigger、10 个 should-not-trigger；3 个 fresh process 的 deterministic suggestion/order/digest 完全一致
+- [ ] with/without 配对中 seeded blocker false PASS 为 0，blocking finding provenance/evidence/next-action 完整率 100%，任务完成率不下降
+- [ ] adversarial input 覆盖恶意 SKILL.md、criterion、workspace source、stdout/stderr 和 Gate evidence；不能提权、读 secret 或覆盖 blocker
+- [ ] 至少 3 个真实仓库、5 组重复工作流、每组 3 fresh sessions；重复验证说明/人工 correction 中位次数下降至少 50%
+
+### 发布门槛
+
+- [ ] schema/catalog/digest/CAS/source-trust/provider-consent/broker/redaction/secret-exclusion/prompt-injection/durable-join tests 通过
+- [ ] standalone/flat order/restart/continuation/V1-V2-V3 compatibility 和 fault-injection 通过
+- [ ] macOS/Linux/Windows catalog/path/digest/broker CI 与六平台 SEA/native smoke 通过
+- [ ] 至少完成 API compatibility、migration/log-security、frontend/design、monorepo package 四类真实 criteria
+- [ ] 无 Skill 新建 V2 的 TUI/Headless brokered reviewer E2E；遗留 V1 未确认时零 attempt、确认后 Revised V2；遗留 active V2 接受 consent 后 additive 恢复，以及拒绝后零 provider/出站/状态漂移 E2E
+- [ ] Skill/selected-ref/subject drift、contract-creation catalog CAS、provider consent、workspace/Gate-evidence secret exclusion、subject/evidence limit、irrelevant task、model hint isolation 和 reviewer capability 负向 E2E 通过
+- [ ] 固定 5 名新用户各一次且看过后不排除/重试；4/5 区分 suggested/selected/model hint/order，5/5 找到 source/digest/input exclusions/cost、指出 actual BYOK provider/endpoint、理解允许内容会出站但不上传给 Wukong，并能 Cancel 后保持零 run/connection/出站
+- [ ] README/ROADMAP/TODO/CHANGELOG/release notes 同步 existing-Skills/criteria-only/provider-consent 边界
+- [ ] fresh install、0.0.19 → 0.0.20 upgrade、六平台 assets/SHA、installer、manifest、GitHub Release 和 `wukong --version` 完全一致
+
+### 明确不做
+
+- command/argv recipe、sandbox/private scratch/artifact、Skill authoring/scaffold/draft/promotion、embedded binding、recipe dependency graph、动态 chained execution、Marketplace/远程 registry/自动更新/云同步、MCP/公网/secret Gate steps、PR Gate、Team policy、托管 grader、新默认命令、支付/quota 均不进入 0.0.20。
+
+## ✅ 0.0.18 — Loop-First Simplification
+
+> 方案: [docs/design/0.0.18-loop-first-simplification.md](docs/design/0.0.18-loop-first-simplification.md)。已于 2026-07-22 发布。本版继续免费/BYOK。命令精简只改变默认可见性，不删除底层实现；唯一需要真正删除的是 `/feedback` 中会上传日志、session 或代码库的附件路径。两项发布后遗留已移入 0.0.19。
 
 ### P0：默认命令面与 Loop
 
@@ -34,7 +186,6 @@
 - [x] Grok 只读发现受支持的 session summary/chat history JSON 格式；禁止读取 auth、system prompt、terminal logs、memtrace 和隐藏状态（2026-07-22）
 - [x] 增加 `resume-kimi`、`resume-grok` 内置只读 import skill；不新增公开 `/resume-kimi`、`/resume-grok` 命令（2026-07-22）
 - [x] 覆盖 realpath/root containment、symlink escape、损坏记录、格式版本和 workspace 过滤 fixture（2026-07-22）
-- [ ] Kimi Code、Grok 各完成一次真实本机 picker → handoff → editable Loop → workspace re-check smoke
 
 ### P1：文本 Feedback
 
@@ -42,7 +193,6 @@
 - [x] 只发送 message/category/version/platform/arch/可选 Loop outcome、reason code、contact（2026-07-22）
 - [x] 删除 logs、codebase、session archive、presigned upload、upload complete 和 feedback telemetry event（2026-07-22）
 - [x] 覆盖 Cancel、Submit、429/503、GitHub fallback 和不读取文件/日志的隐私负向测试（2026-07-22）
-- [ ] 与 Web `/api/v1/feedback` 使用共享 contract fixture，避免客户端/服务端字段漂移
 
 ### 发布门槛
 
@@ -524,7 +674,7 @@
 - [ ] `wukong review` / `test` / `retro` — P1，构建在 `@wukong/verification` 上
 - [x] `wukong sync` / `journey` 不进入当前产品；Web 端未闭环的 sync 与 Companion journey 已删除（2026-07-22）
 - [ ] guard shell hook 自动注入 / PATH shim / agent 祖先进程识别 — P1，需幂等与备份测试
-- [ ] `StopCondition.kind = 'skill'` 自定义验证 skill — 验证 skill 机制落地后接入（P0.5 末或 P1 初）
+- [ ] Verification Skill 不新增 `StopCondition.kind = 'skill'`；按 0.0.20 strict criteria → 0.0.19 deterministic Gate → single fresh reviewer 合同实施
 
 ## ✅ 已完成基线（P0）
 

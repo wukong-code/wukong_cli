@@ -129,6 +129,30 @@ function restoreAgentRecord(agent: Agent, input: AgentRecord): void {
     case 'goal.contract.create':
       agent.goal.restoreContractCreate(input);
       return;
+    case 'goal.contract.identity.assign':
+      agent.goal.restoreContractIdentityAssign(input);
+      return;
+    case 'goal.lineage.create':
+      agent.goal.restoreGoalLineage(input);
+      return;
+    case 'loop.run.create':
+      agent.goal.restoreLoopRunCreate(input);
+      return;
+    case 'loop.run.terminal':
+      agent.goal.restoreLoopRunTerminal(input);
+      return;
+    case 'loop.gate-attempt.complete':
+      agent.goal.restoreGateAttemptComplete(input);
+      return;
+    case 'loop.gate-attempt.create':
+    case 'loop.gate-check-result.create':
+    case 'loop.builtin-risk-scan-result.create':
+    case 'loop.reviewer-result.create':
+    case 'loop.proof-aggregate.create':
+    case 'loop.evidence-snapshot.create':
+    case 'loop.continuation.create':
+      agent.goal.restoreLoopAuditRecord(input);
+      return;
     case 'goal.review.record':
       agent.goal.restoreReviewRecord(input);
       return;

@@ -1,4 +1,11 @@
-import { ErrorCodes, isWukongError, type GoalSnapshot, type PermissionMode } from '@wukong/wukong-sdk';
+import {
+  ErrorCodes,
+  isWukongError,
+  type GoalSnapshot,
+  type LoopContractV2Input,
+  type PermissionMode,
+} from '@wukong/wukong-sdk';
+import type { FinishLineProposal } from '@wukong/verification';
 
 import { parseLoopDuration } from '#/utils/duration';
 import {
@@ -12,8 +19,23 @@ import {
   formatLoopPreflightReady,
   runLoopPreflight,
   type LoopPreflightReady,
+  type DiscoveredCheckDecision,
 } from '#/cli/lib/loop-preflight';
+import {
+  findWorkspaceTrust,
+  grantWorkspaceTrust,
+  type WorkspaceTrustGrant,
+} from '#/cli/lib/workspace-trust';
 
+import {
+  FinishLineEditorComponent,
+  type FinishLineDraft,
+} from '../components/dialogs/finish-line-editor';
+import {
+  FinishLineReviewComponent,
+  type FinishLineReviewChoice,
+} from '../components/dialogs/finish-line-review';
+import { ChoicePickerComponent } from '../components/dialogs/choice-picker';
 import {
   GoalStartPermissionPromptComponent,
   type GoalStartPermissionChoice,
@@ -62,7 +84,11 @@ type GoalCommandHost = Pick<
 
 export interface GoalStartOptions {
   readonly commandName?: 'goal' | 'loop';
-  readonly prepareCreate?: () => Promise<{ readonly maxIterations?: number } | false>;
+  readonly prepareCreate?: () => Promise<{
+    readonly maxIterations?: number;
+    readonly completionCriterion?: string;
+    readonly loopContract?: LoopContractV2Input;
+  } | false>;
   readonly afterCreate?: (snapshot: GoalSnapshot) => void | Promise<void>;
   readonly onCreateError?: () => void | Promise<void>;
   readonly beforeSend?: () => boolean | Promise<boolean>;
@@ -452,11 +478,13 @@ async function startGoal(
   try {
     snapshot = await host.requireSession().createGoal({
       objective: parsed.objective,
+      completionCriterion: prepared?.completionCriterion,
       replace: parsed.replace,
       stopCondition: parsed.stopCondition,
       reviewModel: parsed.reviewModel,
       maxIterations,
       minIntervalMs: parsed.minIntervalMs,
+      loopContract: prepared?.loopContract,
     });
   } catch (error) {
     await options.onCreateError?.();
@@ -500,24 +528,26 @@ async function pauseGoal(host: SlashCommandHost): Promise<void> {
   host.showStatus('Goal paused. Use `/goal resume` to continue.');
 }
 
-async function resumeGoal(host: SlashCommandHost): Promise<void> {
+async function resumeGoal(host: SlashCommandHost): Promise<GoalSnapshot | undefined> {
   if (host.state.appState.model.trim().length === 0 || host.session === undefined) {
     host.showError(LLM_NOT_SET_MESSAGE);
-    return;
+    return undefined;
   }
 
+  let resumed: GoalSnapshot;
   try {
-    await host.requireSession().resumeGoal();
+    resumed = await host.requireSession().resumeGoal();
   } catch (error) {
     if (isWukongError(error) && error.code === ErrorCodes.GOAL_NOT_FOUND) {
       host.showStatus('No goal to resume.');
-      return;
+      return undefined;
     }
     host.showError(formatErrorMessage(error));
-    return;
+    return undefined;
   }
   host.track('goal_resume');
   host.sendNormalUserInput(RESUME_GOAL_INPUT);
+  return resumed;
 }
 
 async function cancelGoal(host: SlashCommandHost): Promise<void> {
@@ -584,11 +614,26 @@ async function resumeLoop(host: SlashCommandHost): Promise<void> {
     host.showStatus('No Loop is available to resume.');
     return;
   }
-  if (goal.loopResult !== undefined) {
-    host.showStatus(`Loop already ended with ${goal.loopResult.status}. Start a new Loop instead.`);
-    return;
+  if (goal.loopContract?.schemaVersion === 2 && goal.loopContract.gateApproval.hasExecutableChecks) {
+    const trusted = await ensureTuiWorkspaceTrust(host, goal.loopContract);
+    if (trusted === false) return;
   }
-  await resumeGoal(host);
+  const previousRunId = goal.loopRunId;
+  const resumed = await resumeGoal(host);
+  if (
+    resumed !== undefined
+    && resumed.loopRunId !== undefined
+    && resumed.loopRunId !== previousRunId
+  ) {
+    const run = await beginLoopRun(resumed.loopRunId);
+    await registerTuiLoop(
+      resumed.goalId,
+      run,
+      host.requireSession().id,
+      host.state.appState.workDir ?? process.cwd(),
+    );
+    host.showStatus('Started a new bounded run under the same frozen Finish Line.');
+  }
 }
 
 async function cancelLoop(host: SlashCommandHost): Promise<void> {
@@ -620,6 +665,9 @@ export type ParsedLoopCommand =
       readonly maxIterations: number;
       readonly minIntervalMs?: number;
       readonly reviewModel?: string;
+      readonly replace?: boolean;
+      readonly supersedesGoalId?: string;
+      readonly supersedesContractId?: string;
     }
   | { readonly kind: 'error'; readonly message: string; readonly severity?: 'error' | 'hint' };
 
@@ -724,11 +772,13 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
 }
 
 export async function handleLoopSlashCommand(host: SlashCommandHost, args: string): Promise<void> {
-  const parsed = parseLoopCommand(args);
+  const revising = args.trim().startsWith('revise ');
+  const parsed = parseLoopCommand(revising ? args.trim().slice('revise '.length) : args);
   switch (parsed.kind) {
     case 'help':
       host.showStatus([
         'Usage: /loop [options] -- <objective>',
+        '       /loop revise [options] -- <new objective>',
         '       /loop status|pause|resume|stop',
         'Options: --max-iterations <n> --every <duration> --review-model <alias>',
       ].join('\n'));
@@ -749,61 +799,447 @@ export async function handleLoopSlashCommand(host: SlashCommandHost, args: strin
     case 'stop':
       await cancelLoop(host);
       return;
-    case 'create': {
-      let run: Awaited<ReturnType<typeof beginLoopRun>> | undefined;
-      let preflight: LoopPreflightReady | undefined;
-      await createGoal(
-        host,
-        {
-          kind: 'create',
-          objective: parsed.objective,
-          replace: false,
-          stopCondition: parsed.stopCondition,
-          maxIterations: parsed.maxIterations,
-          minIntervalMs: parsed.minIntervalMs,
-          reviewModel: parsed.reviewModel,
-        },
-        args,
-        {
-          commandName: 'loop',
-          prepareCreate: async () => {
-            const result = await runLoopPreflight({
-              objective: parsed.objective,
-              model: host.state.appState.model,
-              workspace: host.state.appState.workDir ?? process.cwd(),
-              getActiveGoal: async () => (await host.requireSession().getGoal()).goal,
-            });
-            if (!result.ready) {
-              host.showError(formatLoopPreflightBlocked(result));
-              return false;
-            }
-            preflight = result;
-            run = await beginLoopRun();
-            host.showStatus(formatLoopPreflightReady(result, parsed.maxIterations));
-            return { maxIterations: parsed.maxIterations };
-          },
-          afterCreate: async (snapshot) => {
-            if (run !== undefined) {
-              await registerTuiLoop(
-                snapshot.goalId,
-                run,
-                host.requireSession().id,
-                preflight?.workspace,
-              );
-              host.track('loop_started');
-              if (run.repeatedWithin7d === true) host.track('loop_repeat_started_7d');
-            }
-          },
-          onCreateError: async () => {
-            if (run !== undefined) await completeLoopRun(run, 'ERROR', 0, 'cancelled');
-          },
-          sendInput: () => {
-            // The loop objective is sent as a normal user input after goal creation.
-            host.sendNormalUserInput(parsed.objective);
-          },
-        },
+    case 'create':
+      if (revising) {
+        const current = await getLoopGoal(host);
+        if (current?.loopContract?.schemaVersion !== 2) {
+          host.showStatus('No V2 Loop is available to revise.');
+          return;
+        }
+        const revised: Extract<ParsedLoopCommand, { kind: 'create' }> = {
+          ...parsed,
+          replace: true,
+          supersedesGoalId: current.goalId,
+          supersedesContractId: current.loopContract.contractId,
+        };
+        await openFinishLineReview(host, revised, {
+          objective: revised.objective,
+          constraints: current.loopContract.constraints.map((constraint) => constraint.text),
+        }, args);
+        return;
+      }
+      await openFinishLineReview(host, parsed, {
+        objective: parsed.objective,
+        constraints: [],
+      }, args);
+      return;
+  }
+}
+
+async function openFinishLineReview(
+  host: SlashCommandHost,
+  parsed: Extract<ParsedLoopCommand, { kind: 'create' }>,
+  draft: FinishLineDraft,
+  rawArgs: string,
+  discoveredCheckDecision: DiscoveredCheckDecision = 'tui-default',
+): Promise<void> {
+  const result = await runLoopPreflight({
+    objective: draft.objective,
+    completionCriterion: draft.completionCriterion,
+    constraints: draft.constraints,
+    discoveredCheckDecision,
+    model: host.state.appState.model,
+    workspace: host.state.appState.workDir ?? process.cwd(),
+    mode: 'tui-proposal',
+    getActiveGoal: async () => (await host.requireSession().getGoal()).goal,
+  });
+  if (!result.ready) {
+    host.showError(formatLoopPreflightBlocked(result));
+    return;
+  }
+  showFinishLineReview(host, parsed, draft, rawArgs, result, discoveredCheckDecision);
+}
+
+function showFinishLineReview(
+  host: SlashCommandHost,
+  parsed: Extract<ParsedLoopCommand, { kind: 'create' }>,
+  draft: FinishLineDraft,
+  rawArgs: string,
+  preflight: LoopPreflightReady,
+  discoveredCheckDecision: DiscoveredCheckDecision,
+): void {
+  host.mountEditorReplacement(
+    new FinishLineReviewComponent({
+      proposal: preflight.proposal,
+      maxIterations: parsed.maxIterations,
+      onSelect: (choice) => {
+        void handleFinishLineReviewChoice(
+          host,
+          parsed,
+          draft,
+          rawArgs,
+          preflight,
+          discoveredCheckDecision,
+          choice,
+        );
+      },
+      onCancel: () => {
+        cancelFinishLine(host, rawArgs);
+      },
+    }),
+  );
+}
+
+async function handleFinishLineReviewChoice(
+  host: SlashCommandHost,
+  parsed: Extract<ParsedLoopCommand, { kind: 'create' }>,
+  draft: FinishLineDraft,
+  rawArgs: string,
+  preflight: LoopPreflightReady,
+  discoveredCheckDecision: DiscoveredCheckDecision,
+  choice: FinishLineReviewChoice,
+): Promise<void> {
+  switch (choice) {
+    case 'cancel':
+      cancelFinishLine(host, rawArgs);
+      return;
+    case 'edit':
+      host.mountEditorReplacement(
+        new FinishLineEditorComponent(draft, (result) => {
+          if (result.kind === 'cancel') {
+            showFinishLineReview(
+              host,
+              parsed,
+              draft,
+              rawArgs,
+              preflight,
+              discoveredCheckDecision,
+            );
+            return;
+          }
+          void openFinishLineReview(
+            host,
+            parsed,
+            result.draft,
+            rawArgs,
+            discoveredCheckDecision,
+          );
+        }),
       );
       return;
-    }
+    case 'checks':
+      showFrozenChecks(
+        host,
+        parsed,
+        draft,
+        rawArgs,
+        preflight,
+        discoveredCheckDecision,
+      );
+      return;
+    case 'advanced':
+      showAdvancedLoopSettings(
+        host,
+        parsed,
+        draft,
+        rawArgs,
+        preflight,
+        discoveredCheckDecision,
+      );
+      return;
+    case 'start':
+      host.restoreEditor();
+      await startConfirmedLoop(
+        host,
+        parsed,
+        draft,
+        rawArgs,
+        preflight.proposal,
+        discoveredCheckDecision,
+      );
+      return;
   }
+}
+
+function showAdvancedLoopSettings(
+  host: SlashCommandHost,
+  parsed: Extract<ParsedLoopCommand, { kind: 'create' }>,
+  draft: FinishLineDraft,
+  rawArgs: string,
+  preflight: LoopPreflightReady,
+  discoveredCheckDecision: DiscoveredCheckDecision,
+): void {
+  const limits = [...new Set([parsed.maxIterations, 5, 10, 20])].toSorted((a, b) => a - b);
+  host.mountEditorReplacement(
+    new ChoicePickerComponent({
+      title: 'Advanced Loop settings',
+      hint: '↑↓ navigate · Enter apply · Esc back',
+      notice: [
+        `Reviewer      ${parsed.reviewModel ?? 'fresh reviewer using the active model'}`,
+        `Permission    ${host.state.appState.permissionMode}`,
+        `Every         ${parsed.minIntervalMs === undefined ? 'after each writer attempt' : `${String(parsed.minIntervalMs)} ms`}`,
+        'Use /loop flags to change reviewer model or interval.',
+      ].join('\n'),
+      options: limits.map((limit) => ({
+        value: String(limit),
+        label: `${String(limit)} maximum iterations${limit === parsed.maxIterations ? ' (current)' : ''}`,
+        description: 'Per-run limit; continuing a terminal run starts a new bounded run.',
+      })),
+      onSelect: (value) => {
+        const maxIterations = Number.parseInt(value, 10);
+        showFinishLineReview(
+          host,
+          { ...parsed, maxIterations },
+          draft,
+          rawArgs,
+          preflight,
+          discoveredCheckDecision,
+        );
+      },
+      onCancel: () => {
+        showFinishLineReview(
+          host,
+          parsed,
+          draft,
+          rawArgs,
+          preflight,
+          discoveredCheckDecision,
+        );
+      },
+    }),
+  );
+}
+
+function showFrozenChecks(
+  host: SlashCommandHost,
+  parsed: Extract<ParsedLoopCommand, { kind: 'create' }>,
+  draft: FinishLineDraft,
+  rawArgs: string,
+  preflight: LoopPreflightReady,
+  discoveredCheckDecision: DiscoveredCheckDecision,
+): void {
+  const required = preflight.proposal.gatePlan.requiredChecks;
+  const canExcludeDiscovered = required.some((check) => check.source !== 'explicit');
+  host.mountEditorReplacement(
+    new ChoicePickerComponent({
+      title: 'Required checks',
+      hint: '↑↓ navigate · Enter back · Esc cancel',
+      options: required.length === 0
+        ? [{
+            value: 'back',
+            label: 'No resolved project checks',
+            description: 'The Finish Line warning remains blocking for deterministic source verification.',
+          }]
+        : [
+            ...required.map((check) => ({
+            value: check.id,
+            label: check.displayCommand,
+            description: [
+              check.sourceLocator === undefined ? `Source: ${check.source}` : `Source: ${check.sourceLocator}`,
+              `Selected: ${check.selectedBy}`,
+              check.resolution,
+            ].join(' · '),
+          })),
+            ...(canExcludeDiscovered ? [{
+              value: 'only-explicit',
+              label: 'Exclude discovered checks',
+              description: 'Keep only explicitly supplied checks and record every exclusion in the Gate Plan.',
+            }] : []),
+          ],
+      onSelect: (value) => {
+        if (value === 'only-explicit') {
+          void openFinishLineReview(host, parsed, draft, rawArgs, 'only-explicit');
+          return;
+        }
+        showFinishLineReview(
+          host,
+          parsed,
+          draft,
+          rawArgs,
+          preflight,
+          discoveredCheckDecision,
+        );
+      },
+      onCancel: () => {
+        showFinishLineReview(
+          host,
+          parsed,
+          draft,
+          rawArgs,
+          preflight,
+          discoveredCheckDecision,
+        );
+      },
+    }),
+  );
+}
+
+async function startConfirmedLoop(
+  host: SlashCommandHost,
+  parsed: Extract<ParsedLoopCommand, { kind: 'create' }>,
+  draft: FinishLineDraft,
+  rawArgs: string,
+  proposal: FinishLineProposal,
+  discoveredCheckDecision: DiscoveredCheckDecision,
+): Promise<void> {
+  let run: Awaited<ReturnType<typeof beginLoopRun>> | undefined;
+  let finalized: LoopPreflightReady | undefined;
+  await createGoal(
+    host,
+    {
+      kind: 'create',
+      objective: draft.objective,
+      replace: parsed.replace ?? false,
+      stopCondition: parsed.stopCondition,
+      maxIterations: parsed.maxIterations,
+      minIntervalMs: parsed.minIntervalMs,
+      reviewModel: parsed.reviewModel,
+    },
+    rawArgs,
+    {
+      commandName: 'loop',
+      prepareCreate: async () => {
+        const result = await runLoopPreflight({
+          objective: draft.objective,
+          completionCriterion: draft.completionCriterion,
+          constraints: draft.constraints,
+          discoveredCheckDecision,
+          model: host.state.appState.model,
+          workspace: host.state.appState.workDir ?? process.cwd(),
+          mode: 'tui-confirmed',
+          acknowledgeWarningSetDigest: proposal.finishLineReview.warningSetDigest,
+          getActiveGoal: async () => (await host.requireSession().getGoal()).goal,
+        });
+        if (!result.ready) {
+          host.showError(formatLoopPreflightBlocked(result));
+          return false;
+        }
+        const trustGrant = await ensureTuiWorkspaceTrust(host, result.proposal);
+        if (trustGrant === false) return false;
+        const trustedProposal = trustGrant === undefined
+          || result.proposal.workspaceTrust === undefined
+          ? result.proposal
+          : {
+              ...result.proposal,
+              workspaceTrust: {
+                ...result.proposal.workspaceTrust,
+                trustGrantId: trustGrant.trustGrantId,
+              },
+            };
+        finalized = { ...result, proposal: trustedProposal, trustGrant };
+        host.showStatus(formatLoopPreflightReady(result, parsed.maxIterations));
+        return {
+          maxIterations: parsed.maxIterations,
+          completionCriterion: result.proposal.completionCriterion,
+          loopContract: loopContractInput(
+            trustedProposal,
+            parsed.supersedesGoalId,
+            parsed.supersedesContractId,
+          ),
+        };
+      },
+      afterCreate: async (snapshot) => {
+        if (snapshot.loopRunId === undefined) {
+          throw new Error('Loop contract was created without an authoritative run id.');
+        }
+        run = await beginLoopRun(snapshot.loopRunId);
+        await registerTuiLoop(
+          snapshot.goalId,
+          run,
+          host.requireSession().id,
+          finalized?.workspace,
+        );
+        host.track('loop_started');
+        if (run.repeatedWithin7d === true) host.track('loop_repeat_started_7d');
+      },
+      onCreateError: async () => {
+        if (run !== undefined) await completeLoopRun(run, 'ERROR', 0, 'cancelled');
+      },
+      sendInput: () => {
+        host.sendNormalUserInput(draft.objective);
+      },
+    },
+  );
+}
+
+async function ensureTuiWorkspaceTrust(
+  host: SlashCommandHost,
+  proposal: Pick<FinishLineProposal, 'gateApproval' | 'gatePlan' | 'workspaceIdentity'>,
+): Promise<WorkspaceTrustGrant | undefined | false> {
+  if (!proposal.gateApproval.hasExecutableChecks) return undefined;
+  const existing = await findWorkspaceTrust(proposal.workspaceIdentity.workspaceIdentityDigest);
+  if (existing !== undefined) return existing;
+  return new Promise<WorkspaceTrustGrant | false>((resolve) => {
+    host.mountEditorReplacement(
+      new ChoicePickerComponent({
+        title: 'Trust this workspace before running project checks?',
+        hint: '↑↓ navigate · Enter select · Esc cancel',
+        notice: [
+          `Canonical path   ${proposal.workspaceIdentity.canonicalRealpath}`,
+          `Identity         ${proposal.workspaceIdentity.workspaceIdentityDigest}`,
+          `Selected checks  ${String(proposal.gatePlan.requiredChecks.length)}`,
+          'Risk summary     project shell commands run with current OS permissions',
+        ].join('\n'),
+        noticeTone: 'warning',
+        options: [
+          {
+            value: 'session',
+            label: 'Trust once',
+            description: 'Valid only for this Wukong process.',
+          },
+          {
+            value: 'remembered-local',
+            label: 'Remember locally',
+            description: 'Store this exact workspace identity in the local 0600 trust store.',
+          },
+          {
+            value: 'cancel',
+            label: 'Cancel',
+            description: 'Create no trust grant, contract, or run.',
+          },
+        ],
+        onSelect: (value) => {
+          if (value === 'cancel') {
+            host.restoreEditor();
+            host.showStatus('Loop not started.');
+            resolve(false);
+            return;
+          }
+          void grantWorkspaceTrust(
+            proposal.workspaceIdentity,
+            value === 'remembered-local' ? 'remembered-local' : 'session',
+          ).then((grant) => {
+            host.restoreEditor();
+            resolve(grant);
+          }).catch((error: unknown) => {
+            host.restoreEditor();
+            host.showError(`Failed to trust workspace: ${formatErrorMessage(error)}`);
+            resolve(false);
+          });
+        },
+        onCancel: () => {
+          host.restoreEditor();
+          host.showStatus('Loop not started.');
+          resolve(false);
+        },
+      }),
+    );
+  });
+}
+
+function loopContractInput(
+  proposal: FinishLineProposal,
+  supersedesGoalId?: string,
+  supersedesContractId?: string,
+): LoopContractV2Input {
+  return {
+    schemaVersion: 2,
+    objective: proposal.objective,
+    completionCriterion: proposal.completionCriterion,
+    constraints: proposal.constraints,
+    finishLineReview: proposal.finishLineReview,
+    workspaceIdentity: proposal.workspaceIdentity,
+    workspaceTrust: proposal.workspaceTrust,
+    gateApproval: proposal.gateApproval,
+    gatePlan: proposal.gatePlan,
+    reviewPolicy: proposal.reviewPolicy,
+    source: 'user',
+    supersedesGoalId,
+    supersedesContractId,
+  };
+}
+
+function cancelFinishLine(host: SlashCommandHost, rawArgs: string): void {
+  host.restoreInputText(`/loop ${rawArgs.trim()}`);
+  host.showStatus('Loop not started.');
 }

@@ -6,6 +6,7 @@ export type SettingsSelection =
   | 'editor'
   | 'permission'
   | 'experiments'
+  | 'workspace-trust'
   | 'upgrade'
   | 'usage';
 
@@ -36,6 +37,11 @@ const SETTINGS_OPTIONS: readonly ChoiceOption[] = [
     description: 'Turn experimental features on or off.',
   },
   {
+    value: 'workspace-trust',
+    label: 'Trusted workspaces',
+    description: 'Review or revoke Loop project-check trust grants.',
+  },
+  {
     value: 'upgrade',
     label: 'Automatic updates',
     description: 'Turn automatic CLI updates on or off.',
@@ -54,6 +60,7 @@ function isSettingsSelection(value: string): value is SettingsSelection {
     value === 'editor' ||
     value === 'permission' ||
     value === 'experiments' ||
+    value === 'workspace-trust' ||
     value === 'upgrade' ||
     value === 'usage'
   );

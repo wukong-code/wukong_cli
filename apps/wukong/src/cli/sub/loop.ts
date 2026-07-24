@@ -1,8 +1,14 @@
 import type { Command } from 'commander';
 
+import {
+  formatLoopDryRun,
+  formatLoopPreflightBlocked,
+  formatLoopPreflightReady,
+  runLoopPreflight,
+} from '#/cli/lib/loop-preflight';
 import { parseLoopDuration } from '#/utils/duration';
 
-const MAX_LOOP_OBJECTIVE_LENGTH = 4000;
+const MAX_LOOP_OBJECTIVE_LENGTH = 8000;
 
 export interface LoopCliOptions {
   readonly objective?: string;
@@ -12,6 +18,14 @@ export interface LoopCliOptions {
   readonly dryRun?: boolean;
   readonly model?: string;
   readonly reviewModel?: string;
+  readonly doneWhen?: string;
+  readonly constraints?: readonly string[];
+  readonly checks?: readonly string[];
+  readonly acceptDiscoveredChecks?: boolean;
+  readonly onlyExplicitChecks?: boolean;
+  readonly trustWorkspaceChallenge?: string;
+  readonly approveGatePlanDigest?: string;
+  readonly acknowledgeWarningSetDigest?: string;
 }
 
 export type RunLoopHandler = (options: LoopCliOptions) => void;
@@ -26,6 +40,14 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
     .option('--every <duration>', 'Optional minimum interval between iterations (e.g. 5m, 1h).')
     .option('--model <model>', 'Writer model alias for this Loop session.')
     .option('--review-model <model>', 'Independent reviewer model alias for this Loop.')
+    .option('--done-when <criterion>', 'Optional user-confirmed completion criterion.')
+    .option('--constraint <rule>', 'Must-not rule. Repeat for multiple rules.', collectOption, [])
+    .option('--check <command>', 'Explicit required project check. Repeat for multiple checks.', collectOption, [])
+    .option('--accept-discovered-checks', 'Include all currently recommended project checks.', false)
+    .option('--only-explicit-checks', 'Exclude discovered checks and use only --check values.', false)
+    .option('--trust-workspace <challenge>', 'Exact short-lived workspace trust challenge from --dry-run.')
+    .option('--approve-gate-plan <digest>', 'Exact Gate approval-set digest from --dry-run.')
+    .option('--ack-finish-line-warnings <digest>', 'Exact Finish Line warning-set digest from --dry-run.')
     .option('--dry-run', 'Validate arguments and print the planned loop without running it.', false)
     .action(async (objective: string, raw: RawLoopOptions, command: Command) => {
       const everyResult = parseEvery(raw.every);
@@ -48,6 +70,14 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
         dryRun: raw.dryRun === true,
         model: raw.model ?? (inherited['model'] as string | undefined),
         reviewModel: raw.reviewModel,
+        doneWhen: raw.doneWhen,
+        constraints: raw.constraint,
+        checks: raw.check,
+        acceptDiscoveredChecks: raw.acceptDiscoveredChecks === true,
+        onlyExplicitChecks: raw.onlyExplicitChecks === true,
+        trustWorkspaceChallenge: raw.trustWorkspace,
+        approveGatePlanDigest: raw.approveGatePlan,
+        acknowledgeWarningSetDigest: raw.ackFinishLineWarnings,
       };
 
       const validated = validateLoopOptions(options);
@@ -58,7 +88,38 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
       }
 
       if (options.dryRun === true) {
-        process.stdout.write(formatLoopPlan(options));
+        const result = await runLoopPreflight({
+          objective,
+          completionCriterion: options.doneWhen,
+          constraints: options.constraints,
+          explicitChecks: options.checks,
+          discoveredCheckDecision: options.onlyExplicitChecks === true ? 'only-explicit' : 'accept',
+          model: options.model,
+          workspace: process.cwd(),
+          mode: 'tui-proposal',
+          requireModel: false,
+          getActiveGoal: async () => null,
+        });
+        if (!result.ready) {
+          process.stderr.write(`${formatLoopPreflightBlocked(result)}\n`);
+          process.exit(2);
+          return;
+        }
+        const outputFormat = inherited['outputFormat'];
+        process.stdout.write(
+          outputFormat === 'stream-json'
+            ? formatLoopDryRun(result, {
+                maxIterations: options.maxIterations,
+                writerModel: options.model,
+                reviewerModel: options.reviewModel,
+                minIntervalMs: options.minIntervalMs,
+              })
+            : `${formatLoopPlan(options)}\n`
+              + `${formatLoopPreflightReady(result, options.maxIterations ?? 10)}\n\n`
+              + `Gate approval  ${result.proposal.gateApproval.approvalSetDigest}\n`
+              + `Warnings       ${result.proposal.finishLineReview.warningSetDigest}\n`
+              + `Trust          ${result.trustChallenge}\n`,
+        );
         process.exit(0);
         return;
       }
@@ -79,6 +140,14 @@ interface RawLoopOptions {
   readonly dryRun?: boolean;
   readonly model?: string;
   readonly reviewModel?: string;
+  readonly doneWhen?: string;
+  readonly constraint: string[];
+  readonly check: string[];
+  readonly acceptDiscoveredChecks?: boolean;
+  readonly onlyExplicitChecks?: boolean;
+  readonly trustWorkspace?: string;
+  readonly approveGatePlan?: string;
+  readonly ackFinishLineWarnings?: string;
 }
 
 type ValidationResult = { readonly kind: 'ok' } | { readonly kind: 'error'; readonly message: string };
@@ -111,6 +180,12 @@ export function validateLoopOptions(options: LoopCliOptions): ValidationResult {
   ) {
     return { kind: 'error', message: '--max-iterations must be a positive integer.' };
   }
+  if (options.acceptDiscoveredChecks === true && options.onlyExplicitChecks === true) {
+    return {
+      kind: 'error',
+      message: '--accept-discovered-checks and --only-explicit-checks are mutually exclusive.',
+    };
+  }
   return { kind: 'ok' };
 }
 
@@ -132,6 +207,9 @@ export function formatLoopPlan(options: LoopCliOptions): string {
   }
   if (options.model !== undefined) lines.push(`  Writer model: ${options.model}`);
   if (options.reviewModel !== undefined) lines.push(`  Reviewer model: ${options.reviewModel}`);
+  if (options.doneWhen !== undefined) lines.push(`  Done when: ${options.doneWhen}`);
+  for (const constraint of options.constraints ?? []) lines.push(`  Must not: ${constraint}`);
+  for (const check of options.checks ?? []) lines.push(`  Check: ${check}`);
   return `${lines.join('\n')}\n`;
 }
 
@@ -150,4 +228,8 @@ export function formatDuration(ms: number): string {
   if (ms % 3_600_000 === 0) return `${ms / 3_600_000}h`;
   if (ms % 60_000 === 0) return `${ms / 60_000}m`;
   return `${ms / 1_000}s`;
+}
+
+function collectOption(value: string, previous: string[]): string[] {
+  return [...previous, value];
 }

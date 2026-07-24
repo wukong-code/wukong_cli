@@ -179,6 +179,27 @@ export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRA
   if (goal.reviewModel !== undefined) {
     lines.push(row('Reviewer', value(goal.reviewModel)));
   }
+  if (goal.loopContract?.schemaVersion === 2) {
+    lines.push(row(
+      'Finish line',
+      value(
+        `${String(goal.loopContract.constraints.length)} constraints · `
+        + `${String(goal.loopContract.gatePlan.requiredChecks.length)} checks`,
+      ),
+    ));
+    if (goal.loopRunId !== undefined) {
+      lines.push(row('Run', value(goal.loopRunId.slice(0, 12))));
+    }
+    if (goal.loopChainIterations !== undefined) {
+      lines.push(row('Chain total', value(String(goal.loopChainIterations))));
+    }
+    if (goal.loopTerminal !== undefined) {
+      lines.push(row(
+        'Continue',
+        value(goal.loopTerminal.continuationPolicy.mode),
+      ));
+    }
+  }
   const findings = goal.loopResult?.findings ?? [];
   if (findings.length > 0) {
     const blocking = findings.filter((finding) => finding.severity === 'blocking');

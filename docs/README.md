@@ -1,6 +1,6 @@
 # Wukong Code 文档索引
 
-> 最后更新: 2026-07-22
+> 最后更新: 2026-07-25
 > 当前事实基线: `wukong_cli` 内部实现仓库，产品名称为 **Wukong Code**
 > 状态说明: 本目录区分 **当前已实现** 与 **商业化后续待实现**。
 
@@ -55,13 +55,18 @@
 - [0.0.17 Command Surface Reliability](design/0.0.17-command-surface-reliability.md)
   定义 CLI/TUI 命令契约收口：删除误导入口、保留可发现的 `/transform`、未知 slash 本地拦截、严格参数解析与四层自动化回归；已于 2026-07-22 发布。
 - [0.0.18 Loop-First Simplification](design/0.0.18-loop-first-simplification.md)
-  当前已批准规划：默认命令面只突出 Resume → Loop → Gate，其他命令实现隐藏但不删除；`/resume` 增加 Kimi Code/Grok；`/feedback` 改为无需登录的纯文本 Web API；`/login` 由 CLI 发起并在 Wukong 网站确认，当前模型目录允许为空，托管模型与推理后续再上线。
+  已发布：默认命令面只突出 Resume → Loop → Gate，其他命令实现隐藏但不删除；`/resume` 增加 Kimi Code/Grok；`/feedback` 改为无需登录的纯文本 Web API；`/login` 由 CLI 发起并在 Wukong 网站确认，当前模型目录允许为空。
+- [0.0.19 Explicit Finish Line](design/0.0.19-explicit-finish-line.md)
+  当前发布候选：Loop 启动前确认 Goal、Done when、Must not 和真实 checks；冻结 Gate Plan、workspace trust 与 approval；区分 attempt、terminal、continuation 和 Revised Loop。
+- [0.0.19 Release Notes](releases/0.0.19.md)
+- [0.0.20 Reusable Verification Criteria](design/0.0.20-reusable-verification-skills.md)
+  下一规划版本：只复用用户本机已有 Skill 的严格 qualitative criteria，并通过受限 evidence broker 与逐 run BYOK provider consent 复审；不执行 Skill command。
 - [0.1.0 Pro PR Gate 与 Billing](design/0.1.0-pro-pr-gate.md)
   历史商业化候选，定义过 Free 本地 BYOK 边界与 PR Gate/Billing 验证门槛；当前没有付费计划、Checkout 或 entitlement 实施，不能把该文档当作版本承诺。
 - [跨 Agent Session Resume](design/cross-agent-resume.md)
   当前 `/resume` 恢复 Wukong 会话，`/resume codex|claude|cursor|kimi|grok` 显式发现对应 Agent 的本地会话，并通过内置 Skill 只读导入后在 Wukong 中继续。
 - [执行层 TODO](../TODO.md)
-  按 ROADMAP milestone 拆解的任务清单，记录当前开发版本（0.0.18 Loop-First Simplification）、后续商业实验、暂缓项和已完成基线。
+  按 ROADMAP milestone 拆解的任务清单，记录当前开发版本（0.0.19 Explicit Finish Line）、下一规划版本（0.0.20）和已完成基线。
 
 当前可用 top-level commands 以 `wukong --help` 为准，主要包括：
 

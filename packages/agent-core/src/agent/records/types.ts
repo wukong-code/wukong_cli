@@ -5,10 +5,20 @@ import type {
   GoalActor,
   GoalBudgetLimits,
   GoalStatus,
+  BuiltinRiskScanResultRecordedV1,
+  GateAttemptCompletedV1,
+  GateAttemptCreatedV1,
+  GateCheckResultRecordedV1,
   LoopContract,
+  LoopContinuationCreatedV1,
+  LoopEvidenceSnapshotCreatedV1,
   LoopResult,
   LoopReviewAttempt,
+  LoopRunCreatedV1,
+  LoopRunTerminalV1,
   LoopStrategyAttempt,
+  ProofAggregateRecordedV1,
+  ReviewerResultRecordedV1,
 } from '../goal';
 import type { ToolStoreUpdate } from '../../tools/store';
 import type { CompactionBeginData, CompactionResult } from '../compaction';
@@ -114,6 +124,47 @@ export interface AgentRecordEvents {
   'goal.contract.create': {
     goalId: string;
     contract: LoopContract;
+  };
+  'goal.contract.identity.assign': {
+    goalId: string;
+    contractRecordIdentity: string;
+    contractId: string;
+  };
+  'goal.lineage.create': {
+    goalId: string;
+    supersedesGoalId: string;
+    contractId: string;
+    supersedesContractId: string;
+  };
+  'loop.run.create': {
+    run: LoopRunCreatedV1;
+  };
+  'loop.gate-attempt.create': {
+    attempt: GateAttemptCreatedV1;
+  };
+  'loop.gate-check-result.create': {
+    result: GateCheckResultRecordedV1;
+  };
+  'loop.builtin-risk-scan-result.create': {
+    result: BuiltinRiskScanResultRecordedV1;
+  };
+  'loop.reviewer-result.create': {
+    result: ReviewerResultRecordedV1;
+  };
+  'loop.proof-aggregate.create': {
+    result: ProofAggregateRecordedV1;
+  };
+  'loop.evidence-snapshot.create': {
+    snapshot: LoopEvidenceSnapshotCreatedV1;
+  };
+  'loop.gate-attempt.complete': {
+    attempt: GateAttemptCompletedV1;
+  };
+  'loop.run.terminal': {
+    terminal: LoopRunTerminalV1;
+  };
+  'loop.continuation.create': {
+    continuation: LoopContinuationCreatedV1;
   };
   'goal.review.record': {
     goalId: string;

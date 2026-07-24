@@ -127,6 +127,23 @@ export function createProgram(
         maxIterations: loop.maxIterations!,
         ...(loop.minIntervalMs === undefined ? {} : { minIntervalMs: loop.minIntervalMs }),
         ...(loop.reviewModel === undefined ? {} : { reviewModel: loop.reviewModel }),
+        ...(loop.doneWhen === undefined ? {} : { completionCriterion: loop.doneWhen }),
+        constraints: loop.constraints ?? [],
+        checks: loop.checks ?? [],
+        ...(loop.acceptDiscoveredChecks === true
+          ? { discoveredCheckDecision: 'accept' as const }
+          : loop.onlyExplicitChecks === true
+            ? { discoveredCheckDecision: 'only-explicit' as const }
+            : {}),
+        ...(loop.trustWorkspaceChallenge === undefined
+          ? {}
+          : { trustWorkspaceChallenge: loop.trustWorkspaceChallenge }),
+        ...(loop.approveGatePlanDigest === undefined
+          ? {}
+          : { approveGatePlanDigest: loop.approveGatePlanDigest }),
+        ...(loop.acknowledgeWarningSetDigest === undefined
+          ? {}
+          : { acknowledgeWarningSetDigest: loop.acknowledgeWarningSetDigest }),
       },
       skillsDirs: raw['skillsDir'] as string[],
       addDirs: raw['addDir'] as string[],

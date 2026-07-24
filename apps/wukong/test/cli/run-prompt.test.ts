@@ -43,9 +43,46 @@ const mocks = vi.hoisted(() => {
       }
     }),
   };
+  const finishLineProposal = {
+    schemaVersion: 1 as const,
+    objective: 'fix tests',
+    constraints: [],
+    finishLineReview: {
+      schemaVersion: 1 as const,
+      warningPolicyVersion: 'test',
+      finishLineDigest: 'sha256:finish',
+      warnings: [],
+      warningSetDigest: 'sha256:warnings',
+      acknowledgedWarningIds: [],
+    },
+    workspaceIdentity: {
+      canonicalRealpath: process.cwd(),
+      filesystemIdentity: 'test',
+      workspaceIdentityDigest: 'sha256:workspace',
+    },
+    gateApproval: {
+      schemaVersion: 1 as const,
+      gatePlanDigest: 'sha256:plan',
+      warningSetDigest: 'sha256:warnings',
+      guardPolicyVersion: 'test',
+      orderedChecks: [],
+      approvalSetDigest: 'sha256:approval',
+      hasExecutableChecks: false as const,
+    },
+    gatePlan: {
+      schemaVersion: 1 as const,
+      stopCondition: 'proof-pass' as const,
+      requiredChecks: [],
+      excludedChecks: [],
+      builtinRiskScanPolicyVersion: 'test',
+      planDigest: 'sha256:plan',
+    },
+    reviewPolicy: { mode: 'advisory-live' as const },
+  };
 
   return {
     session,
+    finishLineProposal,
     eventHandlers,
     agentEvent,
     mainEvent,
@@ -100,6 +137,8 @@ const mocks = vi.hoisted(() => {
       model: 'k2',
       workspace: process.cwd(),
       checks: ['pnpm test'],
+      proposal: finishLineProposal,
+      trustChallenge: 'challenge',
     })),
   };
 });
@@ -267,7 +306,10 @@ describe('runPrompt', () => {
     );
     mocks.harnessCreatesDeviceIdOnConstruction = false;
     mocks.parseHeadlessGoalCreate.mockReturnValue(undefined);
-    mocks.session.createGoal.mockResolvedValue({ goalId: 'goal-default' });
+    mocks.session.createGoal.mockResolvedValue({
+      goalId: 'goal-default',
+      loopRunId: 'core-run-default',
+    });
     mocks.goalSummaryJson.mockImplementation((snapshot: any) => snapshot);
     mocks.formatGoalSummaryText.mockImplementation(
       (snapshot: any) => `Goal [${snapshot?.status ?? 'none'}]`,
@@ -279,6 +321,8 @@ describe('runPrompt', () => {
       model: 'k2',
       workspace: process.cwd(),
       checks: ['pnpm test'],
+      proposal: mocks.finishLineProposal,
+      trustChallenge: 'challenge',
     });
     mocks.createWukongCodeHostIdentity.mockImplementation((version: string) => ({
       userAgentProduct: 'wukong-code',
@@ -1111,7 +1155,10 @@ describe('runPrompt', () => {
 
     it('uses the user-selected local iteration limit without a remote quota cap', async () => {
       process.exitCode = undefined;
-      mocks.session.createGoal.mockResolvedValueOnce({ goalId: 'goal-loop-1' });
+      mocks.session.createGoal.mockResolvedValueOnce({
+        goalId: 'goal-loop-1',
+        loopRunId: 'core-run-loop-1',
+      });
       mocks.parseHeadlessGoalCreate.mockReturnValue({
         kind: 'loop',
         objective: 'fix tests',
@@ -1165,7 +1212,10 @@ describe('runPrompt', () => {
         stopCondition: 'proof-pass',
         maxIterations: 3,
       });
-      mocks.session.createGoal.mockResolvedValueOnce({ goalId: 'goal-runtime-error' });
+      mocks.session.createGoal.mockResolvedValueOnce({
+        goalId: 'goal-runtime-error',
+        loopRunId: 'core-run-runtime-error',
+      });
       mocks.session.getGoal.mockResolvedValueOnce({
         goal: { goalId: 'goal-runtime-error', status: 'paused', iteration: 1 },
       });
@@ -1203,6 +1253,7 @@ describe('runPrompt', () => {
       });
       mocks.runLoopPreflight.mockResolvedValueOnce({
         ready: false,
+        reasonCode: 'model_not_configured',
         reason: 'No model is configured.',
         next: 'Run /provider or /model, then start the Loop again.',
       });
@@ -1224,7 +1275,7 @@ describe('runPrompt', () => {
       expect(process.exitCode).toBe(2);
     });
 
-    it('closes the local lifecycle record when goal creation fails', async () => {
+    it('does not create an orphan local lifecycle record when goal creation fails', async () => {
       process.exitCode = undefined;
       mocks.parseHeadlessGoalCreate.mockReturnValue({
         kind: 'loop',
@@ -1239,12 +1290,8 @@ describe('runPrompt', () => {
         stderr: writer(),
       })).rejects.toThrow('goal store unavailable');
 
-      expect(mocks.completeLoopRun).toHaveBeenCalledWith(
-        expect.objectContaining({ runId: 'run123' }),
-        'ERROR',
-        0,
-        'cancelled',
-      );
+      expect(mocks.beginLoopRun).not.toHaveBeenCalled();
+      expect(mocks.completeLoopRun).not.toHaveBeenCalled();
       expect(mocks.registerTuiLoop).not.toHaveBeenCalled();
     });
 

@@ -172,7 +172,7 @@ export interface LoopResultFinding {
 export interface LoopAcceptanceCriterion {
   readonly id: string;
   readonly text: string;
-  readonly source: 'objective' | 'completion_criterion' | 'derived';
+  readonly source: 'objective' | 'completion_criterion' | 'constraint' | 'derived';
 }
 
 export interface LoopVerificationStep {
@@ -182,7 +182,7 @@ export interface LoopVerificationStep {
   readonly blocking: boolean;
 }
 
-export interface LoopContract {
+export interface LoopContractV1 {
   readonly schemaVersion: 1;
   readonly goalId: string;
   readonly objective: string;
@@ -192,6 +192,138 @@ export interface LoopContract {
   readonly source: 'user' | 'planner' | 'fallback';
   readonly createdAt: number;
 }
+
+export interface LoopContractV2 {
+  readonly schemaVersion: 2;
+  readonly contractId: string;
+  readonly supersedesContractId?: string;
+  readonly supersedesGoalId?: string;
+  readonly goalId: string;
+  readonly objective: string;
+  readonly completionCriterion?: string;
+  readonly constraints: readonly { readonly id: string; readonly text: string }[];
+  readonly finishLineReview: {
+    readonly schemaVersion: 1;
+    readonly warningPolicyVersion: string;
+    readonly finishLineDigest: string;
+    readonly warnings: readonly {
+      readonly id: string;
+      readonly code:
+        | 'missing_done_when'
+        | 'broad_criterion'
+        | 'conflicting_finish_line'
+        | 'no_resolved_checks';
+      readonly field: 'objective' | 'completion_criterion' | 'constraint' | 'gate_plan';
+      readonly message: string;
+    }[];
+    readonly warningSetDigest: string;
+    readonly acknowledgedWarningIds: readonly string[];
+    readonly acknowledgedAt?: number;
+  };
+  readonly workspaceIdentity: {
+    readonly canonicalRealpath: string;
+    readonly filesystemIdentity: string;
+    readonly gitCommonDirIdentity?: string;
+    readonly workspaceIdentityDigest: string;
+  };
+  readonly workspaceTrust?: {
+    readonly workspaceIdentityDigest: string;
+    readonly scope: 'loop-project-checks';
+    readonly trustGrantId?: string;
+  };
+  readonly gateApproval:
+    | {
+        readonly schemaVersion: 1;
+        readonly gatePlanDigest: string;
+        readonly warningSetDigest: string;
+        readonly guardPolicyVersion: string;
+        readonly orderedChecks: readonly GateApprovalOrderedCheck[];
+        readonly approvalSetDigest: string;
+        readonly hasExecutableChecks: true;
+        readonly workspaceIdentityDigest: string;
+      }
+    | {
+        readonly schemaVersion: 1;
+        readonly gatePlanDigest: string;
+        readonly warningSetDigest: string;
+        readonly guardPolicyVersion: string;
+        readonly orderedChecks: readonly GateApprovalOrderedCheck[];
+        readonly approvalSetDigest: string;
+        readonly hasExecutableChecks: false;
+        readonly workspaceIdentityDigest?: never;
+      };
+  readonly acceptanceCriteria: readonly LoopAcceptanceCriterion[];
+  readonly verificationPlan: readonly LoopVerificationStep[];
+  readonly gatePlan: GatePlan;
+  readonly reviewPolicy:
+    | {
+        readonly mode: 'blocking-frozen';
+        readonly sourceLocator: '.wukong/review-policy.md';
+        readonly definitionDigest: string;
+      }
+    | { readonly mode: 'advisory-live' };
+  readonly source: 'user' | 'planner' | 'fallback';
+  readonly createdAt: number;
+}
+
+interface GateApprovalOrderedCheck {
+  readonly checkId: string;
+  readonly resolution: 'resolved' | 'expected-unresolved';
+  readonly commandDigest: string;
+  readonly definitionDigest?: string;
+  readonly sourceLocator?: string;
+  readonly riskDigest: string;
+  readonly permissionRequestDigest: string;
+}
+
+interface GatePlan {
+  readonly schemaVersion: 1;
+  readonly stopCondition: 'proof-pass';
+  readonly requiredChecks: readonly GatePlanCheck[];
+  readonly excludedChecks: readonly {
+    readonly displayCommand: string;
+    readonly commandDigest: string;
+    readonly source: GateCheckSource;
+    readonly sourceLocator?: string;
+    readonly excludedBy: 'user';
+    readonly reason: 'only-explicit' | 'tui-confirmed';
+  }[];
+  readonly builtinRiskScanPolicyVersion: string;
+  readonly planDigest: string;
+}
+
+type GateCheckSource =
+  | 'explicit'
+  | 'package-script'
+  | 'workspace-script'
+  | 'project-config'
+  | 'project-inferred';
+
+type GatePlanCheck =
+  | {
+      readonly id: string;
+      readonly source: GateCheckSource;
+      readonly sourceLocator?: string;
+      readonly selectedBy: 'user' | 'project-default';
+      readonly resolution: 'resolved';
+      readonly executionCommand: string;
+      readonly displayCommand: string;
+      readonly commandDigest: string;
+      readonly definitionDigest: string;
+    }
+  | {
+      readonly id: string;
+      readonly source: GateCheckSource;
+      readonly sourceLocator?: string;
+      readonly selectedBy: 'user' | 'project-default';
+      readonly resolution: 'expected-unresolved';
+      readonly executionCommand: string;
+      readonly displayCommand: string;
+      readonly commandDigest: string;
+      readonly expectedSourceLocator?: string;
+    };
+
+export type LoopContract = LoopContractV1 | LoopContractV2;
 
 export interface LoopConvergenceSummary {
   readonly reviewAttempts: number;
@@ -224,6 +356,24 @@ export interface GoalBudgetReport {
   readonly overBudget: boolean;
 }
 
+export interface LoopRunTerminal {
+  readonly schemaVersion: 1;
+  readonly runId: string;
+  readonly contractId: string;
+  readonly status: 'PASS' | 'NEEDS_WORK' | 'ERROR';
+  readonly reasonCode: string;
+  readonly continuationPolicy: {
+    readonly mode: 'same-contract' | 'restore-or-revise' | 'revised-loop' | 'blocked';
+    readonly automaticRetry: false;
+    readonly requiresPreflightRevalidation: true;
+  };
+  readonly blockerKeys: readonly string[];
+  readonly terminalAttemptId?: string;
+  readonly attemptResultDigest?: string;
+  readonly terminalDigest: string;
+  readonly createdAt: number;
+}
+
 export interface GoalSnapshot {
   readonly goalId: string;
   readonly objective: string;
@@ -241,6 +391,10 @@ export interface GoalSnapshot {
   readonly terminalReason?: string;
   readonly loopResult?: LoopResult;
   readonly loopContract?: LoopContract;
+  readonly legacyContractId?: string;
+  readonly loopRunId?: string;
+  readonly loopChainIterations?: number;
+  readonly loopTerminal?: LoopRunTerminal;
   readonly convergence?: LoopConvergenceSummary;
 }
 
@@ -926,7 +1080,7 @@ export const loopResultFindingSchema = z.object({
 export const loopAcceptanceCriterionSchema = z.object({
   id: z.string(),
   text: z.string(),
-  source: z.enum(['objective', 'completion_criterion', 'derived']),
+  source: z.enum(['objective', 'completion_criterion', 'constraint', 'derived']),
 }) satisfies z.ZodType<LoopAcceptanceCriterion>;
 
 export const loopVerificationStepSchema = z.object({
@@ -936,7 +1090,7 @@ export const loopVerificationStepSchema = z.object({
   blocking: z.boolean(),
 }) satisfies z.ZodType<LoopVerificationStep>;
 
-export const loopContractSchema = z.object({
+const loopContractV1Schema = z.object({
   schemaVersion: z.literal(1),
   goalId: z.string(),
   objective: z.string(),
@@ -945,7 +1099,149 @@ export const loopContractSchema = z.object({
   verificationPlan: z.array(loopVerificationStepSchema),
   source: z.enum(['user', 'planner', 'fallback']),
   createdAt: z.number(),
-}) satisfies z.ZodType<LoopContract>;
+}) satisfies z.ZodType<LoopContractV1>;
+
+const gateCheckSourceSchema = z.enum([
+  'explicit',
+  'package-script',
+  'workspace-script',
+  'project-config',
+  'project-inferred',
+]);
+
+const gatePlanCheckSchema = z.discriminatedUnion('resolution', [
+  z.object({
+    id: z.string(),
+    source: gateCheckSourceSchema,
+    sourceLocator: z.string().optional(),
+    selectedBy: z.enum(['user', 'project-default']),
+    resolution: z.literal('resolved'),
+    executionCommand: z.string(),
+    displayCommand: z.string(),
+    commandDigest: z.string(),
+    definitionDigest: z.string(),
+  }),
+  z.object({
+    id: z.string(),
+    source: gateCheckSourceSchema,
+    sourceLocator: z.string().optional(),
+    selectedBy: z.enum(['user', 'project-default']),
+    resolution: z.literal('expected-unresolved'),
+    executionCommand: z.string(),
+    displayCommand: z.string(),
+    commandDigest: z.string(),
+    expectedSourceLocator: z.string().optional(),
+  }),
+]);
+
+const gatePlanSchema = z.object({
+  schemaVersion: z.literal(1),
+  stopCondition: z.literal('proof-pass'),
+  requiredChecks: z.array(gatePlanCheckSchema),
+  excludedChecks: z.array(z.object({
+    displayCommand: z.string(),
+    commandDigest: z.string(),
+    source: gateCheckSourceSchema,
+    sourceLocator: z.string().optional(),
+    excludedBy: z.literal('user'),
+    reason: z.enum(['only-explicit', 'tui-confirmed']),
+  })),
+  builtinRiskScanPolicyVersion: z.string(),
+  planDigest: z.string(),
+});
+
+const gateApprovalOrderedCheckSchema = z.object({
+  checkId: z.string(),
+  resolution: z.enum(['resolved', 'expected-unresolved']),
+  commandDigest: z.string(),
+  definitionDigest: z.string().optional(),
+  sourceLocator: z.string().optional(),
+  riskDigest: z.string(),
+  permissionRequestDigest: z.string(),
+});
+
+const gateApprovalSchema = z.discriminatedUnion('hasExecutableChecks', [
+  z.object({
+    schemaVersion: z.literal(1),
+    gatePlanDigest: z.string(),
+    warningSetDigest: z.string(),
+    guardPolicyVersion: z.string(),
+    orderedChecks: z.array(gateApprovalOrderedCheckSchema),
+    approvalSetDigest: z.string(),
+    hasExecutableChecks: z.literal(true),
+    workspaceIdentityDigest: z.string(),
+  }),
+  z.object({
+    schemaVersion: z.literal(1),
+    gatePlanDigest: z.string(),
+    warningSetDigest: z.string(),
+    guardPolicyVersion: z.string(),
+    orderedChecks: z.array(gateApprovalOrderedCheckSchema),
+    approvalSetDigest: z.string(),
+    hasExecutableChecks: z.literal(false),
+    workspaceIdentityDigest: z.never().optional(),
+  }),
+]);
+
+const loopContractV2Schema = z.object({
+  schemaVersion: z.literal(2),
+  contractId: z.string(),
+  supersedesContractId: z.string().optional(),
+  supersedesGoalId: z.string().optional(),
+  goalId: z.string(),
+  objective: z.string(),
+  completionCriterion: z.string().optional(),
+  constraints: z.array(z.object({ id: z.string(), text: z.string() })),
+  finishLineReview: z.object({
+    schemaVersion: z.literal(1),
+    warningPolicyVersion: z.string(),
+    finishLineDigest: z.string(),
+    warnings: z.array(z.object({
+      id: z.string(),
+      code: z.enum([
+        'missing_done_when',
+        'broad_criterion',
+        'conflicting_finish_line',
+        'no_resolved_checks',
+      ]),
+      field: z.enum(['objective', 'completion_criterion', 'constraint', 'gate_plan']),
+      message: z.string(),
+    })),
+    warningSetDigest: z.string(),
+    acknowledgedWarningIds: z.array(z.string()),
+    acknowledgedAt: z.number().optional(),
+  }),
+  workspaceIdentity: z.object({
+    canonicalRealpath: z.string(),
+    filesystemIdentity: z.string(),
+    gitCommonDirIdentity: z.string().optional(),
+    workspaceIdentityDigest: z.string(),
+  }),
+  workspaceTrust: z.object({
+    workspaceIdentityDigest: z.string(),
+    scope: z.literal('loop-project-checks'),
+    trustGrantId: z.string().optional(),
+  }).optional(),
+  gateApproval: gateApprovalSchema,
+  acceptanceCriteria: z.array(loopAcceptanceCriterionSchema),
+  verificationPlan: z.array(loopVerificationStepSchema),
+  gatePlan: gatePlanSchema,
+  reviewPolicy: z.discriminatedUnion('mode', [
+    z.object({
+      mode: z.literal('blocking-frozen'),
+      sourceLocator: z.literal('.wukong/review-policy.md'),
+      definitionDigest: z.string(),
+    }),
+    z.object({ mode: z.literal('advisory-live') }),
+  ]),
+  source: z.enum(['user', 'planner', 'fallback']),
+  createdAt: z.number(),
+}) satisfies z.ZodType<LoopContractV2>;
+
+export const loopContractSchema = z.discriminatedUnion('schemaVersion', [
+  loopContractV1Schema,
+  loopContractV2Schema,
+]) satisfies z.ZodType<LoopContract>;
 
 export const loopConvergenceSummarySchema = z.object({
   reviewAttempts: z.number(),
@@ -995,6 +1291,26 @@ export const goalSnapshotSchema = z.object({
   terminalReason: z.string().optional(),
   loopResult: loopResultSchema.optional(),
   loopContract: loopContractSchema.optional(),
+  legacyContractId: z.string().optional(),
+  loopRunId: z.string().optional(),
+  loopChainIterations: z.number().int().nonnegative().optional(),
+  loopTerminal: z.object({
+    schemaVersion: z.literal(1),
+    runId: z.string(),
+    contractId: z.string(),
+    status: z.enum(['PASS', 'NEEDS_WORK', 'ERROR']),
+    reasonCode: z.string(),
+    continuationPolicy: z.object({
+      mode: z.enum(['same-contract', 'restore-or-revise', 'revised-loop', 'blocked']),
+      automaticRetry: z.literal(false),
+      requiresPreflightRevalidation: z.literal(true),
+    }),
+    blockerKeys: z.array(z.string()),
+    terminalAttemptId: z.string().optional(),
+    attemptResultDigest: z.string().optional(),
+    terminalDigest: z.string(),
+    createdAt: z.number(),
+  }).optional(),
   convergence: loopConvergenceSummarySchema.optional(),
 }) satisfies z.ZodType<GoalSnapshot>;
 

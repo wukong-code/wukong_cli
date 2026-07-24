@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { buildFinishLine } from '@wukong/verification';
 
 import type { Agent } from '../../src/agent';
 import {
@@ -45,6 +46,13 @@ function makeGoalMode() {
       push: (record: AgentReplayRecord) => {
         replay.push(record);
       },
+    },
+    config: {
+      cwd: process.cwd(),
+      modelAlias: 'writer-model',
+    },
+    permission: {
+      mode: 'manual',
     },
   } as unknown as Agent;
 
@@ -134,6 +142,57 @@ describe('GoalMode creation', () => {
 });
 
 describe('GoalMode lifecycle', () => {
+  it('creates only one continuation run for concurrent resume requests', async () => {
+    const { goals, records } = makeGoalMode();
+    const finishLine = await buildFinishLine({
+      cwd: process.cwd(),
+      objective: 'Continue once',
+      completionCriterion: 'The next bounded run finishes',
+      includeDiscoveredChecks: false,
+    });
+    expect(finishLine.ok).toBe(true);
+    if (!finishLine.ok) return;
+    await goals.createGoal({
+      objective: finishLine.proposal.objective,
+      completionCriterion: finishLine.proposal.completionCriterion,
+      stopCondition: 'proof-pass',
+      loopContract: {
+        schemaVersion: 2,
+        objective: finishLine.proposal.objective,
+        completionCriterion: finishLine.proposal.completionCriterion,
+        constraints: finishLine.proposal.constraints,
+        finishLineReview: {
+          ...finishLine.proposal.finishLineReview,
+          acknowledgedWarningIds: finishLine.proposal.finishLineReview.warnings.map(
+            (warning) => warning.id,
+          ),
+        },
+        workspaceIdentity: finishLine.proposal.workspaceIdentity,
+        workspaceTrust: finishLine.proposal.workspaceTrust,
+        gateApproval: finishLine.proposal.gateApproval,
+        gatePlan: finishLine.proposal.gatePlan,
+        reviewPolicy: finishLine.proposal.reviewPolicy,
+        source: 'user',
+      },
+    });
+    goals.recordLoopTerminal({
+      status: 'NEEDS_WORK',
+      reasonCode: 'max_iterations',
+      blockerKeys: ['check:test:failed'],
+    });
+    await goals.markBlocked({ reason: 'max iterations' }, 'system');
+
+    const [left, right] = await Promise.all([
+      goals.resumeGoal({}, 'user'),
+      goals.resumeGoal({}, 'user'),
+    ]);
+
+    expect(left.loopRunId).toBe(right.loopRunId);
+    expect(left.iteration).toBe(0);
+    expect(records.filter((record) => record.type === 'loop.continuation.create')).toHaveLength(1);
+    expect(records.filter((record) => record.type === 'loop.run.create')).toHaveLength(2);
+  });
+
   it('emits typed lifecycle and completion changes', async () => {
     const { goals, events } = makeGoalMode();
 
@@ -252,6 +311,205 @@ describe('GoalMode accounting and budgets', () => {
 });
 
 describe('GoalMode records', () => {
+  it('returns check_unstable for contradictory results on the same workspace snapshot', async () => {
+    const { goals } = makeGoalMode();
+    const finishLine = await buildFinishLine({
+      cwd: process.cwd(),
+      objective: 'Detect unstable checks',
+      completionCriterion: 'The exact frozen check is stable',
+      explicitChecks: ['node -e "process.exit(0)"'],
+      includeDiscoveredChecks: false,
+    });
+    expect(finishLine.ok).toBe(true);
+    if (!finishLine.ok) return;
+    await goals.createGoal({
+      objective: finishLine.proposal.objective,
+      completionCriterion: finishLine.proposal.completionCriterion,
+      stopCondition: 'proof-pass',
+      loopContract: {
+        schemaVersion: 2,
+        objective: finishLine.proposal.objective,
+        completionCriterion: finishLine.proposal.completionCriterion,
+        constraints: finishLine.proposal.constraints,
+        finishLineReview: finishLine.proposal.finishLineReview,
+        workspaceIdentity: finishLine.proposal.workspaceIdentity,
+        workspaceTrust: finishLine.proposal.workspaceTrust,
+        gateApproval: finishLine.proposal.gateApproval,
+        gatePlan: finishLine.proposal.gatePlan,
+        reviewPolicy: finishLine.proposal.reviewPolicy,
+        source: 'user',
+      },
+    });
+    const common = {
+      workspaceFingerprint: 'same-snapshot',
+      scanFindings: [],
+      reviewerStatus: 'PASS' as const,
+      reviewerPayload: { status: 'PASS' },
+      blockerKeys: [],
+    };
+    const first = goals.recordGateAttempt({
+      ...common,
+      status: 'PASS',
+      reasonCode: 'passed',
+      checks: [{
+        command: 'node -e "process.exit(0)"',
+        status: 'passed',
+        exitCode: 0,
+        stdout: '',
+        stderr: '',
+      }],
+    });
+    const second = goals.recordGateAttempt({
+      ...common,
+      status: 'NEEDS_WORK',
+      reasonCode: 'check_failed',
+      checks: [{
+        command: 'node -e "process.exit(0)"',
+        status: 'failed',
+        exitCode: 1,
+        stdout: '',
+        stderr: 'flaky',
+      }],
+    });
+
+    expect(first).toMatchObject({ status: 'PASS' });
+    expect(second).toMatchObject({ status: 'ERROR', reasonCode: 'check_unstable' });
+  });
+
+  it('persists a V2 contract, run, complete Gate attempt, and terminal result', async () => {
+    const { goals, records } = makeGoalMode();
+    const finishLine = await buildFinishLine({
+      cwd: process.cwd(),
+      objective: 'Ship an explicit Finish Line',
+      completionCriterion: 'The frozen gate and reviewer both pass',
+      includeDiscoveredChecks: false,
+    });
+    expect(finishLine.ok).toBe(true);
+    if (!finishLine.ok) return;
+
+    const created = await goals.createGoal({
+      objective: finishLine.proposal.objective,
+      completionCriterion: finishLine.proposal.completionCriterion,
+      stopCondition: 'proof-pass',
+      loopContract: {
+        schemaVersion: 2,
+        objective: finishLine.proposal.objective,
+        completionCriterion: finishLine.proposal.completionCriterion,
+        constraints: finishLine.proposal.constraints,
+        finishLineReview: {
+          ...finishLine.proposal.finishLineReview,
+          acknowledgedWarningIds: finishLine.proposal.finishLineReview.warnings.map(
+            (warning) => warning.id,
+          ),
+        },
+        workspaceIdentity: finishLine.proposal.workspaceIdentity,
+        workspaceTrust: finishLine.proposal.workspaceTrust,
+        gateApproval: finishLine.proposal.gateApproval,
+        gatePlan: finishLine.proposal.gatePlan,
+        reviewPolicy: finishLine.proposal.reviewPolicy,
+        source: 'user',
+      },
+    });
+    expect(created.loopContract?.schemaVersion).toBe(2);
+    expect(created.loopRunId).toBeTruthy();
+
+    const attempt = goals.recordGateAttempt({
+      status: 'PASS',
+      reasonCode: 'passed',
+      workspaceFingerprint: 'workspace-fingerprint',
+      checks: [],
+      scanFindings: [],
+      reviewerStatus: 'PASS',
+      reviewerPayload: { status: 'PASS', summary: 'reviewed' },
+      blockerKeys: [],
+    });
+    const terminal = goals.recordLoopTerminal({
+      status: 'PASS',
+      reasonCode: 'passed',
+      attempt,
+    });
+
+    expect(attempt).toMatchObject({ status: 'PASS', reasonCode: 'passed' });
+    expect(terminal).toMatchObject({
+      status: 'PASS',
+      continuationPolicy: { mode: 'blocked', automaticRetry: false },
+    });
+    expect(records.map((record) => record.type)).toEqual(expect.arrayContaining([
+      'goal.contract.create',
+      'loop.run.create',
+      'loop.gate-attempt.create',
+      'loop.builtin-risk-scan-result.create',
+      'loop.reviewer-result.create',
+      'loop.proof-aggregate.create',
+      'loop.evidence-snapshot.create',
+      'loop.gate-attempt.complete',
+      'loop.run.terminal',
+    ]));
+
+    const replayed = makeGoalMode().goals;
+    for (const record of records) {
+      // This replay fixture intentionally ignores records outside the Loop proof chain.
+      // oxlint-disable-next-line typescript-eslint/switch-exhaustiveness-check
+      switch (record.type) {
+        case 'goal.create':
+          replayed.restoreCreate(record);
+          break;
+        case 'goal.contract.create':
+          replayed.restoreContractCreate(record);
+          break;
+        case 'loop.run.create':
+          replayed.restoreLoopRunCreate(record);
+          break;
+        case 'loop.gate-attempt.create':
+        case 'loop.gate-check-result.create':
+        case 'loop.builtin-risk-scan-result.create':
+        case 'loop.reviewer-result.create':
+        case 'loop.proof-aggregate.create':
+        case 'loop.evidence-snapshot.create':
+        case 'loop.continuation.create':
+          replayed.restoreLoopAuditRecord(record);
+          break;
+        case 'loop.gate-attempt.complete':
+          replayed.restoreGateAttemptComplete(record);
+          break;
+        case 'loop.run.terminal':
+          replayed.restoreLoopRunTerminal(record);
+          break;
+        default:
+          break;
+      }
+    }
+    expect(replayed.getGoal().goal).toMatchObject({
+      loopRunId: created.loopRunId,
+      loopTerminal: { status: 'PASS', reasonCode: 'passed' },
+    });
+
+    const proofRecord = records.find((record) => record.type === 'loop.proof-aggregate.create');
+    if (proofRecord?.type !== 'loop.proof-aggregate.create') throw new Error('proof record missing');
+    const tampered = {
+      ...proofRecord,
+      result: { ...proofRecord.result, reasonCode: 'tampered' },
+    };
+    const partial = makeGoalMode().goals;
+    const createRecord = records.find((record) => record.type === 'goal.create');
+    const contractRecord = records.find((record) => record.type === 'goal.contract.create');
+    const runRecord = records.find((record) => record.type === 'loop.run.create');
+    const attemptRecord = records.find((record) => record.type === 'loop.gate-attempt.create');
+    if (
+      createRecord?.type !== 'goal.create'
+      || contractRecord?.type !== 'goal.contract.create'
+      || runRecord?.type !== 'loop.run.create'
+      || attemptRecord?.type !== 'loop.gate-attempt.create'
+    ) throw new Error('replay fixture records missing');
+    partial.restoreCreate(createRecord);
+    partial.restoreContractCreate(contractRecord);
+    partial.restoreLoopRunCreate(runRecord);
+    partial.restoreLoopAuditRecord(attemptRecord);
+    expect(() => {
+      partial.restoreLoopAuditRecord(tampered);
+    }).toThrow('proof aggregate mismatch');
+  });
+
   it('creates one immutable Loop contract and restores convergence records', async () => {
     const { goals, records } = makeGoalMode();
     const created = await goals.createGoal({

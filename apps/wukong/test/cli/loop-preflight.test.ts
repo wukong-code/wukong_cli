@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises';
+import { mkdtemp, realpath, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
@@ -27,19 +27,21 @@ describe('Loop preflight', () => {
     const result = await runLoopPreflight({
       objective: 'fix tests',
       model: 'glm-5.2',
-      workspace: cwd,
+      workspace: await realpath(cwd),
       getActiveGoal: async () => null,
       discoverChecks: async () => ['pnpm test', 'pnpm typecheck'],
     });
 
-    expect(result).toEqual({
+    expect(result).toMatchObject({
       ready: true,
       model: 'glm-5.2',
-      workspace: cwd,
+      workspace: await realpath(cwd),
       checks: ['pnpm test', 'pnpm typecheck'],
     });
     if (result.ready) {
-      expect(formatLoopPreflightReady(result, 5)).toContain('Limit    up to 5 iterations');
+      expect(formatLoopPreflightReady(result, 5)).toContain('Run          up to 5 iterations');
+      expect(result.proposal.gatePlan.requiredChecks).toHaveLength(2);
+      expect(result.trustChallenge).toContain('.');
     }
   });
 
@@ -55,7 +57,9 @@ describe('Loop preflight', () => {
 
     expect(result.ready).toBe(true);
     if (result.ready) {
-      expect(formatLoopPreflightReady(result, 2)).toContain('No project checks configured');
+      expect(formatLoopPreflightReady(result, 2)).toContain('Verification 0 required project checks');
+      expect(result.proposal.finishLineReview.warnings.map((warning) => warning.code))
+        .toContain('no_resolved_checks');
     }
   });
 
@@ -85,5 +89,86 @@ describe('Loop preflight', () => {
     expect(activeGoal).toMatchObject({ ready: false, reason: 'Another Goal is already active.' });
     expect(badChecks).toMatchObject({ ready: false, reason: expect.stringContaining('bad checks file') });
     if (!noModel.ready) expect(formatLoopPreflightBlocked(noModel)).toContain('Loop not started');
+  });
+
+  it('requires exact headless selection, warning, plan, and workspace approvals', async () => {
+    const cwd = await workspace();
+    const base = {
+      objective: 'fix tests',
+      model: 'glm-5.2',
+      workspace: cwd,
+      mode: 'headless' as const,
+      discoveredCheckDecision: 'accept' as const,
+      getActiveGoal: async () => null,
+      discoverChecks: async () => ['pnpm test'],
+      homeDir: join(cwd, 'home'),
+    };
+
+    const warning = await runLoopPreflight(base);
+    expect(warning).toMatchObject({
+      ready: false,
+      reasonCode: 'finish_line_warning_ack_required',
+    });
+    if (warning.ready || warning.proposal === undefined) return;
+
+    const approvedWarning = await runLoopPreflight({
+      ...base,
+      acknowledgeWarningSetDigest: warning.proposal.finishLineReview.warningSetDigest,
+    });
+    expect(approvedWarning).toMatchObject({
+      ready: false,
+      reasonCode: 'gate_approval_required',
+    });
+    if (approvedWarning.ready || approvedWarning.proposal === undefined) return;
+
+    const approvedPlan = await runLoopPreflight({
+      ...base,
+      acknowledgeWarningSetDigest: warning.proposal.finishLineReview.warningSetDigest,
+      approveGatePlanDigest: approvedWarning.proposal.gateApproval.approvalSetDigest,
+    });
+    expect(approvedPlan).toMatchObject({
+      ready: false,
+      reasonCode: 'workspace_trust_required',
+    });
+    if (approvedPlan.ready || approvedPlan.trustChallenge === undefined) return;
+
+    const ready = await runLoopPreflight({
+      ...base,
+      acknowledgeWarningSetDigest: warning.proposal.finishLineReview.warningSetDigest,
+      approveGatePlanDigest: approvedWarning.proposal.gateApproval.approvalSetDigest,
+      trustWorkspaceChallenge: approvedPlan.trustChallenge,
+    });
+    expect(ready).toMatchObject({ ready: true, checks: ['pnpm test'] });
+  });
+
+  it('rejects stale headless approval after the Finish Line changes', async () => {
+    const cwd = await workspace();
+    const initial = await runLoopPreflight({
+      objective: 'first objective',
+      completionCriterion: 'All tests pass cleanly',
+      model: 'glm-5.2',
+      workspace: cwd,
+      mode: 'headless',
+      discoveredCheckDecision: 'accept',
+      getActiveGoal: async () => null,
+      discoverChecks: async () => ['pnpm test'],
+      homeDir: join(cwd, 'home'),
+    });
+    expect(initial.ready).toBe(false);
+    if (initial.ready || initial.proposal === undefined) return;
+
+    const changed = await runLoopPreflight({
+      objective: 'different objective',
+      completionCriterion: 'All tests pass cleanly',
+      model: 'glm-5.2',
+      workspace: cwd,
+      mode: 'headless',
+      discoveredCheckDecision: 'accept',
+      getActiveGoal: async () => null,
+      discoverChecks: async () => ['pnpm test'],
+      approveGatePlanDigest: initial.proposal.gateApproval.approvalSetDigest,
+      homeDir: join(cwd, 'home'),
+    });
+    expect(changed).toMatchObject({ ready: false, reasonCode: 'gate_approval_mismatch' });
   });
 });

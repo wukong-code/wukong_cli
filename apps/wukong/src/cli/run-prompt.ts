@@ -44,6 +44,7 @@ import {
   formatLoopPreflightBlocked,
   formatLoopPreflightReady,
   runLoopPreflight,
+  type LoopPreflightReady,
 } from './lib/loop-preflight';
 
 interface PromptOutput {
@@ -202,11 +203,20 @@ async function runHeadlessGoal(
 ): Promise<void> {
   const resolvedModel = goal.kind === 'loop' ? configuredModel(model) : requireConfiguredModel(model);
   let loopRun: LocalLoopRun | undefined;
+  let loopPreflight: LoopPreflightReady | undefined;
   if (goal.kind === 'loop') {
     const preflight = await runLoopPreflight({
       objective: goal.objective,
+      completionCriterion: goal.completionCriterion,
+      constraints: goal.constraints,
+      explicitChecks: goal.checks,
+      discoveredCheckDecision: goal.discoveredCheckDecision,
       model: resolvedModel,
       workspace: process.cwd(),
+      mode: 'headless',
+      approveGatePlanDigest: goal.approveGatePlanDigest,
+      acknowledgeWarningSetDigest: goal.acknowledgeWarningSetDigest,
+      trustWorkspaceChallenge: goal.trustWorkspaceChallenge,
       getActiveGoal: async () => (await session.getGoal()).goal,
     });
     if (!preflight.ready) {
@@ -214,7 +224,7 @@ async function runHeadlessGoal(
       process.exitCode = 2;
       return;
     }
-    loopRun = await beginLoopRun();
+    loopPreflight = preflight;
     stderr.write(`${formatLoopPreflightReady(
       preflight,
       goal.maxIterations ?? 10,
@@ -225,17 +235,39 @@ async function runHeadlessGoal(
   try {
     createdGoal = await session.createGoal({
       objective: goal.objective,
+      completionCriterion: goal.completionCriterion,
       replace: goal.replace,
       ...(goal.stopCondition === undefined ? {} : { stopCondition: goal.stopCondition }),
       reviewModel: goal.reviewModel,
       ...(maxIterations === undefined ? {} : { maxIterations }),
       ...(goal.minIntervalMs === undefined ? {} : { minIntervalMs: goal.minIntervalMs }),
+      ...(loopPreflight !== undefined
+        ? {
+            loopContract: {
+              schemaVersion: 2 as const,
+              objective: loopPreflight.proposal.objective,
+              completionCriterion: loopPreflight.proposal.completionCriterion,
+              constraints: loopPreflight.proposal.constraints,
+              finishLineReview: loopPreflight.proposal.finishLineReview,
+              workspaceIdentity: loopPreflight.proposal.workspaceIdentity,
+              workspaceTrust: loopPreflight.proposal.workspaceTrust,
+              gateApproval: loopPreflight.proposal.gateApproval,
+              gatePlan: loopPreflight.proposal.gatePlan,
+              reviewPolicy: loopPreflight.proposal.reviewPolicy,
+              source: 'user' as const,
+            },
+          }
+        : {}),
     });
   } catch (error) {
     if (loopRun !== undefined) await completeLoopRun(loopRun, 'ERROR', 0, 'cancelled');
     throw error;
   }
-  if (loopRun !== undefined) {
+  if (goal.kind === 'loop') {
+    if (createdGoal.loopRunId === undefined) {
+      throw new Error('Loop contract was created without an authoritative run id.');
+    }
+    loopRun = await beginLoopRun(createdGoal.loopRunId);
     await registerTuiLoop(createdGoal.goalId, loopRun, session.id, process.cwd());
     track('loop_started');
     if (loopRun.repeatedWithin7d === true) track('loop_repeat_started_7d');

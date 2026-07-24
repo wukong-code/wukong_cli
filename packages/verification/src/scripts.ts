@@ -51,6 +51,8 @@ export async function selectVerificationCommands(options: {
       selected.push({
         command: `${packageManager} run ${scriptName}`,
         source: 'package-script',
+        sourceLocator: `package.json#scripts.${scriptName}`,
+        definition: rootPackage.scripts[scriptName],
       });
       continue;
     }
@@ -59,6 +61,8 @@ export async function selectVerificationCommands(options: {
       selected.push({
         command: workspaceCommand(packageManager, workspacePackage.relativePath, scriptName),
         source: 'workspace-script',
+        sourceLocator: `${normalizeLocatorPath(workspacePackage.relativePath)}/package.json#scripts.${scriptName}`,
+        definition: workspacePackage.packageJson.scripts[scriptName],
       });
     }
   }
@@ -78,14 +82,23 @@ async function discoverConfiguredLanguageChecks(cwd: string): Promise<Verificati
     hasSection(setupCfg, 'tool:pytest') ||
     hasSection(toxIni, 'pytest')
   ) {
-    selected.push(inferred('python3 -m pytest'));
+    selected.push(inferred('python3 -m pytest', firstExistingLocator(cwd, [
+      'pytest.ini',
+      'pyproject.toml#tool.pytest',
+      'setup.cfg#tool:pytest',
+      'tox.ini#pytest',
+    ])));
   }
   if (
     hasFile(cwd, 'ruff.toml') ||
     hasFile(cwd, '.ruff.toml') ||
     hasSection(pyproject, 'tool.ruff')
   ) {
-    selected.push(inferred('ruff check .'));
+    selected.push(inferred('ruff check .', firstExistingLocator(cwd, [
+      'ruff.toml',
+      '.ruff.toml',
+      'pyproject.toml#tool.ruff',
+    ])));
   }
   if (
     hasFile(cwd, 'mypy.ini') ||
@@ -93,33 +106,46 @@ async function discoverConfiguredLanguageChecks(cwd: string): Promise<Verificati
     hasSection(pyproject, 'tool.mypy') ||
     hasSection(setupCfg, 'mypy')
   ) {
-    selected.push(inferred('mypy .'));
+    selected.push(inferred('mypy .', firstExistingLocator(cwd, [
+      'mypy.ini',
+      '.mypy.ini',
+      'pyproject.toml#tool.mypy',
+      'setup.cfg#mypy',
+    ])));
   }
 
   if (hasFile(cwd, 'Cargo.toml')) {
-    selected.push(inferred('cargo test'));
+    selected.push(inferred('cargo test', 'Cargo.toml'));
     if (hasFile(cwd, 'clippy.toml') || hasFile(cwd, '.clippy.toml')) {
-      selected.push(inferred('cargo clippy --all-targets --all-features -- -D warnings'));
+      selected.push(inferred(
+        'cargo clippy --all-targets --all-features -- -D warnings',
+        hasFile(cwd, 'clippy.toml') ? 'clippy.toml' : '.clippy.toml',
+      ));
     }
   }
 
   if (hasFile(cwd, 'go.mod')) {
-    selected.push(inferred('go test ./...'));
+    selected.push(inferred('go test ./...', 'go.mod'));
     if (
       hasFile(cwd, '.golangci.yml') ||
       hasFile(cwd, '.golangci.yaml') ||
       hasFile(cwd, '.golangci.toml') ||
       hasFile(cwd, '.golangci.json')
     ) {
-      selected.push(inferred('golangci-lint run'));
+      selected.push(inferred('golangci-lint run', firstExistingLocator(cwd, [
+        '.golangci.yml',
+        '.golangci.yaml',
+        '.golangci.toml',
+        '.golangci.json',
+      ])));
     }
   }
 
   return selected;
 }
 
-function inferred(command: string): VerificationCommand {
-  return { command, source: 'project-inferred' };
+function inferred(command: string, sourceLocator: string): VerificationCommand {
+  return { command, source: 'project-inferred', sourceLocator };
 }
 
 function hasFile(cwd: string, name: string): boolean {
@@ -157,11 +183,17 @@ async function readProjectChecks(cwd: string): Promise<VerificationCommand[]> {
   if (!Array.isArray(parsed.commands)) {
     throw new TypeError('.wukong/checks.json must contain a commands array.');
   }
-  return parsed.commands.map((command) => {
+  return parsed.commands.map((command, index) => {
     if (typeof command !== 'string' || command.trim().length === 0) {
       throw new Error('.wukong/checks.json commands must be non-empty strings.');
     }
-    return { command: command.trim(), source: 'project-config' };
+    const normalized = command.trim();
+    return {
+      command: normalized,
+      source: 'project-config',
+      sourceLocator: `.wukong/checks.json#/commands/${String(index)}`,
+      definition: normalized,
+    };
   });
 }
 
@@ -217,6 +249,18 @@ function workspaceCommand(
 
 function shellQuote(value: string): string {
   return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+function normalizeLocatorPath(value: string): string {
+  return value.replaceAll('\\', '/').replace(/^\.\//u, '');
+}
+
+function firstExistingLocator(cwd: string, candidates: readonly string[]): string {
+  for (const candidate of candidates) {
+    const file = candidate.split('#', 1)[0]!;
+    if (hasFile(cwd, file)) return candidate;
+  }
+  return candidates[0]!;
 }
 
 function scriptSelection(includeBuild: boolean): string[] {

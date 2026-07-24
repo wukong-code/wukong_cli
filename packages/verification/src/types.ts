@@ -43,6 +43,10 @@ export interface VerificationCommand {
     | 'workspace-script'
     | 'project-config'
     | 'project-inferred';
+  /** Workspace-relative source that gives this command its meaning. */
+  readonly sourceLocator?: string;
+  /** Exact source definition used to detect command weakening before execution. */
+  readonly definition?: string;
 }
 
 export interface VerificationCommandResult {

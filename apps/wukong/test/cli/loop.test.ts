@@ -26,13 +26,13 @@ describe('loop pure helpers', () => {
         expect((result as { message: string }).message).toContain('objective');
     });
 
-    it('validateLoopOptions rejects objectives over the core limit', () => {
+    it('validateLoopOptions rejects objectives over the V2 contract limit', () => {
         const result = validateLoopOptions({
-            objective: 'x'.repeat(4001),
+            objective: 'x'.repeat(8001),
             until: 'proof-pass',
             maxIterations: 3,
         });
-        expect(result).toMatchObject({ kind: 'error', message: expect.stringContaining('4000') });
+        expect(result).toMatchObject({ kind: 'error', message: expect.stringContaining('8000') });
     });
 
     it('validateLoopOptions rejects invalid until condition', () => {
@@ -57,6 +57,16 @@ describe('loop pure helpers', () => {
     it('validateLoopOptions accepts valid options', () => {
         const result = validateLoopOptions({ objective: 'fix bugs', until: 'proof-pass', maxIterations: 5 });
         expect(result.kind).toBe('ok');
+    });
+
+    it('requires one discovered-check decision', () => {
+        expect(validateLoopOptions({
+            objective: 'fix bugs',
+            until: 'proof-pass',
+            maxIterations: 5,
+            acceptDiscoveredChecks: true,
+            onlyExplicitChecks: true,
+        })).toMatchObject({ kind: 'error', message: expect.stringContaining('mutually exclusive') });
     });
 
     it('formatDuration formats cleanly', () => {
@@ -174,6 +184,44 @@ describe('loop command', () => {
                 objective: 'fix failing tests',
                 maxIterations: 3,
             },
+        });
+    });
+
+    it('forwards the complete Finish Line and approval flags to headless mode', async () => {
+        const runs: CLIOptions[] = [];
+        const program = createProgram('0.0.0', (options) => runs.push(options), () => {});
+
+        await program.parseAsync([
+            'node',
+            'wukong',
+            'loop',
+            'ship safely',
+            '--done-when',
+            'all checks pass',
+            '--constraint',
+            'do not weaken tests',
+            '--constraint',
+            'do not upload source',
+            '--check',
+            'pnpm test',
+            '--only-explicit-checks',
+            '--approve-gate-plan',
+            'approval-digest',
+            '--ack-finish-line-warnings',
+            'warning-digest',
+            '--trust-workspace',
+            'trust-challenge',
+        ]);
+
+        expect(runs[0]?.headlessGoal).toMatchObject({
+            kind: 'loop',
+            completionCriterion: 'all checks pass',
+            constraints: ['do not weaken tests', 'do not upload source'],
+            checks: ['pnpm test'],
+            discoveredCheckDecision: 'only-explicit',
+            approveGatePlanDigest: 'approval-digest',
+            acknowledgeWarningSetDigest: 'warning-digest',
+            trustWorkspaceChallenge: 'trust-challenge',
         });
     });
 

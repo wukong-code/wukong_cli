@@ -114,9 +114,13 @@ pnpm -C apps/wukong run dev:cli-only -- review feedback <finding-id> accept
 wukong loop "修复失败测试" --max-iterations 5
 wukong loop "完成 API 改动" --model fast --review-model slow
 wukong loop "完成 API 改动" --review-model reviewer
+wukong loop "完成 API 改动" --dry-run
+wukong loop "完成 API 改动" --done-when "兼容性测试通过" --constraint "不删除旧字段"
 ```
 
 Loop 的最终三态和退出码为 `PASS=0`、`NEEDS_WORK=1`、`ERROR=2`，中断为 `130`。所有用户都可以直接运行本地 BYOK Loop，不要求登录，不设置 Guest 试用或月度次数，也不请求 Wukong quota 服务。默认单次最多 10 轮，可用 `--max-iterations` 调整；reviewer step/time 上限和 `/loop stop` 继续提供失控保护。`verify`、`scan`、`proof` 是内部检查层和高级诊断命令。
+
+0.0.19 的新 Loop 会先进入 Finish Line：确认 Goal、可选 Done when、Must not、必跑 checks 和本 run 上限后才创建合同与 run。`--dry-run` 只生成完整提案、workspace challenge、warning digest 和 Gate approval digest，不创建信任授权、合同或 run。Headless 真正执行 discovered checks 时必须确认 dry-run 返回的精确 digest；`--yes`、Auto 或 YOLO 都不能代替。项目 check 会按当前 OS 权限运行可信 workspace 里的 shell，Wukong 会执行静态风险拦截，但不宣称提供完整 shell sandbox。
 
 0.0.16 会在 Loop 创建时冻结用户 objective 和显式 completion criterion。Reviewer 每轮必须先处理上一轮 blocker；同一 blocker 连续两轮不变时只启动一次只读 strategist。策略后仍无进展会返回 `NEEDS_WORK/no_progress`，不会继续空转或偷偷增加迭代额度。
 

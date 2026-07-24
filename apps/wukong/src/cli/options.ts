@@ -9,6 +9,13 @@ export interface CLIHeadlessGoal {
   readonly maxIterations: number;
   readonly minIntervalMs?: number;
   readonly reviewModel?: string;
+  readonly completionCriterion?: string;
+  readonly constraints?: readonly string[];
+  readonly checks?: readonly string[];
+  readonly discoveredCheckDecision?: 'accept' | 'only-explicit';
+  readonly trustWorkspaceChallenge?: string;
+  readonly approveGatePlanDigest?: string;
+  readonly acknowledgeWarningSetDigest?: string;
 }
 
 export interface CLIOptions {

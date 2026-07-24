@@ -412,8 +412,20 @@ export function projectContext(
       case 'turn.steer':
       case 'turn.cancel':
       case 'goal.contract.create':
+      case 'goal.contract.identity.assign':
+      case 'goal.lineage.create':
       case 'goal.review.record':
       case 'goal.strategy.record':
+      case 'loop.builtin-risk-scan-result.create':
+      case 'loop.continuation.create':
+      case 'loop.evidence-snapshot.create':
+      case 'loop.gate-attempt.complete':
+      case 'loop.gate-attempt.create':
+      case 'loop.gate-check-result.create':
+      case 'loop.proof-aggregate.create':
+      case 'loop.reviewer-result.create':
+      case 'loop.run.create':
+      case 'loop.run.terminal':
       case 'permission.record_approval_result':
       case 'full_compaction.begin':
       case 'full_compaction.cancel':

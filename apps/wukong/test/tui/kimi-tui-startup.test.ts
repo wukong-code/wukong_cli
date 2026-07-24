@@ -58,7 +58,44 @@ vi.mock('#/cli/lib/loop-preflight', () => ({
     ready: true,
     model: input.model,
     workspace: input.workspace,
-    checks: ['pnpm test'],
+    checks: [],
+    trustChallenge: 'challenge.signature',
+    proposal: {
+      schemaVersion: 1,
+      objective: input.objective,
+      constraints: [],
+      finishLineReview: {
+        schemaVersion: 1,
+        warningPolicyVersion: 'finish-line-warnings/1',
+        finishLineDigest: 'sha256:finish',
+        warnings: [],
+        warningSetDigest: 'sha256:warnings',
+        acknowledgedWarningIds: [],
+      },
+      workspaceIdentity: {
+        canonicalRealpath: input.workspace,
+        filesystemIdentity: '1:1',
+        workspaceIdentityDigest: 'sha256:workspace',
+      },
+      gateApproval: {
+        schemaVersion: 1,
+        gatePlanDigest: 'sha256:plan',
+        warningSetDigest: 'sha256:warnings',
+        guardPolicyVersion: 'gate-guard/1',
+        orderedChecks: [],
+        approvalSetDigest: 'sha256:approval',
+        hasExecutableChecks: false,
+      },
+      gatePlan: {
+        schemaVersion: 1,
+        stopCondition: 'proof-pass',
+        requiredChecks: [],
+        excludedChecks: [],
+        builtinRiskScanPolicyVersion: 'builtin-risk-scan/1',
+        planDigest: 'sha256:plan',
+      },
+      reviewPolicy: { mode: 'advisory-live' },
+    },
   })),
   formatLoopPreflightReady: () => 'Ready to start Loop',
   formatLoopPreflightBlocked: () => 'Loop not started',
@@ -909,6 +946,7 @@ describe('WukongTUI startup', () => {
           objective: input.objective,
           status: 'active',
           stopCondition: 'proof-pass',
+          loopRunId: `${source}-run`,
         }),
       );
       const prompt = vi.fn(async () => {});
@@ -962,6 +1000,14 @@ describe('WukongTUI startup', () => {
       const editedObjective = `Finish the ${sourceLabel} task and pass the project gate`;
       driver.state.editor.setText(`/loop ${editedObjective}`);
       tui.handleUserInput(driver.state.editor.getText());
+      await vi.waitFor(() => {
+        expect(driver.state.editorContainer.children[0]?.constructor.name)
+          .toBe('FinishLineReviewComponent');
+      });
+      const finishLine = driver.state.editorContainer.children[0] as {
+        handleInput(data: string): void;
+      };
+      finishLine.handleInput('\r');
 
       await vi.waitFor(() => {
         expect(createGoal).toHaveBeenCalledWith(expect.objectContaining({

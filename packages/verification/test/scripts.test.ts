@@ -88,8 +88,18 @@ describe('selectVerificationCommands', () => {
     const selected = await selectVerificationCommands({ cwd });
 
     expect(selected).toEqual([
-      { command: "pnpm --dir 'apps/web' run lint", source: 'workspace-script' },
-      { command: "pnpm --dir 'packages/api' run test", source: 'workspace-script' },
+      {
+        command: "pnpm --dir 'apps/web' run lint",
+        source: 'workspace-script',
+        sourceLocator: 'apps/web/package.json#scripts.lint',
+        definition: 'eslint .',
+      },
+      {
+        command: "pnpm --dir 'packages/api' run test",
+        source: 'workspace-script',
+        sourceLocator: 'packages/api/package.json#scripts.test',
+        definition: 'vitest run',
+      },
     ]);
   });
 
@@ -101,8 +111,18 @@ describe('selectVerificationCommands', () => {
     }));
 
     await expect(selectVerificationCommands({ cwd })).resolves.toEqual([
-      { command: 'pnpm test:unit', source: 'project-config' },
-      { command: 'pnpm typecheck', source: 'project-config' },
+      {
+        command: 'pnpm test:unit',
+        source: 'project-config',
+        sourceLocator: '.wukong/checks.json#/commands/0',
+        definition: 'pnpm test:unit',
+      },
+      {
+        command: 'pnpm typecheck',
+        source: 'project-config',
+        sourceLocator: '.wukong/checks.json#/commands/1',
+        definition: 'pnpm typecheck',
+      },
     ]);
   });
 
@@ -123,9 +143,13 @@ describe('selectVerificationCommands', () => {
     ].join('\n'));
 
     await expect(selectVerificationCommands({ cwd })).resolves.toEqual([
-      { command: 'python3 -m pytest', source: 'project-inferred' },
-      { command: 'ruff check .', source: 'project-inferred' },
-      { command: 'mypy .', source: 'project-inferred' },
+      {
+        command: 'python3 -m pytest',
+        source: 'project-inferred',
+        sourceLocator: 'pyproject.toml#tool.pytest',
+      },
+      { command: 'ruff check .', source: 'project-inferred', sourceLocator: 'pyproject.toml#tool.ruff' },
+      { command: 'mypy .', source: 'project-inferred', sourceLocator: 'pyproject.toml#tool.mypy' },
     ]);
   });
 
@@ -141,10 +165,11 @@ describe('selectVerificationCommands', () => {
     await writeRepoFile(rust, 'Cargo.toml', '[package]\nname = "example"\nversion = "0.1.0"\n');
     await writeRepoFile(rust, 'clippy.toml', 'msrv = "1.80"\n');
     await expect(selectVerificationCommands({ cwd: rust })).resolves.toEqual([
-      { command: 'cargo test', source: 'project-inferred' },
+      { command: 'cargo test', source: 'project-inferred', sourceLocator: 'Cargo.toml' },
       {
         command: 'cargo clippy --all-targets --all-features -- -D warnings',
         source: 'project-inferred',
+        sourceLocator: 'clippy.toml',
       },
     ]);
 
@@ -152,8 +177,8 @@ describe('selectVerificationCommands', () => {
     await writeRepoFile(go, 'go.mod', 'module example.test/project\n\ngo 1.24\n');
     await writeRepoFile(go, '.golangci.yml', 'run:\n  timeout: 2m\n');
     await expect(selectVerificationCommands({ cwd: go })).resolves.toEqual([
-      { command: 'go test ./...', source: 'project-inferred' },
-      { command: 'golangci-lint run', source: 'project-inferred' },
+      { command: 'go test ./...', source: 'project-inferred', sourceLocator: 'go.mod' },
+      { command: 'golangci-lint run', source: 'project-inferred', sourceLocator: '.golangci.yml' },
     ]);
   });
 
@@ -163,8 +188,13 @@ describe('selectVerificationCommands', () => {
     await writeRepoFile(cwd, 'go.mod', 'module example.test/project\n\ngo 1.24\n');
 
     await expect(selectVerificationCommands({ cwd })).resolves.toEqual([
-      { command: 'npm run test', source: 'package-script' },
-      { command: 'go test ./...', source: 'project-inferred' },
+      {
+        command: 'npm run test',
+        source: 'package-script',
+        sourceLocator: 'package.json#scripts.test',
+        definition: 'vitest run',
+      },
+      { command: 'go test ./...', source: 'project-inferred', sourceLocator: 'go.mod' },
     ]);
   });
 });

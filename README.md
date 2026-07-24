@@ -8,6 +8,16 @@
 
 Wukong Code is a terminal AI coding agent built around one primary workflow: **Goal → Write → Check → Review → Fix**. Give `/loop` a goal and Wukong keeps working until an independent reviewer has no blocking findings or the iteration limit is reached.
 
+Version `0.0.19` adds an explicit Finish Line before every new Loop. The TUI
+lets you review the Goal, optional Done when, Must not constraints, frozen
+project checks, and the per-run limit before anything starts. Headless users can
+inspect the same contract with `wukong loop "<goal>" --dry-run`, then confirm
+the exact warning, Gate approval, and workspace trust digests. Check definitions
+and evidence are frozen locally so an agent cannot silently weaken the Gate; a
+terminal continuation gets a new traceable run while contract changes create a
+revised Loop. See the [0.0.19 design](docs/design/0.0.19-explicit-finish-line.md)
+and [release notes](docs/releases/0.0.19.md).
+
 Version `0.0.13` added structured multi-finding reviews, project-specific rules in `.wukong/review-policy.md`, local finding feedback and diagnostics, plus an optional independent reviewer model. The current product remains Free and bring-your-own-key, with no paid plan or entitlement.
 
 Version `0.0.14` adds Cross-Agent Resume, an explicit Resume → Loop handoff, clearer TUI Gate results, and broader real-project check discovery. It remains free and BYOK; see the [0.0.14 design](docs/design/0.0.14-resume-loop-polish.md).
@@ -64,6 +74,8 @@ wukong acp                     # run as an Agent Client Protocol server
 wukong server                  # run the local REST/WebSocket server
 wukong web                     # open the local web UI
 wukong loop "ship the change"  # iterate until the independent delivery gate passes
+wukong loop "ship the change" --dry-run
+wukong loop "fix auth" --done-when "login tests pass" --constraint "do not change the public API"
 wukong loop "fix tests" --model fast --review-model slow
 wukong loop "fix tests" --review-model reviewer
 wukong loop "fix tests" --max-iterations 5 --every 1m

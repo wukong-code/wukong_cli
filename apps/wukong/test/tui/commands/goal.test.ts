@@ -87,6 +87,7 @@ function fakeSnapshot() {
   return {
     goalId: 'g1',
     objective: 'obj',
+    loopRunId: 'core-run-1',
     status: 'active' as const,
     iteration: 0,
     turnsUsed: 0,
@@ -105,6 +106,45 @@ function fakeSnapshot() {
       overBudget: false,
     },
   };
+}
+
+function finishLineProposal(objective: string) {
+  return {
+    schemaVersion: 1,
+    objective,
+    constraints: [],
+    finishLineReview: {
+      schemaVersion: 1,
+      warningPolicyVersion: 'finish-line-warnings/1',
+      finishLineDigest: 'sha256:finish',
+      warnings: [],
+      warningSetDigest: 'sha256:warnings',
+      acknowledgedWarningIds: [],
+    },
+    workspaceIdentity: {
+      canonicalRealpath: '/workspace',
+      filesystemIdentity: '1:1',
+      workspaceIdentityDigest: 'sha256:workspace',
+    },
+    gateApproval: {
+      schemaVersion: 1,
+      gatePlanDigest: 'sha256:plan',
+      warningSetDigest: 'sha256:warnings',
+      guardPolicyVersion: 'gate-guard/1',
+      orderedChecks: [],
+      approvalSetDigest: 'sha256:approval',
+      hasExecutableChecks: false,
+    },
+    gatePlan: {
+      schemaVersion: 1,
+      stopCondition: 'proof-pass',
+      requiredChecks: [],
+      excludedChecks: [],
+      builtinRiskScanPolicyVersion: 'builtin-risk-scan/1',
+      planDigest: 'sha256:plan',
+    },
+    reviewPolicy: { mode: 'advisory-live' },
+  } as const;
 }
 
 function stripAnsi(text: string): string {
@@ -872,18 +912,24 @@ describe('handleLoopSlashCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     loopLifecycleMocks.begin.mockResolvedValue({ runId: 'run123' });
-    loopPreflightMocks.run.mockResolvedValue({
+    loopPreflightMocks.run.mockImplementation(async (input?: { objective: string }) => ({
       ready: true,
       model: 'wukong-model',
       workspace: '/workspace',
-      checks: ['pnpm test'],
-    });
+      checks: [],
+      proposal: finishLineProposal(input?.objective ?? ''),
+      trustChallenge: 'challenge.signature',
+    }));
   });
 
   it('creates a loop goal with stop condition, max iterations, and min interval', async () => {
     const { host, session } = makeHost();
 
     await handleLoopSlashCommand(host, '--until verify-pass --every 5m --max-iterations 3 fix tests');
+    mountedPicker(host).handleInput(ENTER);
+    await vi.waitFor(() => {
+      expect(session.createGoal).toHaveBeenCalled();
+    });
 
     expect(session.createGoal).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -906,6 +952,10 @@ describe('handleLoopSlashCommand', () => {
     const { host, session } = makeHost();
 
     await handleLoopSlashCommand(host, '--max-iterations 12 fix tests');
+    mountedPicker(host).handleInput(ENTER);
+    await vi.waitFor(() => {
+      expect(session.createGoal).toHaveBeenCalled();
+    });
 
     expect(session.createGoal).toHaveBeenCalledWith(expect.objectContaining({
       maxIterations: 12,
@@ -927,18 +977,18 @@ describe('handleLoopSlashCommand', () => {
     expect(host.showError).toHaveBeenCalledWith(expect.stringContaining('Another Goal'));
   });
 
-  it('ends the local lifecycle record as cancelled when goal creation fails', async () => {
+  it('does not create an orphan local lifecycle record when goal creation fails', async () => {
     const { host, session } = makeHost();
     session.createGoal.mockRejectedValueOnce(new Error('goal store unavailable'));
 
     await handleLoopSlashCommand(host, 'fix tests');
+    mountedPicker(host).handleInput(ENTER);
+    await vi.waitFor(() => {
+      expect(host.showError).toHaveBeenCalled();
+    });
 
-    expect(loopLifecycleMocks.completeRun).toHaveBeenCalledWith(
-      expect.objectContaining({ runId: 'run123' }),
-      'ERROR',
-      0,
-      'cancelled',
-    );
+    expect(loopLifecycleMocks.begin).not.toHaveBeenCalled();
+    expect(loopLifecycleMocks.completeRun).not.toHaveBeenCalled();
     expect(host.sendNormalUserInput).not.toHaveBeenCalled();
   });
 
@@ -979,7 +1029,8 @@ describe('handleLoopSlashCommand', () => {
     const { host, session } = makeHost({ permissionMode: 'manual' });
 
     await handleLoopSlashCommand(host, '--max-iterations 3 fix tests');
-    mountedPicker(host).handleInput(ESCAPE);
+    mountedPicker(host).handleInput(ENTER);
+    latestMountedPicker(host).handleInput(ESCAPE);
 
     expect(host.restoreInputText).toHaveBeenCalledWith('/loop --max-iterations 3 fix tests');
     expect(session.createGoal).not.toHaveBeenCalled();
@@ -991,6 +1042,7 @@ describe('handleLoopSlashCommand', () => {
 
     await handleLoopSlashCommand(host, 'fix tests');
     mountedPicker(host).handleInput(ENTER);
+    latestMountedPicker(host).handleInput(ENTER);
 
     await vi.waitFor(() => {
       expect(session.setPermission).toHaveBeenNthCalledWith(1, 'auto');
