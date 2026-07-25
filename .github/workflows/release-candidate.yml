@@ -1,0 +1,25 @@
+name: Native release candidate
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_ref:
+        description: 'Git ref or SHA to validate without publishing'
+        required: true
+        default: 'main'
+        type: string
+
+concurrency:
+  group: native-release-candidate-${{ inputs.source_ref }}
+  cancel-in-progress: true
+
+jobs:
+  native-artifacts:
+    name: Build native release candidate
+    uses: ./.github/workflows/_native-build.yml
+    with:
+      upload-artifact-prefix: wukong-native-rc
+      retention-days: 1
+      sign-macos: false
+      source-ref: ${{ inputs.source_ref }}
+      publish-release-tag: ''
