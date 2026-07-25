@@ -161,22 +161,30 @@ describe('Verification Criteria catalog', () => {
   it('marks same-name sources as an explicit collision instead of first-wins', async () => {
     const cwd = await makeTempDir('wukong-criteria-collision-');
     const project = join(cwd, '.wukong', 'skills');
-    const personal = join(cwd, 'personal');
+    const extra = join(cwd, 'extra');
     await writeSkill(project, recipe);
-    await writeSkill(personal, {
+    await writeSkill(extra, {
       ...recipe,
-      scope: { kind: 'personal', paths: ['src/api/**'] },
+      scope: { kind: 'project', paths: ['src/api/**'] },
     });
-    await chmod(personal, 0o700);
-    await chmod(join(personal, recipe.id), 0o700);
-    await chmod(join(personal, recipe.id, 'SKILL.md'), 0o600);
-    await chmod(join(personal, recipe.id, 'verification', 'criteria.v1.json'), 0o600);
+    const canonicalExtra = await realpath(extra);
+    const extraInfo = await lstat(canonicalExtra);
 
     const result = await discoverVerificationCriteriaCatalog({
       workspaceRoot: cwd,
       roots: [
         { kind: 'project', root: project, workspaceIdentityDigest: 'sha256:workspace' },
-        { kind: 'personal', root: personal },
+        {
+          kind: 'extra',
+          root: canonicalExtra,
+          sourceId: 'collision-fixture',
+          trustGrantId: '00000000-0000-4000-8000-000000000002',
+          rootIdentityDigest: canonicalDigest('wukong/extra-criteria-root/v1', {
+            canonicalRealpath: canonicalExtra,
+            device: extraInfo.dev,
+            inode: extraInfo.ino,
+          }),
+        },
       ],
     });
 

@@ -587,6 +587,255 @@ export const WIRE_RENDERERS: RendererMap = {
     },
   },
 
+  'goal.contract.create': {
+    tone: 'lifecycle',
+    label: 'contract+',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.goalId}</Mono>
+          <Dim>v{r.contract.schemaVersion}</Dim>
+          <span className="truncate text-fg-1">{r.contract.objective}</span>
+        </span>
+      ),
+    }),
+  },
+
+  'goal.contract.identity.assign': {
+    tone: 'meta',
+    label: 'contract-id',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.goalId}</Mono>
+          <Dim>→</Dim>
+          <Mono>{r.contractId}</Mono>
+        </span>
+      ),
+    }),
+  },
+
+  'goal.lineage.create': {
+    tone: 'lifecycle',
+    label: 'lineage',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.supersedesGoalId}</Mono>
+          <Dim>→</Dim>
+          <Mono>{r.goalId}</Mono>
+        </span>
+      ),
+    }),
+  },
+
+  'loop.run.create': {
+    tone: 'lifecycle',
+    label: 'run+',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.run.runId}</Mono>
+          <Dim>contract {r.run.contractId}</Dim>
+          <Dim>v{r.run.schemaVersion}</Dim>
+        </span>
+      ),
+    }),
+  },
+
+  'loop.run-review-settings.assign': {
+    tone: 'config',
+    label: 'review cfg',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.assignment.runId}</Mono>
+          <Dim>settings {r.assignment.runSettingsRef}</Dim>
+        </span>
+      ),
+    }),
+  },
+
+  'loop.gate-attempt.create': {
+    tone: 'lifecycle',
+    label: 'gate+',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.attempt.attemptId}</Mono>
+          <Dim>sequence {r.attempt.sequence}</Dim>
+          <Dim>v{r.attempt.schemaVersion}</Dim>
+        </span>
+      ),
+    }),
+  },
+
+  'loop.gate-check-result.create': {
+    tone: 'lifecycle',
+    label: 'check',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.result.checkId}</Mono>
+          <Dim>{r.result.status}</Dim>
+        </span>
+      ),
+    }),
+  },
+
+  'loop.builtin-risk-scan-result.create': {
+    tone: 'lifecycle',
+    label: 'risk scan',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.result.attemptId}</Mono>
+          <Dim>{r.result.status}</Dim>
+          <Dim>{r.result.findings.length} findings</Dim>
+        </span>
+      ),
+    }),
+  },
+
+  'loop.reviewer-result.create': {
+    tone: 'lifecycle',
+    label: 'review',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.result.attemptId}</Mono>
+          <Dim>{r.result.status}</Dim>
+        </span>
+      ),
+    }),
+  },
+
+  'loop.review-subject-manifest.create': {
+    tone: 'meta',
+    label: 'subject',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.result.attemptId}</Mono>
+          <Dim>{r.result.manifest.entries.length} files</Dim>
+          <Dim>{r.result.manifest.gateEvidence.length} evidence</Dim>
+        </span>
+      ),
+    }),
+  },
+
+  'loop.fresh-criteria-verdict.create': {
+    tone: 'lifecycle',
+    label: 'criteria',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.result.attemptId}</Mono>
+          <Dim>{r.result.verdict.status}</Dim>
+          <Dim>{r.result.verdict.criterionDispositions.length} criteria</Dim>
+        </span>
+      ),
+    }),
+  },
+
+  'loop.proof-aggregate.create': {
+    tone: 'lifecycle',
+    label: 'proof',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.result.attemptId}</Mono>
+          <Dim>{r.result.status}</Dim>
+          <Mono>{r.result.reasonCode}</Mono>
+        </span>
+      ),
+    }),
+  },
+
+  'loop.evidence-snapshot.create': {
+    tone: 'meta',
+    label: 'evidence',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.snapshot.evidenceSnapshotId}</Mono>
+          <Dim>{r.snapshot.orderedCheckResults.length} checks</Dim>
+          <Dim>v{r.snapshot.schemaVersion}</Dim>
+        </span>
+      ),
+    }),
+  },
+
+  'loop.gate-attempt.complete': {
+    tone: 'lifecycle',
+    label: 'gate✓',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.attempt.attemptId}</Mono>
+          <Dim>{r.attempt.status}</Dim>
+          <Mono>{r.attempt.reasonCode}</Mono>
+        </span>
+      ),
+    }),
+  },
+
+  'loop.run.terminal': {
+    tone: 'lifecycle',
+    label: 'run✓',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.terminal.runId}</Mono>
+          <Dim>{r.terminal.status}</Dim>
+          <Mono>{r.terminal.reasonCode}</Mono>
+        </span>
+      ),
+    }),
+  },
+
+  'loop.continuation.create': {
+    tone: 'lifecycle',
+    label: 'continue',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.continuation.priorRunId}</Mono>
+          <Dim>→</Dim>
+          <Mono>{r.continuation.nextRunId}</Mono>
+        </span>
+      ),
+    }),
+  },
+
+  'goal.review.record': {
+    tone: 'lifecycle',
+    label: 'goal review',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.goalId}</Mono>
+          <Dim>{r.attempt.status}</Dim>
+          <Dim>iteration {r.attempt.iteration}</Dim>
+        </span>
+      ),
+    }),
+  },
+
+  'goal.strategy.record': {
+    tone: 'lifecycle',
+    label: 'strategy',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.goalId}</Mono>
+          <Dim>{r.attempt.status}</Dim>
+          <Dim>iteration {r.attempt.triggeredAtIteration}</Dim>
+        </span>
+      ),
+    }),
+  },
+
   'goal.clear': {
     tone: 'warning',
     label: 'goal×',
