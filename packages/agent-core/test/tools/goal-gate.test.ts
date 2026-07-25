@@ -14,6 +14,10 @@ import {
   grantBrokerReviewTrust,
   revokeBrokerReviewTrustBinding,
 } from '@wukong/verification';
+import type {
+  RawGateEvidenceV1,
+  VerificationRisk,
+} from '@wukong/verification';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Agent } from '../../src/agent';
@@ -299,7 +303,10 @@ async function createBrokeredGoal(
   });
 }
 
-function proof(status: 'passed' | 'blocked') {
+function proof(
+  status: 'passed' | 'blocked',
+  scanRisks: readonly VerificationRisk[] = [],
+) {
   return {
     status,
     recommendation: status === 'passed' ? 'Ready.' : 'Fix the failed delivery gate.',
@@ -332,7 +339,7 @@ function proof(status: 'passed' | 'blocked') {
       changedFiles: [],
       risks: [],
     },
-    scan: { status: 'passed', risks: [] },
+    scan: { status: 'passed', risks: scanRisks },
   };
 }
 
@@ -559,6 +566,52 @@ describe('UpdateGoalTool 0.0.20 verification gate', () => {
       'loop.gate-attempt.complete',
       'loop.run.terminal',
     ]);
+  });
+
+  it('brokers repeated risk kinds under unique stable evidence identities', async () => {
+    const { goals } = makeStore();
+    await createBrokeredGoal(goals);
+    const repeatedRisks: readonly VerificationRisk[] = [
+      {
+        id: 'diff.placeholder_added',
+        severity: 'high',
+        message: 'Placeholder or unfinished marker added.',
+        file: 'src/first.ts',
+        line: 10,
+        evidence: '// TODO: first implementation',
+      },
+      {
+        id: 'diff.placeholder_added',
+        severity: 'high',
+        message: 'Placeholder or unfinished marker added.',
+        file: 'src/second.ts',
+        line: 20,
+        evidence: '// TODO: second implementation',
+      },
+    ];
+    mocks.runProof.mockResolvedValue(proof('blocked', repeatedRisks));
+
+    await executeTool(
+      new UpdateGoalTool(makeAgent(goals)),
+      ctx({ status: 'complete' }),
+    );
+
+    const brokerInput = mocks.buildReviewSubjectBroker.mock.calls[0]?.[0] as {
+      readonly gateEvidence: readonly RawGateEvidenceV1[];
+    } | undefined;
+    const riskEvidence = brokerInput?.gateEvidence.filter(
+      (entry) => entry.producerId === 'builtin-risk-scan',
+    ) ?? [];
+    expect(riskEvidence).toHaveLength(2);
+    expect(new Set(riskEvidence.map((entry) => entry.evidenceId)).size).toBe(2);
+    expect(riskEvidence.map((entry) => entry.evidenceId)).toEqual(
+      repeatedRisks.map((risk) => (
+        `${risk.id}@${canonicalDigest(
+          'wukong/builtin-risk-gate-evidence-identity/v1',
+          risk,
+        )}`
+      )),
+    );
   });
 
   it('still invokes exactly one reviewer when deterministic proof fails', async () => {

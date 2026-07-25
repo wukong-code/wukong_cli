@@ -1120,9 +1120,23 @@ function brokeredGateEvidence(
     }
   }
   for (const risk of proof.scan.risks) {
+    const evidenceIdentity = canonicalDigest(
+      'wukong/builtin-risk-gate-evidence-identity/v1',
+      {
+        id: risk.id,
+        severity: risk.severity,
+        message: risk.message,
+        file: risk.file,
+        line: risk.line,
+        evidence: risk.evidence,
+      },
+    );
     evidence.push({
       producerId: 'builtin-risk-scan',
-      evidenceId: risk.id,
+      // A scan can legitimately report the same risk kind at multiple
+      // locations. Include the complete finding identity so the broker keeps
+      // every occurrence without treating the second one as duplicate input.
+      evidenceId: `${risk.id}@${evidenceIdentity}`,
       content: JSON.stringify({
         severity: risk.severity,
         message: risk.message,
