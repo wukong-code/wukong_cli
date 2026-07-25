@@ -5,6 +5,7 @@ import {
 } from '@wukong/kosong';
 
 import type { Agent } from '../agent';
+import type { ExecutableTool } from '../loop';
 import type { PromptOrigin } from '../agent/context';
 import { ErrorCodes, fromWukongErrorPayload, type WukongErrorPayload } from '../errors';
 import { DenyAllPermissionPolicy } from '../agent/permission/policies/deny-all';
@@ -80,6 +81,10 @@ export interface RunSubagentOptions {
   readonly suppressRateLimitFailureEvent?: boolean;
   /** Optional hard per-turn ceiling for bounded internal subagents such as reviewers. */
   readonly maxSteps?: number;
+  /** Do not load inherited context, user tools, or parent hooks. */
+  readonly isolated?: boolean;
+  /** Attempt-scoped in-process tools available only to an isolated child. */
+  readonly internalTools?: readonly ExecutableTool[];
 }
 
 export interface SpawnSubagentOptions extends RunSubagentOptions {
@@ -126,7 +131,7 @@ export class SessionSubagentHost {
     const completion = this.runWithActiveChild(id, options, async (runOptions) => {
       this.emitSubagentSpawned(parent, id, profile.name, runOptions);
       try {
-        await this.configureChild(parent, agent, profile, options.modelAlias);
+        await this.configureChild(parent, agent, profile, options);
         return await this.runPromptTurn(parent, id, agent, profile.name, runOptions);
       } catch (error) {
         this.emitSubagentFailed(parent, id, runOptions, error);
@@ -372,21 +377,29 @@ export class SessionSubagentHost {
     parent: Agent,
     child: Agent,
     profile: ResolvedAgentProfile,
-    modelAlias?: string,
+    options: Pick<SpawnSubagentOptions, 'modelAlias' | 'isolated' | 'internalTools'>,
   ): Promise<void> {
     child.config.update({
       cwd: parent.config.cwd,
-      modelAlias: modelAlias ?? parent.config.modelAlias,
+      modelAlias: options.modelAlias ?? parent.config.modelAlias,
       thinkingLevel: parent.config.thinkingLevel,
     });
 
-    const context = await prepareSystemPromptContext(
-      this.session.systemContextKaos(child.kaos.getcwd()),
-      this.session.options.wukongHomeDir,
-      { additionalDirs: child.getAdditionalDirs() },
-    );
+    const context = options.isolated === true
+      ? undefined
+      : await prepareSystemPromptContext(
+          this.session.systemContextKaos(child.kaos.getcwd()),
+          this.session.options.wukongHomeDir,
+          { additionalDirs: child.getAdditionalDirs() },
+        );
     child.useProfile(profile, context);
-    child.tools.inheritUserTools(parent.tools);
+    if (options.isolated !== true) child.tools.inheritUserTools(parent.tools);
+    if (options.internalTools !== undefined) {
+      if (options.isolated !== true) {
+        throw new Error('Internal subagent tools require isolated mode.');
+      }
+      child.tools.installInternalToolsTransient(options.internalTools);
+    }
     parent.telemetry.track('subagent_capability_ceiling_applied', {
       profile_category: builtinProfileCategory(profile.name),
       capability_mode: readOnlyProfile(profile.tools) ? 'read_only' : 'bounded',
@@ -400,6 +413,7 @@ export class SessionSubagentHost {
     prompt: string,
     signal: AbortSignal,
   ): Promise<void> {
+    if (profileName === 'fresh-reviewer') return;
     await parent.hooks?.trigger('SubagentStart', {
       matcherValue: profileName,
       signal,
@@ -411,6 +425,7 @@ export class SessionSubagentHost {
   }
 
   private triggerSubagentStop(parent: Agent, profileName: string, result: string): void {
+    if (profileName === 'fresh-reviewer') return;
     void parent.hooks?.fireAndForgetTrigger('SubagentStop', {
       matcherValue: profileName,
       inputData: {

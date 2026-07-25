@@ -234,6 +234,25 @@ export class ToolManager {
     }
   }
 
+  /**
+   * Installs attempt-scoped internal tools without persistence or RPC
+   * forwarding. Used only by isolated internal subagents; their Agent instance
+   * is discarded after the bounded invocation.
+   */
+  installInternalToolsTransient(tools: readonly ExecutableTool[]): void {
+    for (const tool of tools) {
+      if (
+        this.builtinTools.has(tool.name)
+        || this.userTools.has(tool.name)
+        || this.mcpTools.has(tool.name)
+      ) {
+        throw new Error(`Internal tool name collides with an existing tool: ${tool.name}`);
+      }
+      this.userTools.set(tool.name, tool);
+      this.enabledTools.add(tool.name);
+    }
+  }
+
   private installUserTool(input: UserToolRegistration, active: boolean): void {
     const { name, description, parameters } = input;
     const tool: ExecutableTool = {

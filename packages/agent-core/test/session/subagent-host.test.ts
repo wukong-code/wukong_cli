@@ -9,6 +9,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { Agent, AgentOptions } from '../../src/agent';
 import { AGENT_WIRE_PROTOCOL_VERSION } from '../../src/agent/records';
 import { ErrorCodes } from '../../src/errors';
+import type { ExecutableTool } from '../../src/loop';
 import type { ResolvedAgentProfile } from '../../src/profile';
 import type { SDKSessionRPC } from '../../src/rpc';
 import { Session } from '../../src/session';
@@ -387,6 +388,62 @@ describe('SessionSubagentHost', () => {
 
     const lookupTool = child.agent.tools.loopTools.find((tool) => tool.name === 'Lookup');
     expect(lookupTool).toBeUndefined();
+  });
+
+  it('isolates the fresh reviewer from parent tools and lifecycle hooks', async () => {
+    const trigger = vi.fn(async () => []);
+    const fireAndForgetTrigger = vi.fn(() => Promise.resolve([]));
+    const parent = testAgent({
+      hookEngine: { trigger, fireAndForgetTrigger } as unknown as NonNullable<Agent['hooks']>,
+    });
+    parent.configure();
+    await parent.rpc.registerTool(lookupToolRegistration());
+    parent.newEvents();
+
+    const child = testAgent();
+    child.mockNextResponse({
+      type: 'text',
+      text: `FRESH_VERDICT_JSON: ${JSON.stringify({
+        schemaVersion: 1,
+        status: 'INCONCLUSIVE',
+        summary:
+          'The attempt-scoped broker did not expose enough verified evidence to satisfy every frozen acceptance criterion, so the isolated reviewer cannot return PASS or assert a blocking defect.',
+      })}`,
+    });
+    const internalTool: ExecutableTool = {
+      name: 'ReadReviewSubject',
+      description: 'Read one attempt-scoped review subject.',
+      parameters: {
+        type: 'object',
+        properties: { subjectRef: { type: 'string' } },
+        required: ['subjectRef'],
+        additionalProperties: false,
+      },
+      resolveExecution: () => ({
+        approvalRule: 'Read',
+        execute: async () => ({ output: 'bounded review subject' }),
+      }),
+    };
+    const host = new SessionSubagentHost(fakeSession(parent.agent, child.agent), 'main');
+
+    const handle = await host.spawn({
+      profileName: 'fresh-reviewer',
+      parentToolCallId: 'call_fresh_reviewer',
+      prompt: 'Judge the bounded review manifest.',
+      description: 'Fresh Loop Gate review',
+      runInBackground: false,
+      signal,
+      isolated: true,
+      internalTools: [internalTool],
+    });
+
+    await expect(handle.completion).resolves.toMatchObject({
+      result: expect.stringContaining('FRESH_VERDICT_JSON'),
+    });
+    expect(child.llmCalls[0]?.tools.map((tool) => tool.name)).toEqual(['ReadReviewSubject']);
+    expect(child.agent.tools.data()).not.toContainEqual(expect.objectContaining({ name: 'Lookup' }));
+    expect(trigger).not.toHaveBeenCalled();
+    expect(fireAndForgetTrigger).not.toHaveBeenCalled();
   });
 
   it('falls back to bundled subagent profiles when the parent profile is missing', async () => {

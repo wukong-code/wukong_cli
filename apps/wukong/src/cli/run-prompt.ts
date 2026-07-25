@@ -234,7 +234,10 @@ async function runHeadlessGoal(
       trustReviewSubjectProposalDigest: goal.trustReviewSubjectProposalDigest,
       acknowledgeReviewSubjectConsentDigest:
         goal.acknowledgeReviewSubjectConsentDigest,
-      reviewProvider: resolveLoopReviewProvider(config, resolvedModel),
+      reviewProvider: resolveLoopReviewProvider(
+        config,
+        goal.reviewModel ?? resolvedModel,
+      ),
       getActiveGoal: async () => (await session.getGoal()).goal,
     });
     if (!preflight.ready) {

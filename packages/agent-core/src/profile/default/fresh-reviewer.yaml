@@ -1,0 +1,9 @@
+name: fresh-reviewer
+description: Isolated bounded-input delivery reviewer for Loop gates.
+systemPromptPath: ./fresh-reviewer.md
+whenToUse: |
+  Use only for an internal Wukong Loop Gate with an attempt-scoped review broker.
+tools:
+  - ReadReviewSubject
+  - SearchReviewSubjects
+  - ReadGateEvidence
