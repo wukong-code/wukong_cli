@@ -1,10 +1,11 @@
-import { mkdtemp, realpath, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import {
   formatLoopPreflightBlocked,
+  formatLoopDryRun,
   formatLoopPreflightReady,
   runLoopPreflight,
 } from '#/cli/lib/loop-preflight';
@@ -44,6 +45,8 @@ describe('Loop preflight', () => {
       expect(formatLoopPreflightReady(result, 5)).toContain('Run          up to 5 iterations');
       expect(result.proposal.gatePlan.requiredChecks).toHaveLength(2);
       expect(result.trustChallenge).toContain('.');
+      expect(result.verificationCatalog.entries.filter((entry) =>
+        entry.ref.source.kind === 'builtin')).toHaveLength(4);
     }
   });
 
@@ -147,14 +150,18 @@ describe('Loop preflight', () => {
       ready: false,
       reasonCode: 'review_subject_trust_required',
     });
-    if (ready.ready || ready.brokerTrustProposal === undefined) return;
+    if (
+      ready.ready
+      || ready.brokerTrustProposal === undefined
+      || ready.brokerTrustChallenge === undefined
+    ) return;
 
     const trusted = await runLoopPreflight({
       ...base,
       acknowledgeWarningSetDigest: warning.proposal.finishLineReview.warningSetDigest,
       approveGatePlanDigest: approvedWarning.proposal.gateApproval.approvalSetDigest,
       trustWorkspaceChallenge: approvedPlan.trustChallenge,
-      trustReviewSubjectProposalDigest: ready.brokerTrustProposal.trustProposalDigest,
+      trustReviewSubjectChallenge: ready.brokerTrustChallenge,
     });
     expect(trusted).toMatchObject({
       ready: false,
@@ -167,7 +174,7 @@ describe('Loop preflight', () => {
       acknowledgeWarningSetDigest: warning.proposal.finishLineReview.warningSetDigest,
       approveGatePlanDigest: approvedWarning.proposal.gateApproval.approvalSetDigest,
       trustWorkspaceChallenge: approvedPlan.trustChallenge,
-      trustReviewSubjectProposalDigest: ready.brokerTrustProposal.trustProposalDigest,
+      trustReviewSubjectChallenge: ready.brokerTrustChallenge,
       acknowledgeReviewSubjectConsentDigest:
         trusted.reviewSubjectConsentProposal.consentProposalDigest,
     });
@@ -205,5 +212,90 @@ describe('Loop preflight', () => {
       homeDir: join(cwd, 'home'),
     });
     expect(changed).toMatchObject({ ready: false, reasonCode: 'gate_approval_mismatch' });
+  });
+
+  it('uses one stream-json protocol for no-selection V2 and exact-selection V3 dry-runs', async () => {
+    const cwd = await workspace();
+    const skillDir = join(cwd, '.wukong', 'skills', 'review-api-contract');
+    await mkdir(join(skillDir, 'verification'), { recursive: true });
+    await writeFile(join(skillDir, 'SKILL.md'), [
+      '---',
+      'name: review-api-contract',
+      'description: Review API compatibility.',
+      'metadata:',
+      '  wukong.verification.criteria: verification/criteria.v1.json',
+      '---',
+      'Review API compatibility without executing commands.',
+    ].join('\n'));
+    await writeFile(
+      join(skillDir, 'verification', 'criteria.v1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        kind: 'wukong.verification-criteria',
+        id: 'review-api-contract',
+        description: 'Review API compatibility.',
+        scope: { kind: 'project', paths: ['src/api/**'] },
+        criteria: [{
+          id: 'typed-failures',
+          text: 'API failures remain explicit and typed.',
+          evidence: 'Cite the handler and deterministic test evidence.',
+        }],
+      }),
+    );
+    const base = {
+      objective: 'keep API failures typed',
+      model: 'glm-5.2',
+      workspace: cwd,
+      reviewProvider,
+      mode: 'tui-proposal' as const,
+      getActiveGoal: async () => null,
+      discoverChecks: async () => [],
+    };
+    const none = await runLoopPreflight(base);
+    expect(none.ready).toBe(true);
+    if (!none.ready) return;
+    const noneJson = JSON.parse(formatLoopDryRun(none));
+    expect(noneJson).toMatchObject({
+      kind: 'loop.finish_line.dry_run',
+      contractSchemaVersion: 2,
+      selectionState: 'none',
+      catalogCompareAndSet: 'not-applicable',
+      verificationSelection: null,
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      estimatedCost: {
+        freshReviewerPassesPerGateAttempt: 1,
+        additionalSkillCommands: 0,
+      },
+    });
+
+    const entry = none.verificationCatalog.entries[0];
+    if (entry === undefined) throw new Error('verification catalog entry missing');
+    const selected = await runLoopPreflight({
+      ...base,
+      verificationCatalogDigest: none.verificationCatalog.catalogDigest,
+      verificationSkills: [{
+        selectionId: entry.selectionId,
+        provenanceDigest: entry.ref.provenanceDigest,
+      }],
+    });
+    expect(selected.ready).toBe(true);
+    if (!selected.ready) return;
+    const selectedJson = JSON.parse(formatLoopDryRun(selected));
+    expect(selectedJson).toMatchObject({
+      contractSchemaVersion: 3,
+      selectionState: 'selected',
+      catalogCompareAndSet: {
+        preflightCatalogDigest: none.verificationCatalog.catalogDigest,
+      },
+      verificationSelection: {
+        selected: [{
+          selectionOrder: 0,
+          ref: { provenanceDigest: entry.ref.provenanceDigest },
+        }],
+      },
+      reviewSubjectConsentProposal: {
+        provider: { providerId: 'test' },
+      },
+    });
   });
 });

@@ -20,6 +20,7 @@ import type {
   PromptPayload,
   RunShellCommandPayload,
   ReconnectMcpServerPayload,
+  ResumeGoalPayload,
   RenameSessionPayload,
   RegisterToolPayload,
   SessionAPI,
@@ -240,7 +241,7 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
     return (await this.getAgent(agentId)).pauseGoal(payload);
   }
 
-  async resumeGoal({ agentId, ...payload }: AgentScopedPayload<EmptyPayload>) {
+  async resumeGoal({ agentId, ...payload }: AgentScopedPayload<ResumeGoalPayload>) {
     return (await this.getAgent(agentId)).resumeGoal(payload);
   }
 

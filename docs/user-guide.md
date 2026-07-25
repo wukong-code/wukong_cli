@@ -122,6 +122,33 @@ Loop 的最终三态和退出码为 `PASS=0`、`NEEDS_WORK=1`、`ERROR=2`，中�
 
 0.0.19 的新 Loop 会先进入 Finish Line：确认 Goal、可选 Done when、Must not、必跑 checks 和本 run 上限后才创建合同与 run。`--dry-run` 只生成完整提案、workspace challenge、warning digest 和 Gate approval digest，不创建信任授权、合同或 run。Headless 真正执行 discovered checks 时必须确认 dry-run 返回的精确 digest；`--yes`、Auto 或 YOLO 都不能代替。项目 check 会按当前 OS 权限运行可信 workspace 里的 shell，Wukong 会执行静态风险拦截，但不宣称提供完整 shell sandbox。
 
+0.0.20 会在 Finish Line 的 **Review verification** 中列出本机现有
+Verification Skill 的 strict criteria sidecar。`○ suggested` 只表示
+versioned path/package 规则命中，不等于已选择；只有用户显式勾选并确认
+exact source、full provenance digest 和 flat order 后才会创建 V3 合同。
+同名 Skill 不再 first-wins，必须选择完整 identity。Skill Markdown 正文、
+commands、scripts、tools、hooks、MCP 和权限声明都不能进入 Gate。
+
+无论是否选择 Skill，新的 reviewer attempt 都先要求独立的本机 broker
+read trust，再逐 run 确认允许的输入范围、上限和实际 BYOK provider
+endpoint。允许的 changed/untracked/scope-matched 文件与脱敏 Gate evidence
+可能发送给该 provider，但不会上传给 Wukong Web/D1；`.env`、credential、
+session、trust store、log、binary/generated 和 secret-bearing 内容不会生成
+可读 ref。Cancel、缺少 exact consent 或 drift 时不会打开 provider connection。
+
+Headless 先查看同一协议：
+
+```bash
+wukong loop "完成 API 改动" --dry-run --output-format stream-json
+```
+
+只有 selection 非空时才提交返回的
+`--verification-catalog-digest` 与可重复
+`--verification-skill "<selection-id>@<provenance-digest>"`；无 selection
+继续创建 V2，并且必须省略 catalog CAS。实际启动还需 dry-run 返回的短时
+`--trust-review-subject` challenge 与 exact `--ack-review-subject`。`--yes`、
+Auto 或 YOLO 不能代替这些决定。
+
 0.0.16 会在 Loop 创建时冻结用户 objective 和显式 completion criterion。Reviewer 每轮必须先处理上一轮 blocker；同一 blocker 连续两轮不变时只启动一次只读 strategist。策略后仍无进展会返回 `NEEDS_WORK/no_progress`，不会继续空转或偷偷增加迭代额度。
 
 ### 11. 选择 Permission Mode

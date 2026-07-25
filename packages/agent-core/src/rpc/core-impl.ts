@@ -93,6 +93,7 @@ import type {
   RemoveWukongProviderPayload,
   RemovePluginPayload,
   RenameSessionPayload,
+  ResumeGoalPayload,
   ResumeSessionPayload,
   SessionSummary,
   SetActiveToolsPayload,
@@ -821,7 +822,7 @@ export class WukongCore implements PromisableMethods<CoreAPI> {
   resumeGoal({
     sessionId,
     ...payload
-  }: SessionAgentPayload<EmptyPayload>): Promise<GoalSnapshot> {
+  }: SessionAgentPayload<ResumeGoalPayload>): Promise<GoalSnapshot> {
     return Promise.resolve(this.sessionApi(sessionId).resumeGoal(payload));
   }
 

@@ -1,7 +1,24 @@
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import {
+  acknowledgeReviewSubjectConsent,
+  buildFinishLine,
+  canonicalDigest,
+  clearBrokerReviewTrustBindingsForTests,
+  createBrokerReviewTrustProposal,
+  createReviewSubjectConsentProposal,
+  createVerificationCriteriaSelection,
+  discoverVerificationCriteriaCatalog,
+  grantBrokerReviewTrust,
+  revokeBrokerReviewTrustBinding,
+} from '@wukong/verification';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import type { Agent } from '../../src/agent';
-import { GoalMode } from '../../src/agent/goal';
+import { GoalMode, type LoopRunReviewSettingsInput } from '../../src/agent/goal';
+import type { AgentRecord } from '../../src/agent/records';
 import { ErrorCodes, WukongError } from '../../src/errors';
 import { UpdateGoalTool } from '../../src/tools/builtin';
 import {
@@ -16,24 +33,72 @@ const mocks = vi.hoisted(() => ({
   runJudge: vi.fn(),
   runProof: vi.fn(),
   createWorkspaceSnapshot: vi.fn(),
+  validateFrozenGatePlan: vi.fn(),
+  buildReviewSubjectBroker: vi.fn(),
 }));
 
-vi.mock('@wukong/verification', () => mocks);
+vi.mock('@wukong/verification', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@wukong/verification')>();
+  return {
+    ...actual,
+    runVerification: mocks.runVerification,
+    runScan: mocks.runScan,
+    runJudge: mocks.runJudge,
+    runProof: mocks.runProof,
+    createWorkspaceSnapshot: mocks.createWorkspaceSnapshot,
+    validateFrozenGatePlan: mocks.validateFrozenGatePlan,
+    ReviewSubjectBroker: { build: mocks.buildReviewSubjectBroker },
+  };
+});
 
 const signal = new AbortController().signal;
+const CHECK_COMMAND = 'node -e "process.exit(0)"';
 
-function ctx<Input>(args: Input) {
-  return { turnId: '0', toolCallId: 'call_1', args, signal };
+function ctx<Input>(args: Input, inputSignal: AbortSignal = signal) {
+  return { turnId: '0', toolCallId: 'call_1', args, signal: inputSignal };
+}
+
+function makeStore(): {
+  readonly goals: GoalMode;
+  readonly records: AgentRecord[];
+} {
+  const records: AgentRecord[] = [];
+  const agent = {
+    type: 'main',
+    records: { logRecord: (record: AgentRecord) => records.push(record) },
+    emitEvent: () => {},
+    telemetry: { track: () => {} },
+    context: { appendSystemReminder: () => {} },
+    config: {
+      cwd: process.cwd(),
+      modelAlias: 'writer-model',
+    },
+    permission: { mode: 'manual' },
+  } as unknown as Agent;
+  return { goals: new GoalMode(agent), records };
 }
 
 function makeAgent(
   store: GoalMode,
-  reminders: Array<{ readonly content: string; readonly origin: unknown }> = [],
+  options: {
+    readonly reminders?: Array<{ readonly content: string; readonly origin: unknown }>;
+    readonly spawn?: ReturnType<typeof vi.fn>;
+    readonly providerName?: string;
+    readonly providerEndpoint?: string;
+    readonly withoutReviewer?: boolean;
+    readonly cwd?: string;
+  } = {},
 ): Agent {
+  const reminders = options.reminders ?? [];
+  const spawn = options.spawn ?? vi.fn(async (input: { readonly prompt: string }) => ({
+    completion: Promise.resolve({ result: freshVerdictFromPrompt(input.prompt, 'PASS') }),
+  }));
+  const providerName = options.providerName ?? 'anthropic';
+  const providerEndpoint = options.providerEndpoint ?? 'https://api.anthropic.com';
   return {
     type: 'main',
     goal: store,
-    config: { cwd: '/workspace' },
+    config: { cwd: options.cwd ?? process.cwd(), modelAlias: 'writer-model' },
     records: { logRecord: () => {} },
     emitEvent: () => {},
     telemetry: { track: () => {} },
@@ -42,847 +107,797 @@ function makeAgent(
         reminders.push({ content, origin });
       },
     },
-    subagentHost: {
-      spawn: async () => ({
-        completion: Promise.resolve({
-          result: 'Independent review complete.\nVERDICT_JSON: {"status":"PASS","summary":"Delivery is complete."}',
-        }),
+    modelProvider: {
+      resolveProviderConfig: () => ({
+        type: 'anthropic',
+        providerName,
+        provider: { baseUrl: providerEndpoint },
       }),
     },
+    subagentHost: options.withoutReviewer ? undefined : { spawn },
   } as unknown as Agent;
 }
 
-function makeStore(): GoalMode {
-  return new GoalMode({
-    type: 'main',
-    records: { logRecord: () => {} },
-    emitEvent: () => {},
-    telemetry: { track: () => {} },
-    context: { appendSystemReminder: () => {} },
-  } as unknown as Agent);
+async function createBrokeredV3Goal(goals: GoalMode, cwd: string): Promise<{
+  readonly skillMd: string;
+}> {
+  const skillDir = join(cwd, '.wukong', 'skills', 'review-api');
+  const skillMd = join(skillDir, 'SKILL.md');
+  await mkdir(join(skillDir, 'verification'), { recursive: true });
+  await writeFile(skillMd, [
+    '---',
+    'name: review-api',
+    'description: Review API compatibility.',
+    'metadata:',
+    '  wukong.verification.criteria: verification/criteria.v1.json',
+    '---',
+    'Review the selected API behavior.',
+  ].join('\n'));
+  await writeFile(
+    join(skillDir, 'verification', 'criteria.v1.json'),
+    JSON.stringify({
+      schemaVersion: 1,
+      kind: 'wukong.verification-criteria',
+      id: 'review-api',
+      description: 'Review API compatibility.',
+      scope: { kind: 'project', paths: ['src/api/**'] },
+      criteria: [{
+        id: 'typed-failures',
+        text: 'API failures remain explicit and typed.',
+        evidence: 'Cite the handler and deterministic evidence.',
+      }],
+    }),
+  );
+  const finishLine = await buildFinishLine({
+    cwd,
+    objective: 'Keep API failures typed',
+    completionCriterion: 'The API criterion and frozen Gate pass',
+    includeDiscoveredChecks: false,
+  });
+  if (!finishLine.ok) throw new Error(finishLine.failure.message);
+  const catalog = await discoverVerificationCriteriaCatalog({
+    workspaceRoot: cwd,
+    roots: [{
+      kind: 'project',
+      root: join(cwd, '.wukong', 'skills'),
+      workspaceIdentityDigest:
+        finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+    }],
+  });
+  const entry = catalog.entries[0];
+  if (entry === undefined) throw new Error('V3 catalog fixture missing');
+  const selection = createVerificationCriteriaSelection(catalog, [{
+    selectionId: entry.selectionId,
+    provenanceDigest: entry.ref.provenanceDigest,
+  }], catalog.catalogDigest);
+  await goals.createGoal({
+    objective: finishLine.proposal.objective,
+    completionCriterion: finishLine.proposal.completionCriterion,
+    stopCondition: 'proof-pass',
+    loopContract: {
+      schemaVersion: 3,
+      objective: finishLine.proposal.objective,
+      completionCriterion: finishLine.proposal.completionCriterion,
+      constraints: finishLine.proposal.constraints,
+      finishLineReview: {
+        ...finishLine.proposal.finishLineReview,
+        acknowledgedWarningIds: finishLine.proposal.finishLineReview.warnings.map(
+          (warning) => warning.id,
+        ),
+      },
+      workspaceIdentity: finishLine.proposal.workspaceIdentity,
+      workspaceTrust: {
+        schemaVersion: 2,
+        workspaceIdentityDigest:
+          finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+        reviewSubjectPolicyVersion: 'review-subject/1',
+        hasExecutableChecks: false,
+        scopes: ['brokered-review-subject'],
+      },
+      gateApproval: finishLine.proposal.gateApproval,
+      legacyGatePlan: finishLine.proposal.gatePlan,
+      reviewPolicy: finishLine.proposal.reviewPolicy,
+      verificationCriteria: selection,
+      selectedRecipes: [{
+        recipe: entry.recipe,
+        provenanceDigest: entry.ref.provenanceDigest,
+      }],
+      reviewSettings: makeReviewSettings(
+        finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+      ),
+      source: 'user',
+    },
+  });
+  return { skillMd };
 }
 
-describe('UpdateGoalTool verification gate', () => {
-  beforeEach(() => {
-    vi.clearAllMocks();
-    mocks.createWorkspaceSnapshot.mockResolvedValue({
+function makeReviewSettings(
+  workspaceIdentityDigest: string,
+  providerId = 'anthropic',
+  endpoint = 'https://api.anthropic.com',
+): LoopRunReviewSettingsInput {
+  const trustProposal = createBrokerReviewTrustProposal({
+    workspaceIdentityDigest,
+    intent: 'once',
+  });
+  const consentProposal = createReviewSubjectConsentProposal({
+    workspaceIdentityDigest,
+    allowedOrigins: ['changed-tracked', 'gate-evidence'],
+    providerId,
+    endpoint,
+  });
+  return {
+    brokerReviewTrust: grantBrokerReviewTrust(
+      trustProposal,
+      trustProposal.trustProposalDigest,
+      'gate-test-trust',
+    ),
+    reviewSubjectConsent: acknowledgeReviewSubjectConsent(
+      consentProposal,
+      consentProposal.consentProposalDigest,
+      1_000,
+    ),
+  };
+}
+
+async function createBrokeredGoal(
+  store: GoalMode,
+  input: {
+    readonly objective?: string;
+    readonly reviewModel?: string;
+    readonly maxIterations?: number;
+    readonly minIntervalMs?: number;
+    readonly providerId?: string;
+    readonly endpoint?: string;
+  } = {},
+) {
+  const objective = input.objective ?? 'ship the change';
+  const finishLine = await buildFinishLine({
+    cwd: process.cwd(),
+    objective,
+    completionCriterion: 'The frozen check and every acceptance criterion pass.',
+    explicitChecks: [CHECK_COMMAND],
+    includeDiscoveredChecks: false,
+  });
+  if (!finishLine.ok) throw new Error(JSON.stringify(finishLine.failure));
+  return store.createGoal({
+    objective,
+    completionCriterion: finishLine.proposal.completionCriterion,
+    stopCondition: 'proof-pass',
+    reviewModel: input.reviewModel,
+    maxIterations: input.maxIterations,
+    minIntervalMs: input.minIntervalMs,
+    loopContract: {
+      schemaVersion: 2,
+      objective,
+      completionCriterion: finishLine.proposal.completionCriterion,
+      constraints: finishLine.proposal.constraints,
+      finishLineReview: {
+        ...finishLine.proposal.finishLineReview,
+        acknowledgedWarningIds: finishLine.proposal.finishLineReview.warnings.map(
+          (warning) => warning.id,
+        ),
+      },
+      workspaceIdentity: finishLine.proposal.workspaceIdentity,
+      workspaceTrust: finishLine.proposal.workspaceTrust,
+      gateApproval: finishLine.proposal.gateApproval,
+      gatePlan: finishLine.proposal.gatePlan,
+      reviewPolicy: finishLine.proposal.reviewPolicy,
+      reviewSettings: makeReviewSettings(
+        finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+        input.providerId,
+        input.endpoint,
+      ),
+      source: 'user',
+    },
+  });
+}
+
+function proof(status: 'passed' | 'blocked') {
+  return {
+    status,
+    recommendation: status === 'passed' ? 'Ready.' : 'Fix the failed delivery gate.',
+    reasonCode: status === 'passed' ? 'passed' : 'check_failed',
+    snapshotId: 'snapshot-id',
+    workspaceFingerprint: {
       headSha: undefined,
       inputDigest: 'input',
       configDigest: 'config',
-    });
-  });
+    },
+    blockers: status === 'passed'
+      ? []
+      : [{
+          id: 'check_failed',
+          kind: 'check',
+          summary: 'The frozen check failed.',
+          command: CHECK_COMMAND,
+          nextAction: 'Fix the failure and rerun the Loop Gate.',
+        }],
+    verification: {
+      selectedCommands: [],
+      commandResults: [{
+        command: CHECK_COMMAND,
+        status: status === 'passed' ? 'passed' : 'failed',
+        exitCode: status === 'passed' ? 0 : 1,
+        durationMs: 10,
+        stdout: status === 'passed' ? 'verified' : '',
+        stderr: status === 'passed' ? '' : 'failed',
+      }],
+      changedFiles: [],
+      risks: [],
+    },
+    scan: { status: 'passed', risks: [] },
+  };
+}
 
-  function proof(status: 'passed' | 'blocked') {
-    return {
-      status,
-      recommendation: status === 'passed' ? 'Ready.' : 'Fix the failed delivery gate.',
-      reasonCode: status === 'passed' ? 'passed' : 'check_failed',
-      snapshotId: 'snapshot-id',
-      workspaceFingerprint: { inputDigest: 'input', configDigest: 'config' },
-      blockers: [],
-      verification: {
-        selectedCommands: ['pnpm test'],
-        commandResults: [],
+function freshVerdictFromPrompt(
+  prompt: string,
+  status: 'PASS' | 'NEEDS_WORK' | 'INCONCLUSIVE',
+): string {
+  const attemptId = lineValue(prompt, 'Attempt: ');
+  const reviewerInputDigest = lineValue(prompt, 'Reviewer input digest: ');
+  const criteria = JSON.parse(lineValue(prompt, 'Frozen criteria: ')) as Array<{
+    readonly criterionId: string;
+    readonly criterionProvenanceDigest: string;
+  }>;
+  const priorBlockerKeys = JSON.parse(lineValue(prompt, 'Prior blocker keys: ')) as string[];
+  const manifest = JSON.parse(lineValue(prompt, 'Review Subject manifest: ')) as {
+    readonly gateEvidence: readonly {
+      readonly producerId: string;
+      readonly evidenceId: string;
+      readonly brokeredEvidenceDigest: string;
+    }[];
+  };
+  const gateEvidence = manifest.gateEvidence[0];
+  const evidence = gateEvidence === undefined
+    ? []
+    : [{
+        kind: 'gate-evidence' as const,
+        producerId: gateEvidence.producerId,
+        evidenceId: gateEvidence.evidenceId,
+        evidenceDigest: gateEvidence.brokeredEvidenceDigest,
+      }];
+  const firstCriterion = criteria[0];
+  const finding = status === 'NEEDS_WORK' && firstCriterion !== undefined
+    ? [{
+        id: 'criterion-not-satisfied',
+        origin: 'criterion',
+        criterionId: firstCriterion.criterionId,
+        criterionProvenanceDigest: firstCriterion.criterionProvenanceDigest,
+        severity: 'blocking',
+        message: 'The criterion is not yet satisfied.',
+        nextAction: 'Fix the criterion.',
+        evidence,
+      }]
+    : [];
+  const verdict = {
+    schemaVersion: 1,
+    attemptId,
+    reviewerInputDigest,
+    status,
+    criterionDispositions: criteria.map((criterion) => ({
+      criterionId: criterion.criterionId,
+      criterionProvenanceDigest: criterion.criterionProvenanceDigest,
+      status: status === 'PASS'
+        ? 'satisfied'
+        : status === 'NEEDS_WORK'
+          ? 'unsatisfied'
+          : 'unverified',
+      evidence: status === 'INCONCLUSIVE' ? [] : evidence,
+    })),
+    priorBlockerDispositions: priorBlockerKeys.map((blockerKey) => ({
+      blockerKey,
+      status: status === 'PASS' ? 'resolved' : 'still-open',
+      evidence: status === 'INCONCLUSIVE' ? [] : evidence,
+    })),
+    findings: finding,
+  };
+  return `FRESH_VERDICT_JSON: ${JSON.stringify(verdict)}`;
+}
+
+function lineValue(prompt: string, prefix: string): string {
+  const line = prompt.split('\n').find((candidate) => candidate.startsWith(prefix));
+  if (line === undefined) throw new Error(`Prompt line missing: ${prefix}`);
+  return line.slice(prefix.length);
+}
+
+describe('UpdateGoalTool 0.0.20 verification gate', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    clearBrokerReviewTrustBindingsForTests();
+    mocks.validateFrozenGatePlan.mockResolvedValue({ ok: true });
+    mocks.createWorkspaceSnapshot.mockResolvedValue({
+      id: 'snapshot-id',
+      cwd: process.cwd(),
+      headSha: undefined,
+      inputDigest: 'input',
+      configDigest: 'config',
+      planDigest: 'plan',
+      git: {
+        cwd: process.cwd(),
+        isRepo: true,
+        statusText: '',
+        diffText: '',
+        diffStat: '',
         changedFiles: [],
-        risks: [],
       },
-      scan: { risks: [] },
-    };
-  }
-
-  it('maps legacy verify-pass to proof-pass and completes when proof passes', async () => {
-    const store = makeStore();
-    const reminders: Array<{ readonly content: string; readonly origin: unknown }> = [];
-    await store.createGoal({ objective: 'work', stopCondition: 'verify-pass' });
+    });
     mocks.runProof.mockResolvedValue(proof('passed'));
-
-    const result = await executeTool(
-      new UpdateGoalTool(makeAgent(store, reminders)),
-      ctx({ status: 'complete' }),
-    );
-
-    expect(result.isError).toBeFalsy();
-    expect(result.stopTurn).toBe(true);
-    expect(store.getGoal().goal).toBeNull();
-    expect(mocks.runProof).toHaveBeenCalledWith({ cwd: '/workspace', writeReport: false, signal });
-  });
-
-  it('rejects complete and injects feedback when proof-pass gate fails', async () => {
-    const store = makeStore();
-    const reminders: Array<{ readonly content: string; readonly origin: unknown }> = [];
-    await store.createGoal({ objective: 'work', stopCondition: 'verify-pass' });
-    mocks.runProof.mockResolvedValue(proof('blocked'));
-
-    const result = await executeTool(
-      new UpdateGoalTool(makeAgent(store, reminders)),
-      ctx({ status: 'complete' }),
-    );
-
-    expect(result.isError).toBeFalsy();
-    expect(result.stopTurn).toBe(false);
-    expect(store.getGoal().goal?.status).toBe('active');
-    expect(store.getGoal().goal?.loopResult).toMatchObject({
-      schemaVersion: 2,
-      status: 'NEEDS_WORK',
-      reasonCode: 'check_failed',
-    });
-    expect(reminders).toHaveLength(1);
-    expect(reminders[0]?.origin).toEqual({ kind: 'system_trigger', name: 'goal_gate_failed' });
-    expect(reminders[0]?.content).toContain('Fix the failed delivery gate');
-  });
-
-  it('rejects complete and injects feedback when scan-clean gate fails', async () => {
-    const store = makeStore();
-    const reminders: Array<{ readonly content: string; readonly origin: unknown }> = [];
-    await store.createGoal({ objective: 'work', stopCondition: 'scan-clean' });
-    mocks.runProof.mockResolvedValue(proof('blocked'));
-
-    const result = await executeTool(
-      new UpdateGoalTool(makeAgent(store, reminders)),
-      ctx({ status: 'complete' }),
-    );
-
-    expect(result.stopTurn).toBe(false);
-    expect(store.getGoal().goal?.status).toBe('active');
-    expect(mocks.runProof).toHaveBeenCalledWith({ cwd: '/workspace', writeReport: false, signal });
-  });
-
-  it('marks complete when judge-pass gate passes', async () => {
-    const store = makeStore();
-    await store.createGoal({ objective: 'work', stopCondition: 'judge-pass' });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-
-    const result = await executeTool(
-      new UpdateGoalTool(makeAgent(store)),
-      ctx({ status: 'complete' }),
-    );
-
-    expect(result.stopTurn).toBe(true);
-    expect(store.getGoal().goal).toBeNull();
-    expect(mocks.runProof).toHaveBeenCalledWith({ cwd: '/workspace', writeReport: false, signal });
-  });
-
-  it('has no gate when stopCondition is absent', async () => {
-    const store = makeStore();
-    await store.createGoal({ objective: 'work' });
-
-    const result = await executeTool(
-      new UpdateGoalTool(makeAgent(store)),
-      ctx({ status: 'complete' }),
-    );
-
-    expect(result.stopTurn).toBe(true);
-    expect(store.getGoal().goal).toBeNull();
-    expect(mocks.runVerification).not.toHaveBeenCalled();
-    expect(mocks.runScan).not.toHaveBeenCalled();
-    expect(mocks.runJudge).not.toHaveBeenCalled();
-  });
-
-  it('blocks the goal when max-iterations is reached', async () => {
-    const store = makeStore();
-    const reminders: Array<{ readonly content: string; readonly origin: unknown }> = [];
-    await store.createGoal({ objective: 'work', stopCondition: 'verify-pass', maxIterations: 2 });
-    mocks.runProof.mockResolvedValue(proof('blocked'));
-
-    // First attempt: gate fails, iteration = 1
-    await executeTool(new UpdateGoalTool(makeAgent(store, reminders)), ctx({ status: 'complete' }));
-    expect(store.getGoal().goal?.status).toBe('active');
-    expect(store.getGoal().goal?.iteration).toBe(1);
-
-    // Second attempt: gate fails at the limit and stops without a third writer turn.
-    const result = await executeTool(
-      new UpdateGoalTool(makeAgent(store, reminders)),
-      ctx({ status: 'complete' }),
-    );
-    expect(result.stopTurn).toBe(true);
-    expect(store.getGoal().goal?.status).toBe('blocked');
-    expect(store.getGoal().goal?.iteration).toBe(2);
-    expect(store.getGoal().goal?.terminalReason).toBe(
-      'loop:NEEDS_WORK:max_iterations:Maximum Loop iterations reached. Last blocker: Fix the failed delivery gate.',
-    );
-    expect(store.getGoal().goal?.loopResult).toMatchObject({
-      status: 'NEEDS_WORK',
-      reasonCode: 'max_iterations',
-      iterations: 2,
+    mocks.buildReviewSubjectBroker.mockImplementation(async (input: {
+      readonly attemptId: string;
+      readonly runId: string;
+      readonly contractId: string;
+      readonly planDigest: string;
+      readonly workspaceFingerprint: string;
+      readonly consent: {
+        readonly consentDigest: string;
+        readonly reviewSubjectPolicyVersion: string;
+      };
+    }) => {
+      const gateEvidence = {
+        producerId: 'project-checks',
+        evidenceId: 'stdout',
+        brokeredEvidenceDigest: canonicalDigest(
+          'wukong/brokered-gate-evidence/v1',
+          'verified',
+        ),
+        byteLength: 8,
+        mediaType: 'text/plain' as const,
+        redactionVersion: 'review-subject-redaction/1',
+        secretScanVersion: 'review-subject-secret-scan/1',
+      };
+      const core = {
+        schemaVersion: 1 as const,
+        attemptId: input.attemptId,
+        runId: input.runId,
+        contractId: input.contractId,
+        planDigest: input.planDigest,
+        consentDigest: input.consent.consentDigest,
+        workspaceFingerprint: input.workspaceFingerprint,
+        policyVersion: input.consent.reviewSubjectPolicyVersion,
+        entries: [],
+        exclusions: [],
+        gateEvidence: [gateEvidence],
+        gateEvidenceExclusions: [],
+      };
+      return {
+        manifest: {
+          ...core,
+          manifestDigest: canonicalDigest('wukong/review-subject-manifest/v1', core),
+        },
+        assertFresh: vi.fn(async () => {}),
+        destroy: vi.fn(),
+        readReviewSubject: vi.fn(),
+        searchReviewSubjects: vi.fn(() => []),
+        readGateEvidence: vi.fn(() => 'verified'),
+      };
     });
   });
 
-  it('leaves interval pacing to the Goal driver without creating a cron task', async () => {
-    const store = makeStore();
-    const reminders: Array<{ readonly content: string; readonly origin: unknown }> = [];
-    await store.createGoal({
-      objective: 'work',
-      stopCondition: 'verify-pass',
-      minIntervalMs: 300_000,
-    });
-    mocks.runProof.mockResolvedValue(proof('blocked'));
+  it('blocks a legacy V1 Loop before checks or reviewer calls', async () => {
+    const { goals, records } = makeStore();
+    await goals.createGoal({ objective: 'legacy work', stopCondition: 'verify-pass' });
+    const spawn = vi.fn();
 
-    const agent = makeAgent(store, reminders);
-
-    const result = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+    const result = await executeTool(
+      new UpdateGoalTool(makeAgent(goals, { spawn })),
+      ctx({ status: 'complete' }),
+    );
 
     expect(result.stopTurn).toBe(true);
-    expect(result.output).toContain('configured interval');
-    expect(store.getGoal().goal).toMatchObject({ status: 'active', minIntervalMs: 300_000 });
-  });
-
-  it('continues immediately when gate fails without minIntervalMs', async () => {
-    const store = makeStore();
-    const reminders: Array<{ readonly content: string; readonly origin: unknown }> = [];
-    await store.createGoal({ objective: 'work', stopCondition: 'verify-pass' });
-    mocks.runProof.mockResolvedValue(proof('blocked'));
-
-    const agent = makeAgent(store, reminders);
-
-    const result = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-
-    expect(result.stopTurn).toBe(false);
-  });
-
-  it('uses a fresh read-only reviewer after deterministic proof passes', async () => {
-    const store = makeStore();
-    await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-    const spawn = vi.fn().mockResolvedValue({
-      completion: Promise.resolve({
-        result: 'The change is complete and covered.\nVERDICT_JSON: {"status":"PASS","summary":"Covered and complete."}',
-      }),
+    expect(goals.getGoal().goal).toMatchObject({
+      status: 'blocked',
+      loopResult: { reasonCode: 'legacy_contract_upgrade_required' },
     });
-    const agent = makeAgent(store);
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+    expect(mocks.runProof).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
+    expect(records.some((record) => record.type === 'loop.gate-attempt.create')).toBe(false);
+  });
 
-    const result = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+  it('completes a non-Loop goal without a delivery gate', async () => {
+    const { goals } = makeStore();
+    await goals.createGoal({ objective: 'ordinary work' });
+
+    const result = await executeTool(
+      new UpdateGoalTool(makeAgent(goals)),
+      ctx({ status: 'complete' }),
+    );
 
     expect(result.stopTurn).toBe(true);
-    expect(store.getGoal().goal).toBeNull();
-    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({
-      profileName: 'reviewer',
-      runInBackground: false,
-      maxSteps: FRESH_REVIEWER_MAX_STEPS,
-      prompt: expect.stringContaining('Objective: ship the change'),
+    expect(goals.getGoal().goal).toBeNull();
+    expect(mocks.runProof).not.toHaveBeenCalled();
+  });
+
+  it('runs one isolated fresh reviewer and completes a brokered V2 Loop', async () => {
+    const { goals, records } = makeStore();
+    await createBrokeredGoal(goals);
+    const spawn = vi.fn(async (input: { readonly prompt: string }) => ({
+      completion: Promise.resolve({ result: freshVerdictFromPrompt(input.prompt, 'PASS') }),
     }));
-    const reviewerPrompt = (spawn.mock.calls[0]?.[0] as { readonly prompt: string }).prompt;
-    expect(reviewerPrompt).toContain('Do not attempt Bash, shell commands, or test execution.');
-    expect(reviewerPrompt).toContain(
-      `Finish repository inspection by step ${String(FRESH_REVIEWER_MAX_STEPS - 4)}`,
+
+    const result = await executeTool(
+      new UpdateGoalTool(makeAgent(goals, { spawn })),
+      ctx({ status: 'complete' }),
     );
-    expect(reviewerPrompt).toContain('reserve the final 4 steps');
+
+    expect(result.stopTurn).toBe(true);
+    expect(goals.getGoal().goal).toBeNull();
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({
+      profileName: 'fresh-reviewer',
+      isolated: true,
+      modelAlias: 'writer-model',
+      maxSteps: FRESH_REVIEWER_MAX_STEPS,
+      internalTools: expect.arrayContaining([
+        expect.objectContaining({ name: 'ReadReviewSubject' }),
+        expect.objectContaining({ name: 'SearchReviewSubjects' }),
+        expect.objectContaining({ name: 'ReadGateEvidence' }),
+      ]),
+    }));
+    const durableOrder = records
+      .map((record) => record.type)
+      .filter((type) => type.startsWith('loop.'));
+    expect(durableOrder).toEqual([
+      'loop.run.create',
+      'loop.gate-attempt.create',
+      'loop.gate-check-result.create',
+      'loop.builtin-risk-scan-result.create',
+      'loop.review-subject-manifest.create',
+      'loop.fresh-criteria-verdict.create',
+      'loop.proof-aggregate.create',
+      'loop.evidence-snapshot.create',
+      'loop.gate-attempt.complete',
+      'loop.run.terminal',
+    ]);
   });
 
-  it('keeps non-blocking findings without making them Loop blockers', async () => {
-    const store = makeStore();
-    await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-    const verdict = {
-      schemaVersion: 1,
-      status: 'NEEDS_WORK',
-      summary: 'One blocker remains.',
-      findings: [
-        {
-          id: 'auth-refresh',
-          criterionId: 'objective',
-          severity: 'blocking',
-          category: 'correctness',
-          summary: 'Refresh tokens remain valid after logout.',
-          file: 'src/auth.ts',
-          line: 84,
-          evidence: 'logout removes the cookie but does not revoke the server token',
-          nextAction: 'Revoke the token during logout.',
-          confidence: 'high',
-          validationStatus: 'verified',
-        },
-        {
-          id: 'auth-comment',
-          severity: 'note',
-          category: 'maintainability',
-          summary: 'The revocation helper could use a short comment.',
-          evidence: 'the helper has non-obvious retry behavior',
-          nextAction: 'Consider documenting the retry behavior.',
-          confidence: 'medium',
-          validationStatus: 'unverified',
-        },
-      ],
-    };
-    const spawn = vi.fn().mockResolvedValue({
-      completion: Promise.resolve({
-        result: `Review complete.\nVERDICT_JSON: ${JSON.stringify(verdict)}`,
-      }),
-    });
-    const agent = makeAgent(store);
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+  it('still invokes exactly one reviewer when deterministic proof fails', async () => {
+    const { goals } = makeStore();
+    const reminders: Array<{ readonly content: string; readonly origin: unknown }> = [];
+    await createBrokeredGoal(goals);
+    mocks.runProof.mockResolvedValue(proof('blocked'));
+    const spawn = vi.fn(async (input: { readonly prompt: string }) => ({
+      completion: Promise.resolve({ result: freshVerdictFromPrompt(input.prompt, 'PASS') }),
+    }));
 
-    const result = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+    const result = await executeTool(
+      new UpdateGoalTool(makeAgent(goals, { spawn, reminders })),
+      ctx({ status: 'complete' }),
+    );
 
     expect(result.stopTurn).toBe(false);
-    expect(store.getGoal().goal?.loopResult?.blockers).toHaveLength(1);
-    expect(store.getGoal().goal?.loopResult?.blockers[0]?.id).toBe('auth-refresh');
-    expect(store.getGoal().goal?.loopResult?.findings).toHaveLength(2);
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(goals.getGoal().goal).toMatchObject({
+      status: 'active',
+      loopResult: { status: 'NEEDS_WORK', reasonCode: 'check_failed' },
+    });
+    expect(reminders.at(-1)?.origin).toEqual({
+      kind: 'system_trigger',
+      name: 'goal_gate_failed',
+    });
   });
 
-  it('continues from a blocking finding and passes on the next review cycle', async () => {
-    const store = makeStore();
-    await store.createGoal({
-      objective: 'revoke tokens on logout',
-      stopCondition: 'proof-pass',
-      maxIterations: 3,
+  it('records bounded input but no verdict/completion for invalid reviewer output', async () => {
+    const { goals, records } = makeStore();
+    await createBrokeredGoal(goals);
+    const spawn = vi.fn(async () => ({
+      completion: Promise.resolve({ result: 'not a structured verdict' }),
+    }));
+
+    const result = await executeTool(
+      new UpdateGoalTool(makeAgent(goals, { spawn })),
+      ctx({ status: 'complete' }),
+    );
+
+    expect(result.stopTurn).toBe(true);
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(goals.getGoal().goal).toMatchObject({
+      status: 'blocked',
+      loopResult: { status: 'ERROR', reasonCode: 'reviewer_invalid_output' },
     });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-    const spawn = vi.fn()
-      .mockResolvedValueOnce({
-        completion: Promise.resolve({
-          result: `Review complete.
-VERDICT_JSON: ${JSON.stringify({
-            schemaVersion: 1,
-            status: 'NEEDS_WORK',
-            summary: 'Logout still leaves the token valid.',
-            findings: [{
-              id: 'auth-refresh',
-              criterionId: 'objective',
-              severity: 'blocking',
-              category: 'security',
-              summary: 'Refresh tokens remain valid after logout.',
-              file: 'src/auth.ts',
-              line: 84,
-              evidence: 'logout removes the cookie without revoking the token',
-              nextAction: 'Revoke the refresh token during logout.',
-              confidence: 'high',
-              validationStatus: 'verified',
-            }],
-          })}`,
-        }),
-      })
-      .mockResolvedValueOnce({
-        completion: Promise.resolve({
-          result: 'Review complete.\nVERDICT_JSON: {"schemaVersion":1,"status":"PASS","summary":"Logout now revokes the token.","findings":[],"priorBlockerDispositions":[{"key":"review:objective:security:src/auth.ts:auth-refresh","status":"resolved"}]}',
-        }),
+    expect(records.some((record) => record.type === 'loop.review-subject-manifest.create')).toBe(true);
+    expect(records.some((record) => record.type === 'loop.fresh-criteria-verdict.create')).toBe(false);
+    expect(records.some((record) => record.type === 'loop.gate-attempt.complete')).toBe(false);
+  });
+
+  it('fails provider-consent preflight before attempt/check/provider work', async () => {
+    const { goals, records } = makeStore();
+    await createBrokeredGoal(goals);
+    const spawn = vi.fn();
+
+    const result = await executeTool(
+      new UpdateGoalTool(makeAgent(goals, {
+        spawn,
+        providerName: 'openai',
+        providerEndpoint: 'https://api.openai.com/v1',
+      })),
+      ctx({ status: 'complete' }),
+    );
+
+    expect(result.stopTurn).toBe(true);
+    expect(goals.getGoal().goal).toMatchObject({
+      status: 'blocked',
+      loopResult: { reasonCode: 'review_subject_consent_required' },
+    });
+    expect(mocks.runProof).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
+    expect(records.some((record) => record.type === 'loop.gate-attempt.create')).toBe(false);
+  });
+
+  it('fails a revoked broker grant before attempt/check/provider work', async () => {
+    const { goals, records } = makeStore();
+    await createBrokeredGoal(goals);
+    const binding = goals.createLoopGateReviewRuntime()?.runSettings.brokerReviewTrust;
+    if (binding === undefined) throw new Error('broker trust fixture missing');
+    revokeBrokerReviewTrustBinding(binding.trustGrantId);
+    const spawn = vi.fn();
+
+    const result = await executeTool(
+      new UpdateGoalTool(makeAgent(goals, { spawn })),
+      ctx({ status: 'complete' }),
+    );
+
+    expect(result.stopTurn).toBe(true);
+    expect(goals.getGoal().goal).toMatchObject({
+      status: 'blocked',
+      loopResult: { reasonCode: 'review_subject_trust_required' },
+    });
+    expect(mocks.runProof).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
+    expect(records.some((record) => record.type === 'loop.gate-attempt.create')).toBe(false);
+  });
+
+  it('fails selected Skill provenance drift before attempt/check/provider work', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'wukong-v3-gate-drift-'));
+    try {
+      const { goals, records } = makeStore();
+      const { skillMd } = await createBrokeredV3Goal(goals, cwd);
+      await writeFile(skillMd, [
+        '---',
+        'name: review-api',
+        'description: Review API compatibility.',
+        'metadata:',
+        '  wukong.verification.criteria: verification/criteria.v1.json',
+        '---',
+        'Changed after the V3 contract was frozen.',
+      ].join('\n'));
+      const spawn = vi.fn();
+
+      await executeTool(
+        new UpdateGoalTool(makeAgent(goals, { cwd, spawn })),
+        ctx({ status: 'complete' }),
+      );
+
+      expect(goals.getGoal().goal).toMatchObject({
+        status: 'blocked',
+        loopResult: { reasonCode: 'verification_criteria_changed' },
       });
-    const agent = makeAgent(store);
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
-
-    const first = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-    expect(first.stopTurn).toBe(false);
-    expect(store.getGoal().goal?.loopResult?.blockers[0]?.id).toBe('auth-refresh');
-
-    const second = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-    expect(second.stopTurn).toBe(true);
-    expect(store.getGoal().goal).toBeNull();
-    expect(spawn).toHaveBeenCalledTimes(2);
-    const secondPrompt = (spawn.mock.calls[1]?.[0] as { readonly prompt: string }).prompt;
-    expect(secondPrompt).toContain('Immutable Loop contract');
-    expect(secondPrompt).toContain('Prior blocking findings');
-    expect(secondPrompt).toContain('auth-refresh');
+      expect(mocks.runProof).not.toHaveBeenCalled();
+      expect(spawn).not.toHaveBeenCalled();
+      expect(records.some((record) => record.type === 'loop.gate-attempt.create'))
+        .toBe(false);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 
-  it('keeps same-file blockers distinct so the next reviewer verdict can resolve both', async () => {
-    const store = makeStore();
-    await store.createGoal({
-      objective: 'secure logout',
-      stopCondition: 'proof-pass',
-      maxIterations: 3,
-    });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-    const firstVerdict = {
-      schemaVersion: 1,
-      status: 'NEEDS_WORK',
-      summary: 'Two independent logout defects remain.',
-      findings: [
-        {
-          id: 'cookie-not-cleared',
-          criterionId: 'objective',
-          severity: 'blocking',
-          category: 'security',
-          summary: 'The cookie remains set.',
-          file: 'src/auth.ts',
-          evidence: 'logout returns without clearing the cookie',
-          nextAction: 'Clear the cookie.',
-          confidence: 'high',
-          validationStatus: 'verified',
-        },
-        {
-          id: 'token-not-revoked',
-          criterionId: 'objective',
-          severity: 'blocking',
-          category: 'security',
-          summary: 'The refresh token remains valid.',
-          file: 'src/auth.ts',
-          evidence: 'the token row is not revoked',
-          nextAction: 'Revoke the token.',
-          confidence: 'high',
-          validationStatus: 'verified',
-        },
-      ],
-      priorBlockerDispositions: [],
-    };
-    const secondVerdict = {
-      schemaVersion: 1,
-      status: 'PASS',
-      summary: 'Both logout defects are fixed.',
-      findings: [],
-      priorBlockerDispositions: [
-        { key: 'review:objective:security:src/auth.ts:cookie-not-cleared', status: 'resolved' },
-        { key: 'review:objective:security:src/auth.ts:token-not-revoked', status: 'resolved' },
-      ],
-    };
-    const spawn = vi.fn()
-      .mockResolvedValueOnce({ completion: Promise.resolve({ result: `VERDICT_JSON: ${JSON.stringify(firstVerdict)}` }) })
-      .mockResolvedValueOnce({ completion: Promise.resolve({ result: `VERDICT_JSON: ${JSON.stringify(secondVerdict)}` }) });
-    const agent = makeAgent(store);
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+  it('adds unchanged files matched by the selected recipe scope to the broker', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'wukong-v3-gate-scope-'));
+    try {
+      const { goals, records } = makeStore();
+      await createBrokeredV3Goal(goals, cwd);
+      await mkdir(join(cwd, 'src', 'api'), { recursive: true });
+      await writeFile(
+        join(cwd, 'src', 'api', 'users.ts'),
+        'export const users = [];',
+      );
 
-    expect((await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }))).stopTurn).toBe(false);
-    expect(store.getReviewHistory().at(-1)?.blockerKeys).toHaveLength(2);
-    expect((await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }))).stopTurn).toBe(true);
-    expect(store.getGoal().goal).toBeNull();
-  });
+      await executeTool(
+        new UpdateGoalTool(makeAgent(goals, { cwd })),
+        ctx({ status: 'complete' }),
+      );
 
-  it('rejects PASS when replaced_by does not reference a current blocking key', async () => {
-    const store = makeStore();
-    await store.createGoal({ objective: 'secure logout', stopCondition: 'proof-pass', maxIterations: 3 });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-    const first = {
-      schemaVersion: 1,
-      status: 'NEEDS_WORK',
-      summary: 'Logout is insecure.',
-      findings: [{
-        id: 'token-not-revoked',
-        criterionId: 'objective',
-        severity: 'blocking',
-        category: 'security',
-        summary: 'Token remains valid.',
-        file: 'src/auth.ts',
-        evidence: 'No revocation write exists.',
-        nextAction: 'Revoke the token.',
-        confidence: 'high',
-        validationStatus: 'verified',
-      }],
-      priorBlockerDispositions: [],
-    };
-    const invalidPass = {
-      schemaVersion: 1,
-      status: 'PASS',
-      summary: 'Ready.',
-      findings: [],
-      priorBlockerDispositions: [{
-        key: 'review:objective:security:src/auth.ts:token-not-revoked',
-        status: 'replaced_by',
-        replacedBy: 'anything',
-      }],
-    };
-    const spawn = vi.fn()
-      .mockResolvedValueOnce({ completion: Promise.resolve({ result: `VERDICT_JSON: ${JSON.stringify(first)}` }) })
-      .mockResolvedValue({ completion: Promise.resolve({ result: `VERDICT_JSON: ${JSON.stringify(invalidPass)}` }) });
-    const agent = makeAgent(store);
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
-
-    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-
-    expect(store.getGoal().goal?.loopResult).toMatchObject({
-      status: 'ERROR',
-      reasonCode: 'reviewer_invalid_output',
-    });
-  });
-
-  it('falls back from an invalid configured reviewer model to the writer model', async () => {
-    const store = makeStore();
-    await store.createGoal({
-      objective: 'ship the change',
-      stopCondition: 'proof-pass',
-      reviewModel: 'reviewer-model',
-    });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-    const spawn = vi.fn()
-      .mockResolvedValueOnce({ completion: Promise.resolve({ result: 'not structured' }) })
-      .mockResolvedValueOnce({ completion: Promise.resolve({ result: 'still not structured' }) })
-      .mockResolvedValueOnce({
-        completion: Promise.resolve({
-          result: 'Review complete.\nVERDICT_JSON: {"schemaVersion":1,"status":"PASS","summary":"Ready.","findings":[]}',
+      expect(mocks.buildReviewSubjectBroker).toHaveBeenCalledWith(
+        expect.objectContaining({
+          candidates: expect.arrayContaining([{
+            logicalPath: 'src/api/users.ts',
+            origin: 'scope-match',
+          }]),
         }),
-      });
-    const agent = makeAgent(store);
-    (agent.config as { modelAlias?: string }).modelAlias = 'writer-model';
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
-
-    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-
-    expect(spawn.mock.calls.map((call) => call[0].modelAlias)).toEqual([
-      'reviewer-model',
-      'reviewer-model',
-      'writer-model',
-    ]);
+      );
+      expect(records.find((record) => record.type === 'loop.run.terminal'))
+        .toMatchObject({ terminal: { status: 'PASS' } });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 
-  it('separates invalid reviewer output from runtime unavailability', async () => {
-    const store = makeStore();
-    await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-    const spawn = vi.fn().mockResolvedValue({
-      completion: Promise.resolve({ result: 'not structured' }),
-    });
-    const agent = makeAgent(store);
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+  it('fails reviewer availability preflight without creating an attempt', async () => {
+    const { goals, records } = makeStore();
+    await createBrokeredGoal(goals);
 
-    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+    const result = await executeTool(
+      new UpdateGoalTool(makeAgent(goals, { withoutReviewer: true })),
+      ctx({ status: 'complete' }),
+    );
 
-    expect(spawn).toHaveBeenCalledTimes(2);
-    expect(store.getGoal().goal?.loopResult).toMatchObject({
-      status: 'ERROR',
-      reasonCode: 'reviewer_invalid_output',
+    expect(result.stopTurn).toBe(true);
+    expect(goals.getGoal().goal).toMatchObject({
+      status: 'blocked',
+      loopResult: { reasonCode: 'reviewer_unavailable' },
     });
+    expect(mocks.runProof).not.toHaveBeenCalled();
+    expect(records.some((record) => record.type === 'loop.gate-attempt.create')).toBe(false);
   });
 
-  it('rejects a blocking finding that invents a criterion outside the frozen contract', async () => {
-    const store = makeStore();
-    await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-    const result = `Review complete.\nVERDICT_JSON: ${JSON.stringify({
-      schemaVersion: 1,
-      status: 'NEEDS_WORK',
-      summary: 'Add an unrelated refactor.',
-      findings: [{
-        id: 'invented-scope',
-        criterionId: 'reviewer-preference',
-        severity: 'blocking',
-        category: 'maintainability',
-        summary: 'Refactor another module.',
-        evidence: 'The reviewer prefers a different abstraction.',
-        nextAction: 'Rewrite the unrelated module.',
-        confidence: 'medium',
-        validationStatus: 'unverified',
-      }],
-      priorBlockerDispositions: [],
-    })}`;
-    const spawn = vi.fn().mockResolvedValue({ completion: Promise.resolve({ result }) });
-    const agent = makeAgent(store);
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
-
-    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-
-    expect(spawn).toHaveBeenCalledTimes(2);
-    expect(store.getGoal().goal?.loopResult).toMatchObject({
-      status: 'ERROR',
-      reasonCode: 'reviewer_invalid_output',
+  it('uses the frozen Loop reviewer model and never retries with the writer model', async () => {
+    const { goals } = makeStore();
+    await createBrokeredGoal(goals, { reviewModel: 'reviewer-model' });
+    const spawn = vi.fn(async () => {
+      throw new Error('provider unavailable');
     });
-  });
 
-  it('falls back after the configured reviewer model is unavailable', async () => {
-    const store = makeStore();
-    await store.createGoal({
-      objective: 'ship the change',
-      stopCondition: 'proof-pass',
-      reviewModel: 'reviewer-model',
-    });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-    const spawn = vi.fn()
-      .mockRejectedValueOnce(new Error('reviewer provider unavailable'))
-      .mockResolvedValueOnce({
-        completion: Promise.resolve({
-          result: 'Review complete.\nVERDICT_JSON: {"schemaVersion":1,"status":"PASS","summary":"Ready.","findings":[]}',
-        }),
-      });
-    const agent = makeAgent(store);
-    (agent.config as { modelAlias?: string }).modelAlias = 'writer-model';
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
-
-    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-
-    expect(spawn.mock.calls.map((call) => call[0].modelAlias)).toEqual([
-      'reviewer-model',
-      'writer-model',
-    ]);
-    expect(store.getGoal().goal).toBeNull();
-  });
-
-  it('returns reviewer_unavailable after both configured and writer models fail', async () => {
-    const store = makeStore();
-    await store.createGoal({
-      objective: 'ship the change',
-      stopCondition: 'proof-pass',
-      reviewModel: 'reviewer-model',
-    });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-    const spawn = vi.fn()
-      .mockRejectedValueOnce(new Error('reviewer provider unavailable'))
-      .mockRejectedValueOnce(new Error('writer provider unavailable'));
-    const agent = makeAgent(store);
-    (agent.config as { modelAlias?: string }).modelAlias = 'writer-model';
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
-
-    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-
-    expect(spawn).toHaveBeenCalledTimes(2);
-    expect(store.getGoal().goal?.loopResult).toMatchObject({
-      status: 'ERROR',
-      reasonCode: 'reviewer_unavailable',
-    });
-  });
-
-  it('stops immediately when the fresh reviewer reaches its step safety limit', async () => {
-    const store = makeStore();
-    await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-    const spawn = vi.fn().mockRejectedValue(new WukongError(
-      ErrorCodes.LOOP_MAX_STEPS_EXCEEDED,
-      `Turn exceeded maxSteps=${String(FRESH_REVIEWER_MAX_STEPS)}.`,
-      { details: { maxSteps: FRESH_REVIEWER_MAX_STEPS } },
-    ));
-    const agent = makeAgent(store);
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
-
-    const result = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+    await executeTool(
+      new UpdateGoalTool(makeAgent(goals, { spawn })),
+      ctx({ status: 'complete' }),
+    );
 
     expect(spawn).toHaveBeenCalledOnce();
-    expect(result.stopTurn).toBe(true);
-    expect(store.getGoal().goal).toMatchObject({
+    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({
+      profileName: 'fresh-reviewer',
+      modelAlias: 'reviewer-model',
+    }));
+    expect(goals.getGoal().goal).toMatchObject({
       status: 'blocked',
-      loopResult: {
-        status: 'ERROR',
-        reasonCode: 'reviewer_limit_exceeded',
-      },
+      loopResult: { reasonCode: 'reviewer_unavailable' },
     });
-    expect(store.getGoal().goal?.terminalReason).toContain(
-      `dedicated ${String(FRESH_REVIEWER_MAX_STEPS)}-step Gate budget`,
-    );
-    expect(store.getGoal().goal?.terminalReason).toContain(
-      'loop_control.max_steps_per_turn cannot raise this reviewer ceiling',
-    );
   });
 
-  it('stops the fresh reviewer after the shared safety timeout without retrying', async () => {
+  it('invalidates a reviewer verdict when broker trust is revoked mid-attempt', async () => {
+    const { goals, records } = makeStore();
+    await createBrokeredGoal(goals);
+    const binding = goals.createLoopGateReviewRuntime()?.runSettings.brokerReviewTrust;
+    if (binding === undefined) throw new Error('broker trust fixture missing');
+    const spawn = vi.fn(async (input: { readonly prompt: string }) => {
+      revokeBrokerReviewTrustBinding(binding.trustGrantId);
+      return {
+        completion: Promise.resolve({
+          result: freshVerdictFromPrompt(input.prompt, 'PASS'),
+        }),
+      };
+    });
+
+    await executeTool(
+      new UpdateGoalTool(makeAgent(goals, { spawn })),
+      ctx({ status: 'complete' }),
+    );
+
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(goals.getGoal().goal).toMatchObject({
+      status: 'blocked',
+      loopResult: { reasonCode: 'reviewer_evidence_stale' },
+    });
+    expect(records.some((record) => record.type === 'loop.gate-attempt.create')).toBe(true);
+    expect(records.find((record) => record.type === 'loop.gate-attempt.complete'))
+      .toMatchObject({
+        attempt: {
+          status: 'ERROR',
+          reasonCode: 'reviewer_evidence_stale',
+        },
+      });
+  });
+
+  it('stops after the dedicated fresh-reviewer step limit without retrying', async () => {
+    const { goals } = makeStore();
+    await createBrokeredGoal(goals);
+    const spawn = vi.fn(async () => ({
+      completion: Promise.reject(new WukongError(
+        ErrorCodes.LOOP_MAX_STEPS_EXCEEDED,
+        'step limit',
+      )),
+    }));
+
+    const result = await executeTool(
+      new UpdateGoalTool(makeAgent(goals, { spawn })),
+      ctx({ status: 'complete' }),
+    );
+
+    expect(result.stopTurn).toBe(true);
+    expect(spawn).toHaveBeenCalledOnce();
+    expect(goals.getGoal().goal).toMatchObject({
+      status: 'blocked',
+      loopResult: { reasonCode: 'reviewer_limit_exceeded' },
+    });
+  });
+
+  it('stops after the shared reviewer timeout without retrying', async () => {
     vi.useFakeTimers();
     try {
-      const store = makeStore();
-      await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });
-      mocks.runProof.mockResolvedValue(proof('passed'));
-      const spawn = vi.fn().mockImplementation(async (options: { readonly signal: AbortSignal }) => ({
-        completion: new Promise<never>((_resolve, reject) => {
-          const rejectOnAbort = () => {
-            reject(options.signal.reason);
-          };
-          if (options.signal.aborted) rejectOnAbort();
-          else options.signal.addEventListener('abort', rejectOnAbort, { once: true });
+      const { goals } = makeStore();
+      await createBrokeredGoal(goals);
+      const spawn = vi.fn(async (input: { readonly signal: AbortSignal }) => ({
+        completion: new Promise((_resolve, reject) => {
+          input.signal.addEventListener('abort', () => {
+            reject(input.signal.reason);
+          }, { once: true });
         }),
       }));
-      const agent = makeAgent(store);
-      (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
-
-      const running = executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
+      const running = executeTool(
+        new UpdateGoalTool(makeAgent(goals, { spawn })),
+        ctx({ status: 'complete' }),
+      );
       await vi.waitFor(() => {
         expect(spawn).toHaveBeenCalledOnce();
       });
       await vi.advanceTimersByTimeAsync(FRESH_REVIEWER_TIMEOUT_MS);
-      const result = await running;
 
+      const result = await running;
       expect(result.stopTurn).toBe(true);
       expect(spawn).toHaveBeenCalledOnce();
-      expect(store.getGoal().goal).toMatchObject({
+      expect(goals.getGoal().goal).toMatchObject({
         status: 'blocked',
-        loopResult: {
-          status: 'ERROR',
-          reasonCode: 'reviewer_limit_exceeded',
-        },
+        loopResult: { reasonCode: 'reviewer_limit_exceeded' },
       });
-      expect(store.getGoal().goal?.terminalReason).toContain(
-        `dedicated ${String(FRESH_REVIEWER_TIMEOUT_MS / 1000)}-second Gate budget`,
-      );
-      expect(store.getGoal().goal?.terminalReason).toContain(
-        'loop_control.max_steps_per_turn does not change this timeout',
-      );
     } finally {
       vi.useRealTimers();
     }
   });
 
-  it('does not fall back after cancellation', async () => {
-    const store = makeStore();
-    await store.createGoal({
-      objective: 'ship the change',
-      stopCondition: 'proof-pass',
-      reviewModel: 'reviewer-model',
-    });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-    const controller = new AbortController();
-    const spawn = vi.fn().mockImplementation(async () => {
-      controller.abort();
-      throw new DOMException('This operation was aborted', 'AbortError');
-    });
-    const agent = makeAgent(store);
-    (agent.config as { modelAlias?: string }).modelAlias = 'writer-model';
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
-
-    await expect(executeTool(new UpdateGoalTool(agent), {
-      ...ctx({ status: 'complete' }),
-      signal: controller.signal,
-    })).rejects.toMatchObject({ name: 'AbortError' });
-
-    expect(spawn).toHaveBeenCalledOnce();
-    expect(store.getGoal().goal?.status).toBe('active');
-  });
-
   it('propagates cancellation into deterministic proof checks', async () => {
-    const store = makeStore();
-    await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });
+    const { goals } = makeStore();
+    await createBrokeredGoal(goals);
     const controller = new AbortController();
-    mocks.runProof.mockImplementationOnce(async (options: { readonly signal: AbortSignal }) => {
-      return new Promise((_, reject) => {
-        options.signal.addEventListener('abort', () => {
-          reject(new DOMException('This operation was aborted', 'AbortError'));
+    mocks.runProof.mockImplementationOnce(async (input: { readonly signal: AbortSignal }) => (
+      new Promise((_resolve, reject) => {
+        input.signal.addEventListener('abort', () => {
+          reject(input.signal.reason);
         }, { once: true });
-      });
-    });
-    const running = executeTool(new UpdateGoalTool(makeAgent(store)), {
-      ...ctx({ status: 'complete' }),
-      signal: controller.signal,
-    });
-
+      })
+    ));
+    const spawn = vi.fn();
+    const running = executeTool(
+      new UpdateGoalTool(makeAgent(goals, { spawn })),
+      ctx({ status: 'complete' }, controller.signal),
+    );
     await vi.waitFor(() => {
       expect(mocks.runProof).toHaveBeenCalledOnce();
     });
-    controller.abort();
+    controller.abort(new DOMException('Aborted', 'AbortError'));
 
     await expect(running).rejects.toMatchObject({ name: 'AbortError' });
-    expect(store.getGoal().goal?.status).toBe('active');
+    expect(spawn).not.toHaveBeenCalled();
   });
 
-  it('changes strategy once for a repeated blocker, then stops with no_progress', async () => {
-    const store = makeStore();
-    const reminders: Array<{ readonly content: string; readonly origin: unknown }> = [];
-    await store.createGoal({
-      objective: 'make the check pass',
-      stopCondition: 'proof-pass',
-      maxIterations: 5,
-    });
-    const blockedProof = {
-      ...proof('blocked'),
-      blockers: [{
-        id: 'tests',
-        kind: 'check' as const,
-        summary: 'Tests fail.',
-        command: 'pnpm test',
-        nextAction: 'Fix the failing test.',
-      }],
-    };
-    mocks.runProof.mockResolvedValue(blockedProof);
-    const spawn = vi.fn().mockResolvedValue({
-      completion: Promise.resolve({
-        result: 'Strategy ready.\nSTRATEGY_JSON: {"diagnosis":"The edit did not address the failing assertion.","recommendedApproach":"Trace the first failing assertion before editing again.","risks":["Avoid broad rewrites."]}',
-      }),
-    });
-    const agent = makeAgent(store, reminders);
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
+  it('blocks at max iterations after a brokered NEEDS_WORK attempt', async () => {
+    const { goals } = makeStore();
+    await createBrokeredGoal(goals, { maxIterations: 1 });
+    mocks.runProof.mockResolvedValue(proof('blocked'));
 
-    const first = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-    const second = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-    expect(first.stopTurn).toBe(false);
-    expect(second.stopTurn).toBe(false);
-    expect(store.getGoal().goal?.convergence).toMatchObject({
-      reviewAttempts: 2,
-      strategyAttempts: 1,
-    });
-    expect(reminders.some((reminder) => reminder.origin === undefined
-      || (reminder.origin as { name?: string }).name === 'goal_loop_strategy')).toBe(true);
-
-    const third = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-    expect(third.stopTurn).toBe(true);
-    expect(store.getGoal().goal).toMatchObject({
-      status: 'blocked',
-      loopResult: { status: 'NEEDS_WORK', reasonCode: 'no_progress' },
-    });
-    expect(spawn).toHaveBeenCalledTimes(1);
-    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({ profileName: 'strategist' }));
-  });
-
-  it('continues and completes when the blocker clears after the strategy change', async () => {
-    const store = makeStore();
-    await store.createGoal({
-      objective: 'make the check pass',
-      stopCondition: 'proof-pass',
-      maxIterations: 5,
-    });
-    const blockedProof = {
-      ...proof('blocked'),
-      blockers: [{
-        id: 'tests',
-        kind: 'check' as const,
-        summary: 'Tests fail.',
-        command: 'pnpm test',
-        nextAction: 'Fix the failing test.',
-      }],
-    };
-    mocks.runProof.mockResolvedValue(blockedProof);
-    const spawn = vi.fn().mockResolvedValueOnce({
-      completion: Promise.resolve({
-        result: 'Strategy ready.\nSTRATEGY_JSON: {"diagnosis":"The same assertion is still failing.","recommendedApproach":"Trace the assertion input before editing.","risks":["Keep the fix scoped."]}',
-      }),
-    });
-    const agent = makeAgent(store);
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
-
-    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-    const priorKey = store.getReviewHistory().at(-1)?.blockerKeys[0];
-    if (priorKey === undefined) throw new Error('expected a prior blocker key');
-
-    mocks.runProof.mockResolvedValueOnce(proof('passed'));
-    spawn.mockResolvedValueOnce({
-      completion: Promise.resolve({
-        result: `Review complete.\nVERDICT_JSON: ${JSON.stringify({
-          schemaVersion: 1,
-          status: 'PASS',
-          summary: 'The failing check is fixed.',
-          findings: [],
-          priorBlockerDispositions: [{ key: priorKey, status: 'resolved' }],
-        })}`,
-      }),
-    });
-
-    const result = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-
-    expect(result.stopTurn).toBe(true);
-    expect(store.getGoal().goal).toBeNull();
-    expect(spawn.mock.calls.map((call) => call[0].profileName)).toEqual([
-      'strategist',
-      'reviewer',
-    ]);
-  });
-
-  it('uses the Loop reviewer model without changing the writer model', async () => {
-    const store = makeStore();
-    await store.createGoal({
-      objective: 'ship the change',
-      stopCondition: 'proof-pass',
-      reviewModel: 'reviewer-model',
-    });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-    const spawn = vi.fn().mockResolvedValue({
-      completion: Promise.resolve({
-        result: 'Review complete.\nVERDICT_JSON: {"schemaVersion":1,"status":"PASS","summary":"Ready.","findings":[]}',
-      }),
-    });
-    const agent = makeAgent(store);
-    (agent as unknown as { subagentHost: { spawn: typeof spawn } }).subagentHost = { spawn };
-
-    await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-
-    expect(spawn).toHaveBeenCalledWith(expect.objectContaining({
-      profileName: 'reviewer',
-      modelAlias: 'reviewer-model',
-    }));
-  });
-
-  it('stops with a verification error when the fresh reviewer is unavailable', async () => {
-    const store = makeStore();
-    await store.createGoal({ objective: 'ship the change', stopCondition: 'proof-pass' });
-    mocks.runProof.mockResolvedValue(proof('passed'));
-    const agent = makeAgent(store);
-    (agent as unknown as { subagentHost?: unknown }).subagentHost = undefined;
-
-    const result = await executeTool(new UpdateGoalTool(agent), ctx({ status: 'complete' }));
-
-    expect(result.stopTurn).toBe(true);
-    expect(store.getGoal().goal?.status).toBe('blocked');
-    expect(store.getGoal().goal?.terminalReason).toBe(
-      'loop:ERROR:reviewer_unavailable:fresh reviewer is unavailable in this runtime.',
+    const result = await executeTool(
+      new UpdateGoalTool(makeAgent(goals)),
+      ctx({ status: 'complete' }),
     );
+
+    expect(result.stopTurn).toBe(true);
+    expect(goals.getGoal().goal).toMatchObject({
+      status: 'blocked',
+      iteration: 1,
+      loopResult: { reasonCode: 'max_iterations' },
+    });
+  });
+
+  it('leaves configured interval pacing to the Goal driver', async () => {
+    const { goals } = makeStore();
+    await createBrokeredGoal(goals, { minIntervalMs: 1_000 });
+    mocks.runProof.mockResolvedValue(proof('blocked'));
+
+    const result = await executeTool(
+      new UpdateGoalTool(makeAgent(goals)),
+      ctx({ status: 'complete' }),
+    );
+
+    expect(result.stopTurn).toBe(true);
+    expect(result.output).toContain('configured interval');
+    expect(goals.getGoal().goal).toMatchObject({ status: 'active', minIntervalMs: 60_000 });
   });
 });

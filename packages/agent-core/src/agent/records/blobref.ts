@@ -81,12 +81,15 @@ export class BlobStore {
       case "loop.builtin-risk-scan-result.create":
       case "loop.continuation.create":
       case "loop.evidence-snapshot.create":
+      case "loop.fresh-criteria-verdict.create":
       case "loop.gate-attempt.complete":
       case "loop.gate-attempt.create":
       case "loop.gate-check-result.create":
       case "loop.proof-aggregate.create":
+      case "loop.review-subject-manifest.create":
       case "loop.reviewer-result.create":
       case "loop.run.create":
+      case "loop.run-review-settings.assign":
       case "loop.run.terminal":
       case "metadata":
       case "micro_compaction.apply":
@@ -155,12 +158,15 @@ export class BlobStore {
       case "loop.builtin-risk-scan-result.create":
       case "loop.continuation.create":
       case "loop.evidence-snapshot.create":
+      case "loop.fresh-criteria-verdict.create":
       case "loop.gate-attempt.complete":
       case "loop.gate-attempt.create":
       case "loop.gate-check-result.create":
       case "loop.proof-aggregate.create":
+      case "loop.review-subject-manifest.create":
       case "loop.reviewer-result.create":
       case "loop.run.create":
+      case "loop.run-review-settings.assign":
       case "loop.run.terminal":
       case "metadata":
       case "micro_compaction.apply":

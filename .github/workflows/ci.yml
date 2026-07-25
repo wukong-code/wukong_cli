@@ -103,6 +103,27 @@ jobs:
       # timeout causes flaky failures. Give it more headroom.
       - run: pnpm run test -- --testTimeout=30000
 
+  verification-criteria-cross-platform:
+    name: Verification criteria (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec vitest run packages/verification/test/criteria.test.ts packages/verification/test/review-subject.test.ts apps/wukong/test/cli/reference-verification-skills.test.ts packages/agent-core/test/tools/goal-gate.test.ts --testTimeout=30000
+
   lint:
     runs-on: ubuntu-latest
 

@@ -365,6 +365,10 @@ export interface CreateGoalPayload {
     | import('../agent/goal').LoopContractV3Input;
 }
 
+export interface ResumeGoalPayload {
+  readonly reviewSettings?: import('../agent/goal').LoopRunReviewSettingsInput;
+}
+
 export interface GetWukongConfigPayload {
   readonly reload?: boolean;
 }
@@ -410,7 +414,7 @@ export interface AgentAPI {
   createGoal: (payload: CreateGoalPayload) => GoalSnapshot;
   getGoal: (payload: EmptyPayload) => GoalToolResult;
   pauseGoal: (payload: EmptyPayload) => GoalSnapshot;
-  resumeGoal: (payload: EmptyPayload) => GoalSnapshot;
+  resumeGoal: (payload: ResumeGoalPayload) => GoalSnapshot;
   cancelGoal: (payload: EmptyPayload) => GoalSnapshot;
   getBackgroundOutput: (payload: GetBackgroundOutputPayload) => string;
   getContext: (payload: EmptyPayload) => AgentContextData;

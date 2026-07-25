@@ -16,6 +16,7 @@ import { TabbedModelSelectorComponent } from '../components/dialogs/tabbed-model
 import { PermissionSelectorComponent } from '../components/dialogs/permission-selector';
 import { SettingsSelectorComponent, type SettingsSelection } from '../components/dialogs/settings-selector';
 import { ThemeSelectorComponent } from '../components/dialogs/theme-selector';
+import { LocalPathInputDialogComponent } from '../components/dialogs/local-path-input-dialog';
 import { UpdatePreferenceSelectorComponent } from '../components/dialogs/update-preference-selector';
 import { saveTuiConfig } from '../config';
 import type { ThemeName } from '#/tui/theme';
@@ -26,6 +27,9 @@ import { showUsage } from './info';
 import { setExperimentalFeatures } from './experimental-flags';
 import type { SlashCommandHost } from './dispatch';
 import {
+  listBrokerReviewTrustGrants,
+  grantCriteriaSourceTrust,
+  listCriteriaSourceTrustGrants,
   listWorkspaceTrustGrants,
   revokeWorkspaceTrust,
 } from '#/cli/lib/workspace-trust';
@@ -661,16 +665,88 @@ function handleSettingsSelection(host: SlashCommandHost, value: SettingsSelectio
     case 'theme': showThemePicker(host); return;
     case 'editor': showEditorPicker(host); return;
     case 'experiments': void showExperimentsPanel(host); return;
+    case 'criteria-sources': void showCriteriaSourceSettings(host); return;
     case 'workspace-trust': void showWorkspaceTrustSettings(host); return;
     case 'upgrade': showUpdatePreferencePicker(host); return;
     case 'usage': void showUsage(host); return;
   }
 }
 
+async function showCriteriaSourceSettings(host: SlashCommandHost): Promise<void> {
+  let grants;
+  try {
+    grants = await listCriteriaSourceTrustGrants();
+  } catch (error) {
+    host.showError(`Failed to read verification source trust: ${formatErrorMessage(error)}`);
+    return;
+  }
+  host.mountEditorReplacement(
+    new ChoicePickerComponent({
+      title: 'Verification sources',
+      hint: '↑↓ navigate · Enter select · Esc back',
+      notice: 'Sources are local-only, exact-root grants. Selecting an existing source revokes it.',
+      noticeTone: 'warning',
+      options: [
+        {
+          value: 'add',
+          label: 'Add local source…',
+          description: 'Trust one exact local directory; remote URLs are not supported.',
+        },
+        ...grants.map((grant) => ({
+          value: grant.trustGrantId,
+          label: grant.canonicalRealpath,
+          description: `${grant.sourceId} · revoke`,
+        })),
+      ],
+      onSelect: (value) => {
+        if (value === 'add') {
+          showCriteriaSourcePathInput(host);
+          return;
+        }
+        void revokeWorkspaceTrust(value).then((revoked) => {
+          host.showStatus(revoked
+            ? 'Verification source trust revoked.'
+            : 'Verification source grant no longer exists.');
+          return showCriteriaSourceSettings(host);
+        }).catch((error: unknown) => {
+          host.showError(`Failed to revoke verification source: ${formatErrorMessage(error)}`);
+        });
+      },
+      onCancel: () => {
+        showSettingsSelector(host);
+      },
+    }),
+  );
+}
+
+function showCriteriaSourcePathInput(host: SlashCommandHost): void {
+  host.mountEditorReplacement(new LocalPathInputDialogComponent((result) => {
+    if (result.kind === 'cancel') {
+      void showCriteriaSourceSettings(host);
+      return;
+    }
+    if (/^https?:\/\//iu.test(result.value)) {
+      host.showError('Verification sources must be local directories; remote URLs are not allowed.');
+      void showCriteriaSourceSettings(host);
+      return;
+    }
+    void grantCriteriaSourceTrust(result.value).then((grant) => {
+      host.showStatus(`Trusted verification source ${grant.sourceId}.`);
+      return showCriteriaSourceSettings(host);
+    }).catch((error: unknown) => {
+      host.showError(`Failed to trust verification source: ${formatErrorMessage(error)}`);
+      return showCriteriaSourceSettings(host);
+    });
+  }));
+}
+
 async function showWorkspaceTrustSettings(host: SlashCommandHost): Promise<void> {
   let grants;
   try {
-    grants = await listWorkspaceTrustGrants();
+    grants = [
+      ...await listWorkspaceTrustGrants(),
+      ...await listBrokerReviewTrustGrants(),
+    ];
   } catch (error) {
     host.showError(`Failed to read trusted workspaces: ${formatErrorMessage(error)}`);
     return;
@@ -693,8 +769,10 @@ async function showWorkspaceTrustSettings(host: SlashCommandHost): Promise<void>
           }]
         : grants.map((grant) => ({
             value: grant.trustGrantId,
-            label: grant.canonicalRealpath,
-            description: `${grant.persistence} · ${grant.workspaceIdentityDigest.slice(0, 24)}…`,
+            label: grant.scope === 'loop-project-checks'
+              ? grant.canonicalRealpath
+              : `Review broker · ${grant.workspaceIdentityDigest.slice(0, 24)}…`,
+            description: `${grant.persistence} · ${grant.scope}`,
           })),
       onSelect: (value) => {
         if (value === 'back') {
@@ -702,7 +780,7 @@ async function showWorkspaceTrustSettings(host: SlashCommandHost): Promise<void>
           return;
         }
         void revokeWorkspaceTrust(value).then((revoked) => {
-          host.showStatus(revoked ? 'Workspace trust revoked.' : 'Workspace trust grant no longer exists.');
+          host.showStatus(revoked ? 'Security trust revoked.' : 'Security trust grant no longer exists.');
           return showWorkspaceTrustSettings(host);
         }).catch((error: unknown) => {
           host.showError(`Failed to revoke workspace trust: ${formatErrorMessage(error)}`);

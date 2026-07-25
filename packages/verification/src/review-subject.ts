@@ -49,6 +49,7 @@ const SECRET_CONTENT = [
   /\bAuthorization\s*:\s*Bearer\s+\S+/iu,
   /-----BEGIN (?:RSA |EC |OPENSSH )?PRIVATE KEY-----/u,
 ] as const;
+const activeBrokerTrustBindings = new Map<string, string>();
 
 export interface BrokerReviewTrustProposalV1 {
   readonly schemaVersion: 1;
@@ -214,6 +215,55 @@ export function createBrokerReviewTrustProposal(input: {
   };
 }
 
+export function createBrokerReviewTrustChallenge(
+  proposal: BrokerReviewTrustProposalV1,
+  options: { readonly now?: number; readonly ttlMs?: number } = {},
+): string {
+  validateBrokerReviewTrustProposal(proposal);
+  const issuedAt = options.now ?? Date.now();
+  const payload = {
+    schemaVersion: 1 as const,
+    workspaceIdentityDigest: proposal.workspaceIdentityDigest,
+    scope: proposal.scope,
+    reviewSubjectPolicyVersion: proposal.reviewSubjectPolicyVersion,
+    trustProposalDigest: proposal.trustProposalDigest,
+    issuedAt,
+    expiresAt: issuedAt + Math.min(options.ttlMs ?? 10 * 60_000, 10 * 60_000),
+    nonce: randomUUID(),
+  };
+  const body = Buffer.from(JSON.stringify(payload), 'utf8').toString('base64url');
+  const signature = canonicalDigest('wukong/broker-review-trust-challenge/v1', body);
+  return `${body}.${signature}`;
+}
+
+export function verifyBrokerReviewTrustChallenge(input: {
+  readonly challenge: string;
+  readonly proposal: BrokerReviewTrustProposalV1;
+  readonly now?: number;
+}): boolean {
+  validateBrokerReviewTrustProposal(input.proposal);
+  const [body, signature, extra] = input.challenge.split('.');
+  if (!body || !signature || extra !== undefined) return false;
+  if (canonicalDigest('wukong/broker-review-trust-challenge/v1', body) !== signature) {
+    return false;
+  }
+  let payload: unknown;
+  try {
+    payload = JSON.parse(Buffer.from(body, 'base64url').toString('utf8'));
+  } catch {
+    return false;
+  }
+  if (!isBrokerTrustChallengePayload(payload)) return false;
+  const now = input.now ?? Date.now();
+  return payload.workspaceIdentityDigest === input.proposal.workspaceIdentityDigest
+    && payload.scope === input.proposal.scope
+    && payload.reviewSubjectPolicyVersion === input.proposal.reviewSubjectPolicyVersion
+    && payload.trustProposalDigest === input.proposal.trustProposalDigest
+    && payload.issuedAt <= now
+    && payload.expiresAt >= now
+    && payload.expiresAt - payload.issuedAt <= 10 * 60_000;
+}
+
 export function grantBrokerReviewTrust(
   proposal: BrokerReviewTrustProposalV1,
   expectedProposalDigest: string,
@@ -226,12 +276,49 @@ export function grantBrokerReviewTrust(
       'Broker review trust proposal is missing or stale.',
     );
   }
-  return {
+  const binding = {
     workspaceIdentityDigest: proposal.workspaceIdentityDigest,
-    scope: 'brokered-review-subject',
+    scope: 'brokered-review-subject' as const,
     trustProposalDigest: proposal.trustProposalDigest,
     trustGrantId,
   };
+  registerBrokerReviewTrustBinding(binding);
+  return binding;
+}
+
+export function registerBrokerReviewTrustBinding(
+  binding: BrokerReviewTrustBindingV1,
+): void {
+  if (
+    binding.scope !== 'brokered-review-subject'
+    || binding.workspaceIdentityDigest.length === 0
+    || binding.trustProposalDigest.length === 0
+    || binding.trustGrantId.length === 0
+  ) {
+    throw new ReviewSubjectError(
+      'review_subject_trust_required',
+      'Broker review trust binding is invalid.',
+    );
+  }
+  activeBrokerTrustBindings.set(
+    binding.trustGrantId,
+    canonicalDigest('wukong/broker-review-trust-binding/v1', binding),
+  );
+}
+
+export function revokeBrokerReviewTrustBinding(trustGrantId: string): void {
+  activeBrokerTrustBindings.delete(trustGrantId);
+}
+
+export function isBrokerReviewTrustBindingActive(
+  binding: BrokerReviewTrustBindingV1,
+): boolean {
+  return activeBrokerTrustBindings.get(binding.trustGrantId)
+    === canonicalDigest('wukong/broker-review-trust-binding/v1', binding);
+}
+
+export function clearBrokerReviewTrustBindingsForTests(): void {
+  activeBrokerTrustBindings.clear();
 }
 
 export function createReviewSubjectConsentProposal(input: {
@@ -680,6 +767,31 @@ function validateBrokerReviewTrustProposal(proposal: BrokerReviewTrustProposalV1
       'Broker review trust proposal is invalid.',
     );
   }
+}
+
+function isBrokerTrustChallengePayload(value: unknown): value is {
+  readonly schemaVersion: 1;
+  readonly workspaceIdentityDigest: string;
+  readonly scope: 'brokered-review-subject';
+  readonly reviewSubjectPolicyVersion: string;
+  readonly trustProposalDigest: string;
+  readonly issuedAt: number;
+  readonly expiresAt: number;
+  readonly nonce: string;
+} {
+  if (typeof value !== 'object' || value === null) return false;
+  const record = value as Record<string, unknown>;
+  return record['schemaVersion'] === 1
+    && typeof record['workspaceIdentityDigest'] === 'string'
+    && record['scope'] === 'brokered-review-subject'
+    && typeof record['reviewSubjectPolicyVersion'] === 'string'
+    && typeof record['trustProposalDigest'] === 'string'
+    && typeof record['issuedAt'] === 'number'
+    && Number.isSafeInteger(record['issuedAt'])
+    && typeof record['expiresAt'] === 'number'
+    && Number.isSafeInteger(record['expiresAt'])
+    && typeof record['nonce'] === 'string'
+    && record['nonce'].length > 0;
 }
 
 function validateReviewSubjectConsentProposal(

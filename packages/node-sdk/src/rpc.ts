@@ -51,6 +51,7 @@ import type {
   PromptInput,
   RenameSessionInput,
   ResumeSessionInput,
+  ResumeGoalInput,
   ResumedSessionSummary,
   SessionSummary,
   SkillSummary,
@@ -580,11 +581,12 @@ export abstract class SDKRpcClientBase {
     });
   }
 
-  async resumeGoal(input: SessionIdRpcInput): Promise<GoalSnapshot> {
+  async resumeGoal(input: SessionIdRpcInput & ResumeGoalInput): Promise<GoalSnapshot> {
     const rpc = await this.getRpc();
     return rpc.resumeGoal({
       sessionId: input.sessionId,
       agentId: this.interactiveAgentId,
+      reviewSettings: input.reviewSettings,
     });
   }
 

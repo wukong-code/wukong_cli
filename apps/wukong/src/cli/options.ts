@@ -21,7 +21,7 @@ export interface CLIHeadlessGoal {
     readonly selectionId: string;
     readonly provenanceDigest: string;
   }[];
-  readonly trustReviewSubjectProposalDigest?: string;
+  readonly trustReviewSubjectChallenge?: string;
   readonly acknowledgeReviewSubjectConsentDigest?: string;
 }
 

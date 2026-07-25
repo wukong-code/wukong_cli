@@ -4,6 +4,7 @@ import {
   canonicalDigest,
   canonicalJson,
   containsInlineSecret,
+  createFreshReviewerInputDigest,
   BUILTIN_RISK_SCAN_POLICY_VERSION,
   FINISH_LINE_WARNING_POLICY_VERSION,
   FRESH_REVIEWER_POLICY_VERSION,
@@ -14,7 +15,9 @@ import {
   type BrokerReviewTrustBindingV1,
   type FinishLineReview,
   type GateApprovalBinding,
+  type FreshCriteriaVerdictV1,
   type GatePlan,
+  type ReviewSubjectManifestV1,
   type ReviewSubjectConsentBindingV1,
   type ReviewPolicyBinding,
   type VerificationCriteriaRecipeV1,
@@ -383,6 +386,18 @@ export interface LoopRunCreatedV2 {
 
 export type LoopRunCreated = LoopRunCreatedV1 | LoopRunCreatedV2;
 
+export interface LoopRunReviewSettingsAssignedV1 {
+  readonly schemaVersion: 1;
+  readonly assignmentId: string;
+  readonly idempotencyKey: string;
+  readonly runId: string;
+  readonly contractId: string;
+  readonly supersedesRunSettingsRef?: string;
+  readonly runSettingsRef: string;
+  readonly runSettings: LoopRunSettingsV2;
+  readonly createdAt: number;
+}
+
 export interface ContinuationPolicyV1 {
   readonly mode: 'same-contract' | 'restore-or-revise' | 'revised-loop' | 'blocked';
   readonly automaticRetry: false;
@@ -427,6 +442,17 @@ export interface GateAttemptCreatedV1 {
   readonly attemptDigest: string;
   readonly createdAt: number;
 }
+
+export interface GateAttemptCreatedV2
+  extends Omit<GateAttemptCreatedV1, 'schemaVersion'> {
+  readonly schemaVersion: 2;
+  readonly runSettingsRef: string;
+  readonly runSettingsDigest: string;
+  readonly brokerReviewTrustGrantId: string;
+  readonly reviewSubjectConsentDigest: string;
+}
+
+export type GateAttemptCreated = GateAttemptCreatedV1 | GateAttemptCreatedV2;
 
 export interface GateCheckResultRecordedV1 {
   readonly schemaVersion: 1;
@@ -481,6 +507,31 @@ export interface ReviewerResultRecordedV1 {
   readonly createdAt: number;
 }
 
+export interface ReviewSubjectManifestRecordedV1 {
+  readonly schemaVersion: 1;
+  readonly manifestRef: string;
+  readonly attemptId: string;
+  readonly runId: string;
+  readonly contractId: string;
+  readonly planDigest: string;
+  readonly manifest: ReviewSubjectManifestV1;
+  readonly manifestDigest: string;
+  readonly createdAt: number;
+}
+
+export interface FreshCriteriaVerdictRecordedV1 {
+  readonly schemaVersion: 1;
+  readonly verdictRef: string;
+  readonly attemptId: string;
+  readonly runId: string;
+  readonly contractId: string;
+  readonly planDigest: string;
+  readonly reviewerInputDigest: string;
+  readonly verdict: FreshCriteriaVerdictV1;
+  readonly verdictDigest: string;
+  readonly createdAt: number;
+}
+
 export interface ProofAggregateRecordedV1 {
   readonly schemaVersion: 1;
   readonly proofAggregateResultRef: string;
@@ -500,6 +551,16 @@ export interface ProofAggregateRecordedV1 {
   readonly proofAggregateDigest: string;
   readonly createdAt: number;
 }
+
+export interface ProofAggregateRecordedV2
+  extends Omit<ProofAggregateRecordedV1, 'schemaVersion' | 'reviewerResultDigest'> {
+  readonly schemaVersion: 2;
+  readonly reviewSubjectManifestDigest: string;
+  readonly freshCriteriaVerdictDigest: string;
+  readonly reviewSubjectConsentDigest: string;
+}
+
+export type ProofAggregateRecorded = ProofAggregateRecordedV1 | ProofAggregateRecordedV2;
 
 export interface LoopEvidenceSnapshotCreatedV1 {
   readonly schemaVersion: 1;
@@ -528,6 +589,23 @@ export interface LoopEvidenceSnapshotCreatedV1 {
   readonly createdAt: number;
 }
 
+export interface LoopEvidenceSnapshotCreatedV2
+  extends Omit<
+    LoopEvidenceSnapshotCreatedV1,
+    'schemaVersion' | 'reviewerResultRef' | 'reviewerResultDigest'
+  > {
+  readonly schemaVersion: 2;
+  readonly reviewSubjectManifestRef: string;
+  readonly reviewSubjectManifestDigest: string;
+  readonly freshCriteriaVerdictRef: string;
+  readonly freshCriteriaVerdictDigest: string;
+  readonly reviewSubjectConsentDigest: string;
+}
+
+export type LoopEvidenceSnapshotCreated =
+  | LoopEvidenceSnapshotCreatedV1
+  | LoopEvidenceSnapshotCreatedV2;
+
 export interface GateAttemptCompletedV1 {
   readonly schemaVersion: 1;
   readonly attemptId: string;
@@ -544,9 +622,8 @@ export interface GateAttemptCompletedV1 {
   readonly createdAt: number;
 }
 
-export interface LoopGateAttemptInput {
-  readonly status: 'PASS' | 'NEEDS_WORK' | 'ERROR';
-  readonly reasonCode: string;
+export interface LoopGateDeterministicEvidenceInput {
+  readonly runtime: LoopGateReviewRuntimeV2;
   readonly workspaceFingerprint: string;
   readonly checks: readonly {
     readonly command: string;
@@ -562,10 +639,44 @@ export interface LoopGateAttemptInput {
     readonly file?: string;
     readonly line?: number;
   }[];
-  readonly reviewerStatus: 'PASS' | 'NEEDS_WORK' | 'INCONCLUSIVE';
-  readonly reviewerPayload: unknown;
+}
+
+export interface LoopGateDeterministicEvidenceV1 {
+  readonly attemptId: string;
+  readonly orderedCheckResultDigests: readonly string[];
+  readonly builtinRiskScanResultDigest: string;
+  readonly unstableCheckIds: readonly string[];
+}
+
+export interface LoopGateAttemptInput {
+  readonly runtime: LoopGateReviewRuntimeV2;
+  readonly deterministicEvidence: LoopGateDeterministicEvidenceV1;
+  readonly status: 'PASS' | 'NEEDS_WORK' | 'ERROR';
+  readonly reasonCode: string;
+  readonly reviewSubjectManifest?: ReviewSubjectManifestV1;
+  readonly freshCriteriaVerdict?: FreshCriteriaVerdictV1;
+  readonly reviewerInputDigest?: string;
   readonly blockerKeys: readonly string[];
   readonly workspaceTrustGrantId?: string;
+}
+
+export interface LoopGateReviewRuntimeV2 {
+  readonly attemptId: string;
+  readonly runId: string;
+  readonly contractId: string;
+  readonly planDigest: string;
+  readonly selectionDigest: string;
+  readonly runSettingsRef: string;
+  readonly runSettings: LoopRunSettingsV2;
+  readonly workspaceIdentityDigest: string;
+  readonly criteria: readonly {
+    readonly criterionId: string;
+    readonly criterionProvenanceDigest: string;
+    readonly text: string;
+    readonly evidenceExpectation?: string;
+  }[];
+  readonly carriedBlockerKeys: readonly string[];
+  readonly reviewPolicy: ReviewPolicyBinding;
 }
 
 export type PriorBlockerDispositionStatus = 'resolved' | 'still_open' | 'replaced_by';
@@ -659,6 +770,7 @@ interface GoalState {
   loopContract?: LoopContract;
   legacyContractId?: string;
   currentLoopRun?: LoopRunCreated;
+  loopRunReviewSettingsAssignments: Map<string, LoopRunReviewSettingsAssignedV1>;
   loopRunTerminals: Map<string, LoopRunTerminalV1>;
   gateAttemptCompletions: Map<string, GateAttemptCompletedV1>;
   restoredGateAudits: Map<string, RestoredGateAudit>;
@@ -669,12 +781,14 @@ interface GoalState {
 }
 
 interface RestoredGateAudit {
-  attempt: GateAttemptCreatedV1;
+  attempt: GateAttemptCreated;
   checks: GateCheckResultRecordedV1[];
   scan?: BuiltinRiskScanResultRecordedV1;
   reviewer?: ReviewerResultRecordedV1;
-  aggregate?: ProofAggregateRecordedV1;
-  snapshot?: LoopEvidenceSnapshotCreatedV1;
+  manifest?: ReviewSubjectManifestRecordedV1;
+  freshVerdict?: FreshCriteriaVerdictRecordedV1;
+  aggregate?: ProofAggregateRecorded;
+  snapshot?: LoopEvidenceSnapshotCreated;
 }
 
 /** Computed budget view exposed through snapshots and tools. */
@@ -765,6 +879,10 @@ interface GoalReasonInput {
   readonly reason?: string;
 }
 
+export interface ResumeGoalInput extends GoalReasonInput {
+  readonly reviewSettings?: LoopRunReviewSettingsInput;
+}
+
 /**
  * Single durable owner of the current goal.
  *
@@ -849,6 +967,7 @@ export class GoalMode {
       tokensUsed: 0,
       wallClockMs: 0,
       budgetLimits: {},
+      loopRunReviewSettingsAssignments: new Map(),
       loopRunTerminals: new Map(),
       gateAttemptCompletions: new Map(),
       restoredGateAudits: new Map(),
@@ -1062,6 +1181,7 @@ export class GoalMode {
       wallClockMs: 0,
       wallClockResumedAt: Date.now(),
       budgetLimits: {},
+      loopRunReviewSettingsAssignments: new Map(),
       loopRunTerminals: new Map(),
       gateAttemptCompletions: new Map(),
       restoredGateAudits: new Map(),
@@ -1356,53 +1476,130 @@ export class GoalMode {
     return contract;
   }
 
-  recordGateAttempt(input: LoopGateAttemptInput): GateAttemptCompletedV1 | null {
-    const state = this.state;
-    const contract = state?.loopContract;
-    const run = state?.currentLoopRun;
-    if (state === undefined || contract?.schemaVersion !== 2 || run === undefined) return null;
+  beginLoopGateAttempt(
+    runtime: LoopGateReviewRuntimeV2,
+    workspaceBefore: string,
+  ): GateAttemptCreatedV2 {
+    const state = this.requireState();
+    const contract = state.loopContract;
+    const run = state.currentLoopRun;
+    const settingsBinding = run === undefined
+      ? undefined
+      : loopRunReviewSettingsBinding(state, run);
+    if (
+      contract === undefined
+      || contract.schemaVersion === 1
+      || run === undefined
+      || settingsBinding === undefined
+    ) {
+      throw new WukongError(
+        ErrorCodes.REQUEST_INVALID,
+        'A 0.0.20 Gate attempt requires a V2/V3 contract and brokered run settings',
+      );
+    }
     if (state.loopRunTerminals.has(run.runId)) {
       throw new WukongError(
         ErrorCodes.REQUEST_INVALID,
         'Cannot append a Gate attempt after the current Loop run is terminal',
       );
     }
-    const attemptId = randomUUID();
-    const sequence = state.gateAttemptCompletions.size + 1;
-    const now = Date.now();
+    if (
+      runtime.runId !== run.runId
+      || runtime.contractId !== contract.contractId
+      || runtime.planDigest !== contract.gatePlan.planDigest
+      || runtime.runSettingsRef !== settingsBinding.runSettingsRef
+      || runtime.runSettings.settingsDigest !== settingsBinding.runSettings.settingsDigest
+    ) {
+      throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Gate runtime is stale');
+    }
+    const existing = state.restoredGateAudits.get(runtime.attemptId);
+    if (existing !== undefined) {
+      if (
+        existing.attempt.schemaVersion !== 2
+        || existing.attempt.workspaceBefore !== workspaceBefore
+      ) {
+        throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Gate attempt id is already bound');
+      }
+      return existing.attempt;
+    }
     const carriedBlockerSetDigest = canonicalDigest(
       'wukong/carried-blocker-set/v1',
       run.carriedBlockerKeys.toSorted(),
     );
-    const attemptBase = {
-      schemaVersion: 1 as const,
-      attemptId,
+    const base = {
+      schemaVersion: 2 as const,
+      attemptId: runtime.attemptId,
       runId: run.runId,
       contractId: contract.contractId,
-      sequence,
-      planDigest: contract.gatePlan.planDigest,
+      sequence: state.restoredGateAudits.size + 1,
+      planDigest: runtime.planDigest,
       gateApprovalDigest: contract.gateApproval.approvalSetDigest,
-      workspaceBefore: input.workspaceFingerprint,
+      workspaceBefore,
       carriedBlockerSetDigest,
-      createdAt: now,
+      runSettingsRef: settingsBinding.runSettingsRef,
+      runSettingsDigest: settingsBinding.runSettings.settingsDigest,
+      brokerReviewTrustGrantId: settingsBinding.runSettings.brokerReviewTrust.trustGrantId,
+      reviewSubjectConsentDigest:
+        settingsBinding.runSettings.reviewSubjectConsent.consentDigest,
+      createdAt: Date.now(),
     };
-    const attempt: GateAttemptCreatedV1 = {
-      ...attemptBase,
-      attemptDigest: canonicalDigest('wukong/gate-attempt/v1', attemptBase),
+    const attempt: GateAttemptCreatedV2 = {
+      ...base,
+      attemptDigest: canonicalDigest('wukong/gate-attempt/v2', base),
     };
+    state.restoredGateAudits.set(attempt.attemptId, { attempt, checks: [] });
     this.agent.records.logRecord({ type: 'loop.gate-attempt.create', attempt });
+    this.persistState(state, { silent: true });
+    return attempt;
+  }
 
+  recordGateDeterministicEvidence(
+    input: LoopGateDeterministicEvidenceInput,
+  ): LoopGateDeterministicEvidenceV1 {
+    const state = this.requireState();
+    const contract = state.loopContract;
+    const run = state.currentLoopRun;
+    const settingsBinding = run === undefined
+      ? undefined
+      : loopRunReviewSettingsBinding(state, run);
+    if (
+      contract === undefined
+      || contract.schemaVersion === 1
+      || run === undefined
+      || settingsBinding === undefined
+    ) {
+      throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Brokered Gate run is unavailable');
+    }
+    const audit = state.restoredGateAudits.get(input.runtime.attemptId);
+    if (
+      audit?.attempt.schemaVersion !== 2
+      || audit.attempt.runId !== run.runId
+      || audit.attempt.contractId !== contract.contractId
+      || audit.attempt.planDigest !== input.runtime.planDigest
+      || audit.attempt.runSettingsRef !== settingsBinding.runSettingsRef
+      || audit.attempt.runSettingsDigest !== settingsBinding.runSettings.settingsDigest
+      || audit.attempt.workspaceBefore !== input.workspaceFingerprint
+    ) {
+      throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Gate attempt runtime binding mismatch');
+    }
+    if (audit.checks.length > 0 || audit.scan !== undefined) {
+      throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Gate attempt evidence was already recorded');
+    }
+    const now = Date.now();
+    const gatePlan = contract.schemaVersion === 2
+      ? contract.gatePlan
+      : contract.gatePlan.legacySnapshot;
     const checkResults: GateCheckResultRecordedV1[] = [];
-    for (let index = 0; index < contract.gatePlan.requiredChecks.length; index += 1) {
-      const frozen = contract.gatePlan.requiredChecks[index]!;
+    for (let index = 0; index < gatePlan.requiredChecks.length; index += 1) {
+      const frozen = gatePlan.requiredChecks[index]!;
       const observed = input.checks[index];
       const base = {
         schemaVersion: 1 as const,
         checkResultRef: randomUUID(),
-        attemptId,
+        attemptId: audit.attempt.attemptId,
         runId: run.runId,
         contractId: contract.contractId,
-        planDigest: contract.gatePlan.planDigest,
+        planDigest: input.runtime.planDigest,
         checkId: frozen.id,
         commandDigest: frozen.commandDigest,
         definitionDigest: frozen.resolution === 'resolved' ? frozen.definitionDigest : undefined,
@@ -1420,13 +1617,23 @@ export class GoalMode {
         redactionVersion: 'loop-output-redaction/1',
         createdAt: now,
       };
-      const record: GateCheckResultRecordedV1 = {
+      const result: GateCheckResultRecordedV1 = {
         ...base,
         checkResultDigest: canonicalDigest('wukong/gate-check-result/v1', base),
       };
-      checkResults.push(record);
-      this.agent.records.logRecord({ type: 'loop.gate-check-result.create', result: record });
+      checkResults.push(result);
+      audit.checks.push(result);
+      this.agent.records.logRecord({ type: 'loop.gate-check-result.create', result });
     }
+    const unstableCheckIds = checkResults
+      .filter((current) => state.gateCheckHistory.some((prior) => (
+        prior.workspaceFingerprint === current.workspaceFingerprint
+        && prior.checkId === current.checkId
+        && prior.commandDigest === current.commandDigest
+        && (prior.status === 'passed') !== (current.status === 'passed')
+      )))
+      .map((current) => current.checkId);
+    state.gateCheckHistory.push(...checkResults);
 
     const scanFindings = input.scanFindings.map((finding) => {
       const payload = {
@@ -1449,12 +1656,12 @@ export class GoalMode {
     const scanBase = {
       schemaVersion: 1 as const,
       scanResultRef: randomUUID(),
-      attemptId,
+      attemptId: audit.attempt.attemptId,
       runId: run.runId,
       contractId: contract.contractId,
-      planDigest: contract.gatePlan.planDigest,
-      scanPolicyVersion: contract.gatePlan.builtinRiskScanPolicyVersion,
-      workspaceFingerprint: input.workspaceFingerprint,
+      planDigest: input.runtime.planDigest,
+      scanPolicyVersion: gatePlan.builtinRiskScanPolicyVersion,
+      workspaceFingerprint: audit.attempt.workspaceBefore,
       status: scanFindings.some((finding) => finding.severity === 'blocking')
         ? 'blocking' as const
         : 'clean' as const,
@@ -1465,75 +1672,169 @@ export class GoalMode {
       ...scanBase,
       scanResultDigest: canonicalDigest('wukong/builtin-risk-scan-result/v1', scanBase),
     };
+    audit.scan = scan;
     this.agent.records.logRecord({ type: 'loop.builtin-risk-scan-result.create', result: scan });
-    const unstableCheckIds = checkResults
-      .filter((current) => state.gateCheckHistory.some((prior) => (
-        prior.workspaceFingerprint === current.workspaceFingerprint
-        && prior.checkId === current.checkId
-        && prior.commandDigest === current.commandDigest
-        && (prior.status === 'passed') !== (current.status === 'passed')
-      )))
-      .map((current) => current.checkId);
-    state.gateCheckHistory.push(...checkResults);
-
-    const reviewerInputDigest = canonicalDigest('wukong/reviewer-input/v1', {
-      attemptId,
-      contractId: contract.contractId,
-      planDigest: contract.gatePlan.planDigest,
-      workspaceFingerprint: input.workspaceFingerprint,
+    const deterministicEvidence: LoopGateDeterministicEvidenceV1 = {
+      attemptId: audit.attempt.attemptId,
       orderedCheckResultDigests: checkResults.map((result) => result.checkResultDigest),
-      scanResultDigest: scan.scanResultDigest,
-      carriedBlockerSetDigest,
-      reviewPolicyBinding: contract.reviewPolicy,
-    });
-    const reviewerPayloadDigest = canonicalDigest(
-      'wukong/reviewer-payload/v1',
-      input.reviewerPayload,
-    );
-    const reviewerBase = {
-      schemaVersion: 1 as const,
-      reviewerResultRef: randomUUID(),
-      attemptId,
+      builtinRiskScanResultDigest: scan.scanResultDigest,
+      unstableCheckIds,
+    };
+    this.persistState(state, { silent: true });
+    return deterministicEvidence;
+  }
+
+  recordGateAttempt(input: LoopGateAttemptInput): GateAttemptCompletedV1 | null {
+    const state = this.requireState();
+    const contract = state.loopContract;
+    const run = state.currentLoopRun;
+    const settingsBinding = run === undefined
+      ? undefined
+      : loopRunReviewSettingsBinding(state, run);
+    if (
+      contract === undefined
+      || contract.schemaVersion === 1
+      || run === undefined
+      || settingsBinding === undefined
+    ) {
+      return null;
+    }
+    const existingCompletion = state.gateAttemptCompletions.get(input.runtime.attemptId);
+    if (existingCompletion !== undefined) return existingCompletion;
+    const audit = state.restoredGateAudits.get(input.runtime.attemptId);
+    if (
+      audit?.attempt.schemaVersion !== 2
+      || audit.attempt.runId !== run.runId
+      || audit.attempt.contractId !== contract.contractId
+      || audit.attempt.planDigest !== input.runtime.planDigest
+      || audit.attempt.runSettingsRef !== settingsBinding.runSettingsRef
+      || audit.attempt.runSettingsDigest !== settingsBinding.runSettings.settingsDigest
+      || audit.scan === undefined
+      || input.deterministicEvidence.attemptId !== audit.attempt.attemptId
+      || canonicalJson(input.deterministicEvidence.orderedCheckResultDigests)
+        !== canonicalJson(audit.checks.map((result) => result.checkResultDigest))
+      || input.deterministicEvidence.builtinRiskScanResultDigest !== audit.scan.scanResultDigest
+    ) {
+      throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Gate deterministic evidence binding mismatch');
+    }
+    const now = Date.now();
+    const checkResults = audit.checks;
+    const scan = audit.scan;
+    const unstableCheckIds = [...input.deterministicEvidence.unstableCheckIds];
+    const gatePlan = contract.schemaVersion === 2
+      ? contract.gatePlan
+      : contract.gatePlan.legacySnapshot;
+    const manifest = input.reviewSubjectManifest;
+    const reviewerInputDigest = input.reviewerInputDigest;
+    if (manifest === undefined || reviewerInputDigest === undefined) {
+      this.persistState(state, { silent: true });
+      return null;
+    }
+    if (
+      manifest.attemptId !== audit.attempt.attemptId
+      || manifest.runId !== run.runId
+      || manifest.contractId !== contract.contractId
+      || manifest.planDigest !== input.runtime.planDigest
+      || manifest.workspaceFingerprint !== audit.attempt.workspaceBefore
+      || manifest.consentDigest
+        !== settingsBinding.runSettings.reviewSubjectConsent.consentDigest
+    ) {
+      throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Review subject manifest binding mismatch');
+    }
+    const manifestRecord: ReviewSubjectManifestRecordedV1 = {
+      schemaVersion: 1,
+      manifestRef: randomUUID(),
+      attemptId: audit.attempt.attemptId,
       runId: run.runId,
       contractId: contract.contractId,
-      planDigest: contract.gatePlan.planDigest,
-      reviewerInputDigest,
-      reviewerPayloadDigest,
-      status: input.reviewerStatus,
+      planDigest: input.runtime.planDigest,
+      manifest,
+      manifestDigest: manifest.manifestDigest,
       createdAt: now,
     };
-    const reviewer: ReviewerResultRecordedV1 = {
-      ...reviewerBase,
-      reviewerResultDigest: canonicalDigest('wukong/reviewer-result-record/v1', reviewerBase),
-    };
-    this.agent.records.logRecord({ type: 'loop.reviewer-result.create', result: reviewer });
+    audit.manifest = manifestRecord;
+    this.agent.records.logRecord({
+      type: 'loop.review-subject-manifest.create',
+      result: manifestRecord,
+    });
 
-    const allChecksPassed = checkResults.length === contract.gatePlan.requiredChecks.length
+    const verdict = input.freshCriteriaVerdict;
+    if (verdict === undefined) {
+      this.persistState(state, { silent: true });
+      return null;
+    }
+    if (
+      verdict.attemptId !== audit.attempt.attemptId
+      || verdict.reviewerInputDigest !== reviewerInputDigest
+      || reviewerInputDigest !== freshReviewerInputDigestForAudit(state, audit)
+    ) {
+      throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Fresh verdict binding mismatch');
+    }
+    const verdictRecord: FreshCriteriaVerdictRecordedV1 = {
+      schemaVersion: 1,
+      verdictRef: randomUUID(),
+      attemptId: audit.attempt.attemptId,
+      runId: run.runId,
+      contractId: contract.contractId,
+      planDigest: input.runtime.planDigest,
+      reviewerInputDigest,
+      verdict,
+      verdictDigest: canonicalDigest('wukong/fresh-criteria-verdict/v1', verdict),
+      createdAt: now,
+    };
+    audit.freshVerdict = verdictRecord;
+    this.agent.records.logRecord({
+      type: 'loop.fresh-criteria-verdict.create',
+      result: verdictRecord,
+    });
+
+    const allChecksPassed = checkResults.length === gatePlan.requiredChecks.length
       && checkResults.every((result) => result.status === 'passed');
+    const criteriaSatisfied = input.runtime.criteria.every((criterion) => (
+      verdict.criterionDispositions.some((disposition) => (
+        disposition.criterionId === criterion.criterionId
+        && disposition.criterionProvenanceDigest === criterion.criterionProvenanceDigest
+        && disposition.status === 'satisfied'
+      ))
+    ));
+    const carriedBlockersResolved = input.runtime.carriedBlockerKeys.every((key) => (
+      verdict.priorBlockerDispositions.some((disposition) => (
+        disposition.blockerKey === key && disposition.status === 'resolved'
+      ))
+    ));
+    const noBlockingFindings = verdict.findings.every(
+      (finding) => finding.severity !== 'blocking',
+    );
     const canPass = input.status === 'PASS'
       && allChecksPassed
       && scan.status === 'clean'
-      && reviewer.status === 'PASS'
+      && verdict.status === 'PASS'
+      && criteriaSatisfied
+      && carriedBlockersResolved
+      && noBlockingFindings
       && unstableCheckIds.length === 0
       && input.blockerKeys.length === 0;
-    const aggregateStatus: ProofAggregateRecordedV1['status'] = canPass
+    const aggregateStatus: ProofAggregateRecordedV2['status'] = canPass
       ? 'PASS'
       : input.status === 'ERROR' || unstableCheckIds.length > 0
         ? 'ERROR'
         : 'NEEDS_WORK';
     const aggregateBase = {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       proofAggregateResultRef: randomUUID(),
-      attemptId,
+      attemptId: audit.attempt.attemptId,
       runId: run.runId,
       contractId: contract.contractId,
-      planDigest: contract.gatePlan.planDigest,
+      planDigest: input.runtime.planDigest,
       orderedCheckResultDigests: checkResults.map((result) => result.checkResultDigest),
       builtinRiskScanResultRef: scan.scanResultRef,
       builtinRiskScanResultDigest: scan.scanResultDigest,
       builtinRiskScanPolicyVersion: scan.scanPolicyVersion,
-      reviewerResultDigest: reviewer.reviewerResultDigest,
-      carriedBlockerSetDigest,
+      reviewSubjectManifestDigest: manifestRecord.manifestDigest,
+      freshCriteriaVerdictDigest: verdictRecord.verdictDigest,
+      reviewSubjectConsentDigest:
+        settingsBinding.runSettings.reviewSubjectConsent.consentDigest,
+      carriedBlockerSetDigest: audit.attempt.carriedBlockerSetDigest,
       status: aggregateStatus,
       reasonCode: canPass
         ? 'passed'
@@ -1546,52 +1847,58 @@ export class GoalMode {
       ].toSorted(),
       createdAt: now,
     };
-    const aggregate: ProofAggregateRecordedV1 = {
+    const aggregate: ProofAggregateRecordedV2 = {
       ...aggregateBase,
-      proofAggregateDigest: canonicalDigest('wukong/proof-aggregate/v1', aggregateBase),
+      proofAggregateDigest: canonicalDigest('wukong/proof-aggregate/v2', aggregateBase),
     };
+    audit.aggregate = aggregate;
     this.agent.records.logRecord({ type: 'loop.proof-aggregate.create', result: aggregate });
 
     const snapshotBase = {
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
       evidenceSnapshotId: randomUUID(),
-      attemptId,
+      attemptId: audit.attempt.attemptId,
       runId: run.runId,
       contractId: contract.contractId,
-      planDigest: contract.gatePlan.planDigest,
+      planDigest: input.runtime.planDigest,
       gateApprovalDigest: contract.gateApproval.approvalSetDigest,
       workspaceTrustGrantId: input.workspaceTrustGrantId
-        ?? contract.workspaceTrust?.trustGrantId,
-      workspaceFingerprint: input.workspaceFingerprint,
+        ?? (contract.schemaVersion === 2 ? contract.workspaceTrust?.trustGrantId : undefined),
+      workspaceFingerprint: audit.attempt.workspaceBefore,
       orderedCheckResults: checkResults.map((result) => ({
         checkId: result.checkId,
         resultRef: result.checkResultRef,
         resultDigest: result.checkResultDigest,
         status: result.status,
       })),
-      reviewerResultRef: reviewer.reviewerResultRef,
-      reviewerResultDigest: reviewer.reviewerResultDigest,
+      reviewSubjectManifestRef: manifestRecord.manifestRef,
+      reviewSubjectManifestDigest: manifestRecord.manifestDigest,
+      freshCriteriaVerdictRef: verdictRecord.verdictRef,
+      freshCriteriaVerdictDigest: verdictRecord.verdictDigest,
       builtinRiskScanResultRef: scan.scanResultRef,
       builtinRiskScanResultDigest: scan.scanResultDigest,
       builtinRiskScanPolicyVersion: scan.scanPolicyVersion,
       proofAggregateResultRef: aggregate.proofAggregateResultRef,
       proofAggregateDigest: aggregate.proofAggregateDigest,
+      reviewSubjectConsentDigest:
+        settingsBinding.runSettings.reviewSubjectConsent.consentDigest,
       createdAt: now,
     };
-    const snapshot: LoopEvidenceSnapshotCreatedV1 = {
+    const snapshot: LoopEvidenceSnapshotCreatedV2 = {
       ...snapshotBase,
-      evidenceDigest: canonicalDigest('wukong/loop-evidence-snapshot/v1', snapshotBase),
+      evidenceDigest: canonicalDigest('wukong/loop-evidence-snapshot/v2', snapshotBase),
     };
+    audit.snapshot = snapshot;
     this.agent.records.logRecord({ type: 'loop.evidence-snapshot.create', snapshot });
 
     const completedBase = {
       schemaVersion: 1 as const,
-      attemptId,
+      attemptId: audit.attempt.attemptId,
       runId: run.runId,
       contractId: contract.contractId,
-      planDigest: contract.gatePlan.planDigest,
+      planDigest: input.runtime.planDigest,
       gateApprovalDigest: contract.gateApproval.approvalSetDigest,
-      sequence,
+      sequence: audit.attempt.sequence,
       status: aggregate.status,
       reasonCode: aggregate.reasonCode,
       evidenceSnapshotId: snapshot.evidenceSnapshotId,
@@ -1602,10 +1909,69 @@ export class GoalMode {
       ...completedBase,
       resultDigest: canonicalDigest('wukong/gate-attempt-result/v1', completedBase),
     };
-    state.gateAttemptCompletions.set(attemptId, completed);
+    state.gateAttemptCompletions.set(completed.attemptId, completed);
     this.agent.records.logRecord({ type: 'loop.gate-attempt.complete', attempt: completed });
     this.persistState(state, { silent: true });
     return completed;
+  }
+
+  createLoopGateReviewRuntime(): LoopGateReviewRuntimeV2 | null {
+    const state = this.state;
+    const contract = state?.loopContract;
+    const run = state?.currentLoopRun;
+    const settingsBinding = state === undefined || run === undefined
+      ? undefined
+      : loopRunReviewSettingsBinding(state, run);
+    if (
+      state === undefined
+      || contract === undefined
+      || contract.schemaVersion === 1
+      || run === undefined
+      || settingsBinding === undefined
+      || state.loopRunTerminals.has(run.runId)
+    ) {
+      return null;
+    }
+    const planDigest = contract.gatePlan.planDigest;
+    const criteria = contract.schemaVersion === 3
+      ? contract.acceptanceCriteria.map((criterion) => ({
+          criterionId: criterion.id,
+          criterionProvenanceDigest: criterion.criterionProvenanceDigest,
+          text: criterion.text,
+          ...(criterion.evidenceExpectation === undefined
+            ? {}
+            : { evidenceExpectation: criterion.evidenceExpectation }),
+        }))
+      : contract.acceptanceCriteria.map((criterion) => ({
+        criterionId: criterion.id,
+        criterionProvenanceDigest: canonicalDigest(
+          'wukong/legacy-criterion-provenance/v1',
+          {
+            contractId: contract.contractId,
+            id: criterion.id,
+            text: criterion.text,
+            source: criterion.source,
+          },
+        ),
+        text: criterion.text,
+      }));
+    return {
+      attemptId: randomUUID(),
+      runId: run.runId,
+      contractId: contract.contractId,
+      planDigest,
+      selectionDigest: contract.schemaVersion === 3
+        ? contract.verificationCriteria.selectionDigest
+        : canonicalDigest('wukong/verification-selection/none/v1', {
+            contractId: contract.contractId,
+          }),
+      runSettingsRef: settingsBinding.runSettingsRef,
+      runSettings: settingsBinding.runSettings,
+      workspaceIdentityDigest: contract.workspaceIdentity.workspaceIdentityDigest,
+      criteria,
+      carriedBlockerKeys: run.carriedBlockerKeys,
+      reviewPolicy: contract.reviewPolicy,
+    };
   }
 
   recordLoopTerminal(input: {
@@ -1617,7 +1983,11 @@ export class GoalMode {
     const state = this.state;
     const contract = state?.loopContract;
     const run = state?.currentLoopRun;
-    if (state === undefined || contract?.schemaVersion !== 2 || run === undefined) return null;
+    if (
+      state === undefined
+      || (contract?.schemaVersion !== 2 && contract?.schemaVersion !== 3)
+      || run === undefined
+    ) return null;
     const existing = state.loopRunTerminals.get(run.runId);
     if (existing !== undefined) return existing;
     const policy = continuationPolicyFor(input.status, input.reasonCode);
@@ -1650,10 +2020,64 @@ export class GoalMode {
     const state = this.state;
     if (state === undefined || state.goalId !== record.run.goalId) return;
     const { runDigest, ...base } = record.run;
-    if (canonicalDigest('wukong/loop-run/v1', base) !== runDigest) {
+    const digestNamespace = record.run.schemaVersion === 2
+      ? 'wukong/loop-run/v2'
+      : 'wukong/loop-run/v1';
+    if (canonicalDigest(digestNamespace, base) !== runDigest) {
       throw new Error('Loop record replay failed: run digest mismatch');
     }
+    if (record.run.schemaVersion === 2) {
+      const { settingsDigest, ...settingsBase } = record.run.runSettings;
+      if (
+        canonicalDigest('wukong/loop-run-settings/v2', settingsBase) !== settingsDigest
+        || record.run.runSettingsRef.length === 0
+      ) {
+        throw new Error('Loop record replay failed: run settings digest mismatch');
+      }
+    }
     state.currentLoopRun = record.run;
+  }
+
+  restoreLoopRunReviewSettingsAssignment(
+    record: AgentRecordOf<'loop.run-review-settings.assign'>,
+  ): void {
+    const state = this.state;
+    const contract = state?.loopContract;
+    const run = state?.currentLoopRun;
+    if (
+      state === undefined
+      || contract === undefined
+      || contract.schemaVersion === 1
+      || run === undefined
+      || run.runId !== record.assignment.runId
+      || contract.contractId !== record.assignment.contractId
+    ) {
+      throw new Error('Loop record replay failed: review settings assignment binding mismatch');
+    }
+    const previous = loopRunReviewSettingsBinding(state, run);
+    if (record.assignment.supersedesRunSettingsRef !== previous?.runSettingsRef) {
+      throw new Error('Loop record replay failed: review settings assignment is stale');
+    }
+    const { settingsDigest, ...settingsBase } = record.assignment.runSettings;
+    const expectedIdempotencyKey = reviewSettingsAssignmentIdempotencyKey({
+      run,
+      previousRunSettingsRef: previous?.runSettingsRef,
+      reviewSettings: {
+        brokerReviewTrust: record.assignment.runSettings.brokerReviewTrust,
+        reviewSubjectConsent: record.assignment.runSettings.reviewSubjectConsent,
+      },
+    });
+    if (
+      canonicalDigest('wukong/loop-run-settings/v2', settingsBase) !== settingsDigest
+      || expectedIdempotencyKey !== record.assignment.idempotencyKey
+    ) {
+      throw new Error('Loop record replay failed: review settings assignment digest mismatch');
+    }
+    validateLoopRunReviewSettings(contract, {
+      brokerReviewTrust: record.assignment.runSettings.brokerReviewTrust,
+      reviewSubjectConsent: record.assignment.runSettings.reviewSubjectConsent,
+    });
+    state.loopRunReviewSettingsAssignments.set(run.runId, record.assignment);
   }
 
   restoreLoopRunTerminal(record: AgentRecordOf<'loop.run.terminal'>): void {
@@ -1687,6 +2111,8 @@ export class GoalMode {
     | 'loop.gate-check-result.create'
     | 'loop.builtin-risk-scan-result.create'
     | 'loop.reviewer-result.create'
+    | 'loop.review-subject-manifest.create'
+    | 'loop.fresh-criteria-verdict.create'
     | 'loop.proof-aggregate.create'
     | 'loop.evidence-snapshot.create'
     | 'loop.continuation.create'
@@ -1694,6 +2120,63 @@ export class GoalMode {
     const state = this.state;
     if (state === undefined) return;
     restoreGateAuditRecord(state, record);
+  }
+
+  private assignLoopRunReviewSettings(
+    state: GoalState,
+    contract: LoopContractV2 | LoopContractV3,
+    run: LoopRunCreated,
+    reviewSettings: LoopRunReviewSettingsInput,
+  ): LoopRunReviewSettingsAssignedV1 {
+    validateLoopRunReviewSettings(contract, reviewSettings);
+    const existing = state.loopRunReviewSettingsAssignments.get(run.runId);
+    if (
+      existing !== undefined
+      && existing.runSettings.brokerReviewTrust.trustProposalDigest
+        === reviewSettings.brokerReviewTrust.trustProposalDigest
+      && existing.runSettings.reviewSubjectConsent.consentProposalDigest
+        === reviewSettings.reviewSubjectConsent.consentProposalDigest
+    ) {
+      return existing;
+    }
+    const previous = loopRunReviewSettingsBinding(state, run);
+    const idempotencyKey = reviewSettingsAssignmentIdempotencyKey({
+      run,
+      previousRunSettingsRef: previous?.runSettingsRef,
+      reviewSettings,
+    });
+    const legacy = run.schemaVersion === 2 ? run.runSettings.legacy : run.runSettings;
+    const legacySettingsDigest = canonicalDigest(
+      'wukong/loop-run-settings/legacy/v1',
+      legacy,
+    );
+    const settingsBase = {
+      schemaVersion: 2 as const,
+      legacy,
+      legacySettingsDigest,
+      brokerReviewTrust: reviewSettings.brokerReviewTrust,
+      reviewSubjectConsent: reviewSettings.reviewSubjectConsent,
+    };
+    const assignment: LoopRunReviewSettingsAssignedV1 = {
+      schemaVersion: 1,
+      assignmentId: randomUUID(),
+      idempotencyKey,
+      runId: run.runId,
+      contractId: contract.contractId,
+      supersedesRunSettingsRef: previous?.runSettingsRef,
+      runSettingsRef: randomUUID(),
+      runSettings: {
+        ...settingsBase,
+        settingsDigest: canonicalDigest('wukong/loop-run-settings/v2', settingsBase),
+      },
+      createdAt: Date.now(),
+    };
+    state.loopRunReviewSettingsAssignments.set(run.runId, assignment);
+    this.agent.records.logRecord({
+      type: 'loop.run-review-settings.assign',
+      assignment,
+    });
+    return assignment;
   }
 
   private createLoopRun(
@@ -1890,7 +2373,7 @@ export class GoalMode {
     return this.toSnapshot(state);
   }
 
-  async resumeGoal(input: GoalReasonInput = {}, actor: GoalActor = 'user'): Promise<GoalSnapshot> {
+  async resumeGoal(input: ResumeGoalInput = {}, actor: GoalActor = 'user'): Promise<GoalSnapshot> {
     if (this.resumeInFlight !== undefined) return this.resumeInFlight;
     const pending = this.resumeGoalInternal(input, actor);
     this.resumeInFlight = pending;
@@ -1902,7 +2385,7 @@ export class GoalMode {
   }
 
   private async resumeGoalInternal(
-    input: GoalReasonInput,
+    input: ResumeGoalInput,
     actor: GoalActor,
   ): Promise<GoalSnapshot> {
     const state = this.requireState();
@@ -1919,6 +2402,25 @@ export class GoalMode {
       ? undefined
       : state.loopRunTerminals.get(currentRun.runId);
     if (
+      (contract?.schemaVersion === 2 || contract?.schemaVersion === 3)
+      && currentRun !== undefined
+      && terminal === undefined
+    ) {
+      if (input.reviewSettings !== undefined) {
+        this.assignLoopRunReviewSettings(
+          state,
+          contract,
+          currentRun,
+          input.reviewSettings,
+        );
+      } else if (loopRunReviewSettingsBinding(state, currentRun) === undefined) {
+        throw new WukongError(
+          ErrorCodes.GOAL_NOT_RESUMABLE,
+          'This legacy Loop run requires fresh broker trust and provider consent before resume.',
+        );
+      }
+    }
+    if (
       state.status === 'blocked'
       && (contract?.schemaVersion === 2 || contract?.schemaVersion === 3)
       && currentRun !== undefined
@@ -1928,6 +2430,12 @@ export class GoalMode {
         throw new WukongError(
           ErrorCodes.GOAL_NOT_RESUMABLE,
           'This Loop requires restoring the approved workspace or starting a Revised Loop.',
+        );
+      }
+      if (input.reviewSettings === undefined) {
+        throw new WukongError(
+          ErrorCodes.GOAL_NOT_RESUMABLE,
+          'Loop continuation requires fresh broker trust and provider consent.',
         );
       }
       const revalidation = await validateFrozenGatePlan(
@@ -1943,12 +2451,7 @@ export class GoalMode {
       const nextRun = this.createLoopRun(
         state,
         contract,
-        currentRun.schemaVersion === 2
-          ? {
-              brokerReviewTrust: currentRun.runSettings.brokerReviewTrust,
-              reviewSubjectConsent: currentRun.runSettings.reviewSubjectConsent,
-            }
-          : undefined,
+        input.reviewSettings,
         currentRun.runId,
         terminal.blockerKeys,
       );
@@ -2308,6 +2811,8 @@ function restoreGateAuditRecord(
     | 'loop.gate-check-result.create'
     | 'loop.builtin-risk-scan-result.create'
     | 'loop.reviewer-result.create'
+    | 'loop.review-subject-manifest.create'
+    | 'loop.fresh-criteria-verdict.create'
     | 'loop.proof-aggregate.create'
     | 'loop.evidence-snapshot.create'
     | 'loop.continuation.create'
@@ -2322,18 +2827,43 @@ function restoreGateAuditRecord(
   }
   if (record.type === 'loop.gate-attempt.create') {
     const { attemptDigest, ...base } = record.attempt;
-    if (canonicalDigest('wukong/gate-attempt/v1', base) !== attemptDigest) {
+    const digestNamespace = record.attempt.schemaVersion === 2
+      ? 'wukong/gate-attempt/v2'
+      : 'wukong/gate-attempt/v1';
+    if (canonicalDigest(digestNamespace, base) !== attemptDigest) {
       throw new Error('Loop record replay failed: Gate attempt digest mismatch');
     }
     const contract = state.loopContract;
+    const run = state.currentLoopRun;
     if (
-      contract?.schemaVersion !== 2
+      contract === undefined
+      || contract.schemaVersion === 1
+      || run === undefined
+      || run.runId !== record.attempt.runId
       || contract.contractId !== record.attempt.contractId
       || contract.gatePlan.planDigest !== record.attempt.planDigest
       || contract.gateApproval.approvalSetDigest !== record.attempt.gateApprovalDigest
       || state.restoredGateAudits.has(record.attempt.attemptId)
     ) {
       throw new Error('Loop record replay failed: Gate attempt binding mismatch');
+    }
+    const settingsBinding = loopRunReviewSettingsBinding(state, run);
+    if (
+      record.attempt.schemaVersion === 2
+      && (
+        settingsBinding === undefined
+        || record.attempt.runSettingsRef !== settingsBinding.runSettingsRef
+        || record.attempt.runSettingsDigest !== settingsBinding.runSettings.settingsDigest
+        || record.attempt.brokerReviewTrustGrantId
+          !== settingsBinding.runSettings.brokerReviewTrust.trustGrantId
+        || record.attempt.reviewSubjectConsentDigest
+          !== settingsBinding.runSettings.reviewSubjectConsent.consentDigest
+      )
+    ) {
+      throw new Error('Loop record replay failed: Gate run settings binding mismatch');
+    }
+    if (record.attempt.schemaVersion === 1 && contract.schemaVersion !== 2) {
+      throw new Error('Loop record replay failed: legacy Gate attempt cannot bind a V3 contract');
     }
     state.restoredGateAudits.set(record.attempt.attemptId, {
       attempt: record.attempt,
@@ -2379,6 +2909,9 @@ function restoreGateAuditRecord(
       return;
     }
     case 'loop.reviewer-result.create': {
+      if (audit.attempt.schemaVersion !== 1) {
+        throw new Error('Loop record replay failed: legacy reviewer record on V2 attempt');
+      }
       const { reviewerResultDigest, ...base } = record.result;
       if (
         audit.reviewer !== undefined
@@ -2389,29 +2922,152 @@ function restoreGateAuditRecord(
       audit.reviewer = record.result;
       return;
     }
+    case 'loop.review-subject-manifest.create': {
+      if (
+        audit.attempt.schemaVersion !== 2
+        || audit.manifest !== undefined
+        || audit.scan === undefined
+      ) {
+        throw new Error('Loop record replay failed: review manifest ordering mismatch');
+      }
+      const { manifestDigest, ...manifestBase } = record.result.manifest;
+      if (
+        record.result.manifestDigest !== manifestDigest
+        || canonicalDigest('wukong/review-subject-manifest/v1', manifestBase) !== manifestDigest
+        || record.result.manifest.attemptId !== record.result.attemptId
+        || record.result.manifest.runId !== record.result.runId
+        || record.result.manifest.contractId !== record.result.contractId
+        || record.result.manifest.planDigest !== record.result.planDigest
+        || record.result.manifest.consentDigest !== audit.attempt.reviewSubjectConsentDigest
+      ) {
+        throw new Error('Loop record replay failed: review manifest digest mismatch');
+      }
+      audit.manifest = record.result;
+      return;
+    }
+    case 'loop.fresh-criteria-verdict.create': {
+      if (
+        audit.attempt.schemaVersion !== 2
+        || audit.manifest === undefined
+        || audit.freshVerdict !== undefined
+        || record.result.verdict.attemptId !== record.result.attemptId
+        || record.result.verdict.reviewerInputDigest !== record.result.reviewerInputDigest
+        || record.result.reviewerInputDigest !== freshReviewerInputDigestForAudit(state, audit)
+        || canonicalDigest('wukong/fresh-criteria-verdict/v1', record.result.verdict)
+          !== record.result.verdictDigest
+      ) {
+        throw new Error('Loop record replay failed: fresh verdict mismatch');
+      }
+      audit.freshVerdict = record.result;
+      return;
+    }
     case 'loop.proof-aggregate.create': {
       const { proofAggregateDigest, ...base } = record.result;
+      const digestNamespace = record.result.schemaVersion === 2
+        ? 'wukong/proof-aggregate/v2'
+        : 'wukong/proof-aggregate/v1';
       if (
         audit.aggregate !== undefined
-        || canonicalDigest('wukong/proof-aggregate/v1', base) !== proofAggregateDigest
+        || canonicalDigest(digestNamespace, base) !== proofAggregateDigest
       ) {
         throw new Error('Loop record replay failed: proof aggregate mismatch');
+      }
+      if (
+        record.result.schemaVersion === 2
+        && (
+          audit.attempt.schemaVersion !== 2
+          || audit.manifest === undefined
+          || audit.freshVerdict === undefined
+          || record.result.reviewSubjectManifestDigest !== audit.manifest.manifestDigest
+          || record.result.freshCriteriaVerdictDigest !== audit.freshVerdict.verdictDigest
+          || record.result.reviewSubjectConsentDigest
+            !== audit.attempt.reviewSubjectConsentDigest
+        )
+      ) {
+        throw new Error('Loop record replay failed: proof aggregate broker join mismatch');
+      }
+      if (record.result.schemaVersion === 1 && audit.attempt.schemaVersion !== 1) {
+        throw new Error('Loop record replay failed: legacy proof aggregate on V2 attempt');
       }
       audit.aggregate = record.result;
       return;
     }
     case 'loop.evidence-snapshot.create': {
       const { evidenceDigest, ...base } = record.snapshot;
+      const digestNamespace = record.snapshot.schemaVersion === 2
+        ? 'wukong/loop-evidence-snapshot/v2'
+        : 'wukong/loop-evidence-snapshot/v1';
       if (
         audit.snapshot !== undefined
-        || canonicalDigest('wukong/loop-evidence-snapshot/v1', base) !== evidenceDigest
+        || audit.aggregate === undefined
+        || canonicalDigest(digestNamespace, base) !== evidenceDigest
       ) {
         throw new Error('Loop record replay failed: evidence snapshot mismatch');
+      }
+      if (
+        record.snapshot.schemaVersion === 2
+        && (
+          audit.attempt.schemaVersion !== 2
+          || audit.manifest === undefined
+          || audit.freshVerdict === undefined
+          || record.snapshot.reviewSubjectManifestRef !== audit.manifest.manifestRef
+          || record.snapshot.reviewSubjectManifestDigest !== audit.manifest.manifestDigest
+          || record.snapshot.freshCriteriaVerdictRef !== audit.freshVerdict.verdictRef
+          || record.snapshot.freshCriteriaVerdictDigest !== audit.freshVerdict.verdictDigest
+          || record.snapshot.reviewSubjectConsentDigest
+            !== audit.attempt.reviewSubjectConsentDigest
+        )
+      ) {
+        throw new Error('Loop record replay failed: evidence snapshot broker join mismatch');
+      }
+      if (record.snapshot.schemaVersion === 1 && audit.attempt.schemaVersion !== 1) {
+        throw new Error('Loop record replay failed: legacy evidence snapshot on V2 attempt');
       }
       audit.snapshot = record.snapshot;
       return;
     }
   }
+}
+
+function freshReviewerInputDigestForAudit(
+  state: GoalState,
+  audit: RestoredGateAudit,
+): string | undefined {
+  const contract = state.loopContract;
+  const run = state.currentLoopRun;
+  const settingsBinding = run === undefined
+    ? undefined
+    : loopRunReviewSettingsBinding(state, run);
+  if (
+    audit.attempt.schemaVersion !== 2
+    || audit.manifest === undefined
+    || contract === undefined
+    || contract.schemaVersion === 1
+    || run === undefined
+    || settingsBinding === undefined
+    || run.runId !== audit.attempt.runId
+  ) {
+    return undefined;
+  }
+  const selectionDigest = contract.schemaVersion === 3
+    ? contract.verificationCriteria.selectionDigest
+    : canonicalDigest('wukong/verification-selection/none/v1', {
+        contractId: contract.contractId,
+      });
+  return createFreshReviewerInputDigest({
+    attemptId: audit.attempt.attemptId,
+    contractId: audit.attempt.contractId,
+    planDigest: audit.attempt.planDigest,
+    selectionDigest,
+    subjectManifestDigest: audit.manifest.manifestDigest,
+    orderedCheckResultDigests: audit.checks.map((result) => result.checkResultDigest),
+    priorBlockerSetDigest: audit.attempt.carriedBlockerSetDigest,
+    reviewPolicyDigest: canonicalDigest(
+      'wukong/fresh-review-policy-binding/v1',
+      contract.reviewPolicy,
+    ),
+    consentDigest: audit.attempt.reviewSubjectConsentDigest,
+  });
 }
 
 function validateRestoredGateAttempt(
@@ -2426,17 +3082,21 @@ function validateRestoredGateAttempt(
   const contract = state.loopContract;
   if (
     audit === undefined
-    || contract?.schemaVersion !== 2
+    || contract === undefined
+    || contract.schemaVersion === 1
     || audit.scan === undefined
-    || audit.reviewer === undefined
     || audit.aggregate === undefined
     || audit.snapshot === undefined
-    || audit.checks.length !== contract.gatePlan.requiredChecks.length
+    || audit.checks.length !== (
+      contract.schemaVersion === 2
+        ? contract.gatePlan.requiredChecks.length
+        : contract.gatePlan.legacySnapshot.requiredChecks.length
+    )
   ) {
     throw new Error('Loop record replay failed: Gate completion has missing evidence');
   }
   const checkDigests = audit.checks.map((check) => check.checkResultDigest);
-  if (
+  const commonJoinInvalid = (
     completed.runId !== audit.attempt.runId
     || completed.contractId !== audit.attempt.contractId
     || completed.planDigest !== audit.attempt.planDigest
@@ -2446,12 +3106,49 @@ function validateRestoredGateAttempt(
     || audit.aggregate.status !== completed.status
     || audit.aggregate.proofAggregateDigest !== audit.snapshot.proofAggregateDigest
     || audit.scan.scanResultDigest !== audit.snapshot.builtinRiskScanResultDigest
-    || audit.reviewer.reviewerResultDigest !== audit.snapshot.reviewerResultDigest
     || canonicalJson(checkDigests) !== canonicalJson(audit.aggregate.orderedCheckResultDigests)
     || canonicalJson(checkDigests)
       !== canonicalJson(audit.snapshot.orderedCheckResults.map((check) => check.resultDigest))
-  ) {
+  );
+  if (commonJoinInvalid) {
     throw new Error('Loop record replay failed: Gate evidence join mismatch');
+  }
+  if (audit.attempt.schemaVersion === 1) {
+    if (
+      audit.reviewer === undefined
+      || audit.aggregate.schemaVersion !== 1
+      || audit.snapshot.schemaVersion !== 1
+      || audit.reviewer.reviewerResultDigest !== audit.snapshot.reviewerResultDigest
+    ) {
+      throw new Error('Loop record replay failed: legacy Gate evidence join mismatch');
+    }
+    return;
+  }
+  const run = state.currentLoopRun;
+  const settingsBinding = run === undefined
+    ? undefined
+    : loopRunReviewSettingsBinding(state, run);
+  if (
+    settingsBinding === undefined
+    || audit.manifest === undefined
+    || audit.freshVerdict === undefined
+    || audit.aggregate.schemaVersion !== 2
+    || audit.snapshot.schemaVersion !== 2
+    || audit.attempt.runSettingsRef !== settingsBinding.runSettingsRef
+    || audit.attempt.runSettingsDigest !== settingsBinding.runSettings.settingsDigest
+    || audit.manifest.manifestDigest !== audit.snapshot.reviewSubjectManifestDigest
+    || audit.manifest.manifestRef !== audit.snapshot.reviewSubjectManifestRef
+    || audit.freshVerdict.verdictDigest !== audit.snapshot.freshCriteriaVerdictDigest
+    || audit.freshVerdict.verdictRef !== audit.snapshot.freshCriteriaVerdictRef
+    || audit.aggregate.reviewSubjectManifestDigest !== audit.manifest.manifestDigest
+    || audit.aggregate.freshCriteriaVerdictDigest !== audit.freshVerdict.verdictDigest
+    || audit.aggregate.reviewSubjectConsentDigest
+      !== audit.attempt.reviewSubjectConsentDigest
+    || audit.snapshot.reviewSubjectConsentDigest
+      !== audit.attempt.reviewSubjectConsentDigest
+    || (completed.status === 'PASS' && audit.freshVerdict.verdict.status !== 'PASS')
+  ) {
+    throw new Error('Loop record replay failed: brokered Gate evidence join mismatch');
   }
 }
 
@@ -2727,6 +3424,50 @@ function validateLoopRunReviewSettings(
   }
 }
 
+function loopRunReviewSettingsBinding(
+  state: GoalState,
+  run: LoopRunCreated,
+): {
+  readonly runSettingsRef: string;
+  readonly runSettings: LoopRunSettingsV2;
+} | undefined {
+  const assignment = state.loopRunReviewSettingsAssignments.get(run.runId);
+  if (assignment !== undefined) {
+    return {
+      runSettingsRef: assignment.runSettingsRef,
+      runSettings: assignment.runSettings,
+    };
+  }
+  return run.schemaVersion === 2
+    ? {
+        runSettingsRef: run.runSettingsRef,
+        runSettings: run.runSettings,
+      }
+    : undefined;
+}
+
+function reviewSettingsAssignmentIdempotencyKey(input: {
+  readonly run: LoopRunCreated;
+  readonly previousRunSettingsRef?: string;
+  readonly reviewSettings: LoopRunReviewSettingsInput;
+}): string {
+  const legacy = input.run.schemaVersion === 2
+    ? input.run.runSettings.legacy
+    : input.run.runSettings;
+  return canonicalDigest('wukong/review-settings-assignment-idempotency/v1', {
+    runId: input.run.runId,
+    previousRunSettingsRef: input.previousRunSettingsRef,
+    consentProposalDigest:
+      input.reviewSettings.reviewSubjectConsent.consentProposalDigest,
+    brokerReviewTrustProposalDigest:
+      input.reviewSettings.brokerReviewTrust.trustProposalDigest,
+    legacySettingsDigest: canonicalDigest(
+      'wukong/loop-run-settings/legacy/v1',
+      legacy,
+    ),
+  });
+}
+
 function legacyFinishLineProjection(contract: LoopContractV3): {
   readonly workspaceIdentity: WorkspaceIdentity;
   readonly workspaceTrust?: WorkspaceTrustBinding;
@@ -2749,7 +3490,7 @@ function legacyFinishLineProjection(contract: LoopContractV3): {
 }
 
 function normalizeGateCheckStatus(
-  status: LoopGateAttemptInput['checks'][number]['status'] | undefined,
+  status: LoopGateDeterministicEvidenceInput['checks'][number]['status'] | undefined,
 ): GateCheckResultRecordedV1['status'] {
   switch (status) {
     case 'passed':

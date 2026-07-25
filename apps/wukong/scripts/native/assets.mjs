@@ -262,6 +262,19 @@ export async function collectNativeAssets({ appRoot, target }) {
     Object.assign(assets, result.assets);
   }
 
+  const referenceCriteriaRoot = resolve(appRoot, 'reference-verification-skills');
+  if (!existsSync(referenceCriteriaRoot)) {
+    fail(`Reference verification criteria assets are missing: ${referenceCriteriaRoot}`);
+  }
+  const referenceResult = await packageManifestEntries({
+    packageName: '@wukong/reference-verification-skills',
+    packageRoot: referenceCriteriaRoot,
+    files: await listFiles(referenceCriteriaRoot),
+    target,
+  });
+  manifestPackages.push(referenceResult.packageManifest);
+  Object.assign(assets, referenceResult.assets);
+
   const manifest = {
     version: NATIVE_ASSET_MANIFEST_VERSION,
     target,

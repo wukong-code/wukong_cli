@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "wukong.verification-criteria",
+  "id": "migration-safety",
+  "description": "Review database and state migrations for bounded rollout and recovery.",
+  "scope": {
+    "kind": "project",
+    "paths": [
+      "db/**",
+      "migrations/**",
+      "schema/**",
+      "src/migrations/**",
+      "wrangler/migrations/**"
+    ]
+  },
+  "criteria": [
+    {
+      "id": "mixed-version-safe",
+      "text": "The migration is safe while old and new application versions may overlap.",
+      "evidence": "Cite the compatibility mechanism and deterministic migration evidence."
+    },
+    {
+      "id": "retry-recovery-bounded",
+      "text": "Retry, partial failure, and recovery behavior is explicit and bounded.",
+      "evidence": "Cite idempotency or recovery logic and a deterministic failure-path result."
+    }
+  ]
+}

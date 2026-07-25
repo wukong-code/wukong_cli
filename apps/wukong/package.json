@@ -1,6 +1,6 @@
 {
   "name": "@wukong.today/code",
-  "version": "0.0.19",
+  "version": "0.0.20",
   "description": "Wukong Code — AI agent for code verification and delivery",
   "license": "UNLICENSED",
   "author": "Wukong Code Team",
@@ -29,6 +29,7 @@
   "files": [
     "dist",
     "dist-web",
+    "reference-verification-skills",
     "scripts/postinstall.mjs",
     "scripts/postinstall",
     "README.md"

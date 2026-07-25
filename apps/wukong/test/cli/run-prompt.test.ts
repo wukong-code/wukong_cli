@@ -86,6 +86,7 @@ const mocks = vi.hoisted(() => {
     checks: ['pnpm test'],
     proposal: finishLineProposal,
     trustChallenge: 'challenge',
+    brokerTrustChallenge: 'broker.challenge',
     contractSchemaVersion: 2 as const,
     verificationCatalog: {
       schemaVersion: 1 as const,

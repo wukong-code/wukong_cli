@@ -41,8 +41,12 @@ describe('Verification Criteria selector', () => {
     selector.focused = true;
 
     const initial = selector.render(90).join('\n').replaceAll(ANSI, '');
-    expect(initial).toContain('suggested');
+    expect(initial).toContain('○ suggested');
     expect(initial).not.toContain('1 selected');
+    expect(initial).toContain('Trust: workspace');
+    expect(initial).toContain(catalog.entries[0]!.ref.provenanceDigest);
+    expect(initial).toContain('Criterion complete');
+    expect(initial).toContain('Model hints: none');
     selector.handleInput(' ');
     selector.handleInput('\u001B[B');
     selector.handleInput(' ');

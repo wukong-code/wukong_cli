@@ -138,6 +138,9 @@ function restoreAgentRecord(agent: Agent, input: AgentRecord): void {
     case 'loop.run.create':
       agent.goal.restoreLoopRunCreate(input);
       return;
+    case 'loop.run-review-settings.assign':
+      agent.goal.restoreLoopRunReviewSettingsAssignment(input);
+      return;
     case 'loop.run.terminal':
       agent.goal.restoreLoopRunTerminal(input);
       return;
@@ -148,6 +151,8 @@ function restoreAgentRecord(agent: Agent, input: AgentRecord): void {
     case 'loop.gate-check-result.create':
     case 'loop.builtin-risk-scan-result.create':
     case 'loop.reviewer-result.create':
+    case 'loop.review-subject-manifest.create':
+    case 'loop.fresh-criteria-verdict.create':
     case 'loop.proof-aggregate.create':
     case 'loop.evidence-snapshot.create':
     case 'loop.continuation.create':

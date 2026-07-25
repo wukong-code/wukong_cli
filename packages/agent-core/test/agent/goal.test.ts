@@ -1,10 +1,20 @@
 import { describe, expect, it } from 'vitest';
-import { buildFinishLine } from '@wukong/verification';
+import {
+  acknowledgeReviewSubjectConsent,
+  buildFinishLine,
+  canonicalDigest,
+  createBrokerReviewTrustProposal,
+  createFreshReviewerInputDigest,
+  createReviewSubjectConsentProposal,
+  grantBrokerReviewTrust,
+  ReviewSubjectBroker,
+} from '@wukong/verification';
 
 import type { Agent } from '../../src/agent';
 import {
   GoalMode,
   type GoalChange,
+  type LoopRunReviewSettingsInput,
   type GoalSnapshot,
 } from '../../src/agent/goal';
 import type { AgentRecord } from '../../src/agent/records';
@@ -64,6 +74,173 @@ function makeGoalMode() {
     telemetry,
     reminders,
   };
+}
+
+function replayGoalRecord(goals: GoalMode, record: AgentRecord): void {
+  // This test helper intentionally ignores records outside the durable Loop proof chain.
+  // oxlint-disable-next-line typescript-eslint/switch-exhaustiveness-check
+  switch (record.type) {
+    case 'goal.create':
+      goals.restoreCreate(record);
+      break;
+    case 'goal.contract.create':
+      goals.restoreContractCreate(record);
+      break;
+    case 'loop.run.create':
+      goals.restoreLoopRunCreate(record);
+      break;
+    case 'loop.run-review-settings.assign':
+      goals.restoreLoopRunReviewSettingsAssignment(record);
+      break;
+    case 'loop.gate-attempt.create':
+    case 'loop.gate-check-result.create':
+    case 'loop.builtin-risk-scan-result.create':
+    case 'loop.reviewer-result.create':
+    case 'loop.review-subject-manifest.create':
+    case 'loop.fresh-criteria-verdict.create':
+    case 'loop.proof-aggregate.create':
+    case 'loop.evidence-snapshot.create':
+    case 'loop.continuation.create':
+      goals.restoreLoopAuditRecord(record);
+      break;
+    case 'loop.gate-attempt.complete':
+      goals.restoreGateAttemptComplete(record);
+      break;
+    case 'loop.run.terminal':
+      goals.restoreLoopRunTerminal(record);
+      break;
+    default:
+      break;
+  }
+}
+
+function makeReviewSettings(
+  workspaceIdentityDigest: string,
+  acknowledgedAt = 1_000,
+): LoopRunReviewSettingsInput {
+  const trustProposal = createBrokerReviewTrustProposal({
+    workspaceIdentityDigest,
+    intent: 'once',
+  });
+  const consentProposal = createReviewSubjectConsentProposal({
+    workspaceIdentityDigest,
+    allowedOrigins: ['changed-tracked', 'gate-evidence'],
+    providerId: 'anthropic',
+    endpoint: 'https://api.anthropic.com',
+  });
+  return {
+    brokerReviewTrust: grantBrokerReviewTrust(
+      trustProposal,
+      trustProposal.trustProposalDigest,
+      'test-broker-trust-grant',
+    ),
+    reviewSubjectConsent: acknowledgeReviewSubjectConsent(
+      consentProposal,
+      consentProposal.consentProposalDigest,
+      acknowledgedAt,
+    ),
+  };
+}
+
+async function recordBrokeredGate(
+  goals: GoalMode,
+  input: {
+    readonly workspaceFingerprint: string;
+    readonly checkStatus?: 'passed' | 'failed';
+    readonly status: 'PASS' | 'NEEDS_WORK';
+    readonly reasonCode: string;
+  },
+) {
+  const runtime = goals.createLoopGateReviewRuntime();
+  if (runtime === null) throw new Error('brokered runtime missing');
+  goals.beginLoopGateAttempt(runtime, input.workspaceFingerprint);
+  const deterministicEvidence = goals.recordGateDeterministicEvidence({
+    runtime,
+    workspaceFingerprint: input.workspaceFingerprint,
+    checks: input.checkStatus === undefined
+      ? []
+      : [{
+          command: 'node -e "process.exit(0)"',
+          status: input.checkStatus,
+          exitCode: input.checkStatus === 'passed' ? 0 : 1,
+          stdout: '',
+          stderr: input.checkStatus === 'passed' ? '' : 'flaky',
+        }],
+    scanFindings: [],
+  });
+  const broker = await ReviewSubjectBroker.build({
+    workspaceRoot: process.cwd(),
+    attemptId: runtime.attemptId,
+    runId: runtime.runId,
+    contractId: runtime.contractId,
+    planDigest: runtime.planDigest,
+    workspaceFingerprint: input.workspaceFingerprint,
+    consent: runtime.runSettings.reviewSubjectConsent,
+    candidates: [],
+    gateEvidence: [{
+      producerId: 'test-gate',
+      evidenceId: 'result',
+      content: 'The frozen acceptance criteria were verified by the test fixture.',
+      mediaType: 'text/plain',
+    }],
+  });
+  const gateEvidence = broker.manifest.gateEvidence[0];
+  if (gateEvidence === undefined) throw new Error('gate evidence missing');
+  const evidence = [{
+    kind: 'gate-evidence' as const,
+    producerId: gateEvidence.producerId,
+    evidenceId: gateEvidence.evidenceId,
+    evidenceDigest: gateEvidence.brokeredEvidenceDigest,
+  }];
+  const reviewerInputDigest = createFreshReviewerInputDigest({
+    attemptId: runtime.attemptId,
+    contractId: runtime.contractId,
+    planDigest: runtime.planDigest,
+    selectionDigest: runtime.selectionDigest,
+    subjectManifestDigest: broker.manifest.manifestDigest,
+    orderedCheckResultDigests: deterministicEvidence.orderedCheckResultDigests,
+    priorBlockerSetDigest: canonicalDigest(
+      'wukong/carried-blocker-set/v1',
+      runtime.carriedBlockerKeys,
+    ),
+    reviewPolicyDigest: canonicalDigest(
+      'wukong/fresh-review-policy-binding/v1',
+      runtime.reviewPolicy,
+    ),
+    consentDigest: runtime.runSettings.reviewSubjectConsent.consentDigest,
+  });
+  const verdict = {
+    schemaVersion: 1 as const,
+    attemptId: runtime.attemptId,
+    reviewerInputDigest,
+    status: 'PASS' as const,
+    criterionDispositions: runtime.criteria.map((criterion) => ({
+      criterionId: criterion.criterionId,
+      criterionProvenanceDigest: criterion.criterionProvenanceDigest,
+      status: 'satisfied' as const,
+      evidence,
+    })),
+    priorBlockerDispositions: runtime.carriedBlockerKeys.map((blockerKey) => ({
+      blockerKey,
+      status: 'resolved' as const,
+      evidence,
+    })),
+    findings: [],
+  };
+  try {
+    return goals.recordGateAttempt({
+      runtime,
+      deterministicEvidence,
+      status: input.status,
+      reasonCode: input.reasonCode,
+      reviewSubjectManifest: broker.manifest,
+      freshCriteriaVerdict: verdict,
+      reviewerInputDigest,
+      blockerKeys: [],
+    });
+  } finally {
+    broker.destroy();
+  }
 }
 
 describe('GoalMode creation', () => {
@@ -181,16 +358,161 @@ describe('GoalMode lifecycle', () => {
       blockerKeys: ['check:test:failed'],
     });
     await goals.markBlocked({ reason: 'max iterations' }, 'system');
+    const reviewSettings = makeReviewSettings(
+      finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+    );
 
     const [left, right] = await Promise.all([
-      goals.resumeGoal({}, 'user'),
-      goals.resumeGoal({}, 'user'),
+      goals.resumeGoal({ reviewSettings }, 'user'),
+      goals.resumeGoal({ reviewSettings }, 'user'),
     ]);
 
     expect(left.loopRunId).toBe(right.loopRunId);
     expect(left.iteration).toBe(0);
     expect(records.filter((record) => record.type === 'loop.continuation.create')).toHaveLength(1);
     expect(records.filter((record) => record.type === 'loop.run.create')).toHaveLength(2);
+  });
+
+  it('assigns brokered review settings to a legacy active V2 run before resume', async () => {
+    const { goals, records } = makeGoalMode();
+    const finishLine = await buildFinishLine({
+      cwd: process.cwd(),
+      objective: 'Resume a legacy V2 run',
+      completionCriterion: 'The run uses brokered review settings',
+      includeDiscoveredChecks: false,
+    });
+    expect(finishLine.ok).toBe(true);
+    if (!finishLine.ok) return;
+    await goals.createGoal({
+      objective: finishLine.proposal.objective,
+      completionCriterion: finishLine.proposal.completionCriterion,
+      stopCondition: 'proof-pass',
+      loopContract: {
+        schemaVersion: 2,
+        objective: finishLine.proposal.objective,
+        completionCriterion: finishLine.proposal.completionCriterion,
+        constraints: finishLine.proposal.constraints,
+        finishLineReview: {
+          ...finishLine.proposal.finishLineReview,
+          acknowledgedWarningIds: finishLine.proposal.finishLineReview.warnings.map(
+            (warning) => warning.id,
+          ),
+        },
+        workspaceIdentity: finishLine.proposal.workspaceIdentity,
+        workspaceTrust: finishLine.proposal.workspaceTrust,
+        gateApproval: finishLine.proposal.gateApproval,
+        gatePlan: finishLine.proposal.gatePlan,
+        reviewPolicy: finishLine.proposal.reviewPolicy,
+        source: 'user',
+      },
+    });
+    await goals.pauseGoal();
+    await expect(goals.resumeGoal()).rejects.toMatchObject({
+      code: ErrorCodes.GOAL_NOT_RESUMABLE,
+    });
+
+    const reviewSettings = makeReviewSettings(
+      finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+    );
+    const resumed = await goals.resumeGoal({ reviewSettings });
+    const runtime = goals.createLoopGateReviewRuntime();
+
+    expect(resumed.status).toBe('active');
+    expect(runtime).toMatchObject({
+      runSettings: {
+        reviewSubjectConsent: {
+          consentDigest: reviewSettings.reviewSubjectConsent.consentDigest,
+        },
+      },
+    });
+    expect(
+      records.filter((record) => record.type === 'loop.run-review-settings.assign'),
+    ).toHaveLength(1);
+
+    const replayed = makeGoalMode().goals;
+    for (const record of records) {
+      // This fixture restores only the contract/run settings records it exercises.
+      // oxlint-disable-next-line typescript-eslint/switch-exhaustiveness-check
+      switch (record.type) {
+        case 'goal.create':
+          replayed.restoreCreate(record);
+          break;
+        case 'goal.contract.create':
+          replayed.restoreContractCreate(record);
+          break;
+        case 'loop.run.create':
+          replayed.restoreLoopRunCreate(record);
+          break;
+        case 'loop.run-review-settings.assign':
+          replayed.restoreLoopRunReviewSettingsAssignment(record);
+          break;
+        default:
+          break;
+      }
+    }
+    expect(replayed.createLoopGateReviewRuntime()?.runSettings.settingsDigest)
+      .toBe(runtime?.runSettings.settingsDigest);
+  });
+
+  it('requires a new consent binding for a terminal continuation', async () => {
+    const { goals } = makeGoalMode();
+    const finishLine = await buildFinishLine({
+      cwd: process.cwd(),
+      objective: 'Continue with fresh consent',
+      completionCriterion: 'The next run has its own consent binding',
+      includeDiscoveredChecks: false,
+    });
+    expect(finishLine.ok).toBe(true);
+    if (!finishLine.ok) return;
+    const firstSettings = makeReviewSettings(
+      finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+      1_000,
+    );
+    await goals.createGoal({
+      objective: finishLine.proposal.objective,
+      completionCriterion: finishLine.proposal.completionCriterion,
+      stopCondition: 'proof-pass',
+      loopContract: {
+        schemaVersion: 2,
+        objective: finishLine.proposal.objective,
+        completionCriterion: finishLine.proposal.completionCriterion,
+        constraints: finishLine.proposal.constraints,
+        finishLineReview: {
+          ...finishLine.proposal.finishLineReview,
+          acknowledgedWarningIds: finishLine.proposal.finishLineReview.warnings.map(
+            (warning) => warning.id,
+          ),
+        },
+        workspaceIdentity: finishLine.proposal.workspaceIdentity,
+        workspaceTrust: finishLine.proposal.workspaceTrust,
+        gateApproval: finishLine.proposal.gateApproval,
+        gatePlan: finishLine.proposal.gatePlan,
+        reviewPolicy: finishLine.proposal.reviewPolicy,
+        reviewSettings: firstSettings,
+        source: 'user',
+      },
+    });
+    goals.recordLoopTerminal({
+      status: 'NEEDS_WORK',
+      reasonCode: 'max_iterations',
+    });
+    await goals.markBlocked({ reason: 'max iterations' }, 'system');
+
+    await expect(goals.resumeGoal()).rejects.toMatchObject({
+      code: ErrorCodes.GOAL_NOT_RESUMABLE,
+    });
+    const nextSettings = makeReviewSettings(
+      finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+      2_000,
+    );
+    expect(nextSettings.reviewSubjectConsent.consentDigest)
+      .not.toBe(firstSettings.reviewSubjectConsent.consentDigest);
+    const resumed = await goals.resumeGoal({ reviewSettings: nextSettings });
+    const runtime = goals.createLoopGateReviewRuntime();
+
+    expect(resumed.status).toBe('active');
+    expect(runtime?.runSettings.reviewSubjectConsent.consentDigest)
+      .toBe(nextSettings.reviewSubjectConsent.consentDigest);
   });
 
   it('emits typed lifecycle and completion changes', async () => {
@@ -337,39 +659,23 @@ describe('GoalMode records', () => {
         gateApproval: finishLine.proposal.gateApproval,
         gatePlan: finishLine.proposal.gatePlan,
         reviewPolicy: finishLine.proposal.reviewPolicy,
+        reviewSettings: makeReviewSettings(
+          finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+        ),
         source: 'user',
       },
     });
-    const common = {
+    const first = await recordBrokeredGate(goals, {
       workspaceFingerprint: 'same-snapshot',
-      scanFindings: [],
-      reviewerStatus: 'PASS' as const,
-      reviewerPayload: { status: 'PASS' },
-      blockerKeys: [],
-    };
-    const first = goals.recordGateAttempt({
-      ...common,
       status: 'PASS',
       reasonCode: 'passed',
-      checks: [{
-        command: 'node -e "process.exit(0)"',
-        status: 'passed',
-        exitCode: 0,
-        stdout: '',
-        stderr: '',
-      }],
+      checkStatus: 'passed',
     });
-    const second = goals.recordGateAttempt({
-      ...common,
+    const second = await recordBrokeredGate(goals, {
+      workspaceFingerprint: 'same-snapshot',
       status: 'NEEDS_WORK',
       reasonCode: 'check_failed',
-      checks: [{
-        command: 'node -e "process.exit(0)"',
-        status: 'failed',
-        exitCode: 1,
-        stdout: '',
-        stderr: 'flaky',
-      }],
+      checkStatus: 'failed',
     });
 
     expect(first).toMatchObject({ status: 'PASS' });
@@ -407,21 +713,19 @@ describe('GoalMode records', () => {
         gateApproval: finishLine.proposal.gateApproval,
         gatePlan: finishLine.proposal.gatePlan,
         reviewPolicy: finishLine.proposal.reviewPolicy,
+        reviewSettings: makeReviewSettings(
+          finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+        ),
         source: 'user',
       },
     });
     expect(created.loopContract?.schemaVersion).toBe(2);
     expect(created.loopRunId).toBeTruthy();
 
-    const attempt = goals.recordGateAttempt({
+    const attempt = await recordBrokeredGate(goals, {
+      workspaceFingerprint: 'workspace-fingerprint',
       status: 'PASS',
       reasonCode: 'passed',
-      workspaceFingerprint: 'workspace-fingerprint',
-      checks: [],
-      scanFindings: [],
-      reviewerStatus: 'PASS',
-      reviewerPayload: { status: 'PASS', summary: 'reviewed' },
-      blockerKeys: [],
     });
     const terminal = goals.recordLoopTerminal({
       status: 'PASS',
@@ -439,7 +743,8 @@ describe('GoalMode records', () => {
       'loop.run.create',
       'loop.gate-attempt.create',
       'loop.builtin-risk-scan-result.create',
-      'loop.reviewer-result.create',
+      'loop.review-subject-manifest.create',
+      'loop.fresh-criteria-verdict.create',
       'loop.proof-aggregate.create',
       'loop.evidence-snapshot.create',
       'loop.gate-attempt.complete',
@@ -448,36 +753,7 @@ describe('GoalMode records', () => {
 
     const replayed = makeGoalMode().goals;
     for (const record of records) {
-      // This replay fixture intentionally ignores records outside the Loop proof chain.
-      // oxlint-disable-next-line typescript-eslint/switch-exhaustiveness-check
-      switch (record.type) {
-        case 'goal.create':
-          replayed.restoreCreate(record);
-          break;
-        case 'goal.contract.create':
-          replayed.restoreContractCreate(record);
-          break;
-        case 'loop.run.create':
-          replayed.restoreLoopRunCreate(record);
-          break;
-        case 'loop.gate-attempt.create':
-        case 'loop.gate-check-result.create':
-        case 'loop.builtin-risk-scan-result.create':
-        case 'loop.reviewer-result.create':
-        case 'loop.proof-aggregate.create':
-        case 'loop.evidence-snapshot.create':
-        case 'loop.continuation.create':
-          replayed.restoreLoopAuditRecord(record);
-          break;
-        case 'loop.gate-attempt.complete':
-          replayed.restoreGateAttemptComplete(record);
-          break;
-        case 'loop.run.terminal':
-          replayed.restoreLoopRunTerminal(record);
-          break;
-        default:
-          break;
-      }
+      replayGoalRecord(replayed, record);
     }
     expect(replayed.getGoal().goal).toMatchObject({
       loopRunId: created.loopRunId,
@@ -508,6 +784,47 @@ describe('GoalMode records', () => {
     expect(() => {
       partial.restoreLoopAuditRecord(tampered);
     }).toThrow('proof aggregate mismatch');
+
+    const manifestIndex = records.findIndex(
+      (record) => record.type === 'loop.review-subject-manifest.create',
+    );
+    const verdictIndex = records.findIndex(
+      (record) => record.type === 'loop.fresh-criteria-verdict.create',
+    );
+    const verdictRecord = records[verdictIndex];
+    if (
+      manifestIndex < 0
+      || verdictIndex < 0
+      || verdictRecord?.type !== 'loop.fresh-criteria-verdict.create'
+    ) {
+      throw new Error('broker verdict fixture records missing');
+    }
+
+    const missingManifest = makeGoalMode().goals;
+    for (const record of records.slice(0, manifestIndex)) {
+      replayGoalRecord(missingManifest, record);
+    }
+    expect(() => {
+      missingManifest.restoreLoopAuditRecord(verdictRecord);
+    }).toThrow('fresh verdict mismatch');
+
+    const tamperedVerdict = {
+      ...verdictRecord,
+      result: {
+        ...verdictRecord.result,
+        verdict: {
+          ...verdictRecord.result.verdict,
+          reviewerInputDigest: 'sha256:tampered-reviewer-input',
+        },
+      },
+    };
+    const verdictReplay = makeGoalMode().goals;
+    for (const record of records.slice(0, verdictIndex)) {
+      replayGoalRecord(verdictReplay, record);
+    }
+    expect(() => {
+      verdictReplay.restoreLoopAuditRecord(tamperedVerdict);
+    }).toThrow('verdict');
   });
 
   it('creates one immutable Loop contract and restores convergence records', async () => {

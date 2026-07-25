@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "wukong.verification-criteria",
+  "id": "log-security",
+  "description": "Review logging and diagnostics for secret, prompt, source, and session exposure.",
+  "scope": {
+    "kind": "project",
+    "paths": [
+      "**/logger.*",
+      "**/logging/**",
+      "**/telemetry/**",
+      "logs/**",
+      "src/diagnostics/**"
+    ]
+  },
+  "criteria": [
+    {
+      "id": "sensitive-content-excluded",
+      "text": "Logs and diagnostics do not expose credentials, prompts, source contents, session contents, or local evidence.",
+      "evidence": "Cite the redaction or exclusion boundary and deterministic negative evidence."
+    },
+    {
+      "id": "failure-observable-without-payload",
+      "text": "Failures remain diagnosable using bounded metadata without retaining sensitive payloads.",
+      "evidence": "Cite the emitted metadata and tests showing sensitive payload fields are absent."
+    }
+  ]
+}

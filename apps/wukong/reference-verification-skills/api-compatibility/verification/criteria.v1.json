@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "wukong.verification-criteria",
+  "id": "api-compatibility",
+  "description": "Review changed API surfaces for explicit compatibility and failure behavior.",
+  "scope": {
+    "kind": "project",
+    "paths": [
+      "api/**",
+      "apps/**/api/**",
+      "packages/protocol/**",
+      "src/api/**",
+      "src/routes/**"
+    ]
+  },
+  "criteria": [
+    {
+      "id": "compatibility-explicit",
+      "text": "Changed request and response behavior is backward compatible or the breaking boundary is explicit.",
+      "evidence": "Cite the changed contract or handler and deterministic compatibility evidence."
+    },
+    {
+      "id": "failures-typed",
+      "text": "Not-found, validation, authentication, and server failures remain explicit and typed.",
+      "evidence": "Cite representative failure paths and their deterministic tests."
+    }
+  ]
+}

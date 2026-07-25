@@ -9,14 +9,19 @@ import {
   buildFinishLine,
   classifyGateCommand,
   createBrokerReviewTrustProposal,
+  createBrokerReviewTrustChallenge,
   createReviewSubjectConsentProposal,
   createVerificationCriteriaSelection,
   createTrustChallenge,
+  digestVerificationCriteriaAssetRoot,
+  discoverPackageVerificationCriteriaRoots,
   discoverVerificationCriteriaCatalog,
   grantBrokerReviewTrust,
   inspectGit,
   REVIEW_SUBJECT_POLICY_VERSION,
+  registerBuiltinVerificationCriteriaRoot,
   verifyTrustChallenge,
+  verifyBrokerReviewTrustChallenge,
   type BrokerReviewTrustBindingV1,
   type BrokerReviewTrustProposalV1,
   type FinishLineProposal,
@@ -30,8 +35,13 @@ import {
 } from '@wukong/verification';
 import type { GoalSnapshot, WukongConfig } from '@wukong/wukong-sdk';
 
+import { WUKONG_BUILD_INFO } from '../build-info';
+import { getNativePackageRoot } from '../../native/native-assets';
 import {
+  brokerReviewTrustBinding,
+  findBrokerReviewTrust,
   findWorkspaceTrust,
+  listCriteriaSourceTrustGrants,
   type WorkspaceTrustGrant,
 } from './workspace-trust';
 
@@ -54,6 +64,7 @@ export interface LoopPreflightReady {
     readonly provenanceDigest: string;
   }[];
   readonly brokerTrustProposal: BrokerReviewTrustProposalV1;
+  readonly brokerTrustChallenge: string;
   readonly brokerReviewTrust?: BrokerReviewTrustBindingV1;
   readonly reviewSubjectConsentProposal: ReviewSubjectConsentProposalV1;
   readonly reviewSubjectConsent?: ReviewSubjectConsentBindingV1;
@@ -85,6 +96,7 @@ export interface LoopPreflightBlocked {
   readonly proposal?: FinishLineProposal;
   readonly trustChallenge?: string;
   readonly brokerTrustProposal?: BrokerReviewTrustProposalV1;
+  readonly brokerTrustChallenge?: string;
   readonly reviewSubjectConsentProposal?: ReviewSubjectConsentProposalV1;
   readonly verificationCatalog?: VerificationCriteriaCatalogV1;
 }
@@ -109,7 +121,8 @@ export interface LoopPreflightOptions {
     readonly selectionId: string;
     readonly provenanceDigest: string;
   }[];
-  readonly trustReviewSubjectProposalDigest?: string;
+  readonly trustReviewSubjectChallenge?: string;
+  readonly brokerReviewTrust?: BrokerReviewTrustBindingV1;
   readonly acknowledgeReviewSubjectConsentDigest?: string;
   readonly reviewProvider?: {
     readonly providerId: string;
@@ -119,6 +132,55 @@ export interface LoopPreflightOptions {
   readonly homeDir?: string;
   readonly requireModel?: boolean;
   readonly discoverChecks?: (workspace: string) => Promise<readonly string[]>;
+}
+
+export interface LoopReviewSettingsProposal {
+  readonly brokerTrustProposal: BrokerReviewTrustProposalV1;
+  readonly reviewSubjectConsentProposal: ReviewSubjectConsentProposalV1;
+}
+
+export function createLoopReviewSettingsProposal(input: {
+  readonly workspaceIdentityDigest: string;
+  readonly reviewProvider: {
+    readonly providerId: string;
+    readonly endpoint: string;
+  };
+}): LoopReviewSettingsProposal {
+  return {
+    brokerTrustProposal: createBrokerReviewTrustProposal({
+      workspaceIdentityDigest: input.workspaceIdentityDigest,
+      intent: 'once',
+    }),
+    reviewSubjectConsentProposal: createReviewSubjectConsentProposal({
+      workspaceIdentityDigest: input.workspaceIdentityDigest,
+      allowedOrigins: [
+        'changed-tracked',
+        'explicit-untracked',
+        'scope-match',
+        'gate-evidence',
+      ],
+      providerId: input.reviewProvider.providerId,
+      endpoint: input.reviewProvider.endpoint,
+    }),
+  };
+}
+
+export function confirmLoopReviewSettings(
+  proposal: LoopReviewSettingsProposal,
+): {
+  readonly brokerReviewTrust: BrokerReviewTrustBindingV1;
+  readonly reviewSubjectConsent: ReviewSubjectConsentBindingV1;
+} {
+  return {
+    brokerReviewTrust: grantBrokerReviewTrust(
+      proposal.brokerTrustProposal,
+      proposal.brokerTrustProposal.trustProposalDigest,
+    ),
+    reviewSubjectConsent: acknowledgeReviewSubjectConsent(
+      proposal.reviewSubjectConsentProposal,
+      proposal.reviewSubjectConsentProposal.consentProposalDigest,
+    ),
+  };
 }
 
 export async function runLoopPreflight(
@@ -336,21 +398,20 @@ export async function runLoopPreflight(
       verificationCatalog,
     );
   }
-  const brokerTrustProposal = createBrokerReviewTrustProposal({
+  const {
+    brokerTrustProposal,
+    reviewSubjectConsentProposal,
+  } = createLoopReviewSettingsProposal({
     workspaceIdentityDigest: proposal.workspaceIdentity.workspaceIdentityDigest,
-    intent: 'once',
+    reviewProvider: provider,
   });
-  const reviewSubjectConsentProposal = createReviewSubjectConsentProposal({
-    workspaceIdentityDigest: proposal.workspaceIdentity.workspaceIdentityDigest,
-    allowedOrigins: [
-      'changed-tracked',
-      'explicit-untracked',
-      'scope-match',
-      'gate-evidence',
-    ],
-    providerId: provider.providerId,
-    endpoint: provider.endpoint,
-  });
+  const brokerTrustChallenge = createBrokerReviewTrustChallenge(brokerTrustProposal);
+  const storedBrokerTrust = options.brokerReviewTrust === undefined
+    ? await findBrokerReviewTrust(
+        proposal.workspaceIdentity.workspaceIdentityDigest,
+        { homeDir: options.homeDir },
+      )
+    : undefined;
   if (mode === 'headless' || mode === 'tui-confirmed') {
     if (
       proposal.finishLineReview.warnings.length > 0
@@ -437,22 +498,40 @@ export async function runLoopPreflight(
     }
   }
 
-  let brokerReviewTrust: BrokerReviewTrustBindingV1 | undefined;
+  const suppliedBrokerTrust =
+    options.brokerReviewTrust?.workspaceIdentityDigest
+      === proposal.workspaceIdentity.workspaceIdentityDigest
+      && options.brokerReviewTrust.scope === 'brokered-review-subject'
+      ? options.brokerReviewTrust
+      : undefined;
+  const rememberedBrokerTrust = storedBrokerTrust === undefined
+    || storedBrokerTrust.reviewSubjectPolicyVersion
+      !== brokerTrustProposal.reviewSubjectPolicyVersion
+    ? undefined
+    : brokerReviewTrustBinding(storedBrokerTrust);
+  let brokerReviewTrust = suppliedBrokerTrust ?? rememberedBrokerTrust;
   let reviewSubjectConsent: ReviewSubjectConsentBindingV1 | undefined;
   if (mode === 'headless' || mode === 'tui-confirmed') {
     if (
-      options.trustReviewSubjectProposalDigest
-        !== brokerTrustProposal.trustProposalDigest
+      brokerReviewTrust === undefined
+      && (
+        options.trustReviewSubjectChallenge === undefined
+        || !verifyBrokerReviewTrustChallenge({
+          challenge: options.trustReviewSubjectChallenge,
+          proposal: brokerTrustProposal,
+        })
+      )
     ) {
       return blocked(
         'review_subject_trust_required',
         'Exact local broker trust is required before Wukong can read bounded review subjects.',
-        `Re-run with --trust-review-subject ${brokerTrustProposal.trustProposalDigest}`,
+        `Re-run with --trust-review-subject ${brokerTrustChallenge}`,
         proposal,
         trustChallenge,
         brokerTrustProposal,
         reviewSubjectConsentProposal,
         verificationCatalog,
+        brokerTrustChallenge,
       );
     }
     if (
@@ -468,11 +547,12 @@ export async function runLoopPreflight(
         brokerTrustProposal,
         reviewSubjectConsentProposal,
         verificationCatalog,
+        brokerTrustChallenge,
       );
     }
-    brokerReviewTrust = grantBrokerReviewTrust(
+    brokerReviewTrust ??= grantBrokerReviewTrust(
       brokerTrustProposal,
-      options.trustReviewSubjectProposalDigest,
+      brokerTrustProposal.trustProposalDigest,
     );
     reviewSubjectConsent = acknowledgeReviewSubjectConsent(
       reviewSubjectConsentProposal,
@@ -503,6 +583,7 @@ export async function runLoopPreflight(
     verificationSelection,
     selectedRecipes,
     brokerTrustProposal,
+    brokerTrustChallenge,
     brokerReviewTrust,
     reviewSubjectConsentProposal,
     reviewSubjectConsent,
@@ -562,12 +643,23 @@ export function formatLoopDryRun(
     excludedChecks: proposal.gatePlan.excludedChecks,
     contractSchemaVersion: result.contractSchemaVersion,
     selectionState: result.verificationSelection === undefined ? 'none' : 'selected',
+    catalogCompareAndSet: result.verificationSelection === undefined
+      ? 'not-applicable'
+      : {
+          preflightCatalogDigest: result.verificationCatalog.catalogDigest,
+          selectionDigest: result.verificationSelection.selectionDigest,
+        },
     verificationCatalog: result.verificationCatalog,
     verificationSelection: result.verificationSelection ?? null,
     selectedRecipes: result.selectedRecipes,
     reviewSubjectPolicyVersion: REVIEW_SUBJECT_POLICY_VERSION,
     brokerTrustProposal: result.brokerTrustProposal,
+    brokerTrustChallenge: result.brokerTrustChallenge,
     reviewSubjectConsentProposal: result.reviewSubjectConsentProposal,
+    estimatedCost: {
+      freshReviewerPassesPerGateAttempt: 1,
+      additionalSkillCommands: 0,
+    },
     trustChallenge: result.trustChallenge,
     approvalSetDigest: proposal.gateApproval.approvalSetDigest,
     warningSetDigest: proposal.finishLineReview.warningSetDigest,
@@ -583,6 +675,7 @@ function blocked(
   brokerTrustProposal?: BrokerReviewTrustProposalV1,
   reviewSubjectConsentProposal?: ReviewSubjectConsentProposalV1,
   verificationCatalog?: VerificationCriteriaCatalogV1,
+  brokerTrustChallenge?: string,
 ): LoopPreflightBlocked {
   return {
     ready: false,
@@ -592,6 +685,7 @@ function blocked(
     proposal,
     trustChallenge,
     brokerTrustProposal,
+    brokerTrustChallenge,
     reviewSubjectConsentProposal,
     verificationCatalog,
   };
@@ -652,7 +746,50 @@ async function defaultCriteriaRoots(
       continue;
     }
   }
+  roots.push(...await discoverPackageVerificationCriteriaRoots({
+    workspaceRoot: workspace,
+    workspaceIdentityDigest,
+  }));
+  for (const grant of await listCriteriaSourceTrustGrants({ homeDir })) {
+    roots.push({
+      kind: 'extra',
+      root: grant.canonicalRealpath,
+      sourceId: grant.sourceId,
+      trustGrantId: grant.trustGrantId,
+      rootIdentityDigest: grant.rootIdentityDigest,
+    });
+  }
+  const builtinRoot = await resolveBuiltinCriteriaRoot();
+  if (builtinRoot !== undefined) {
+    const root = {
+      kind: 'builtin' as const,
+      root: builtinRoot,
+      version: WUKONG_BUILD_INFO.version ?? 'dev',
+      assetDigest: await digestVerificationCriteriaAssetRoot(builtinRoot),
+    };
+    registerBuiltinVerificationCriteriaRoot(root);
+    roots.push(root);
+  }
   return roots;
+}
+
+async function resolveBuiltinCriteriaRoot(): Promise<string | undefined> {
+  const nativeRoot = getNativePackageRoot('@wukong/reference-verification-skills');
+  const moduleDirectory = import.meta.dirname;
+  const candidates = [
+    nativeRoot,
+    join(moduleDirectory, '..', 'reference-verification-skills'),
+    join(moduleDirectory, '..', '..', '..', 'reference-verification-skills'),
+  ];
+  for (const candidate of candidates) {
+    if (candidate === null) continue;
+    try {
+      if ((await stat(candidate)).isDirectory()) return candidate;
+    } catch {
+      continue;
+    }
+  }
+  return undefined;
 }
 
 function defaultProviderEndpoint(

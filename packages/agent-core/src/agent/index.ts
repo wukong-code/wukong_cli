@@ -408,7 +408,7 @@ export class Agent {
       createGoal: (payload) => this.goal.createGoal(payload),
       getGoal: () => this.goal.getGoal(),
       pauseGoal: () => this.goal.pauseGoal(),
-      resumeGoal: () => this.goal.resumeGoal(),
+      resumeGoal: (payload) => this.goal.resumeGoal(payload),
       cancelGoal: () => this.goal.cancelGoal(),
       getBackgroundOutput: (payload) => this.background.readOutput(payload.taskId, payload.tail),
       getContext: () => this.context.data(),

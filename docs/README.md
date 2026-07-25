@@ -60,7 +60,8 @@
   已于 2026-07-25 发布：Loop 启动前确认 Goal、Done when、Must not 和真实 checks；冻结 Gate Plan、workspace trust 与 approval；区分 attempt、terminal、continuation 和 Revised Loop。跨平台、真实多语言 E2E 和五用户量化验收仍作为发布后验证债务保留。
 - [0.0.19 Release Notes](releases/0.0.19.md)
 - [0.0.20 Reusable Verification Criteria](design/0.0.20-reusable-verification-skills.md)
-  下一规划版本：只复用用户本机已有 Skill 的严格 qualitative criteria，并通过受限 evidence broker 与逐 run BYOK provider consent 复审；不执行 Skill command。
+  实现候选：只复用用户本机已有 Skill 的严格 qualitative criteria，并通过受限 evidence broker 与逐 run BYOK provider consent 复审；不执行 Skill command。发布门槛验证中。
+- [0.0.20 Release Notes](releases/0.0.20.md)
 - [0.0.21 Isolated Loop Worktrees](design/0.0.21-isolated-loop-worktrees.md)
   后续候选：exact snapshot、显式 bootstrap、独占 worktree、safe Promote 与 target Final Gate。
 - [0.1.0 Trusted Local Loop](design/0.1.0-trusted-local-loop.md)

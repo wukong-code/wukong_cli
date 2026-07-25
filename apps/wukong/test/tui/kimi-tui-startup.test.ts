@@ -10,6 +10,7 @@ import {
   cancelLoopRecord,
   completeTuiLoop,
 } from '#/cli/lib/loop-lifecycle';
+import { clearSessionWorkspaceTrustForTests } from '#/cli/lib/workspace-trust';
 import {
   listActiveLoopRuns,
   type LoopRunRecord,
@@ -53,10 +54,114 @@ vi.mock('#/cli/lib/loop-lifecycle', () => ({
   cancelLoopRecord: vi.fn(async () => {}),
   completeTuiLoop: vi.fn(async () => ({ repeatedCompletedWithin7d: false })),
 }));
+vi.mock('#/cli/lib/workspace-trust', () => ({
+  clearSessionWorkspaceTrustForTests: vi.fn(),
+  findBrokerReviewTrust: vi.fn(async () => undefined),
+  findWorkspaceTrust: vi.fn(async () => undefined),
+  listBrokerReviewTrustGrants: vi.fn(async () => []),
+  listWorkspaceTrustGrants: vi.fn(async () => []),
+  revokeWorkspaceTrust: vi.fn(async () => true),
+  grantBrokerReviewTrustLocally: vi.fn(async (proposal: {
+    workspaceIdentityDigest: string;
+    trustProposalDigest: string;
+    reviewSubjectPolicyVersion: string;
+  }) => ({
+    schemaVersion: 1,
+    trustGrantId: 'broker-grant',
+    workspaceIdentityDigest: proposal.workspaceIdentityDigest,
+    scope: 'brokered-review-subject',
+    trustProposalDigest: proposal.trustProposalDigest,
+    reviewSubjectPolicyVersion: proposal.reviewSubjectPolicyVersion,
+    persistence: 'session',
+    createdAt: 1,
+  })),
+  brokerReviewTrustBinding: (grant: {
+    trustGrantId: string;
+    workspaceIdentityDigest: string;
+    scope: 'brokered-review-subject';
+    trustProposalDigest: string;
+  }) => ({
+    trustGrantId: grant.trustGrantId,
+    workspaceIdentityDigest: grant.workspaceIdentityDigest,
+    scope: grant.scope,
+    trustProposalDigest: grant.trustProposalDigest,
+  }),
+  grantWorkspaceTrust: vi.fn(async (identity: {
+    canonicalRealpath: string;
+    workspaceIdentityDigest: string;
+  }) => ({
+    schemaVersion: 1,
+    trustGrantId: 'workspace-grant',
+    canonicalRealpath: identity.canonicalRealpath,
+    workspaceIdentityDigest: identity.workspaceIdentityDigest,
+    scope: 'loop-project-checks',
+    persistence: 'session',
+    createdAt: 1,
+  })),
+}));
 vi.mock('#/cli/lib/loop-preflight', () => ({
   resolveLoopReviewProvider: () => ({
     providerId: 'openai',
     endpoint: 'https://api.openai.com/v1',
+  }),
+  createLoopReviewSettingsProposal: () => ({
+    brokerTrustProposal: {
+      schemaVersion: 1,
+      workspaceIdentityDigest: 'sha256:workspace',
+      scope: 'brokered-review-subject',
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      intent: 'once',
+      trustProposalDigest: 'sha256:broker',
+    },
+    reviewSubjectConsentProposal: {
+      schemaVersion: 1,
+      workspaceIdentityDigest: 'sha256:workspace',
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      hardExclusionPolicyVersion: 'review-subject-hard-exclusion/1',
+      allowedOrigins: ['changed-tracked'],
+      limits: {
+        maxFiles: 200,
+        maxTotalBytes: 2_097_152,
+        maxFileBytes: 262_144,
+        maxGateEvidenceTotalBytes: 524_288,
+        maxGateEvidenceBytes: 131_072,
+      },
+      provider: {
+        providerId: 'openai',
+        endpointOrigin: { scheme: 'https', host: 'api.openai.com', port: 443 },
+        endpointOriginDigest: 'sha256:origin',
+      },
+      consentProposalDigest: 'sha256:consent',
+    },
+  }),
+  confirmLoopReviewSettings: () => ({
+    brokerReviewTrust: {
+      trustGrantId: 'broker-grant',
+      workspaceIdentityDigest: 'sha256:workspace',
+      scope: 'brokered-review-subject',
+      trustProposalDigest: 'sha256:broker',
+    },
+    reviewSubjectConsent: {
+      schemaVersion: 1,
+      workspaceIdentityDigest: 'sha256:workspace',
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      hardExclusionPolicyVersion: 'review-subject-hard-exclusion/1',
+      allowedOrigins: ['changed-tracked'],
+      limits: {
+        maxFiles: 200,
+        maxTotalBytes: 2_097_152,
+        maxFileBytes: 262_144,
+        maxGateEvidenceTotalBytes: 524_288,
+        maxGateEvidenceBytes: 131_072,
+      },
+      provider: {
+        providerId: 'openai',
+        endpointOriginDigest: 'sha256:origin',
+      },
+      consentProposalDigest: 'sha256:consent',
+      acknowledgedAt: 1,
+      consentDigest: 'sha256:consent-binding',
+    },
   }),
   runLoopPreflight: vi.fn(async (input: { objective: string; model: string; workspace: string }) => ({
     ready: true,
@@ -64,6 +169,7 @@ vi.mock('#/cli/lib/loop-preflight', () => ({
     workspace: input.workspace,
     checks: [],
     trustChallenge: 'challenge.signature',
+    brokerTrustChallenge: 'broker.challenge',
     contractSchemaVersion: 2,
     verificationCatalog: {
       schemaVersion: 1,
@@ -2206,6 +2312,7 @@ describe('WukongTUI active Loop recovery', () => {
   };
 
   beforeEach(() => {
+    clearSessionWorkspaceTrustForTests();
     listActiveLoopRunsMock.mockReset().mockResolvedValue([]);
     cancelLoopRecordMock.mockReset().mockResolvedValue(undefined);
     completeTuiLoopMock.mockReset().mockResolvedValue({ repeatedCompletedWithin7d: false });
@@ -2262,6 +2369,58 @@ describe('WukongTUI active Loop recovery', () => {
     expect(sendNormalUserInput).toHaveBeenCalledWith(expect.stringContaining(
       'Do not reuse an old Gate conclusion',
     ));
+  });
+
+  it('reconfirms bounded BYOK review consent before recovering a paused V2 Loop', async () => {
+    const resumeGoal = vi.fn(async () => {});
+    const session = makeSession({
+      resumeGoal,
+      getGoal: vi.fn(async () => ({
+        goal: goalSnapshot({
+          status: 'paused',
+          reviewModel: 'k2',
+          loopContract: {
+            schemaVersion: 2,
+            workspaceIdentity: {
+              canonicalRealpath: '/tmp/proj-a',
+              workspaceIdentityDigest: 'sha256:workspace',
+            },
+          } as never,
+        }),
+      })),
+    });
+    const driver = makeDriver(makeHarness(session), makeStartupInput()) as RecoveryDriver;
+    const sendNormalUserInput = vi.spyOn(driver, 'sendNormalUserInput').mockImplementation(() => {});
+
+    await driver.init();
+    const recovering = driver.handleActiveLoopRecovery(activeRecord, 'resume');
+    await vi.waitFor(() => {
+      expect(driver.state.editorContainer.render(100).join('\n'))
+        .toContain('Allow this workspace to build bounded review input');
+    });
+    const picker = driver.state.editorContainer.children[0] as {
+      handleInput(data: string): void;
+    };
+    picker.handleInput('\r');
+    await vi.waitFor(() => {
+      expect(driver.state.editorContainer.render(100).join('\n'))
+        .toContain('Allow this Loop continuation');
+    });
+    const consent = driver.state.editorContainer.children[0] as {
+      handleInput(data: string): void;
+    };
+    consent.handleInput('\r');
+    await recovering;
+
+    expect(resumeGoal).toHaveBeenCalledWith({
+      reviewSettings: expect.objectContaining({
+        brokerReviewTrust: expect.objectContaining({ trustGrantId: expect.any(String) }),
+        reviewSubjectConsent: expect.objectContaining({
+          consentDigest: 'sha256:consent-binding',
+        }),
+      }),
+    });
+    expect(sendNormalUserInput).toHaveBeenCalledOnce();
   });
 
   it('reconciles a terminal SDK Goal instead of prompting for recovery', async () => {

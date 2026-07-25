@@ -57,6 +57,7 @@ import {
   type SkillListSession,
 } from './commands';
 import * as slashCommands from './commands/dispatch';
+import { reviewSettingsForResume } from './commands/goal';
 import { BannerComponent } from './components/chrome/banner';
 import { DeviceCodeBoxComponent } from './components/chrome/device-code-box';
 import { GutterContainer } from './components/chrome/gutter-container';
@@ -803,7 +804,14 @@ export class WukongTUI {
         return;
       }
       if (goal.status === 'paused' || goal.status === 'blocked') {
-        await session.resumeGoal();
+        const reviewSettings = await reviewSettingsForResume(this, goal);
+        if (reviewSettings === false) {
+          this.showActiveLoopRecovery(record);
+          return;
+        }
+        await session.resumeGoal(
+          reviewSettings === undefined ? {} : { reviewSettings },
+        );
       }
       this.track('resume_selected', { source: 'active_loop' });
       this.restoreEditor();

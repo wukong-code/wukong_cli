@@ -34,7 +34,7 @@ export interface HeadlessGoalCreate {
     readonly selectionId: string;
     readonly provenanceDigest: string;
   }[];
-  readonly trustReviewSubjectProposalDigest?: string;
+  readonly trustReviewSubjectChallenge?: string;
   readonly acknowledgeReviewSubjectConsentDigest?: string;
 }
 

@@ -1,5 +1,15 @@
 # @wukong.today/code
 
+## 0.0.20
+
+### Patch Changes
+
+- [`44d06f0`](https://github.com/mutnpc/wukong_cli/commit/44d06f05e588b63f6a12bf538bdcd0bf9d11c480) Thanks [@xxg1413](https://github.com/xxg1413)! - Add strict local Verification Criteria discovery, explicit exact-digest selection, V3 contracts, and per-run consent for bounded reviewer input. Project, personal, monorepo package, explicitly trusted local, and read-only built-in reference sources are supported without executing Skill commands. All new V2/V3 reviewers use the same secret-filtering broker and durable Gate join. Use `/loop` to review criteria, source trust, input limits, cost, and the exact BYOK destination before starting.
+
+- [`ad67209`](https://github.com/mutnpc/wukong_cli/commit/ad67209c242e99deb0668d0eee6d809cc6d9c1e0) Thanks [@xxg1413](https://github.com/xxg1413)! - Give the Loop fresh reviewer a 24-step, five-minute Gate budget, reserve time
+  for its structured verdict, and show reviewer-specific recovery guidance when
+  that dedicated budget is exhausted.
+
 ## 0.0.19
 
 ### Patch Changes

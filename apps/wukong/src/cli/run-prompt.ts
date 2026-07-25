@@ -231,7 +231,7 @@ async function runHeadlessGoal(
       trustWorkspaceChallenge: goal.trustWorkspaceChallenge,
       verificationCatalogDigest: goal.verificationCatalogDigest,
       verificationSkills: goal.verificationSkills,
-      trustReviewSubjectProposalDigest: goal.trustReviewSubjectProposalDigest,
+      trustReviewSubjectChallenge: goal.trustReviewSubjectChallenge,
       acknowledgeReviewSubjectConsentDigest:
         goal.acknowledgeReviewSubjectConsentDigest,
       reviewProvider: resolveLoopReviewProvider(

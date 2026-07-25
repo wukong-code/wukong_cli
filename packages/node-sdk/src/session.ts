@@ -24,6 +24,7 @@ import type {
   PluginSummary,
   PromptInput,
   ReloadSessionOptions,
+  ResumeGoalInput,
   ReloadSummary,
   RoleSummary,
   ResumedSessionState,
@@ -408,9 +409,9 @@ export class Session {
     return this.rpc.pauseGoal({ sessionId: this.id });
   }
 
-  async resumeGoal(): Promise<GoalSnapshot> {
+  async resumeGoal(input: ResumeGoalInput = {}): Promise<GoalSnapshot> {
     this.ensureOpen();
-    return this.rpc.resumeGoal({ sessionId: this.id });
+    return this.rpc.resumeGoal({ sessionId: this.id, ...input });
   }
 
   async cancelGoal(): Promise<GoalSnapshot> {

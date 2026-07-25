@@ -92,46 +92,46 @@
 
 ### P0：Criteria schema、catalog 与 provenance
 
-- [ ] 复用 Agent Skills 目录，使用 namespaced metadata 指向 strict `wukong.verification-criteria` JSON sidecar
-- [ ] sidecar 只接受 scope + blocking qualitative criteria；拒绝 commands/steps/scripts/tools/permissions/hooks/MCP、unknown fields 和 path escape
-- [ ] 支持 personal/project/package/extra/builtin scope、稳定 precedence 和同名多来源 exact selection
-- [ ] source trust 绑定 workspace identity、personal ownership/permission、extra exact grant 或 builtin release asset；TUI 显示 trust 并支持 exact extra-grant revoke
-- [ ] source/sourceTrust 使用 paired discriminated union；跨 kind 组合、extra sourceId mismatch 和 builtin version mismatch 在 strict schema 层拒绝
-- [ ] 使用 RFC 8785 + domain-separated full SHA-256 冻结 SKILL.md、sidecar、catalog 和 selection；每种 digest 有 golden fixture
-- [ ] deterministic suggested 只来自 versioned path/package rules；model recommendation 单列为 `advisoryHint`，不进入 digest/selection/合同
+- [x] 复用 Agent Skills 目录，使用 namespaced metadata 指向 strict `wukong.verification-criteria` JSON sidecar（2026-07-25）
+- [x] sidecar 只接受 scope + blocking qualitative criteria；拒绝 commands/steps/scripts/tools/permissions/hooks/MCP、unknown fields 和 path escape（2026-07-25）
+- [x] 支持 personal/project/package/extra/builtin scope、稳定 precedence 和同名多来源 exact selection（2026-07-25）
+- [x] source trust 绑定 workspace identity、personal ownership/permission、extra exact grant 或 builtin release asset；TUI 显示 trust 并支持 exact extra-grant revoke（2026-07-25）
+- [x] source/sourceTrust 使用 paired discriminated union；跨 kind 组合、extra sourceId mismatch 和 builtin version mismatch 在 strict schema 层拒绝（2026-07-25）
+- [x] 使用 RFC 8785 + domain-separated full SHA-256 冻结 SKILL.md、sidecar、catalog 和 selection；每种 digest 有 golden fixture（2026-07-25）
+- [x] deterministic suggested 只来自 versioned path/package rules；model recommendation 单列为 `advisoryHint`，不进入 digest/selection/合同（2026-07-25；当前不主动生成 model hint）
 
 ### P0：V3、兼容与 selection CAS
 
-- [ ] 新建 additive V3/GatePlanV2；V2 → V3 只能 Revised Loop，新 goal/contract lineage，不热附加
-- [ ] V3 使用 additive workspace trust scope；旧 `loop-project-checks` grant 不能静默扩成 `brokered-review-subject`
-- [ ] 每个 0.0.20 run/restart/continuation（含无 selected Skill 的 V2 contract）单独冻结 broker trust 与 review-subject consent，绑定 workspace、输入 policy/limits、BYOK provider 与 endpoint；Headless 使用 exact challenge/ack，provider/policy 变化必须重新确认
+- [x] 新建 additive V3/GatePlanV2；V2 → V3 只能 Revised Loop，新 goal/contract lineage，不热附加（2026-07-25）
+- [x] V3 使用 additive workspace trust scope；旧 `loop-project-checks` grant 不能静默扩成 `brokered-review-subject`（2026-07-25）
+- [x] 每个 0.0.20 run/restart/continuation（含无 selected Skill 的 V2 contract）单独冻结 broker trust 与 review-subject consent，绑定 workspace、输入 policy/limits、BYOK provider 与 endpoint；Headless 使用 exact challenge/ack，provider/policy 变化必须重新确认（2026-07-25）
 - [ ] canonical provider origin/digest 与实际 connection 逐次校验；跨 origin redirect 或 origin drift 在发送任何 bytes 前 fail closed
-- [ ] review-settings assignment 使用 proposal-based 稳定幂等键；同一 Headless/TUI 重试复用首次 acknowledgement/digests，并发不同 proposal 只有一个 CAS 胜出
-- [ ] V3 workspace trust 使用 broker-only / project-checks+broker 判别联合，并与 legacy approval `hasExecutableChecks` 完全一致；无 resolved check 不授予 shell scope
-- [ ] broker trust proposal/grant 创建幂等；reviewer 前后及 PASS 前 revalidate，mid-attempt revoke 立即停止后续读取并使 evidence stale
-- [ ] 完整保存 V2 finish line、trust、Gate approval、review policy 和 legacy Gate Plan；raw shell 仍只由 0.0.19 runner 执行
-- [ ] expected-unresolved 在 V3 中继续 unresolved/零 spawn，不能编译成 command
-- [ ] recipe criteria 投影为带 provenance 的稳定 V3 criterion IDs；Skill 不能删除 V2 criteria
-- [ ] suggested 使用未选状态；只有用户显式选择的 standalone criteria 才进入 flat ordered selection
-- [ ] Headless 用 `--verification-catalog-digest` 与带 expected provenance digest 的可重复 `--verification-skill` compare-and-set
-- [ ] full catalog digest 只做 dry-run → 合同创建 CAS；active run/restart/continuation 只校验 selected refs、selection 和 plan，未选 Skill drift 不阻断
-- [ ] `--dry-run --output-format stream-json` 输出 catalog/deterministic-suggested/selection/criteria/subject-policy/provider-consent/cost；零模型调用，合同创建 CAS 或 selected-ref 漂移时零执行
-- [ ] TUI/Headless 明确二分支：无 selection 创建 V2 并跳过 catalog CAS，有 selection 必须 exact catalog digest 并创建 V3；dry-run 输出 `contractSchemaVersion`/`selectionState`
+- [x] review-settings assignment 使用 proposal-based 稳定幂等键；同一 Headless/TUI 重试复用首次 acknowledgement/digests，并发不同 proposal 只有一个 CAS 胜出（2026-07-25）
+- [x] V3 workspace trust 使用 broker-only / project-checks+broker 判别联合，并与 legacy approval `hasExecutableChecks` 完全一致；无 resolved check 不授予 shell scope（2026-07-25）
+- [x] broker trust proposal/grant 创建幂等；reviewer 前后及 PASS 前 revalidate，mid-attempt revoke 立即停止后续读取并使 evidence stale（2026-07-25）
+- [x] 完整保存 V2 finish line、trust、Gate approval、review policy 和 legacy Gate Plan；raw shell 仍只由 0.0.19 runner 执行（2026-07-25）
+- [x] expected-unresolved 在 V3 中继续 unresolved/零 spawn，不能编译成 command（2026-07-25）
+- [x] recipe criteria 投影为带 provenance 的稳定 V3 criterion IDs；Skill 不能删除 V2 criteria（2026-07-25）
+- [x] suggested 使用未选状态；只有用户显式选择的 standalone criteria 才进入 flat ordered selection（2026-07-25）
+- [x] Headless 用 `--verification-catalog-digest` 与带 expected provenance digest 的可重复 `--verification-skill` compare-and-set（2026-07-25）
+- [x] full catalog digest 只做 dry-run → 合同创建 CAS；active run/restart/continuation 只校验 selected refs、selection 和 plan，未选 Skill drift 不阻断（2026-07-25）
+- [x] `--dry-run --output-format stream-json` 输出 catalog/deterministic-suggested/selection/criteria/subject-policy/provider-consent/cost；零模型调用，合同创建 CAS 或 selected-ref 漂移时零执行（2026-07-25）
+- [x] TUI/Headless 明确二分支：无 selection 创建 V2 并跳过 catalog CAS，有 selection 必须 exact catalog digest 并创建 V3；dry-run 输出 `contractSchemaVersion`/`selectionState`（2026-07-25）
 
 ### P0：Review Subject broker 与 fresh reviewer
 
-- [ ] reviewer 不获得任意 Read/Glob/Grep/Bash/Skill/MCP/Web，只能读取 attempt-scoped subject/evidence refs
-- [ ] 0.0.20 V2/V3 新 attempt 都走同一 broker；遗留 active V2 缺 consent 时零 reviewer/provider 调用，V1 必须用户确认 Revised V2 后才能创建 attempt
-- [ ] subject manifest 只含 bounded workspace-relative regular text/JSON；hard exclude `.env`、credential/key/cert、auth/session/log/trust、home、binary/generated
-- [ ] manifest policy/consent digest、allowed origins 和逐项/总量 limits 与 run settings exact match；不一致在 provider connection 前 fail closed
-- [ ] path exclusion 后执行 secret-content scan；hard-excluded secret sentinel 不生成 ref，broker read/出站为 0
-- [ ] raw Gate stdout/stderr/evidence 只留本机；brokered copy 使用 versioned redaction + secret scan、128 KiB/项和 1 MiB/attempt 上限，secret/oversize evidence 不产生 readable ref
-- [ ] provider-visible exclusion 只有 attempt-keyed HMAC ID/reason，不含 raw identity/digest；前后重算稳定、跨 attempt 不可关联，ephemeral key/mapping 在 attempt completion 后销毁
-- [ ] subject manifest 在 reviewer 前后重算；超限、excluded dependency 或 workspace drift 不得 PASS
-- [ ] 唯一 fresh reviewer 每个完整 attempt 恰好一次；criteria 与 carried blockers dispositions exact coverage
-- [ ] evidence 使用 `review-subject | gate-evidence` tagged identity；跨 attempt、raw/excluded/未知 ref 或 invalid/incomplete verdict 进入 INCONCLUSIVE
-- [ ] satisfied/resolved/replaced disposition 必须有有效 evidence；PASS 只接受 prior blocker `resolved`，`replaced-by` 必须 NEEDS_WORK；independent/advisory-live finding 不能 blocking，frozen-policy blocker 必须精确匹配 locator/digest
-- [ ] legacy checks 仍每项执行一次，Proof aggregate 只聚合一次；run consent/subject/verdict/aggregate/snapshot/completion/terminal 统一用 `attemptId` 与 exact consent digest durable join
+- [x] reviewer 不获得任意 Read/Glob/Grep/Bash/Skill/MCP/Web，只能读取 attempt-scoped subject/evidence refs（2026-07-25）
+- [x] 0.0.20 V2/V3 新 attempt 都走同一 broker；遗留 active V2 缺 consent 时零 reviewer/provider 调用，V1 必须用户确认 Revised V2 后才能创建 attempt（2026-07-25）
+- [x] subject manifest 只含 bounded workspace-relative regular text/JSON；hard exclude `.env`、credential/key/cert、auth/session/log/trust、home、binary/generated（2026-07-25）
+- [x] manifest policy/consent digest、allowed origins 和逐项/总量 limits 与 run settings exact match；不一致在 provider connection 前 fail closed（2026-07-25）
+- [x] path exclusion 后执行 secret-content scan；hard-excluded secret sentinel 不生成 ref，broker read/出站为 0（2026-07-25）
+- [x] raw Gate stdout/stderr/evidence 只留本机；brokered copy 使用 versioned redaction + secret scan、128 KiB/项和 1 MiB/attempt 上限，secret/oversize evidence 不产生 readable ref（2026-07-25）
+- [x] provider-visible exclusion 只有 attempt-keyed HMAC ID/reason，不含 raw identity/digest；前后重算稳定、跨 attempt 不可关联，ephemeral key/mapping 在 attempt completion 后销毁（2026-07-25）
+- [x] subject manifest 在 reviewer 前后重算；超限、excluded dependency 或 workspace drift 不得 PASS（2026-07-25）
+- [x] 唯一 fresh reviewer 每个完整 attempt 恰好一次；criteria 与 carried blockers dispositions exact coverage（2026-07-25）
+- [x] evidence 使用 `review-subject | gate-evidence` tagged identity；跨 attempt、raw/excluded/未知 ref 或 invalid/incomplete verdict 进入 INCONCLUSIVE（2026-07-25）
+- [x] satisfied/resolved/replaced disposition 必须有有效 evidence；PASS 只接受 prior blocker `resolved`，`replaced-by` 必须 NEEDS_WORK；independent/advisory-live finding 不能 blocking，frozen-policy blocker 必须精确匹配 locator/digest（2026-07-25）
+- [x] legacy checks 仍每项执行一次，Proof aggregate 只聚合一次；run consent/subject/verdict/aggregate/snapshot/completion/terminal 统一用 `attemptId` 与 exact consent digest durable join（2026-07-25）
 
 ### P1：Eval 与真实流程
 
@@ -142,8 +142,8 @@
 
 ### 发布门槛
 
-- [ ] schema/catalog/digest/CAS/source-trust/provider-consent/broker/redaction/secret-exclusion/prompt-injection/durable-join tests 通过
-- [ ] standalone/flat order/restart/continuation/V1-V2-V3 compatibility 和 fault-injection 通过
+- [x] schema/catalog/digest/CAS/source-trust/provider-consent/broker/redaction/secret-exclusion/prompt-injection/durable-join tests 通过（2026-07-25；全仓 9337 tests passed）
+- [x] standalone/flat order/restart/continuation/V1-V2-V3 compatibility 和 fault-injection 通过（2026-07-25；本机自动化）
 - [ ] macOS/Linux/Windows catalog/path/digest/broker CI 与六平台 SEA/native smoke 通过
 - [ ] 至少完成 API compatibility、migration/log-security、frontend/design、monorepo package 四类真实 criteria
 - [ ] 无 Skill 新建 V2 的 TUI/Headless brokered reviewer E2E；遗留 V1 未确认时零 attempt、确认后 Revised V2；遗留 active V2 接受 consent 后 additive 恢复，以及拒绝后零 provider/出站/状态漂移 E2E

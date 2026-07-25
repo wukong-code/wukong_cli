@@ -6,6 +6,7 @@ export type SettingsSelection =
   | 'editor'
   | 'permission'
   | 'experiments'
+  | 'criteria-sources'
   | 'workspace-trust'
   | 'upgrade'
   | 'usage';
@@ -37,6 +38,11 @@ const SETTINGS_OPTIONS: readonly ChoiceOption[] = [
     description: 'Turn experimental features on or off.',
   },
   {
+    value: 'criteria-sources',
+    label: 'Verification sources',
+    description: 'Trust or revoke exact local criteria source directories.',
+  },
+  {
     value: 'workspace-trust',
     label: 'Trusted workspaces',
     description: 'Review or revoke Loop project-check trust grants.',
@@ -60,6 +66,7 @@ function isSettingsSelection(value: string): value is SettingsSelection {
     value === 'editor' ||
     value === 'permission' ||
     value === 'experiments' ||
+    value === 'criteria-sources' ||
     value === 'workspace-trust' ||
     value === 'upgrade' ||
     value === 'usage'

@@ -2,6 +2,7 @@ import type {
   ExportSessionManifest,
   LoopContractV3Input,
   LoopContractV2Input,
+  LoopRunReviewSettingsInput,
   ResumeSessionResult,
   ShellEnvironment,
   TelemetryClient,
@@ -92,6 +93,10 @@ export interface CreateGoalInput {
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
   readonly loopContract?: LoopContractV2Input | LoopContractV3Input;
+}
+
+export interface ResumeGoalInput {
+  readonly reviewSettings?: LoopRunReviewSettingsInput;
 }
 
 export type TextPromptPart = Extract<ContentPart, { type: 'text' }>;

@@ -59,7 +59,7 @@ export class VerificationCriteriaSelectorComponent extends Container implements 
     }
     if (matchesKey(data, Key.space)) {
       const entry = this.list.selected();
-      if (entry === undefined || entry.status !== 'valid') return;
+      if (entry === undefined) return;
       const index = this.selected.findIndex(
         (selected) => selected.selectionId === entry.selectionId,
       );
@@ -127,13 +127,14 @@ export class VerificationCriteriaSelectorComponent extends Container implements 
       );
       const selected = selectedIndex !== -1;
       const pointer = cursor ? SELECT_POINTER : ' ';
-      const state = entry.status === 'collision'
-        ? currentTheme.fg('error', ' collision')
-        : selected
-          ? currentTheme.fg('success', ` ${String(selectedIndex + 1)} selected`)
+      const collision = entry.status === 'collision'
+        ? currentTheme.fg('warning', ' ! same name · exact source')
+        : '';
+      const state = selected
+          ? currentTheme.fg('success', ` ✓ ${String(selectedIndex + 1)} selected`)
           : entrySuggestion(this.options.catalog, entry.selectionId)
-            ? currentTheme.fg('warning', ' suggested')
-            : '';
+            ? currentTheme.fg('warning', ' ○ suggested')
+            : currentTheme.fg('textMuted', ' ○');
       lines.push(
         currentTheme.fg(cursor ? 'primary' : 'textDim', `  ${pointer} `)
           + (
@@ -141,6 +142,7 @@ export class VerificationCriteriaSelectorComponent extends Container implements 
               ? currentTheme.boldFg('primary', entry.ref.skillName)
               : currentTheme.fg('text', entry.ref.skillName)
           )
+          + collision
           + state,
       );
       lines.push(currentTheme.fg(
@@ -152,6 +154,20 @@ export class VerificationCriteriaSelectorComponent extends Container implements 
           'textMuted',
           `    Input: scope-matched/changed files; secrets excluded · Cost: one shared fresh review`,
         ));
+        lines.push(currentTheme.fg(
+          'textMuted',
+          `    Trust: ${formatSourceTrust(entry)}`,
+        ));
+        lines.push(currentTheme.fg(
+          'textMuted',
+          `    Digest: ${entry.ref.provenanceDigest}`,
+        ));
+        for (const criterion of entry.recipe.criteria) {
+          lines.push(currentTheme.fg(
+            'textMuted',
+            `    Criterion ${criterion.id}: ${criterion.text}`,
+          ));
+        }
       }
     }
     lines.push('');
@@ -161,8 +177,26 @@ export class VerificationCriteriaSelectorComponent extends Container implements 
         ` Page ${String(view.page.page + 1)}/${String(view.page.pageCount)}`,
       ));
     }
+    lines.push(currentTheme.fg(
+      'textMuted',
+      ' Model hints: none · hints are advisory and never select criteria',
+    ));
     lines.push(currentTheme.fg('primary', '─'.repeat(width)));
     return lines.map((line) => truncateToWidth(line, width));
+  }
+}
+
+function formatSourceTrust(entry: VerificationCriteriaCatalogEntryV1): string {
+  const trust = entry.ref.sourceTrust;
+  switch (trust.kind) {
+    case 'workspace':
+      return `workspace · ${trust.workspaceIdentityDigest}`;
+    case 'personal-local':
+      return `personal-local · ${trust.ownerIdentityDigest}`;
+    case 'extra-local-grant':
+      return `extra-local-grant · ${trust.trustGrantId}`;
+    case 'builtin-release':
+      return `builtin-release · ${trust.version} · ${trust.assetDigest}`;
   }
 }
 

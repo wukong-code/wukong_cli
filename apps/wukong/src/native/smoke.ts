@@ -1,6 +1,10 @@
 import { getEmbeddedNativeAssetManifest, getNativePackageRoot } from './native-assets';
 
-const smokePackages = ['@mariozechner/clipboard', 'koffi'];
+const smokePackages = [
+  '@mariozechner/clipboard',
+  '@wukong/reference-verification-skills',
+  'koffi',
+];
 
 export function runNativeAssetSmokeIfRequested(): boolean {
   if (process.env['WUKONG_CODE_NATIVE_ASSET_SMOKE'] !== '1') return false;

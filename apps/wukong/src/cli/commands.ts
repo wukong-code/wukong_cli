@@ -148,11 +148,11 @@ export function createProgram(
           ? {}
           : { verificationCatalogDigest: loop.verificationCatalogDigest }),
         verificationSkills: parseVerificationSkills(loop.verificationSkills),
-        ...(loop.trustReviewSubjectProposalDigest === undefined
+        ...(loop.trustReviewSubjectChallenge === undefined
           ? {}
           : {
-              trustReviewSubjectProposalDigest:
-                loop.trustReviewSubjectProposalDigest,
+              trustReviewSubjectChallenge:
+                loop.trustReviewSubjectChallenge,
             }),
         ...(loop.acknowledgeReviewSubjectConsentDigest === undefined
           ? {}

@@ -31,7 +31,7 @@ export interface LoopCliOptions {
   readonly acknowledgeWarningSetDigest?: string;
   readonly verificationCatalogDigest?: string;
   readonly verificationSkills?: readonly string[];
-  readonly trustReviewSubjectProposalDigest?: string;
+  readonly trustReviewSubjectChallenge?: string;
   readonly acknowledgeReviewSubjectConsentDigest?: string;
 }
 
@@ -57,7 +57,7 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
     .option('--ack-finish-line-warnings <digest>', 'Exact Finish Line warning-set digest from --dry-run.')
     .option('--verification-catalog-digest <digest>', 'Exact Verification Criteria catalog digest from --dry-run.')
     .option('--verification-skill <identity@digest>', 'Select an exact Verification Skill identity and provenance digest. Repeat to set flat order.', collectOption, [])
-    .option('--trust-review-subject <digest>', 'Exact local broker trust proposal digest from --dry-run.')
+    .option('--trust-review-subject <challenge>', 'Exact short-lived local broker trust challenge from --dry-run.')
     .option('--ack-review-subject <digest>', 'Exact run-scoped BYOK review-subject consent digest from --dry-run.')
     .option('--dry-run', 'Validate arguments and print the planned loop without running it.', false)
     .action(async (objective: string, raw: RawLoopOptions, command: Command) => {
@@ -91,7 +91,7 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
         acknowledgeWarningSetDigest: raw.ackFinishLineWarnings,
         verificationCatalogDigest: raw.verificationCatalogDigest,
         verificationSkills: raw.verificationSkill,
-        trustReviewSubjectProposalDigest: raw.trustReviewSubject,
+        trustReviewSubjectChallenge: raw.trustReviewSubject,
         acknowledgeReviewSubjectConsentDigest: raw.ackReviewSubject,
       };
 

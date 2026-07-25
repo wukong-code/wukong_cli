@@ -1,16 +1,21 @@
 import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it } from 'vitest';
 
 import {
   acknowledgeReviewSubjectConsent,
+  clearBrokerReviewTrustBindingsForTests,
+  createBrokerReviewTrustChallenge,
   createBrokerReviewTrustProposal,
   createReviewSubjectConsentProposal,
   grantBrokerReviewTrust,
+  isBrokerReviewTrustBindingActive,
   ReviewSubjectBroker,
   ReviewSubjectError,
   validateProviderAgainstConsent,
+  verifyBrokerReviewTrustChallenge,
+  revokeBrokerReviewTrustBinding,
 } from '../src/review-subject';
 import {
   createFreshReviewerInputDigest,
@@ -20,6 +25,10 @@ import {
 import { makeTempDir } from './helpers';
 
 describe('Review Subject consent and broker', () => {
+  beforeEach(() => {
+    clearBrokerReviewTrustBindingsForTests();
+  });
+
   it('binds broker trust and outbound consent as separate exact decisions', () => {
     const trustProposal = createBrokerReviewTrustProposal({
       workspaceIdentityDigest: 'sha256:workspace',
@@ -74,6 +83,49 @@ describe('Review Subject consent and broker', () => {
     }).toThrowError(expect.objectContaining({
       reasonCode: 'review_subject_consent_required',
     }));
+  });
+
+  it('uses a proposal-bound broker challenge that expires within ten minutes', () => {
+    const proposal = createBrokerReviewTrustProposal({
+      workspaceIdentityDigest: 'sha256:workspace',
+      intent: 'once',
+    });
+    const challenge = createBrokerReviewTrustChallenge(proposal, { now: 1_000 });
+
+    expect(verifyBrokerReviewTrustChallenge({
+      challenge,
+      proposal,
+      now: 1_000,
+    })).toBe(true);
+    expect(verifyBrokerReviewTrustChallenge({
+      challenge,
+      proposal,
+      now: 601_001,
+    })).toBe(false);
+    expect(verifyBrokerReviewTrustChallenge({
+      challenge,
+      proposal: createBrokerReviewTrustProposal({
+        workspaceIdentityDigest: 'sha256:other-workspace',
+        intent: 'once',
+      }),
+      now: 1_000,
+    })).toBe(false);
+  });
+
+  it('invalidates the exact in-memory broker binding immediately on revoke', () => {
+    const proposal = createBrokerReviewTrustProposal({
+      workspaceIdentityDigest: 'sha256:workspace',
+      intent: 'once',
+    });
+    const binding = grantBrokerReviewTrust(
+      proposal,
+      proposal.trustProposalDigest,
+      'grant-revoke-test',
+    );
+
+    expect(isBrokerReviewTrustBindingActive(binding)).toBe(true);
+    revokeBrokerReviewTrustBinding(binding.trustGrantId);
+    expect(isBrokerReviewTrustBindingActive(binding)).toBe(false);
   });
 
   it('rejects non-canonical origins and limits above the hard ceiling', () => {

@@ -27,14 +27,18 @@ wukong migrate
 wukong upgrade
 ```
 
-The normal interactive path is `/resume` → `/loop` → Gate. In 0.0.19 every
-new Loop first confirms an explicit Finish Line and freezes exact project-check
-provenance, workspace trust, and Gate approval. `wukong loop --dry-run` previews
-the same contract without creating local state. `verify`, `scan`, `proof`,
-`judge`, and their TUI equivalents remain advanced local diagnostics; `/goal`
-is the hidden compatibility execution engine behind Loop. The package remains
-free, local-first, and BYOK. It does not provide hosted inference, payment,
-quota, cloud session/evidence sync, PR Gate, or a complete shell sandbox.
+The normal interactive path is `/resume` → `/loop` → Gate. In 0.0.20 every new
+reviewer attempt reads only a bounded local broker and requires separate local
+read trust plus per-run consent for the exact BYOK provider endpoint. Existing
+Verification Skills may contribute strict qualitative criteria, but suggestions
+are never selected automatically and Skill commands are never executed.
+`wukong loop --dry-run --output-format stream-json` previews the exact catalog,
+selection CAS, provider destination, input exclusions, and cost without
+creating a run or opening a provider connection. `verify`, `scan`, `proof`, and
+`judge` remain advanced diagnostics; `/goal` is the hidden compatibility engine
+behind Loop. The package remains free, local-first, and BYOK. It does not
+provide hosted inference, payment, quota, cloud session/evidence sync, PR Gate,
+Skill authoring, or a complete shell sandbox.
 
 ## Development
 

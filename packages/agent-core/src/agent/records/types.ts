@@ -6,18 +6,21 @@ import type {
   GoalBudgetLimits,
   GoalStatus,
   BuiltinRiskScanResultRecordedV1,
+  FreshCriteriaVerdictRecordedV1,
   GateAttemptCompletedV1,
-  GateAttemptCreatedV1,
+  GateAttemptCreated,
   GateCheckResultRecordedV1,
   LoopContract,
   LoopContinuationCreatedV1,
-  LoopEvidenceSnapshotCreatedV1,
+  LoopEvidenceSnapshotCreated,
   LoopResult,
   LoopReviewAttempt,
   LoopRunCreated,
+  LoopRunReviewSettingsAssignedV1,
   LoopRunTerminalV1,
   LoopStrategyAttempt,
-  ProofAggregateRecordedV1,
+  ProofAggregateRecorded,
+  ReviewSubjectManifestRecordedV1,
   ReviewerResultRecordedV1,
 } from '../goal';
 import type { ToolStoreUpdate } from '../../tools/store';
@@ -139,8 +142,11 @@ export interface AgentRecordEvents {
   'loop.run.create': {
     run: LoopRunCreated;
   };
+  'loop.run-review-settings.assign': {
+    assignment: LoopRunReviewSettingsAssignedV1;
+  };
   'loop.gate-attempt.create': {
-    attempt: GateAttemptCreatedV1;
+    attempt: GateAttemptCreated;
   };
   'loop.gate-check-result.create': {
     result: GateCheckResultRecordedV1;
@@ -151,11 +157,17 @@ export interface AgentRecordEvents {
   'loop.reviewer-result.create': {
     result: ReviewerResultRecordedV1;
   };
+  'loop.review-subject-manifest.create': {
+    result: ReviewSubjectManifestRecordedV1;
+  };
+  'loop.fresh-criteria-verdict.create': {
+    result: FreshCriteriaVerdictRecordedV1;
+  };
   'loop.proof-aggregate.create': {
-    result: ProofAggregateRecordedV1;
+    result: ProofAggregateRecorded;
   };
   'loop.evidence-snapshot.create': {
-    snapshot: LoopEvidenceSnapshotCreatedV1;
+    snapshot: LoopEvidenceSnapshotCreated;
   };
   'loop.gate-attempt.complete': {
     attempt: GateAttemptCompletedV1;

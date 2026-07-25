@@ -1,4 +1,5 @@
 import { createHash } from 'node:crypto';
+import { homedir } from 'node:os';
 import {
   lstat,
   readFile,
@@ -17,6 +18,9 @@ export const VERIFICATION_CRITERIA_ACCESS_POLICY_VERSION = 'verification-criteri
 const MAX_SKILL_MD_BYTES = 64 * 1024;
 const MAX_SIDECAR_BYTES = 32 * 1024;
 const MAX_CRITERIA = 16;
+const REVIEW_SCOPE_MATCH_LIMIT = 500;
+const PACKAGE_CRITERIA_SCAN_LIMIT = 500;
+const PACKAGE_CRITERIA_SCAN_DEPTH = 8;
 const MAX_TEXT_LENGTH = 1_000;
 const MAX_EVIDENCE_LENGTH = 1_000;
 const CONTROL_CHARACTER = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u;
@@ -42,6 +46,26 @@ const FORBIDDEN_RECIPE_KEYS = new Set([
   'agent',
   'mcp',
 ]);
+const PACKAGE_MARKERS = [
+  'Cargo.toml',
+  'go.mod',
+  'package.json',
+  'pyproject.toml',
+] as const;
+const PACKAGE_SCAN_SKIPPED_DIRECTORIES = new Set([
+  '.git',
+  '.next',
+  '.nuxt',
+  '.wukong',
+  'build',
+  'coverage',
+  'dist',
+  'node_modules',
+  'out',
+  'target',
+  'vendor',
+]);
+const runtimeBuiltinRoots = new Map<string, VerificationCriteriaSourceRootV1>();
 
 export interface VerificationCriterionDeclarationV1 {
   readonly id: string;
@@ -222,6 +246,94 @@ export interface DiscoverVerificationCriteriaOptions {
   readonly caseInsensitive?: boolean;
 }
 
+export function registerBuiltinVerificationCriteriaRoot(
+  root: Extract<VerificationCriteriaSourceRootV1, { readonly kind: 'builtin' }>,
+): void {
+  runtimeBuiltinRoots.set(`${root.version}:${root.assetDigest}`, root);
+}
+
+export function clearBuiltinVerificationCriteriaRootsForTests(): void {
+  runtimeBuiltinRoots.clear();
+}
+
+export async function digestVerificationCriteriaAssetRoot(root: string): Promise<string> {
+  const canonicalRoot = await realpath(root);
+  const files: Array<{ readonly path: string; readonly sha256: string }> = [];
+  for (const skillDir of await listSkillDirectories(canonicalRoot)) {
+    const skillName = basename(skillDir);
+    for (const logicalPath of ['SKILL.md', 'verification/criteria.v1.json'] as const) {
+      const path = join(skillDir, logicalPath);
+      const info = await lstat(path);
+      if (!info.isFile() || info.isSymbolicLink()) {
+        throw new VerificationCriteriaError(
+          'verification_criteria_untrusted',
+          'Builtin criteria assets must contain only regular manifest files.',
+        );
+      }
+      files.push({
+        path: `${skillName}/${logicalPath}`,
+        sha256: digestRaw('wukong/builtin-criteria-file/v1', await readFile(path)),
+      });
+    }
+  }
+  return canonicalDigest(
+    'wukong/builtin-criteria-assets/v1',
+    files.toSorted((left, right) => left.path.localeCompare(right.path)),
+  );
+}
+
+export async function discoverPackageVerificationCriteriaRoots(options: {
+  readonly workspaceRoot: string;
+  readonly workspaceIdentityDigest: string;
+}): Promise<readonly VerificationCriteriaSourceRootV1[]> {
+  const workspaceRoot = await realpath(options.workspaceRoot);
+  const roots: VerificationCriteriaSourceRootV1[] = [];
+  let visitedDirectories = 0;
+  const walk = async (directory: string, depth: number): Promise<void> => {
+    if (
+      depth > PACKAGE_CRITERIA_SCAN_DEPTH
+      || visitedDirectories >= PACKAGE_CRITERIA_SCAN_LIMIT
+    ) return;
+    visitedDirectories += 1;
+    if (directory !== workspaceRoot && await isPackageDirectory(directory)) {
+      const skillsRoot = join(directory, '.wukong', 'skills');
+      try {
+        const info = await lstat(skillsRoot);
+        if (info.isDirectory() && !info.isSymbolicLink()) {
+          roots.push({
+            kind: 'package',
+            root: skillsRoot,
+            packagePath: normalizeLogicalPath(relative(workspaceRoot, directory)),
+            workspaceIdentityDigest: options.workspaceIdentityDigest,
+          });
+        }
+      } catch {
+        // Package-local criteria are optional.
+      }
+    }
+    let entries;
+    try {
+      entries = await readdir(directory, { withFileTypes: true });
+    } catch {
+      return;
+    }
+    for (const entry of entries.toSorted((left, right) => left.name.localeCompare(right.name))) {
+      if (
+        visitedDirectories >= PACKAGE_CRITERIA_SCAN_LIMIT
+        || !entry.isDirectory()
+        || entry.isSymbolicLink()
+        || PACKAGE_SCAN_SKIPPED_DIRECTORIES.has(entry.name)
+      ) continue;
+      await walk(join(directory, entry.name), depth + 1);
+    }
+  };
+  await walk(workspaceRoot, 0);
+  return roots.toSorted((left, right) =>
+    left.kind === 'package' && right.kind === 'package'
+      ? left.packagePath.localeCompare(right.packagePath)
+      : 0);
+}
+
 export class VerificationCriteriaError extends Error {
   constructor(
     readonly reasonCode:
@@ -229,12 +341,110 @@ export class VerificationCriteriaError extends Error {
       | 'verification_criteria_untrusted'
       | 'verification_criteria_collision'
       | 'verification_catalog_changed'
+      | 'verification_criteria_missing'
+      | 'verification_criteria_changed'
       | 'verification_selection_limit',
     message: string,
   ) {
     super(message);
     this.name = 'VerificationCriteriaError';
   }
+}
+
+export interface ResolveSelectedVerificationCriteriaOptions {
+  readonly workspaceRoot: string;
+  readonly selection: VerificationCriteriaSelectionV1;
+  readonly sourceRoots?: readonly VerificationCriteriaSourceRootV1[];
+  readonly personalRoot?: string;
+}
+
+/**
+ * Re-read only the frozen selection. Unselected catalog drift is intentionally
+ * ignored after contract creation.
+ */
+export async function resolveSelectedVerificationCriteria(
+  options: ResolveSelectedVerificationCriteriaOptions,
+): Promise<readonly VerificationCriteriaCatalogEntryV1[]> {
+  validateVerificationCriteriaSelection(options.selection);
+  const roots = options.sourceRoots
+    ? selectedSourceRoots(
+        options.workspaceRoot,
+        options.selection,
+        options.personalRoot,
+        [...options.sourceRoots, ...runtimeBuiltinRoots.values()],
+      )
+    : selectedSourceRoots(
+        options.workspaceRoot,
+        options.selection,
+        options.personalRoot,
+        [...runtimeBuiltinRoots.values()],
+      );
+  const catalog = await discoverVerificationCriteriaCatalog({
+    workspaceRoot: options.workspaceRoot,
+    roots,
+  });
+  const byIdentity = new Map(
+    catalog.entries.map((entry) => [selectionIdentity(entry.ref), entry]),
+  );
+  return options.selection.selected.map(({ ref }) => {
+    const identity = selectionIdentity(ref);
+    const entry = byIdentity.get(identity);
+    if (entry === undefined) {
+      const failure = catalog.failures.find(
+        (candidate) => candidate.logicalLocator === ref.logicalLocator,
+      );
+      throw new VerificationCriteriaError(
+        failure?.reasonCode === 'verification_criteria_untrusted'
+          ? 'verification_criteria_untrusted'
+          : 'verification_criteria_missing',
+        failure?.message ?? `Selected verification criteria is missing: ${identity}`,
+      );
+    }
+    if (entry.ref.provenanceDigest !== ref.provenanceDigest) {
+      throw new VerificationCriteriaError(
+        'verification_criteria_changed',
+        `Selected verification criteria changed: ${identity}`,
+      );
+    }
+    return entry;
+  });
+}
+
+/**
+ * Resolve regular workspace files covered by the exact selected recipe scopes.
+ * The broker applies the final hard exclusions, secret scan, and consent limits.
+ */
+export async function resolveVerificationScopePaths(options: {
+  readonly workspaceRoot: string;
+  readonly recipes: readonly VerificationCriteriaRecipeV1[];
+}): Promise<readonly string[]> {
+  if (options.recipes.length === 0) return [];
+  const workspaceRoot = await realpath(options.workspaceRoot);
+  const matched = new Set<string>();
+  const skippedDirectories = new Set([
+    '.git', '.next', '.nuxt', '.wukong', 'build', 'coverage', 'dist',
+    'node_modules', 'out', 'target', 'vendor',
+  ]);
+  const walk = async (directory: string): Promise<void> => {
+    if (matched.size > REVIEW_SCOPE_MATCH_LIMIT) return;
+    const entries = await readdir(directory, { withFileTypes: true });
+    for (const entry of entries.toSorted((left, right) => left.name.localeCompare(right.name))) {
+      if (matched.size > REVIEW_SCOPE_MATCH_LIMIT) return;
+      if (entry.isSymbolicLink()) continue;
+      const absolutePath = join(directory, entry.name);
+      if (entry.isDirectory()) {
+        if (!skippedDirectories.has(entry.name)) await walk(absolutePath);
+        continue;
+      }
+      if (!entry.isFile()) continue;
+      const logicalPath = normalizeLogicalPath(relative(workspaceRoot, absolutePath));
+      if (options.recipes.some((recipe) => scopeMatchesPath(recipe.scope, logicalPath))) {
+        matched.add(logicalPath);
+      }
+    }
+  };
+  await walk(workspaceRoot);
+  return [...matched].toSorted();
 }
 
 export async function discoverVerificationCriteriaCatalog(
@@ -376,10 +586,10 @@ export function createVerificationCriteriaSelection(
     }
     seen.add(request.selectionId);
     const entry = byId.get(request.selectionId);
-    if (entry === undefined || entry.status !== 'valid') {
+    if (entry === undefined) {
       throw new VerificationCriteriaError(
         'verification_criteria_collision',
-        `Verification criteria selection is missing, invalid, or ambiguous: ${request.selectionId}`,
+        `Verification criteria selection is missing or invalid: ${request.selectionId}`,
       );
     }
     if (entry.ref.provenanceDigest !== request.provenanceDigest) {
@@ -641,6 +851,23 @@ async function validateSourceRoot(
       return { ok: false, message: 'Workspace criteria source escapes the confirmed workspace.' };
     }
     if (sourceRoot.kind === 'personal') await validatePersonalAccess([rootRealpath]);
+    if (sourceRoot.kind === 'extra') {
+      const info = await lstat(rootRealpath);
+      const rootIdentityDigest = canonicalDigest('wukong/extra-criteria-root/v1', {
+        canonicalRealpath: rootRealpath,
+        device: info.dev,
+        inode: info.ino,
+      });
+      if (rootIdentityDigest !== sourceRoot.rootIdentityDigest) {
+        return { ok: false, message: 'Extra criteria source root identity changed after trust.' };
+      }
+    }
+    if (
+      sourceRoot.kind === 'builtin'
+      && await digestVerificationCriteriaAssetRoot(rootRealpath) !== sourceRoot.assetDigest
+    ) {
+      return { ok: false, message: 'Builtin criteria release asset digest mismatch.' };
+    }
     return { ok: true, rootRealpath };
   } catch (error) {
     return {
@@ -792,6 +1019,17 @@ async function validatePersonalAccess(paths: readonly string[]): Promise<void> {
   }
 }
 
+async function isPackageDirectory(directory: string): Promise<boolean> {
+  for (const marker of PACKAGE_MARKERS) {
+    try {
+      if ((await lstat(join(directory, marker))).isFile()) return true;
+    } catch {
+      continue;
+    }
+  }
+  return false;
+}
+
 function sourceLogicalRoot(source: VerificationCriteriaSourceRootV1): string {
   switch (source.kind) {
     case 'personal': return '~/.wukong/skills';
@@ -876,6 +1114,101 @@ function matchLogicalGlob(path: string, glob: string): boolean {
     pattern += /[.+^${}()|[\]\\]/u.test(char) ? `\\${char}` : char;
   }
   return new RegExp(`^${pattern}$`, 'u').test(path);
+}
+
+function scopeMatchesPath(
+  scope: VerificationCriteriaScopeV1,
+  logicalPath: string,
+): boolean {
+  if (scope.kind !== 'package') {
+    return scope.paths.some((glob) => matchLogicalGlob(logicalPath, glob));
+  }
+  if (
+    logicalPath !== scope.packagePath
+    && !logicalPath.startsWith(`${scope.packagePath}/`)
+  ) {
+    return false;
+  }
+  const packagePath = logicalPath
+    .slice(scope.packagePath.length)
+    .replace(/^\/+/u, '');
+  return scope.paths.some((glob) => matchLogicalGlob(packagePath, glob));
+}
+
+function selectedSourceRoots(
+  workspaceRoot: string,
+  selection: VerificationCriteriaSelectionV1,
+  personalRoot: string | undefined,
+  trustedRoots: readonly VerificationCriteriaSourceRootV1[],
+): readonly VerificationCriteriaSourceRootV1[] {
+  const roots = new Map<string, VerificationCriteriaSourceRootV1>();
+  for (const { ref } of selection.selected) {
+    let root: VerificationCriteriaSourceRootV1;
+    const source = ref.source;
+    const sourceTrust = ref.sourceTrust;
+    switch (source.kind) {
+      case 'project':
+        root = {
+          kind: 'project',
+          root: join(workspaceRoot, '.wukong', 'skills'),
+          workspaceIdentityDigest: ref.sourceTrust.kind === 'workspace'
+            ? ref.sourceTrust.workspaceIdentityDigest
+            : '',
+        };
+        break;
+      case 'package':
+        root = {
+          kind: 'package',
+          root: join(workspaceRoot, source.packagePath, '.wukong', 'skills'),
+          packagePath: source.packagePath,
+          workspaceIdentityDigest: ref.sourceTrust.kind === 'workspace'
+            ? ref.sourceTrust.workspaceIdentityDigest
+            : '',
+        };
+        break;
+      case 'personal':
+        root = {
+          kind: 'personal',
+          root: personalRoot ?? join(homedir(), '.wukong', 'skills'),
+        };
+        break;
+      case 'extra': {
+        const exact = trustedRoots.find((candidate) => (
+          candidate.kind === 'extra'
+          && candidate.sourceId === source.sourceId
+          && sourceTrust.kind === 'extra-local-grant'
+          && candidate.trustGrantId === sourceTrust.trustGrantId
+          && candidate.rootIdentityDigest === sourceTrust.rootIdentityDigest
+        ));
+        if (exact?.kind !== 'extra') {
+          throw new VerificationCriteriaError(
+            'verification_criteria_untrusted',
+            'Selected extra criteria source grant is missing, changed, or revoked.',
+          );
+        }
+        root = exact;
+        break;
+      }
+      case 'builtin': {
+        const exact = trustedRoots.find((candidate) => (
+          candidate.kind === 'builtin'
+          && candidate.version === source.version
+          && sourceTrust.kind === 'builtin-release'
+          && candidate.assetDigest === sourceTrust.assetDigest
+        ));
+        if (exact?.kind !== 'builtin') {
+          throw new VerificationCriteriaError(
+            'verification_criteria_untrusted',
+            'Selected builtin criteria asset is missing or does not match this release.',
+          );
+        }
+        root = exact;
+        break;
+      }
+    }
+    roots.set(sourceLogicalRoot(root), root);
+  }
+  return [...roots.values()];
 }
 
 function normalizeChangedPaths(paths: readonly string[]): readonly string[] {
@@ -982,7 +1315,7 @@ function compareCatalogEntry(
     || left.ref.skillName.localeCompare(right.ref.skillName);
 }
 
-function digestRaw(domain: string, value: string): string {
+function digestRaw(domain: string, value: string | Uint8Array): string {
   return `sha256:${createHash('sha256')
     .update(domain)
     .update('\0')

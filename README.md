@@ -8,15 +8,17 @@
 
 Wukong Code is a terminal AI coding agent built around one primary workflow: **Goal → Write → Check → Review → Fix**. Give `/loop` a goal and Wukong keeps working until an independent reviewer has no blocking findings or the iteration limit is reached.
 
-Version `0.0.19` adds an explicit Finish Line before every new Loop. The TUI
-lets you review the Goal, optional Done when, Must not constraints, frozen
-project checks, and the per-run limit before anything starts. Headless users can
-inspect the same contract with `wukong loop "<goal>" --dry-run`, then confirm
-the exact warning, Gate approval, and workspace trust digests. Check definitions
-and evidence are frozen locally so an agent cannot silently weaken the Gate; a
-terminal continuation gets a new traceable run while contract changes create a
-revised Loop. See the [0.0.19 design](docs/design/0.0.19-explicit-finish-line.md)
-and [release notes](docs/releases/0.0.19.md).
+Version `0.0.20` adds reusable Verification Criteria without executing Skill
+commands. `/loop` discovers strict sidecars from existing personal, project,
+monorepo package, explicitly trusted local, and read-only built-in reference
+Skills. Suggested recipes remain unselected until the user chooses an exact
+source and digest; multiple selections keep a visible flat order. Every new
+V2/V3 reviewer uses a bounded, secret-filtering local broker and a separate
+per-run confirmation for the exact BYOK provider endpoint. Headless users can
+inspect the same catalog, selection CAS, input policy, provider destination,
+and cost with `--dry-run --output-format stream-json`. See the
+[0.0.20 design](docs/design/0.0.20-reusable-verification-skills.md) and
+[release notes](docs/releases/0.0.20.md).
 
 Version `0.0.13` added structured multi-finding reviews, project-specific rules in `.wukong/review-policy.md`, local finding feedback and diagnostics, plus an optional independent reviewer model. The current product remains Free and bring-your-own-key, with no paid plan or entitlement.
 
@@ -46,7 +48,7 @@ Login with an authenticated catalog that may honestly be empty. Login does not
 replace a BYOK default model. See the
 [0.0.18 design](docs/design/0.0.18-loop-first-simplification.md).
 
-The planned sequence is now `0.0.20` reusable verification criteria, `0.0.21`
+The planned sequence is now `0.0.21`
 isolated Loop worktrees, and then `0.1.0` as the first stable **Trusted Local
 Loop**. Version `0.1.0` remains Free, local-first, and BYOK; it does not include
 parallel agents, a Supervisor, billing, or managed models. `0.2.0 Pro Reliable

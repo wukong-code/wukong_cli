@@ -6,7 +6,11 @@ import {
   type LoopContractV3Input,
   type PermissionMode,
 } from '@wukong/wukong-sdk';
-import type { FinishLineProposal } from '@wukong/verification';
+import {
+  createBrokerReviewTrustProposal,
+  type BrokerReviewTrustBindingV1,
+  type FinishLineProposal,
+} from '@wukong/verification';
 
 import { parseLoopDuration } from '#/utils/duration';
 import {
@@ -18,13 +22,18 @@ import {
 import {
   formatLoopPreflightBlocked,
   formatLoopPreflightReady,
+  confirmLoopReviewSettings,
+  createLoopReviewSettingsProposal,
   resolveLoopReviewProvider,
   runLoopPreflight,
   type LoopPreflightReady,
   type DiscoveredCheckDecision,
 } from '#/cli/lib/loop-preflight';
 import {
+  brokerReviewTrustBinding,
+  findBrokerReviewTrust,
   findWorkspaceTrust,
+  grantBrokerReviewTrustLocally,
   grantWorkspaceTrust,
   type WorkspaceTrustGrant,
 } from '#/cli/lib/workspace-trust';
@@ -542,7 +551,13 @@ async function resumeGoal(host: SlashCommandHost): Promise<GoalSnapshot | undefi
 
   let resumed: GoalSnapshot;
   try {
-    resumed = await host.requireSession().resumeGoal();
+    const session = host.requireSession();
+    const current = (await session.getGoal()).goal;
+    const reviewSettings = await reviewSettingsForResume(host, current);
+    if (reviewSettings === false) return undefined;
+    resumed = await session.resumeGoal(
+      reviewSettings === undefined ? {} : { reviewSettings },
+    );
   } catch (error) {
     if (isWukongError(error) && error.code === ErrorCodes.GOAL_NOT_FOUND) {
       host.showStatus('No goal to resume.');
@@ -554,6 +569,98 @@ async function resumeGoal(host: SlashCommandHost): Promise<GoalSnapshot | undefi
   host.track('goal_resume');
   host.sendNormalUserInput(RESUME_GOAL_INPUT);
   return resumed;
+}
+
+export async function reviewSettingsForResume(
+  host: SlashCommandHost,
+  goal: GoalSnapshot | null,
+): Promise<
+  | ReturnType<typeof confirmLoopReviewSettings>
+  | undefined
+  | false
+> {
+  const contract = goal?.loopContract;
+  if (
+    goal?.status !== 'paused'
+    && goal?.status !== 'blocked'
+  ) {
+    return undefined;
+  }
+  if (contract?.schemaVersion !== 2 && contract?.schemaVersion !== 3) {
+    return undefined;
+  }
+  const config = await host.harness.getConfig();
+  const provider = resolveLoopReviewProvider(
+    config,
+    goal.reviewModel ?? host.state.appState.model,
+  );
+  if (provider === undefined) {
+    host.showError(
+      'Cannot resume Loop: the actual reviewer provider endpoint could not be resolved.',
+    );
+    return false;
+  }
+  const proposal = createLoopReviewSettingsProposal({
+    workspaceIdentityDigest: contract.workspaceIdentity.workspaceIdentityDigest,
+    reviewProvider: provider,
+  });
+  const storedBrokerTrust = await findBrokerReviewTrust(
+    contract.workspaceIdentity.workspaceIdentityDigest,
+  );
+  const brokerReviewTrust = await confirmTuiBrokerReviewTrust(host, {
+    canonicalRealpath: contract.workspaceIdentity.canonicalRealpath,
+    workspaceIdentityDigest: contract.workspaceIdentity.workspaceIdentityDigest,
+    brokerTrustProposal: proposal.brokerTrustProposal,
+    existing: storedBrokerTrust === undefined
+      ? undefined
+      : brokerReviewTrustBinding(storedBrokerTrust),
+  });
+  if (brokerReviewTrust === false) return false;
+  const origin = proposal.reviewSubjectConsentProposal.provider.endpointOrigin;
+  const confirmed = await new Promise<boolean>((resolve) => {
+    host.mountEditorReplacement(
+      new ChoicePickerComponent({
+        title: 'Allow this Loop continuation to send bounded review input?',
+        hint: '↑↓ navigate · Enter select · Esc cancel',
+        notice: [
+          `Workspace  ${contract.workspaceIdentity.canonicalRealpath}`,
+          `Provider   ${origin.scheme}://${origin.host}:${String(origin.port)}`,
+          'Input      changed/scope files and redacted Gate evidence within fixed limits',
+          'Excluded   secrets, private state, binaries, generated and oversized content',
+          'Privacy    sent to your BYOK provider; not uploaded to Wukong',
+        ].join('\n'),
+        noticeTone: 'warning',
+        options: [
+          {
+            value: 'continue',
+            label: 'Continue once',
+            description: 'Freeze this exact provider/input consent for the resumed run.',
+          },
+          {
+            value: 'cancel',
+            label: 'Cancel',
+            description: 'Keep the Goal stopped and make no provider call.',
+          },
+        ],
+        onSelect: (value) => {
+          host.restoreEditor();
+          resolve(value === 'continue');
+        },
+        onCancel: () => {
+          host.restoreEditor();
+          resolve(false);
+        },
+      }),
+    );
+  });
+  if (!confirmed) {
+    host.showStatus('Loop remains stopped. No review input was sent.');
+    return false;
+  }
+  return {
+    ...confirmLoopReviewSettings(proposal),
+    brokerReviewTrust,
+  };
 }
 
 async function cancelGoal(host: SlashCommandHost): Promise<void> {
@@ -993,6 +1100,10 @@ async function handleFinishLineReviewChoice(
       );
       return;
     case 'start':
+      {
+        const brokerReviewTrust = preflight.brokerReviewTrust
+          ?? await ensureTuiBrokerReviewTrust(host, preflight);
+        if (brokerReviewTrust === false) return;
       await confirmReviewSubjectAccess(
         host,
         parsed,
@@ -1000,7 +1111,9 @@ async function handleFinishLineReviewChoice(
         rawArgs,
         preflight,
         discoveredCheckDecision,
+        brokerReviewTrust,
       );
+      }
       return;
   }
 }
@@ -1135,6 +1248,7 @@ async function confirmReviewSubjectAccess(
   rawArgs: string,
   preflight: LoopPreflightReady,
   discoveredCheckDecision: DiscoveredCheckDecision,
+  brokerReviewTrust: BrokerReviewTrustBindingV1,
 ): Promise<void> {
   await new Promise<void>((resolve) => {
     host.mountEditorReplacement(
@@ -1183,6 +1297,7 @@ async function confirmReviewSubjectAccess(
             rawArgs,
             preflight,
             discoveredCheckDecision,
+            brokerReviewTrust,
           ).finally(resolve);
         },
         onCancel: () => {
@@ -1208,6 +1323,7 @@ async function startConfirmedLoop(
   rawArgs: string,
   initialPreflight: LoopPreflightReady,
   discoveredCheckDecision: DiscoveredCheckDecision,
+  brokerReviewTrust: BrokerReviewTrustBindingV1,
 ): Promise<void> {
   let run: Awaited<ReturnType<typeof beginLoopRun>> | undefined;
   let finalized: LoopPreflightReady | undefined;
@@ -1243,8 +1359,9 @@ async function startConfirmedLoop(
             initialPreflight.verificationSelection === undefined
               ? undefined
               : initialPreflight.verificationCatalog.catalogDigest,
-          trustReviewSubjectProposalDigest:
-            initialPreflight.brokerTrustProposal.trustProposalDigest,
+          trustReviewSubjectChallenge:
+            initialPreflight.brokerTrustChallenge,
+          brokerReviewTrust,
           acknowledgeReviewSubjectConsentDigest:
             initialPreflight.reviewSubjectConsentProposal.consentProposalDigest,
           reviewProvider: resolveLoopReviewProvider(
@@ -1303,6 +1420,92 @@ async function startConfirmedLoop(
       },
     },
   );
+}
+
+async function ensureTuiBrokerReviewTrust(
+  host: SlashCommandHost,
+  preflight: LoopPreflightReady,
+): Promise<BrokerReviewTrustBindingV1 | false> {
+  return confirmTuiBrokerReviewTrust(host, {
+    canonicalRealpath: preflight.proposal.workspaceIdentity.canonicalRealpath,
+    workspaceIdentityDigest:
+      preflight.proposal.workspaceIdentity.workspaceIdentityDigest,
+    brokerTrustProposal: preflight.brokerTrustProposal,
+    existing: preflight.brokerReviewTrust,
+  });
+}
+
+async function confirmTuiBrokerReviewTrust(
+  host: SlashCommandHost,
+  input: {
+    readonly canonicalRealpath: string;
+    readonly workspaceIdentityDigest: string;
+    readonly brokerTrustProposal: LoopPreflightReady['brokerTrustProposal'];
+    readonly existing?: BrokerReviewTrustBindingV1;
+  },
+): Promise<BrokerReviewTrustBindingV1 | false> {
+  if (input.existing !== undefined) return input.existing;
+  return new Promise<BrokerReviewTrustBindingV1 | false>((resolve) => {
+    host.mountEditorReplacement(
+      new ChoicePickerComponent({
+        title: 'Allow this workspace to build bounded review input?',
+        hint: '↑↓ navigate · Enter select · Esc cancel',
+        notice: [
+          `Workspace  ${input.canonicalRealpath}`,
+          `Identity   ${input.workspaceIdentityDigest}`,
+          'Scope      brokered review subjects only; no shell or filesystem tool access',
+          'Outbound   this trust does not authorize provider transmission',
+        ].join('\n'),
+        noticeTone: 'warning',
+        options: [
+          {
+            value: 'session',
+            label: 'Trust once',
+            description: 'Keep this broker-read grant only for this Wukong process.',
+          },
+          {
+            value: 'remembered-local',
+            label: 'Remember locally',
+            description: 'Store this exact workspace/policy grant in the local 0600 trust store.',
+          },
+          {
+            value: 'cancel',
+            label: 'Cancel',
+            description: 'Create no trust grant, contract, run, or provider connection.',
+          },
+        ],
+        onSelect: (value) => {
+          if (value === 'cancel') {
+            host.restoreEditor();
+            host.showStatus('Loop not started.');
+            resolve(false);
+            return;
+          }
+          void grantBrokerReviewTrustLocally(
+            value === 'remembered-local'
+              ? createBrokerReviewTrustProposal({
+                  workspaceIdentityDigest: input.workspaceIdentityDigest,
+                  intent: 'remember-locally',
+                })
+              : input.brokerTrustProposal,
+            value === 'remembered-local' ? 'remembered-local' : 'session',
+          ).then((grant) => {
+            host.restoreEditor();
+            resolve(brokerReviewTrustBinding(grant));
+          }).catch((error: unknown) => {
+            host.restoreEditor();
+            host.showError(`Failed to trust review broker: ${formatErrorMessage(error)}`);
+            resolve(false);
+          });
+        },
+        onCancel: () => {
+          host.restoreEditor();
+          host.showStatus('Loop not started.');
+          resolve(false);
+        },
+      }),
+    );
+  });
 }
 
 async function ensureTuiWorkspaceTrust(

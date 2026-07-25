@@ -1,0 +1,28 @@
+{
+  "schemaVersion": 1,
+  "kind": "wukong.verification-criteria",
+  "id": "frontend-design",
+  "description": "Review changed frontend behavior for state completeness and interaction consistency.",
+  "scope": {
+    "kind": "project",
+    "paths": [
+      "apps/**/src/components/**",
+      "apps/**/src/pages/**",
+      "apps/**/src/routes/**",
+      "src/components/**",
+      "src/pages/**"
+    ]
+  },
+  "criteria": [
+    {
+      "id": "states-complete",
+      "text": "Loading, empty, error, success, disabled, and narrow-layout states are handled where applicable.",
+      "evidence": "Cite the relevant component paths and deterministic or captured UI evidence for applicable states."
+    },
+    {
+      "id": "interaction-consistent",
+      "text": "Primary actions, keyboard behavior, focus, and visible labels remain consistent with the surrounding product.",
+      "evidence": "Cite the interaction implementation and its deterministic or captured UI evidence."
+    }
+  ]
+}

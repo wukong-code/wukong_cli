@@ -19,6 +19,7 @@ import {
 } from '#/tui/goal-queue-store';
 import type { SlashCommandHost } from '#/tui/commands/dispatch';
 import { getBuiltInPalette } from '#/tui/theme';
+import { clearSessionWorkspaceTrustForTests } from '#/cli/lib/workspace-trust';
 
 const loopLifecycleMocks = vi.hoisted(() => ({
   begin: vi.fn(async () => ({ runId: 'run123' })),
@@ -43,8 +44,110 @@ vi.mock('#/cli/lib/loop-lifecycle', () => ({
   completeLoopRun: loopLifecycleMocks.completeRun,
 }));
 
+vi.mock('#/cli/lib/workspace-trust', () => ({
+  clearSessionWorkspaceTrustForTests: vi.fn(),
+  findBrokerReviewTrust: vi.fn(async () => undefined),
+  findWorkspaceTrust: vi.fn(async () => undefined),
+  grantBrokerReviewTrustLocally: vi.fn(async (proposal: {
+    workspaceIdentityDigest: string;
+    trustProposalDigest: string;
+    reviewSubjectPolicyVersion: string;
+  }) => ({
+    schemaVersion: 1,
+    trustGrantId: 'broker-grant',
+    workspaceIdentityDigest: proposal.workspaceIdentityDigest,
+    scope: 'brokered-review-subject',
+    trustProposalDigest: proposal.trustProposalDigest,
+    reviewSubjectPolicyVersion: proposal.reviewSubjectPolicyVersion,
+    persistence: 'session',
+    createdAt: 1,
+  })),
+  brokerReviewTrustBinding: (grant: {
+    trustGrantId: string;
+    workspaceIdentityDigest: string;
+    scope: 'brokered-review-subject';
+    trustProposalDigest: string;
+  }) => ({
+    trustGrantId: grant.trustGrantId,
+    workspaceIdentityDigest: grant.workspaceIdentityDigest,
+    scope: grant.scope,
+    trustProposalDigest: grant.trustProposalDigest,
+  }),
+  grantWorkspaceTrust: vi.fn(async (identity: {
+    canonicalRealpath: string;
+    workspaceIdentityDigest: string;
+  }) => ({
+    schemaVersion: 1,
+    trustGrantId: 'workspace-grant',
+    canonicalRealpath: identity.canonicalRealpath,
+    workspaceIdentityDigest: identity.workspaceIdentityDigest,
+    scope: 'loop-project-checks',
+    persistence: 'session',
+    createdAt: 1,
+  })),
+}));
+
 vi.mock('#/cli/lib/loop-preflight', () => ({
   runLoopPreflight: loopPreflightMocks.run,
+  createLoopReviewSettingsProposal: () => ({
+    brokerTrustProposal: {
+      schemaVersion: 1,
+      workspaceIdentityDigest: 'sha256:workspace',
+      scope: 'brokered-review-subject',
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      intent: 'once',
+      trustProposalDigest: 'sha256:broker',
+    },
+    reviewSubjectConsentProposal: {
+      schemaVersion: 1,
+      workspaceIdentityDigest: 'sha256:workspace',
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      hardExclusionPolicyVersion: 'review-subject-hard-exclusion/1',
+      allowedOrigins: ['changed-tracked'],
+      limits: {
+        maxFiles: 200,
+        maxTotalBytes: 2_097_152,
+        maxFileBytes: 262_144,
+        maxGateEvidenceTotalBytes: 524_288,
+        maxGateEvidenceBytes: 131_072,
+      },
+      provider: {
+        providerId: 'openai',
+        endpointOrigin: { scheme: 'https', host: 'api.openai.com', port: 443 },
+        endpointOriginDigest: 'sha256:origin',
+      },
+      consentProposalDigest: 'sha256:consent',
+    },
+  }),
+  confirmLoopReviewSettings: () => ({
+    brokerReviewTrust: {
+      workspaceIdentityDigest: 'sha256:workspace',
+      scope: 'brokered-review-subject',
+      trustProposalDigest: 'sha256:broker',
+      trustGrantId: 'broker-grant',
+    },
+    reviewSubjectConsent: {
+      schemaVersion: 1,
+      workspaceIdentityDigest: 'sha256:workspace',
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      hardExclusionPolicyVersion: 'review-subject-hard-exclusion/1',
+      allowedOrigins: ['changed-tracked'],
+      limits: {
+        maxFiles: 200,
+        maxTotalBytes: 2_097_152,
+        maxFileBytes: 262_144,
+        maxGateEvidenceTotalBytes: 524_288,
+        maxGateEvidenceBytes: 131_072,
+      },
+      provider: {
+        providerId: 'openai',
+        endpointOriginDigest: 'sha256:origin',
+      },
+      consentProposalDigest: 'sha256:consent',
+      acknowledgedAt: 1,
+      consentDigest: 'sha256:consent-binding',
+    },
+  }),
   resolveLoopReviewProvider: () => ({
     providerId: 'openai',
     endpoint: 'https://api.openai.com/v1',
@@ -159,6 +262,7 @@ function loopPreflightReady(objective: string) {
     checks: [],
     proposal: finishLineProposal(objective),
     trustChallenge: 'challenge.signature',
+    brokerTrustChallenge: 'broker.challenge',
     contractSchemaVersion: 2 as const,
     verificationCatalog: {
       schemaVersion: 1 as const,
@@ -521,6 +625,7 @@ describe('handleGoalCommand', () => {
   let session: ReturnType<typeof makeHost>['session'];
 
   beforeEach(() => {
+    clearSessionWorkspaceTrustForTests();
     const made = makeHost();
     host = made.host;
     session = made.session;
@@ -913,6 +1018,80 @@ describe('handleGoalCommand', () => {
     expect(host.sendNormalUserInput).toHaveBeenCalledWith('Resume the active goal.');
   });
 
+  it('/goal resume reconfirms exact broker and provider consent for a Loop', async () => {
+    session.getGoal.mockResolvedValueOnce({
+      goal: {
+        ...fakeSnapshot(),
+        status: 'blocked',
+        reviewModel: 'wukong-model',
+        loopContract: {
+          schemaVersion: 2,
+          workspaceIdentity: {
+            canonicalRealpath: '/workspace',
+            workspaceIdentityDigest: 'sha256:workspace',
+          },
+        },
+      },
+    } as never);
+
+    const running = handleGoalCommand(host, 'resume');
+    await vi.waitFor(() => {
+      expect(host.mountEditorReplacement).toHaveBeenCalledOnce();
+    });
+    mountedPicker(host).handleInput(ENTER);
+    await vi.waitFor(() => {
+      expect(host.mountEditorReplacement).toHaveBeenCalledTimes(2);
+    });
+    latestMountedPicker(host).handleInput(ENTER);
+    await running;
+
+    expect(session.resumeGoal).toHaveBeenCalledWith({
+      reviewSettings: expect.objectContaining({
+        brokerReviewTrust: expect.objectContaining({
+          trustGrantId: expect.any(String),
+        }),
+        reviewSubjectConsent: expect.objectContaining({
+          consentDigest: 'sha256:consent-binding',
+        }),
+      }),
+    });
+    expect(host.sendNormalUserInput).toHaveBeenCalledWith('Resume the active goal.');
+  });
+
+  it('/goal resume consent cancellation keeps the Loop stopped', async () => {
+    session.getGoal.mockResolvedValueOnce({
+      goal: {
+        ...fakeSnapshot(),
+        status: 'blocked',
+        loopContract: {
+          schemaVersion: 2,
+          workspaceIdentity: {
+            canonicalRealpath: '/workspace',
+            workspaceIdentityDigest: 'sha256:workspace',
+          },
+        },
+      },
+    } as never);
+
+    const running = handleGoalCommand(host, 'resume');
+    await vi.waitFor(() => {
+      expect(host.mountEditorReplacement).toHaveBeenCalledOnce();
+    });
+    mountedPicker(host).handleInput(ENTER);
+    await vi.waitFor(() => {
+      expect(host.mountEditorReplacement).toHaveBeenCalledTimes(2);
+    });
+    latestMountedPicker(host).handleInput(DOWN);
+    latestMountedPicker(host).handleInput(ENTER);
+    await running;
+
+    expect(session.resumeGoal).not.toHaveBeenCalled();
+    expect(host.sendNormalUserInput).not.toHaveBeenCalled();
+    expect(host.showStatus).toHaveBeenCalledWith(
+      'Loop remains stopped. No review input was sent.',
+    );
+  });
+
   it('/goal cancel calls cancelGoal and does not send input', async () => {
     await handleGoalCommand(host, 'cancel');
     expect(session.cancelGoal).toHaveBeenCalledOnce();
@@ -1006,6 +1185,7 @@ describe('dispatchInput /goal integration', () => {
 
 describe('handleLoopSlashCommand', () => {
   beforeEach(() => {
+    clearSessionWorkspaceTrustForTests();
     vi.clearAllMocks();
     loopLifecycleMocks.begin.mockResolvedValue({ runId: 'run123' });
     loopPreflightMocks.run.mockImplementation(
