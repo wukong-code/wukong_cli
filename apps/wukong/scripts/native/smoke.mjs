@@ -33,7 +33,15 @@ async function runWukong(args) {
     });
     return `${stdout}${stderr}`;
   } catch (error) {
-    const detail = [error.stdout?.trim(), error.stderr?.trim(), error.message]
+    const detail = [
+      error.stdout?.trim(),
+      error.stderr?.trim(),
+      error.code !== undefined ? `exit code: ${String(error.code)}` : null,
+      error.signal !== undefined && error.signal !== null
+        ? `signal: ${String(error.signal)}`
+        : null,
+      error.message,
+    ]
       .filter(Boolean)
       .join('\n');
     fail(`Native smoke failed: ${executablePath} ${args.join(' ')}\n${detail}`);
@@ -49,7 +57,15 @@ async function runWukongWithEnv(args, env) {
     });
     return `${stdout}${stderr}`;
   } catch (error) {
-    const detail = [error.stdout?.trim(), error.stderr?.trim(), error.message]
+    const detail = [
+      error.stdout?.trim(),
+      error.stderr?.trim(),
+      error.code !== undefined ? `exit code: ${String(error.code)}` : null,
+      error.signal !== undefined && error.signal !== null
+        ? `signal: ${String(error.signal)}`
+        : null,
+      error.message,
+    ]
       .filter(Boolean)
       .join('\n');
     fail(`Native smoke failed: ${executablePath} ${args.join(' ')}\n${detail}`);

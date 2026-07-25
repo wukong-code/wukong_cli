@@ -12,9 +12,20 @@ import { appRoot, targetTriple } from './paths.mjs';
 
 const execFileAsync = promisify(execFile);
 
-const OFFICIAL_NODE_VERSION = 'v26.4.0';
+const DEFAULT_OFFICIAL_NODE_VERSION = 'v26.4.0';
+const OFFICIAL_NODE_VERSION_BY_TARGET = Object.freeze({
+  // Node's LIEF-based `--build-sea` output segfaults on macOS x64. Node also
+  // skips its upstream SEA suite on this platform (nodejs/node#59553,
+  // nodejs/node#60250). Keep Intel macOS on the stable Node 24 runtime and
+  // inject its blob with postject in 03-inject.mjs.
+  'darwin-x64': 'v24.18.0',
+});
 const NODE_SEA_CACHE_DIR = resolve(appRoot, '.node-sea');
 const SENTINEL = 'NODE_SEA_FUSE_fce680ab2cc467b6e072b8b5df1996b2';
+
+export function officialNodeVersion(target = resolveTarget()) {
+  return OFFICIAL_NODE_VERSION_BY_TARGET[target] ?? DEFAULT_OFFICIAL_NODE_VERSION;
+}
 
 /**
  * Map a Wukong target triple (e.g. darwin-x64, win32-x64) to the Node.js
@@ -41,20 +52,20 @@ function resolveTarget() {
   return targetTriple();
 }
 
-function cachedNodePath(target = resolveTarget()) {
+function cachedNodePath(target = resolveTarget(), version = officialNodeVersion(target)) {
   const tag = nodePlatformTag(target);
   const ext = process.platform === 'win32' ? '.exe' : '';
-  return resolve(NODE_SEA_CACHE_DIR, `node-${OFFICIAL_NODE_VERSION}-${tag}`, 'bin', `node${ext}`);
+  return resolve(NODE_SEA_CACHE_DIR, `node-${version}-${tag}`, 'bin', `node${ext}`);
 }
 
-function tarPath(target = resolveTarget()) {
+function tarPath(target = resolveTarget(), version = officialNodeVersion(target)) {
   const tag = nodePlatformTag(target);
-  return resolve(NODE_SEA_CACHE_DIR, `node-${OFFICIAL_NODE_VERSION}-${tag}.tar.gz`);
+  return resolve(NODE_SEA_CACHE_DIR, `node-${version}-${tag}.tar.gz`);
 }
 
-function downloadUrl(target = resolveTarget()) {
+function downloadUrl(target = resolveTarget(), version = officialNodeVersion(target)) {
   const tag = nodePlatformTag(target);
-  return `https://nodejs.org/download/release/${OFFICIAL_NODE_VERSION}/node-${OFFICIAL_NODE_VERSION}-${tag}.tar.gz`;
+  return `https://nodejs.org/download/release/${version}/node-${version}-${tag}.tar.gz`;
 }
 
 async function sha256File(path) {
@@ -100,7 +111,7 @@ function versionGte(version, minVersion) {
   return true;
 }
 
-async function findUsableSystemNode() {
+async function findUsableSystemNode(requiredVersion) {
   const candidates = [process.execPath];
   if (process.env.PATH) {
     const sep = process.platform === 'win32' ? ';' : ':';
@@ -112,18 +123,21 @@ async function findUsableSystemNode() {
 
   for (const nodePath of candidates) {
     if (!(await nodeBinaryHasSentinel(nodePath))) continue;
-    const version = await nodeVersion(nodePath);
-    if (version && versionGte(version, OFFICIAL_NODE_VERSION)) {
+    const actualVersion = await nodeVersion(nodePath);
+    if (actualVersion && versionGte(actualVersion, requiredVersion)) {
       return nodePath;
     }
   }
   return null;
 }
 
-async function downloadOfficialNode(target = resolveTarget()) {
-  const binPath = cachedNodePath(target);
-  const archivePath = tarPath(target);
-  const extractDir = resolve(NODE_SEA_CACHE_DIR, `node-${OFFICIAL_NODE_VERSION}-${nodePlatformTag(target)}`);
+async function downloadOfficialNode(
+  target = resolveTarget(),
+  version = officialNodeVersion(target),
+) {
+  const binPath = cachedNodePath(target, version);
+  const archivePath = tarPath(target, version);
+  const extractDir = resolve(NODE_SEA_CACHE_DIR, `node-${version}-${nodePlatformTag(target)}`);
 
   if (await nodeBinaryHasSentinel(binPath)) {
     console.log(`Using cached official Node.js binary for SEA build: ${binPath}`);
@@ -131,10 +145,10 @@ async function downloadOfficialNode(target = resolveTarget()) {
   }
 
   await mkdir(NODE_SEA_CACHE_DIR, { recursive: true });
-  console.log(`Downloading official Node.js ${OFFICIAL_NODE_VERSION} for target ${target}...`);
-  console.log(`URL: ${downloadUrl(target)}`);
+  console.log(`Downloading official Node.js ${version} for target ${target}...`);
+  console.log(`URL: ${downloadUrl(target, version)}`);
 
-  const response = await fetch(downloadUrl(target));
+  const response = await fetch(downloadUrl(target, version));
   if (!response.ok) {
     throw new Error(`Failed to download Node.js: ${response.status} ${response.statusText}`);
   }
@@ -145,7 +159,7 @@ async function downloadOfficialNode(target = resolveTarget()) {
   await run('tar', ['-xzf', archivePath, '-C', extractDir, '--strip-components=1']);
 
   const digest = await sha256File(archivePath);
-  console.log(`Downloaded and extracted Node.js ${OFFICIAL_NODE_VERSION} (sha256: ${digest})`);
+  console.log(`Downloaded and extracted Node.js ${version} (sha256: ${digest})`);
 
   return binPath;
 }
@@ -163,17 +177,20 @@ export async function ensureSeaNodeBinary() {
 
   const target = resolveTarget();
   const host = hostTarget();
+  const version = officialNodeVersion(target);
 
   // When the requested target matches the host architecture we can reuse the
   // system Node.js if it already supports single-executable applications.
   // For cross-compilation we must download a Node.js binary for the target.
-  if (target === host) {
-    const usableNode = await findUsableSystemNode();
+  // Intel macOS deliberately uses the exact Node 24 runtime because Node 26
+  // SEA executables crash before JavaScript starts on that platform.
+  if (target === host && target !== 'darwin-x64') {
+    const usableNode = await findUsableSystemNode(version);
     if (usableNode !== null) {
       console.log(`Using system Node.js binary for SEA build: ${usableNode}`);
       return usableNode;
     }
   }
 
-  return downloadOfficialNode(target);
+  return downloadOfficialNode(target, version);
 }
