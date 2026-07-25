@@ -145,14 +145,14 @@
 - [x] schema/catalog/digest/CAS/source-trust/provider-consent/origin-lock/broker/redaction/secret-exclusion/prompt-injection/durable-join tests 通过（2026-07-25；全仓 9343 tests passed）
 - [x] standalone/flat order/restart/continuation/V1-V2-V3 compatibility 和 fault-injection 通过（2026-07-25；本机自动化）
 - [x] macOS/Linux/Windows catalog/path/digest/broker CI 通过（2026-07-25）
-- [ ] 六平台 SEA/native smoke 通过（pre-release RC workflow 已增加；2026-07-25 run 30148508532 在启动 runner 前被账户 Actions budget 拒绝，需恢复预算后重跑）
+- [x] 六平台 SEA/native smoke 通过（2026-07-25；RC run `30150571870`）
 - [x] installer 使用公开 `wukong-code` release、Windows exact `win32-*` asset 名，并兼容 `sha256sum`/`shasum`；本地 Bats 9/9 通过（2026-07-25）
 - [ ] 至少完成 API compatibility、migration/log-security、frontend/design、monorepo package 四类真实 criteria
 - [ ] 无 Skill 新建 V2 的 TUI/Headless brokered reviewer E2E；遗留 V1 未确认时零 attempt、确认后 Revised V2；遗留 active V2 接受 consent 后 additive 恢复，以及拒绝后零 provider/出站/状态漂移 E2E
 - [ ] Skill/selected-ref/subject drift、contract-creation catalog CAS、provider consent、workspace/Gate-evidence secret exclusion、subject/evidence limit、irrelevant task、model hint isolation 和 reviewer capability 负向 E2E 通过
 - [ ] 固定 5 名新用户各一次且看过后不排除/重试；4/5 区分 suggested/selected/model hint/order，5/5 找到 source/digest/input exclusions/cost、指出 actual BYOK provider/endpoint、理解允许内容会出站但不上传给 Wukong，并能 Cancel 后保持零 run/connection/出站
 - [x] README/ROADMAP/TODO/CHANGELOG/release notes 同步 existing-Skills/criteria-only/provider-consent 边界（2026-07-25）
-- [ ] fresh install、0.0.19 → 0.0.20 upgrade、六平台 assets/SHA、installer、manifest、GitHub Release 和 `wukong --version` 完全一致
+- [x] fresh install、0.0.19 → 0.0.20 upgrade、六平台 assets/SHA、installer、manifest、GitHub Release 和 `wukong --version` 完全一致（2026-07-25；production deployment `7914837c-b547-45f2-982a-2a459b2c9677`）
 
 ### 明确不做
 
