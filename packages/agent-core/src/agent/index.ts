@@ -5,7 +5,7 @@ import { ErrorCodes, WukongError, makeErrorPayload } from '#/errors';
 import { log } from '#/logging/logger';
 import type { Logger } from '#/logging/types';
 import type { AgentAPI, AgentEvent, WukongConfig, SDKAgentRPC, UsageStatus } from '#/rpc';
-import { generate } from '@wukong/kosong';
+import { generate, type ProviderRequestPolicy } from '@wukong/kosong';
 
 import type { EnabledPluginSessionStart } from '#/plugin';
 
@@ -127,6 +127,7 @@ export class Agent {
   readonly replayBuilder: ReplayBuilder;
 
   private additionalDirs: readonly string[];
+  private providerRequestPolicy: ProviderRequestPolicy | undefined;
 
   constructor(options: AgentOptions) {
     this.type = options.type ?? 'main';
@@ -198,6 +199,10 @@ export class Agent {
     }
   }
 
+  setProviderRequestPolicy(policy: ProviderRequestPolicy | undefined): void {
+    this.providerRequestPolicy = policy;
+  }
+
   get generate(): typeof generate {
     return async (provider, systemPrompt, tools, history, callbacks, options) => {
       const { requestLogFields, generateOptions } = splitGenerateOptions(options);
@@ -245,6 +250,7 @@ export class Agent {
       generate: this.generate,
       completionBudgetConfig,
       usedContextTokens: () => this.context.tokenCount,
+      providerRequestPolicy: this.providerRequestPolicy,
     });
   }
 

@@ -1,4 +1,5 @@
 import type { ContentPart, Message, StreamedMessagePart, ToolCall } from '#/message';
+import { ChatProviderError } from '#/errors';
 import type {
   ChatProvider,
   FinishReason,
@@ -8,6 +9,7 @@ import type {
   StreamedMessage,
   ThinkingEffort,
 } from '#/provider';
+import { createOriginLockedFetch, type ProviderRequestPolicy } from '#/provider-request-policy';
 import type { Tool } from '#/tool';
 import type { TokenUsage } from '#/usage';
 import OpenAI from 'openai';
@@ -576,7 +578,7 @@ export class OpenAILegacyChatProvider implements ChatProvider {
     }
 
     try {
-      const client = this._createClient(options?.auth);
+      const client = this._createClient(options?.auth, options?.providerRequestPolicy);
       const response = (await client.chat.completions.create(
         createParams as unknown as OpenAI.Chat.ChatCompletionCreateParamsNonStreaming,
         options?.signal ? { signal: options.signal } : undefined,
@@ -625,7 +627,22 @@ export class OpenAILegacyChatProvider implements ChatProvider {
     return clone;
   }
 
-  private _createClient(auth: ProviderRequestAuth | undefined): OpenAI {
+  private _createClient(
+    auth: ProviderRequestAuth | undefined,
+    requestPolicy?: ProviderRequestPolicy,
+  ): OpenAI {
+    if (requestPolicy !== undefined) {
+      if (this._httpClient !== undefined || this._clientFactory !== undefined) {
+        throw new ChatProviderError(
+          'OpenAILegacyChatProvider cannot enforce an origin lock with a custom client.',
+        );
+      }
+      return this._buildClient(
+        requireProviderApiKey('OpenAILegacyChatProvider', auth, this._apiKey),
+        auth,
+        requestPolicy,
+      );
+    }
     return resolveAuthBackedClient(
       { cachedClient: this._client, clientFactory: this._clientFactory },
       auth,
@@ -634,7 +651,11 @@ export class OpenAILegacyChatProvider implements ChatProvider {
     );
   }
 
-  private _buildClient(apiKey: string, auth?: ProviderRequestAuth): OpenAI {
+  private _buildClient(
+    apiKey: string,
+    auth?: ProviderRequestAuth,
+    requestPolicy?: ProviderRequestPolicy,
+  ): OpenAI {
     const clientOpts: Record<string, unknown> = {
       apiKey,
       baseURL: this._baseUrl,
@@ -645,6 +666,9 @@ export class OpenAILegacyChatProvider implements ChatProvider {
     }
     if (this._httpClient !== undefined) {
       clientOpts['httpClient'] = this._httpClient;
+    }
+    if (requestPolicy !== undefined) {
+      clientOpts['fetch'] = createOriginLockedFetch(requestPolicy);
     }
     return new OpenAI(clientOpts as ConstructorParameters<typeof OpenAI>[0]);
   }

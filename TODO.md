@@ -105,7 +105,7 @@
 - [x] 新建 additive V3/GatePlanV2；V2 → V3 只能 Revised Loop，新 goal/contract lineage，不热附加（2026-07-25）
 - [x] V3 使用 additive workspace trust scope；旧 `loop-project-checks` grant 不能静默扩成 `brokered-review-subject`（2026-07-25）
 - [x] 每个 0.0.20 run/restart/continuation（含无 selected Skill 的 V2 contract）单独冻结 broker trust 与 review-subject consent，绑定 workspace、输入 policy/limits、BYOK provider 与 endpoint；Headless 使用 exact challenge/ack，provider/policy 变化必须重新确认（2026-07-25）
-- [ ] canonical provider origin/digest 与实际 connection 逐次校验；跨 origin redirect 或 origin drift 在发送任何 bytes 前 fail closed
+- [x] canonical provider origin/digest 与实际 connection 逐次校验；reviewer 使用逐请求 exact-origin transport lock，禁用 redirect；direct origin drift 在调用 fetch 前拒绝，307 跨 origin 不会重发 body，不支持安全锁定的 transport 在 Gate attempt/provider connection 前 fail closed（2026-07-25）
 - [x] review-settings assignment 使用 proposal-based 稳定幂等键；同一 Headless/TUI 重试复用首次 acknowledgement/digests，并发不同 proposal 只有一个 CAS 胜出（2026-07-25）
 - [x] V3 workspace trust 使用 broker-only / project-checks+broker 判别联合，并与 legacy approval `hasExecutableChecks` 完全一致；无 resolved check 不授予 shell scope（2026-07-25）
 - [x] broker trust proposal/grant 创建幂等；reviewer 前后及 PASS 前 revalidate，mid-attempt revoke 立即停止后续读取并使 evidence stale（2026-07-25）
@@ -142,14 +142,15 @@
 
 ### 发布门槛
 
-- [x] schema/catalog/digest/CAS/source-trust/provider-consent/broker/redaction/secret-exclusion/prompt-injection/durable-join tests 通过（2026-07-25；全仓 9337 tests passed）
+- [x] schema/catalog/digest/CAS/source-trust/provider-consent/origin-lock/broker/redaction/secret-exclusion/prompt-injection/durable-join tests 通过（2026-07-25；全仓 9343 tests passed）
 - [x] standalone/flat order/restart/continuation/V1-V2-V3 compatibility 和 fault-injection 通过（2026-07-25；本机自动化）
-- [ ] macOS/Linux/Windows catalog/path/digest/broker CI 与六平台 SEA/native smoke 通过
+- [x] macOS/Linux/Windows catalog/path/digest/broker CI 通过（2026-07-25）
+- [ ] 六平台 SEA/native smoke 通过
 - [ ] 至少完成 API compatibility、migration/log-security、frontend/design、monorepo package 四类真实 criteria
 - [ ] 无 Skill 新建 V2 的 TUI/Headless brokered reviewer E2E；遗留 V1 未确认时零 attempt、确认后 Revised V2；遗留 active V2 接受 consent 后 additive 恢复，以及拒绝后零 provider/出站/状态漂移 E2E
 - [ ] Skill/selected-ref/subject drift、contract-creation catalog CAS、provider consent、workspace/Gate-evidence secret exclusion、subject/evidence limit、irrelevant task、model hint isolation 和 reviewer capability 负向 E2E 通过
 - [ ] 固定 5 名新用户各一次且看过后不排除/重试；4/5 区分 suggested/selected/model hint/order，5/5 找到 source/digest/input exclusions/cost、指出 actual BYOK provider/endpoint、理解允许内容会出站但不上传给 Wukong，并能 Cancel 后保持零 run/connection/出站
-- [ ] README/ROADMAP/TODO/CHANGELOG/release notes 同步 existing-Skills/criteria-only/provider-consent 边界
+- [x] README/ROADMAP/TODO/CHANGELOG/release notes 同步 existing-Skills/criteria-only/provider-consent 边界（2026-07-25）
 - [ ] fresh install、0.0.19 → 0.0.20 upgrade、六平台 assets/SHA、installer、manifest、GitHub Release 和 `wukong --version` 完全一致
 
 ### 明确不做

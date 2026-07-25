@@ -14,6 +14,7 @@ import type {
   StreamedMessage,
   ThinkingEffort,
 } from '#/provider';
+import { createOriginLockedFetch, type ProviderRequestPolicy } from '#/provider-request-policy';
 import type { Tool } from '#/tool';
 import type { TokenUsage } from '#/usage';
 import OpenAI from 'openai';
@@ -1062,7 +1063,7 @@ export class OpenAIResponsesChatProvider implements ChatProvider {
     }
 
     try {
-      const client = this._createClient(options?.auth);
+      const client = this._createClient(options?.auth, options?.providerRequestPolicy);
       const createParams: Record<string, unknown> = {
         model: this._model,
         input,
@@ -1124,7 +1125,22 @@ export class OpenAIResponsesChatProvider implements ChatProvider {
     return clone;
   }
 
-  private _createClient(auth: ProviderRequestAuth | undefined): OpenAI {
+  private _createClient(
+    auth: ProviderRequestAuth | undefined,
+    requestPolicy?: ProviderRequestPolicy,
+  ): OpenAI {
+    if (requestPolicy !== undefined) {
+      if (this._httpClient !== undefined || this._clientFactory !== undefined) {
+        throw new ChatProviderError(
+          'OpenAIResponsesChatProvider cannot enforce an origin lock with a custom client.',
+        );
+      }
+      return this._buildClient(
+        requireProviderApiKey('OpenAIResponsesChatProvider', auth, this._apiKey),
+        auth,
+        requestPolicy,
+      );
+    }
     return resolveAuthBackedClient(
       { cachedClient: this._client, clientFactory: this._clientFactory },
       auth,
@@ -1133,7 +1149,11 @@ export class OpenAIResponsesChatProvider implements ChatProvider {
     );
   }
 
-  private _buildClient(apiKey: string, auth?: ProviderRequestAuth): OpenAI {
+  private _buildClient(
+    apiKey: string,
+    auth?: ProviderRequestAuth,
+    requestPolicy?: ProviderRequestPolicy,
+  ): OpenAI {
     const clientOpts: Record<string, unknown> = {
       apiKey,
       baseURL: this._baseUrl,
@@ -1144,6 +1164,9 @@ export class OpenAIResponsesChatProvider implements ChatProvider {
     }
     if (this._httpClient !== undefined) {
       clientOpts['httpClient'] = this._httpClient;
+    }
+    if (requestPolicy !== undefined) {
+      clientOpts['fetch'] = createOriginLockedFetch(requestPolicy);
     }
     return new OpenAI(clientOpts as ConstructorParameters<typeof OpenAI>[0]);
   }

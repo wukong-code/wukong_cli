@@ -645,6 +645,12 @@ async function preflightFreshReviewerRuntime(
       'The frozen provider consent does not match the actual reviewer endpoint.',
     );
   }
+  if (!supportsOriginLockedReview(resolvedProvider)) {
+    return preflightFailure(
+      'review_subject_consent_required',
+      'The reviewer provider transport cannot enforce the frozen origin consent.',
+    );
+  }
   if (
     runtime.runSettings.brokerReviewTrust.workspaceIdentityDigest
       !== runtime.workspaceIdentityDigest
@@ -816,6 +822,16 @@ async function runFreshReviewer(
     providerId: resolvedProvider.providerName,
     endpoint: providerEndpoint,
   });
+  if (!supportsOriginLockedReview(resolvedProvider)) {
+    return {
+      passed: false,
+      terminal: true,
+      terminalStatus: 'ERROR',
+      reasonCode: 'review_subject_consent_required',
+      reason: 'The reviewer provider transport cannot enforce the frozen origin consent.',
+      checks,
+    };
+  }
   if (
     runtime.runSettings.brokerReviewTrust.workspaceIdentityDigest
       !== runtime.workspaceIdentityDigest
@@ -891,6 +907,10 @@ async function runFreshReviewer(
       maxSteps: FRESH_REVIEWER_MAX_STEPS,
       isolated: true,
       internalTools: reviewBrokerTools(broker),
+      providerRequestPolicy: {
+        expectedOrigin: providerEndpoint,
+        redirect: 'error',
+      },
     });
     const completion = await handle.completion;
     const verdict = parseFreshCriteriaVerdict(completion.result);
@@ -1052,6 +1072,25 @@ function providerEndpointForReview(
       return 'https://api.wukong.ai/v1';
     case 'vertexai':
       return undefined;
+  }
+}
+
+function supportsOriginLockedReview(resolved: ResolvedRuntimeProvider): boolean {
+  if (
+    ('clientFactory' in resolved.provider && resolved.provider.clientFactory !== undefined)
+    || ('httpClient' in resolved.provider && resolved.provider.httpClient !== undefined)
+  ) {
+    return false;
+  }
+  switch (resolved.provider.type) {
+    case 'anthropic':
+    case 'openai':
+    case 'openai_responses':
+    case 'wukong':
+      return true;
+    case 'google-genai':
+    case 'vertexai':
+      return false;
   }
 }
 

@@ -25,6 +25,11 @@ export type {
 
 // Provider interfaces
 export * from './provider';
+export {
+  createOriginLockedFetch,
+  providerRequestOrigin,
+} from './provider-request-policy';
+export type { ProviderRequestPolicy } from './provider-request-policy';
 export { createProvider, getModelCapability } from './providers';
 export type { ProviderConfig, ProviderType } from './providers';
 // Wukong provider: exported so callers can narrow a `ChatProvider` to the Wukong

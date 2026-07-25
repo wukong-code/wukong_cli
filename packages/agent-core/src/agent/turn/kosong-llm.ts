@@ -25,6 +25,7 @@ import {
   type GenerateCallbacks,
   type Message,
   type ModelCapability,
+  type ProviderRequestPolicy,
   type StreamedMessagePart,
 } from '@wukong/kosong';
 
@@ -63,6 +64,8 @@ export interface KosongLLMConfig {
    * providers to size the completion budget to the remaining context window.
    */
   readonly usedContextTokens?: (() => number) | undefined;
+  /** Optional request-scoped transport lock for isolated provider calls. */
+  readonly providerRequestPolicy?: ProviderRequestPolicy | undefined;
 }
 
 export class KosongLLM implements LLM {
@@ -74,6 +77,7 @@ export class KosongLLM implements LLM {
   private readonly generate: GenerateFn;
   private readonly completionBudgetConfig: CompletionBudgetConfig | undefined;
   private readonly usedContextTokens: (() => number) | undefined;
+  private readonly providerRequestPolicy: ProviderRequestPolicy | undefined;
 
   constructor(config: KosongLLMConfig) {
     this.provider = config.provider;
@@ -83,6 +87,7 @@ export class KosongLLM implements LLM {
     this.generate = config.generate ?? kosongGenerate;
     this.completionBudgetConfig = config.completionBudgetConfig;
     this.usedContextTokens = config.usedContextTokens;
+    this.providerRequestPolicy = config.providerRequestPolicy;
   }
 
   async chat(params: LLMChatParams): Promise<LLMChatResponse> {
@@ -115,6 +120,7 @@ export class KosongLLM implements LLM {
       onRequestStart: markRequestStart,
       onStreamEnd: markStreamEnd,
       requestLogFields: params.requestLogFields,
+      providerRequestPolicy: this.providerRequestPolicy,
     };
 
     const result = await this.generate(

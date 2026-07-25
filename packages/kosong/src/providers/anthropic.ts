@@ -13,6 +13,7 @@ import type {
   StreamedMessage,
   ThinkingEffort,
 } from '#/provider';
+import { createOriginLockedFetch, type ProviderRequestPolicy } from '#/provider-request-policy';
 import type { Tool } from '#/tool';
 import type { TokenUsage } from '#/usage';
 import Anthropic, {
@@ -1101,7 +1102,7 @@ export class AnthropicChatProvider implements ChatProvider {
       requestOptions['signal'] = options.signal;
     }
     const finalRequestOptions = Object.keys(requestOptions).length > 0 ? requestOptions : undefined;
-    const client = this._createClient(options?.auth);
+    const client = this._createClient(options?.auth, options?.providerRequestPolicy);
 
     if (this._stream) {
       // Use the raw Messages stream instead of the SDK MessageStream helper.
@@ -1140,7 +1141,18 @@ export class AnthropicChatProvider implements ChatProvider {
     }
   }
 
-  private _createClient(auth: ProviderRequestAuth | undefined): Anthropic {
+  private _createClient(
+    auth: ProviderRequestAuth | undefined,
+    requestPolicy?: ProviderRequestPolicy,
+  ): Anthropic {
+    if (requestPolicy !== undefined) {
+      if (this._clientFactory !== undefined) {
+        throw new ChatProviderError(
+          'AnthropicChatProvider cannot enforce an origin lock with a custom client.',
+        );
+      }
+      return this._buildClient(this._requireApiKey(auth), requestPolicy);
+    }
     return resolveAuthBackedClient(
       { cachedClient: this._client, clientFactory: this._clientFactory },
       auth,
@@ -1194,12 +1206,15 @@ export class AnthropicChatProvider implements ChatProvider {
   // These `null`s — and the nulled headers in _buildDefaultHeaders — are NOT
   // redundant: removing them reintroduces credential leakage. Regression cover:
   // test/e2e/anthropic-adapter.test.ts.
-  private _buildClient(apiKey: string): Anthropic {
+  private _buildClient(apiKey: string, requestPolicy?: ProviderRequestPolicy): Anthropic {
     return new Anthropic({
       apiKey,
       authToken: null,
       baseURL: this._baseUrl ?? null,
       defaultHeaders: this._buildDefaultHeaders(apiKey),
+      ...(requestPolicy === undefined
+        ? {}
+        : { fetch: createOriginLockedFetch(requestPolicy) }),
     });
   }
 

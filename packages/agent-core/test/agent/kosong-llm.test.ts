@@ -136,6 +136,47 @@ describe('KosongLLM stream timing', () => {
   });
 });
 
+describe('KosongLLM provider request policy', () => {
+  it('forwards the request-scoped origin lock to the provider generator', async () => {
+    const policy = {
+      expectedOrigin: 'https://api.example.test/v1',
+      redirect: 'error' as const,
+    };
+    let receivedPolicy: unknown;
+    const generate: GenerateFn = async (
+      _provider,
+      _systemPrompt,
+      _tools,
+      _history,
+      _callbacks,
+      options,
+    ) => {
+      receivedPolicy = options?.providerRequestPolicy;
+      return {
+        id: 'response-1',
+        message: { role: 'assistant', content: [], toolCalls: [] },
+        usage: emptyUsage(),
+        finishReason: 'completed',
+        rawFinishReason: 'stop',
+      };
+    };
+    const llm = new KosongLLM({
+      provider,
+      systemPrompt: 'system',
+      generate,
+      providerRequestPolicy: policy,
+    });
+
+    await llm.chat({
+      messages: [],
+      tools: [],
+      signal: new AbortController().signal,
+    });
+
+    expect(receivedPolicy).toEqual(policy);
+  });
+});
+
 describe('KosongLLM completion budget', () => {
   it('applies the model context window as the completion cap', async () => {
     let appliedCap: number | undefined;

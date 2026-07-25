@@ -1,6 +1,7 @@
 import {
   APIProviderRateLimitError,
   isProviderRateLimitError,
+  type ProviderRequestPolicy,
   type TokenUsage,
 } from '@wukong/kosong';
 
@@ -85,6 +86,8 @@ export interface RunSubagentOptions {
   readonly isolated?: boolean;
   /** Attempt-scoped in-process tools available only to an isolated child. */
   readonly internalTools?: readonly ExecutableTool[];
+  /** Request-scoped provider origin lock for bounded isolated children. */
+  readonly providerRequestPolicy?: ProviderRequestPolicy;
 }
 
 export interface SpawnSubagentOptions extends RunSubagentOptions {
@@ -153,6 +156,7 @@ export class SessionSubagentHost {
       this.emitSubagentSpawned(parent, agentId, profileName, runOptions);
       try {
         child.config.update({ modelAlias: parent.config.modelAlias });
+        child.setProviderRequestPolicy(options.providerRequestPolicy);
         return await this.runPromptTurn(parent, agentId, child, profileName, runOptions);
       } catch (error) {
         this.emitSubagentFailed(parent, agentId, runOptions, error);
@@ -169,6 +173,7 @@ export class SessionSubagentHost {
       try {
         runOptions.signal.throwIfAborted();
         child.config.update({ modelAlias: parent.config.modelAlias });
+        child.setProviderRequestPolicy(options.providerRequestPolicy);
         this.emitSubagentStarted(parent, agentId);
         const turnId = child.turn.retry('agent-host');
         if (turnId === null) {
@@ -377,13 +382,17 @@ export class SessionSubagentHost {
     parent: Agent,
     child: Agent,
     profile: ResolvedAgentProfile,
-    options: Pick<SpawnSubagentOptions, 'modelAlias' | 'isolated' | 'internalTools'>,
+    options: Pick<
+      SpawnSubagentOptions,
+      'modelAlias' | 'isolated' | 'internalTools' | 'providerRequestPolicy'
+    >,
   ): Promise<void> {
     child.config.update({
       cwd: parent.config.cwd,
       modelAlias: options.modelAlias ?? parent.config.modelAlias,
       thinkingLevel: parent.config.thinkingLevel,
     });
+    child.setProviderRequestPolicy(options.providerRequestPolicy);
 
     const context = options.isolated === true
       ? undefined

@@ -114,6 +114,12 @@ export interface GenerateOptions {
    */
   auth?: ProviderRequestAuth;
   /**
+   * Request-scoped transport boundary for sensitive brokered review input.
+   * Providers must either enforce the exact origin with redirects disabled or
+   * reject the request before opening a connection.
+   */
+  providerRequestPolicy?: import('./provider-request-policy').ProviderRequestPolicy;
+  /**
    * Host-side instrumentation hook fired immediately before invoking the
    * provider adapter's generate call.
    */

@@ -85,6 +85,7 @@ function makeAgent(
     readonly spawn?: ReturnType<typeof vi.fn>;
     readonly providerName?: string;
     readonly providerEndpoint?: string;
+    readonly providerType?: 'anthropic' | 'google-genai';
     readonly withoutReviewer?: boolean;
     readonly cwd?: string;
   } = {},
@@ -95,6 +96,7 @@ function makeAgent(
   }));
   const providerName = options.providerName ?? 'anthropic';
   const providerEndpoint = options.providerEndpoint ?? 'https://api.anthropic.com';
+  const providerType = options.providerType ?? 'anthropic';
   return {
     type: 'main',
     goal: store,
@@ -109,9 +111,13 @@ function makeAgent(
     },
     modelProvider: {
       resolveProviderConfig: () => ({
-        type: 'anthropic',
+        type: providerType,
         providerName,
-        provider: { baseUrl: providerEndpoint },
+        provider: {
+          type: providerType,
+          model: 'reviewer-model',
+          baseUrl: providerEndpoint,
+        },
       }),
     },
     subagentHost: options.withoutReviewer ? undefined : { spawn },
@@ -528,6 +534,10 @@ describe('UpdateGoalTool 0.0.20 verification gate', () => {
       isolated: true,
       modelAlias: 'writer-model',
       maxSteps: FRESH_REVIEWER_MAX_STEPS,
+      providerRequestPolicy: {
+        expectedOrigin: 'https://api.anthropic.com',
+        redirect: 'error',
+      },
       internalTools: expect.arrayContaining([
         expect.objectContaining({ name: 'ReadReviewSubject' }),
         expect.objectContaining({ name: 'SearchReviewSubjects' }),
@@ -610,6 +620,31 @@ describe('UpdateGoalTool 0.0.20 verification gate', () => {
         spawn,
         providerName: 'openai',
         providerEndpoint: 'https://api.openai.com/v1',
+      })),
+      ctx({ status: 'complete' }),
+    );
+
+    expect(result.stopTurn).toBe(true);
+    expect(goals.getGoal().goal).toMatchObject({
+      status: 'blocked',
+      loopResult: { reasonCode: 'review_subject_consent_required' },
+    });
+    expect(mocks.runProof).not.toHaveBeenCalled();
+    expect(spawn).not.toHaveBeenCalled();
+    expect(records.some((record) => record.type === 'loop.gate-attempt.create')).toBe(false);
+  });
+
+  it('fails an unsupported origin-lock transport before attempt/check/provider work', async () => {
+    const { goals, records } = makeStore();
+    await createBrokeredGoal(goals);
+    const spawn = vi.fn();
+
+    const result = await executeTool(
+      new UpdateGoalTool(makeAgent(goals, {
+        spawn,
+        providerType: 'google-genai',
+        providerName: 'anthropic',
+        providerEndpoint: 'https://api.anthropic.com',
       })),
       ctx({ status: 'complete' }),
     );

@@ -1,4 +1,5 @@
 import { normalizeWukongToolSchema } from './wukong-schema';
+import { ChatProviderError } from '#/errors';
 import type { ContentPart, Message, StreamedMessagePart, ToolCall } from '#/message';
 import type {
   ChatProvider,
@@ -10,6 +11,7 @@ import type {
   ThinkingEffort,
   VideoUploadInput,
 } from '#/provider';
+import { createOriginLockedFetch, type ProviderRequestPolicy } from '#/provider-request-policy';
 import type { Tool } from '#/tool';
 import type { TokenUsage } from '#/usage';
 import OpenAI from 'openai';
@@ -485,7 +487,7 @@ export class WukongChatProvider implements ChatProvider {
     }
 
     try {
-      const client = this._createClient(options?.auth);
+      const client = this._createClient(options?.auth, options?.providerRequestPolicy);
       // Use type assertion via unknown because we pass Wukong-proprietary fields
       // (reasoning_effort, thinking) that don't exist in the OpenAI type definitions.
       const response = (await client.chat.completions.create(
@@ -554,7 +556,24 @@ export class WukongChatProvider implements ChatProvider {
     return this._withGenerationKwargs({ extra_body: merged });
   }
 
-  private _createClient(auth: ProviderRequestAuth | undefined): OpenAI {
+  private _createClient(
+    auth: ProviderRequestAuth | undefined,
+    requestPolicy?: ProviderRequestPolicy,
+  ): OpenAI {
+    if (requestPolicy !== undefined) {
+      if (this._clientFactory !== undefined) {
+        throw new ChatProviderError(
+          'WukongChatProvider cannot enforce an origin lock with a custom client.',
+        );
+      }
+      const defaultHeaders = mergeRequestHeaders(this._defaultHeaders, auth?.headers);
+      return new OpenAI({
+        apiKey: requireProviderApiKey('WukongChatProvider', auth, this._apiKey),
+        baseURL: this._baseUrl,
+        defaultHeaders,
+        fetch: createOriginLockedFetch(requestPolicy),
+      });
+    }
     return resolveAuthBackedClient(
       { cachedClient: this._client, clientFactory: this._clientFactory },
       auth,

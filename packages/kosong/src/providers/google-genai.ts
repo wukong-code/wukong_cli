@@ -763,6 +763,11 @@ export class GoogleGenAIChatProvider implements ChatProvider {
     history: Message[],
     options?: GenerateOptions,
   ): Promise<StreamedMessage> {
+    if (options?.providerRequestPolicy !== undefined) {
+      throw new ChatProviderError(
+        'GoogleGenAIChatProvider cannot enforce the required request-scoped origin lock.',
+      );
+    }
     // Short-circuit if the caller has already aborted — the Google GenAI
     // SDK will not honor the signal natively, so we must check manually.
     if (options?.signal?.aborted === true) {
