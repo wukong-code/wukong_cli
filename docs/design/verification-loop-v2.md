@@ -211,7 +211,7 @@ role_profiles = true
 
 ## 9. Loop 额度与付费边界
 
-> 2026-07-20 后续决策：本节的 Guest/Free 数字仍描述 0.0.12 已发布 contract；旧 Pro 候选已由 [0.1.0 Pro PR Gate 与 Billing](0.1.0-pro-pr-gate.md) 替代。0.1.0 以 PR Gate publish 为首个付费假设，更多 Loop 只作次要 capability。
+> 历史决策记录：本节的 Guest/Free 数字仍描述 0.0.12 已发布 contract。2026-07-20 的 PR Gate 单点付费假设现已[归档](historical-pro-pr-gate-billing.md)；2026-07-25 起，0.1.0 是 Free Trusted Local Loop，0.2.0 才是 Reliable Autonomy 商业候选。
 
 0.0.12 只设置一个用户可理解的额度：Loop sessions。
 
@@ -230,11 +230,11 @@ role_profiles = true
 - BYOK 模型 token 由用户承担，不新增 AI credits。
 - Free 用户从当月第3次开始看到 Pro 提示并记录 upgrade intent，第10次后才硬限制；提示不消耗额外额度。
 
-后续付费候选（以 0.1.0 设计为准）：
+后续版本决策（2026-07-25 更新）：
 
-- 0.1.0：发布本地 Gate summary/comment 和 commit status 到 GitHub PR。
-- 0.1.0 次要权益：服务端配置的更高 Loop allowance 和轮次。
-- 0.1.0 之后：managed reviewer、后台/云端 Loop、Team Role/Policy、组织 gate、审计和 private runner。
+- 0.1.0：Free Trusted Local Loop，不设置服务端 Loop allowance 或付费 entitlement。
+- 0.2.0 候选：有界并行、显式 Detach、本机 Supervisor 与可选 Verified PR Gate；不对 BYOK token 加价。
+- managed reviewer、后台/云端 Loop、Team Role/Policy、组织 gate、审计和 private runner 继续后移。
 
 不把规则扫描、测试命令包装器或 Report 文件本身当作主要付费理由。
 

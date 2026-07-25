@@ -20,7 +20,9 @@ Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal →
 
 `0.0.18` 把默认 TUI 命令面收口到 Loop 主流程，同时通过 `/help advanced` 保留高级工具和兼容实现；新增 Kimi Code/Grok 只读 Resume、显式确认的纯文本 `/feedback`，以及由 CLI 发起、在网站通过 Google/GitHub 确认的 Device Login。当前 Wukong 模型目录可以为空，登录仍成功且不会覆盖用户的 BYOK 默认模型。完整范围见 [0.0.18 设计](docs/design/0.0.18-loop-first-simplification.md)。
 
-旧 `0.1.0` 文档曾探索 Pro PR Gate 商业实验，但它不是当前承诺：目前没有付费计划、Checkout 或 entitlement 实施。任何商业化范围都需要在真实 Free 用户验证后重新决策。
+后续顺序已调整为：`0.0.20` 可复用 Verification Criteria → `0.0.21` 单 Loop 隔离 worktree → `0.1.0` 第一版稳定的 **Trusted Local Loop**。`0.1.0` 继续 Free、local-first、BYOK，不包含并行 Agent、Supervisor、Billing 或 managed model。`0.2.0 Pro Reliable Autonomy` 只是更后的有界并行与本机 Supervisor 邀请制候选，不代表当前已有付费计划或 Checkout。详见[路线图](ROADMAP.md)。
+
+旧文档曾用 `0.1.0` 名称探索只为 PR Gate 收费；该方案现已归档，不再占用这个版本号。
 
 `0.0.12` 建立了 Loop-first runtime。`verify`、`scan`、`proof` 仍保留为高级诊断命令，但只是 Loop 的内部层，不再各自形成产品或额度。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md) 和 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。
 

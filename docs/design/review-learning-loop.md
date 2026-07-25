@@ -191,7 +191,7 @@ interface ReviewFeedbackEvent {
 | GitHub PR comment/status | 无 | 0.1.0：本地预览 Free、发布 Pro | 组织级集成后续 |
 | 自动学习 PR 讨论串 | 无 | 无 | 后续，显式授权 |
 
-0.0.13 只发布 Free 列，Pricing、Dashboard 和 CLI 中的 Pro/Team 保持 `Coming Soon`，不展示价格或可用 Checkout。2026-07-20 的后续决策已把 0.1.0 收窄为 PR Gate publish + Billing；更强 reviewer、长期学习和团队共享策略继续后移。详见 [0.1.0 Pro PR Gate 与 Billing](0.1.0-pro-pr-gate.md)。
+0.0.13 只发布 Free 列，Pricing、Dashboard 和 CLI 中的 Pro/Team 保持 `Coming Soon`，不展示价格或可用 Checkout。2026-07-20 曾把 0.1.0 收窄为 PR Gate publish + Billing；该假设现已[归档](historical-pro-pr-gate-billing.md)。2026-07-25 起，0.1.0 是 Free Trusted Local Loop，付费只作为 0.2.0 Reliable Autonomy 候选。
 
 ## 10. 0.0.13 实现顺序
 

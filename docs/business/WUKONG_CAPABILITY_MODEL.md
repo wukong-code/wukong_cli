@@ -1,6 +1,6 @@
 # Wukong 能力体系与商业化原则
 
-> 状态：长期产品策略，指导后续版本设计；不是当前功能完成声明
+> 状态：长期能力研究。2026-07-25 起，版本与商业边界以 [0.1.0 Trusted Local Loop](../design/0.1.0-trusted-local-loop.md) 和 [0.2.0 Pro Reliable Autonomy](../design/0.2.0-pro-reliable-autonomy.md) 为准；本文中的旧 PR Gate、Managed Gate 与 tier 示例不构成当前计划。
 >
 > 日期：2026-07-20
 >
@@ -271,14 +271,15 @@ Managed Gate 的价值不是模型代理转售，而是提供独立、稳定、�
 
 本版本不销售 Custom Specialist，不上线 Managed Gate，不用未完成能力更新官网付费承诺。
 
-### 0.1.0：只做可验证的邀请制付费实验
+### 0.1.0：Free Trusted Local Loop
 
-当前 0.1.0 contract 的首个付费假设仍是 PR Gate publish，且明确不包含 managed model credits。本文新增两个后续候选，需要在修改 0.1.0 contract 前单独验证：
+0.1.0 不做付费实验。它把 Finish Line、reusable criteria、isolated worktree、safe Promote 与 target Final Gate 收敛为第一版可稳定推荐的 Free + BYOK 产品；单前台 Loop 不登录、不查 entitlement，也不设置 Wukong 次数或 token quota。
 
-1. `Custom Specialist` 是否提高 Pro 购买和留存意愿。
-2. `Managed Gate + PR publish` 是否比只卖 publish 形成更强购买理由，并且单位经济、隐私和可靠性成立。
+### 0.2.0：Reliable Autonomy 邀请制候选
 
-在正式修改 0.1.0 entitlement 前，必须完成用户访谈、最小证据包原型和真实单次 Gate 成本测试；不能同时测试多个模糊权益后把付款原因归因给其中一个。
+0.2.0 候选验证用户是否愿意为 2–5 个有界并行任务、显式 Detach、本机 exception-first Supervisor 与可选 Verified PR Gate 组成的可靠自治 bundle 付费。一个候选月付 SKU `$12/月`；10 人受邀、5 人真实使用、3 人付款、2 人续费前不讨论 public Checkout。
+
+`Custom Specialist`、Managed Gate/credits 与 Team 能力均不自动进入 0.2.0，必须分别验证隐私、成本和真实购买理由。
 
 ### 后续 Team
 
@@ -320,14 +321,16 @@ Managed Gate 的价值不是模型代理转售，而是提供独立、稳定、�
 - 把基础安全默认值包装成付费权益。
 - 把未实现的云端、支付、Team、Managed Gate 或模型能力写成已上线。
 
-最终商业叙事：
+当前商业叙事：
 
-> Free 让 Wukong 帮用户完成任务；Pro 解锁用户自己的 Specialist 与官方火眼金睛；Team 让每一次变化都有规则、门禁和审计。
+> Free 提供一个可信的本地 Loop；Pro 候选让一个人用有界并行和本机监督可靠推进更多工作。Wukong 不卖用户自己的 API Key。
 
 ## 参考
 
 - [0.0.16 Loop Convergence](../design/0.0.16-loop-convergence.md)
-- [0.1.0 Pro PR Gate 与 Billing](../design/0.1.0-pro-pr-gate.md)
+- [0.1.0 Trusted Local Loop](../design/0.1.0-trusted-local-loop.md)
+- [0.2.0 Pro Reliable Autonomy](../design/0.2.0-pro-reliable-autonomy.md)
+- [历史候选：Pro PR Gate 与 Billing](../design/historical-pro-pr-gate-billing.md)
 - [商业化与产品重构方案](COMMERCIAL_REFACTOR_PLAN.md)
 - [Claude Code Subagents](https://code.claude.com/docs/en/sub-agents)
 - [GitHub Copilot Plans](https://github.com/features/copilot/plans)

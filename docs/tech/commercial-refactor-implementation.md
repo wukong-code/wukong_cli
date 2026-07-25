@@ -1,5 +1,7 @@
 # Wukong 商业化重构技术实现方案
 
+> 状态：**HISTORICAL TECHNICAL PLAN**。本文包含已移除的远端 Loop quota 与旧商业假设，不是当前实现或版本真相源。当前版本边界见 [ROADMAP](../../ROADMAP.md)、[0.1.0 Trusted Local Loop](../design/0.1.0-trusted-local-loop.md) 与 [0.2.0 Pro Reliable Autonomy](../design/0.2.0-pro-reliable-autonomy.md)。
+>
 > 版本: v1.3
 > 日期: 2026-07-14
 > 对应商业方案: `docs/business/COMMERCIAL_REFACTOR_PLAN.md`
@@ -1016,7 +1018,7 @@ team_rules(
 | `POST /api/v1/loops/complete` | 按 `requestId` 幂等记录 terminal lifecycle、outcome 与实际迭代数 |
 | `GET /api/v1/usages` | 返回 Loop sessions 的 limit、used、recent lifecycle 和 reset timestamp |
 
-以上为当前已部署 contract。0.1.0 新增的 account/capability contract 以 [0.1.0 Pro PR Gate 与 Billing](../design/0.1.0-pro-pr-gate.md) 为准，不重新引入 trust-runs 命名。
+以上是 0.0.12 的历史已部署 contract；0.0.17 已移除本地 BYOK Loop 对远端 quota 的依赖。0.1.0 不新增 account/capability entitlement；0.2.0 若获批，统一 contract 以 [Pro Reliable Autonomy](../design/0.2.0-pro-reliable-autonomy.md) 为准。
 
 服务端新增：
 

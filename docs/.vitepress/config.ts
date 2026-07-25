@@ -20,7 +20,7 @@ const mermaidOptimizeDeps = [
 const config = withMermaid(defineConfig({
   base,
   title: 'Wukong CLI Docs',
-  description: 'Current Wukong CLI documentation and commercial refactor plan',
+  description: 'Current Wukong Code documentation, version plans, and historical research',
   ignoreDeadLinks: true,
 
   head: [
@@ -35,11 +35,9 @@ const config = withMermaid(defineConfig({
     search: { provider: 'local' },
     nav: [
       { text: 'User Guide', link: '/user-guide' },
-      { text: 'Commercial Plan', link: '/business/COMMERCIAL_REFACTOR_PLAN' },
+      { text: '0.0.20 Plan', link: '/design/0.0.20-reusable-verification-skills' },
       { text: 'Architecture', link: '/tech/architecture' },
       { text: 'Updates & Announcements', link: '/operations/updates-and-announcements' },
-      { text: 'Technical Plan', link: '/tech/commercial-refactor-implementation' },
-      { text: 'Design', link: '/design/design' },
       { text: 'Test Plan', link: '/test/verification-cli-test-plan' },
     ],
     sidebar: [
@@ -48,25 +46,33 @@ const config = withMermaid(defineConfig({
         items: [
           { text: 'Documentation Index', link: '/' },
           { text: 'User Guide', link: '/user-guide' },
+          { text: 'Architecture', link: '/tech/architecture' },
+          { text: 'Cross-Agent Session Resume', link: '/design/cross-agent-resume' },
+          { text: 'Verification CLI Test Plan', link: '/test/verification-cli-test-plan' },
           { text: 'CLI 更新与公告', link: '/operations/updates-and-announcements' },
         ],
       },
       {
-        text: 'Commercial Refactor',
+        text: 'Version Plans',
         items: [
-          { text: 'Commercial Plan', link: '/business/COMMERCIAL_REFACTOR_PLAN' },
-          { text: 'Wukong Capability Model', link: '/business/WUKONG_CAPABILITY_MODEL' },
-          { text: 'Architecture', link: '/tech/architecture' },
-          { text: 'Technical Plan', link: '/tech/commercial-refactor-implementation' },
-          { text: 'Product Design', link: '/design/design' },
-          { text: 'Verification CLI Test Plan', link: '/test/verification-cli-test-plan' },
-          { text: 'Login and Sync Test Plan', link: '/test/test-login-sync' },
+          { text: '0.0.19 Explicit Finish Line (Released)', link: '/design/0.0.19-explicit-finish-line' },
+          { text: '0.0.20 Reusable Verification Criteria (Approved Plan)', link: '/design/0.0.20-reusable-verification-skills' },
+          { text: '0.0.21 Isolated Loop Worktrees (Candidate)', link: '/design/0.0.21-isolated-loop-worktrees' },
+          { text: '0.1.0 Trusted Local Loop (Planned)', link: '/design/0.1.0-trusted-local-loop' },
+          { text: '0.2.0 Pro Reliable Autonomy (Candidate)', link: '/design/0.2.0-pro-reliable-autonomy' },
+          { text: '↳ Bounded Parallel Loop', link: '/design/0.2.0-bounded-parallel-loop' },
+          { text: '↳ Local Loop Supervisor', link: '/design/0.2.0-local-loop-supervisor' },
         ],
       },
       {
-        text: 'Confirmed, Unscheduled',
+        text: 'Historical Product & Commercial Research',
         items: [
-          { text: 'Cross-Agent Session Resume', link: '/design/cross-agent-resume' },
+          { text: 'Archived Pro PR Gate + Billing', link: '/design/historical-pro-pr-gate-billing' },
+          { text: 'Commercial Plan (Historical)', link: '/business/COMMERCIAL_REFACTOR_PLAN' },
+          { text: 'Wukong Capability Model (Historical)', link: '/business/WUKONG_CAPABILITY_MODEL' },
+          { text: 'Technical Plan (Historical)', link: '/tech/commercial-refactor-implementation' },
+          { text: 'Product Design (Historical)', link: '/design/design' },
+          { text: 'Login and Sync Test Plan (Historical)', link: '/test/test-login-sync' },
         ],
       },
     ],

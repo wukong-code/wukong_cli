@@ -46,7 +46,16 @@ Login with an authenticated catalog that may honestly be empty. Login does not
 replace a BYOK default model. See the
 [0.0.18 design](docs/design/0.0.18-loop-first-simplification.md).
 
-An older `0.1.0` document explored a Pro PR Gate experiment. It is not a current commitment: there is no paid plan, Checkout, or active entitlement work. Any commercial scope requires a new decision after real Free-user validation.
+The planned sequence is now `0.0.20` reusable verification criteria, `0.0.21`
+isolated Loop worktrees, and then `0.1.0` as the first stable **Trusted Local
+Loop**. Version `0.1.0` remains Free, local-first, and BYOK; it does not include
+parallel agents, a Supervisor, billing, or managed models. `0.2.0 Pro Reliable
+Autonomy` is a later candidate for bounded parallel work and an explicit local
+Supervisor pilot, not a current paid plan or Checkout commitment. See the
+[roadmap](ROADMAP.md).
+
+An older document explored charging for PR Gate alone under the `0.1.0` name.
+That proposal is now archived and no longer owns the version number.
 
 Version `0.0.12` established the Loop-first runtime. `verify`, `scan`, and `proof` remain available as advanced diagnostics, but they are internal Loop layers rather than separate products or quotas. See the [0.0.12 design contract](docs/design/verification-loop-v2.md) and the [0.0.13 review design](docs/design/review-learning-loop.md).
 

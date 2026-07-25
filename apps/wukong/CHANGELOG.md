@@ -168,7 +168,10 @@
 - Clear all lint warnings and fix latent bugs uncovered by lint.
 - Fix Vitest `#/cli/*` alias resolution so the CLI test suite runs green.
 
-## 0.1.1
+## Internal package lineage: 0.1.1
+
+> This entry predates the public Wukong Code release sequence. It is not a
+> public `v0.1.1` release or the current product roadmap.
 
 ### Patch Changes
 
@@ -180,7 +183,11 @@
   - Fix latent bugs uncovered by lint: verification double-resolve, jitter codePointAt, oauth Set type
   - Add `#/*` subpath imports to `@wukong.today/code` package.json so Vitest can resolve `#/cli/*` in tests
 
-## 0.1.0
+## Internal package lineage: 0.1.0
+
+> This entry predates the public Wukong Code release sequence. The planned
+> public `v0.1.0` is the Free Trusted Local Loop milestone defined in
+> `ROADMAP.md`.
 
 ### Minor Changes
 

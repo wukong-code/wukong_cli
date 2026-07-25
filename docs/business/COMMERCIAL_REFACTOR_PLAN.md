@@ -1,5 +1,8 @@
 # Wukong Code 商业化与产品重构方案
 
+> 状态：**SUPERSEDED HISTORICAL PLAN**。本文保留 2026-07-20 的旧额度与 PR Gate 收费假设，不是当前 roadmap、TODO 或实现依据。
+> 当前版本边界：[0.1.0 Trusted Local Loop](../design/0.1.0-trusted-local-loop.md) 继续 Free；[0.2.0 Pro Reliable Autonomy](../design/0.2.0-pro-reliable-autonomy.md) 才是未批准的邀请制商业候选。
+>
 > 版本: v1.5
 > 日期: 2026-07-20
 > 当前范围: `wukong_cli` 新 Kimi-code base
@@ -292,7 +295,7 @@ Loop 必须提供真实免费体验，但额度只作用于顶层 session，不�
 3. Team Role Profiles、Shared Policy、org CI 和 Audit 只有在个人 PR 工作流成立后再验证。
 4. Managed Model Add-on 只有在用户明确不愿 BYOK 且数据/成本边界成立后再引入。
 
-0.1.0 的完整商业和工程 contract 见 [0.1.0 Pro PR Gate 与 Billing](../design/0.1.0-pro-pr-gate.md)。候选 `$9/月` 只用于邀请制实验，真实完成和付款门槛未满足时不公开价格或 Checkout。
+旧 0.1.0 商业 contract 已归档为 [历史候选：Pro PR Gate 与 Billing](../design/historical-pro-pr-gate-billing.md)。其中 `$9/月` 与 PR Gate 单点收费只用于历史追溯，不代表当前候选价格或权益。
 
 ### 4.5 商业验证门槛
 

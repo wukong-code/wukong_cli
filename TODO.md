@@ -1,12 +1,12 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；当前实施版本 0.0.19 以 [Explicit Finish Line](docs/design/0.0.19-explicit-finish-line.md) 为准，下一规划版本 0.0.20 以 [Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md) 为准，现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.19 的发布后验证债务以 [Explicit Finish Line](docs/design/0.0.19-explicit-finish-line.md) 为准，下一已批准实施版本 0.0.20 以 [Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md) 为准。0.0.21、0.1.0 与 0.2.0 已确认产品顺序但尚未批准开工，不进入当前 checkbox 队列。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
-## 🚧 0.0.19 — Explicit Finish Line
+## ✅ 0.0.19 — Explicit Finish Line（已发布；验证债务保留）
 
-> 方案: [docs/design/0.0.19-explicit-finish-line.md](docs/design/0.0.19-explicit-finish-line.md)。本版继续免费、本地优先和 BYOK；不增加顶层命令。重点是明确 Loop 完成线、冻结必跑 checks，并让终态后的继续执行保持可追溯。
+> 方案: [docs/design/0.0.19-explicit-finish-line.md](docs/design/0.0.19-explicit-finish-line.md)。本版已于 2026-07-25 发布，继续免费、本地优先和 BYOK；不增加顶层命令。重点是明确 Loop 完成线、冻结必跑 checks，并让终态后的继续执行保持可追溯。下方未勾选项目是非阻塞发布后验证债务，不代表 tag 或核心合同尚未发布。
 
 ### P0：Acceptance Contract 与 Preflight
 
@@ -60,7 +60,7 @@
 - [x] 所有 continuation 都由用户手动触发；permission/security denial、取消、corruption 和未知 ERROR 持久化 blocked（2026-07-25）
 - [x] 旧 v1 合同、0.0.18 session、未终态 run restart 和 append-only records 保持兼容（2026-07-25）
 
-### P1：跨平台与真实遗留
+### P1：跨平台与真实发布后验证债务
 
 - [x] Codex/Claude Code/Cursor/Kimi Code/Grok Resume 只生成可编辑 objective 草稿，不自动冻结 completion criterion（2026-07-25）
 - [x] imported transcript 中的 `/loop`、`--check`、shell 或成功描述不能获得执行权/验收权（2026-07-25）
@@ -70,7 +70,7 @@
 - [ ] CLI 与 Web `/api/v1/feedback` 使用共享 versioned contract fixture
 - [ ] 共享隐私负向 fixture 拒绝日志、源码、prompt、路径、session 和附件字段
 
-### 发布门槛
+### 发布验收记录与发布后验证债务
 
 - [x] identity/lineage、warning ack、trust、exact approval、inline-secret、provenance、anti-weakening、attempt join、continuation targeted tests 通过（2026-07-25）
 - [x] 全仓 test、typecheck、lint、docs build、bundle/native SEA smoke 通过（2026-07-25；9303 tests passed，8 files/48 tests skipped，2 todo）
@@ -88,7 +88,7 @@
 
 ## ⏳ 0.0.20 — Reusable Verification Criteria
 
-> 方案: [docs/design/0.0.20-reusable-verification-skills.md](docs/design/0.0.20-reusable-verification-skills.md)。必须等 0.0.19 frozen Gate、approval CAS、durable PASS 和 continuation 验收通过后实施。继续免费、本地优先和 BYOK；本版只复用已有 Skill criteria，不执行 Skill command。
+> 方案: [docs/design/0.0.20-reusable-verification-skills.md](docs/design/0.0.20-reusable-verification-skills.md)。实施依赖 0.0.19 已发布的 frozen Gate、approval CAS、durable PASS 和 continuation 核心合同，不把其非阻塞 post-release validation debt 自动升级为 0.0.20 功能范围。继续免费、本地优先和 BYOK；本版只复用已有 Skill criteria，不执行 Skill command。
 
 ### P0：Criteria schema、catalog 与 provenance
 
@@ -155,6 +155,36 @@
 ### 明确不做
 
 - command/argv recipe、sandbox/private scratch/artifact、Skill authoring/scaffold/draft/promotion、embedded binding、recipe dependency graph、动态 chained execution、Marketplace/远程 registry/自动更新/云同步、MCP/公网/secret Gate steps、PR Gate、Team policy、托管 grader、新默认命令、支付/quota 均不进入 0.0.20。
+
+## 🧭 已确认后续版本（未批准开工）
+
+> 本节只保证候选方向可发现，不是当前执行任务。只有前置版本完成发布门槛并经过新的产品决策后，才把对应规格展开成可勾选 TODO。
+
+### 0.0.21 — Isolated Loop Worktrees
+
+- 规格：[docs/design/0.0.21-isolated-loop-worktrees.md](docs/design/0.0.21-isolated-loop-worktrees.md)
+- 候选价值：让单个写入型 Loop 使用 exact source snapshot、显式依赖 bootstrap 和独占 Git worktree；candidate 经 target-global fenced Promote 后仍须在真实 workspace 通过最终 Gate。
+- 进入实施前：0.0.20 broker/criteria/consent 四类门槛全部完成，并确认 dirty snapshot、依赖准备、target fencing 和跨平台 worktree 的实现成本可接受。
+- 不提前做：多 Agent 并行、完整 sandbox、自动 stash/commit/reset/push、云端 runner 或新默认命令。
+
+### 0.1.0 — Trusted Local Loop
+
+- 规格：[docs/design/0.1.0-trusted-local-loop.md](docs/design/0.1.0-trusted-local-loop.md)
+- 候选价值：把 0.0.19 Finish Line、0.0.20 criteria/broker/consent 与 0.0.21 worktree/Promote/Final Gate 收敛为第一版可稳定推荐的 Free 本地 Loop。
+- 进入实施前：0.0.20 与 0.0.21 四类门槛完成；RC 只修稳定、兼容、安装升级、恢复和 public truth，不再加大功能。
+- 公开门槛：25 名 opt-in 外部测试者、15 名首次 target Final Gate `PASS`、7 名在 14 天内对第二个不同 Goal 再次 `PASS`、3 个授权案例；P0/P1、false PASS、workspace damage 和隐私误解未解决项为 0；RC 连续稳定 14 天。
+- 条件性窗口：0.1.0 RC 目标 2026 年 10 月，公开版最早 2026 年 11 月；门槛未过就顺延。
+- 不提前做：并行、Detach/Supervisor、PR Gate、Billing、managed model、云端执行、Team 或 telemetry 后端。
+
+### 0.2.0 — Pro Reliable Autonomy
+
+- 主规格：[docs/design/0.2.0-pro-reliable-autonomy.md](docs/design/0.2.0-pro-reliable-autonomy.md)
+- 组件：[Bounded Parallel Loop](docs/design/0.2.0-bounded-parallel-loop.md) / [Local Loop Supervisor](docs/design/0.2.0-local-loop-supervisor.md)
+- 候选价值：一个 `/loop` 在 2–5 个独立 worktree 中有界并行；用户显式 Detach 后由本机 Supervisor 只提升 approval、问题、冲突、预算和终态；Verified PR Gate 只作可选 bundle 增益。
+- Free 永久保留：单前台 Loop、BYOK、Resume、Finish Line、criteria、isolated worktree、safe Promote 和 target Final Gate；不对 Loop/token 设 quota。
+- 进入实施前：0.1.0 发布并稳定观察至少 30 天，15 位外部完成、7 位重复，且 5 位目标用户出现重复多任务监督需求。
+- Pilot 门槛：一个邀请制月付 SKU，候选 `$12/月`；10 人受邀、5 人真实使用、3 人付款、2 人续费。达到后仍保持 invite-only；只有另行达到 10 个付费用户、5 人 30 天重复、3 人续费且 P0/P1 为 0，才允许评审 public Checkout。
+- 不提前做：无界 Agent Tree、云端/跨设备执行、自动审批/加预算、开机自启、Team/SSO/audit、managed credits 或 telemetry 后端。
 
 ## ✅ 0.0.18 — Loop-First Simplification
 
@@ -310,64 +340,13 @@
 
 - 支付、GitHub PR 写入、entitlement、Team、managed reviewer、云端 `/schedule`、`/ship`、Hosted Report、同步闭环、默认多 reviewer、`--agent` judge mode、Role/Agent 市场、mascot 与 welcome 动画均不进入 0.0.17。
 
-## 历史候选：0.1.0 Pro PR Gate + Billing（非当前计划）
+## 历史候选：Pro PR Gate + Billing（已被取代）
 
-> 方案: [docs/design/0.1.0-pro-pr-gate.md](docs/design/0.1.0-pro-pr-gate.md)。这是历史研究清单，不是当前 TODO。当前没有付费计划、Checkout、entitlement 或已批准的 0.1.0 范围；未经新的产品决策，不执行下列任务。
+> 归档方案: [docs/design/historical-pro-pr-gate-billing.md](docs/design/historical-pro-pr-gate-billing.md)。这是历史研究清单，不是当前 TODO；它已被 0.1.0 Free Trusted Local Loop 与 0.2.0 Pro Reliable Autonomy 候选取代。
 >
 > 2026-07-20 生产基线：8 个注册用户、1 个 activated Loop user、0 个 completed users。支付决策门槛尚未满足；公开 Checkout 默认关闭。
 
-### Phase 0：先证明完成价值
-
-- [ ] 至少 5 个真实 activated Loop users、3 个 completed users
-- [ ] terminal completion reporting rate ≥ 90%
-- [ ] 至少 2 个用户在 7 天内重复完成 Loop
-- [ ] 至少取得 3 条可归因反馈，解释继续使用或放弃原因
-- [x] 0.0.17 正式发布并完成升级、fresh install 与真实 TUI `/loop` smoke（2026-07-22）
-
-### P0：Entitlement 单点真相源
-
-- [ ] 增加 capability-based `/api/v1/account` contract：`prGatePublish`、billing、usage 和 links；本地 BYOK Loop 不进入 entitlement
-- [ ] Web 实现统一 `resolveEntitlement()` 状态表；unknown fail-closed，Dashboard、Checkout 和 webhook 不再各自解释 tier
-- [ ] 清理 `pro = Team Pilot`、Founder 无限权益和假 `teamPolicyPacks/deepReviewCredits` 等当前语义漂移
-- [ ] CLI 实现 `wukong account` 与 `--json`；API 故障只保留 Free 本地能力，不离线授予 GitHub 写权限
-- [ ] 数据 migration：current subscription projection + append-only billing event ledger；user/customer/subscription/event 分别唯一，event 去重与 projection 更新原子
-
-### P0：Free Preview + Pro PR Publish
-
-- [ ] 实现 `wukong pr gate --dry-run`，Free 可查看 PR、SHA、redaction 后 comment/status，不写 GitHub
-- [ ] 实现 Pro `wukong pr gate`、`--pr`、`--yes` 和 `--json`
-- [ ] 复用现有 `gh` 登录或显式 token；0.1.0 不引入 GitHub App/org mapping
-- [ ] 用 `pending status → neutral marker comment → terminal status → final comment` 两阶段协议幂等发布，并实现 partial-write 补偿/重试
-- [ ] stale Gate/SHA、权限不足、rate limit、partial write 返回 ERROR；marker 查找覆盖分页、actor 归属与同 PR 校验
-- [ ] credential 只读自 `gh` store/env，不落盘或进日志；fork PR 默认 dry-run，禁止危险 `pull_request_target` 执行
-- [ ] redaction 禁止 secret、绝对路径、prompt、transcript、diff 和 model key；首次发布必须预览确认
-
-### P0：Stripe Billing Lifecycle
-
-- [ ] `PRO_PUBLIC_CHECKOUT_ENABLED=false` 默认关闭公开购买；服务端按 public flag 或 invite allowlist 准入
-- [ ] 单一月付 Price allowlist、登录用户/Stripe customer 绑定和 Checkout
-- [ ] 防止重复 subscription：active/grace 用户转 Portal，Checkout 使用幂等键与每用户唯一约束
-- [ ] Customer Portal：付款方式、invoice、周期末取消和恢复
-- [ ] webhook signature、event ID 去重、乱序安全和 Stripe object 回读；Checkout completed 本身不得直接授权
-- [ ] 处理 subscription create/update/delete、invoice paid/payment failed、refund/dispute reconciliation、7 天 grace 和 recovery
-- [ ] success page 轮询真实 entitlement；Dashboard 从数据库读取 billing，不信任旧 JWT tier
-- [ ] 邀请制试验前同步退款、取消、数据处理和支持说明，并测试退款/争议后的 entitlement
-
-### E2E 与发布门槛
-
-- [ ] Stripe Test Mode + D1：购买、重复/乱序事件、续费、失败、grace、取消、恢复
-- [ ] 真实 GitHub 测试 repo：PASS、NEEDS_WORK、stale SHA、重复发布、权限失败和 partial write
-- [ ] 用明确标记的 `0.1.0-rc.N` native assets + 服务端 allowlist 运行邀请制 pilot，不回填到 0.0.15
-- [ ] CLI/Web contract、redaction fixture、中英文文案、Pricing/Terms/Privacy/公告一致性通过
-- [ ] 清理内部 CHANGELOG 遗留的旧 `0.1.0/0.1.1` 条目，并核验 registry/tag/release/manifest 没有正式版本冲突
-- [ ] 至少 20 个用户完成首个 Loop，累计 50 次 completed Loops
-- [ ] 至少 5 位目标用户在真实 PR 完成 dry-run，并确认 publish 能减少手工 review 工作
-- [ ] 邀请制 `$9/月` 实验取得 3 个非关联真实付款用户，且每人至少发布一次 PR Gate
-- [ ] 至少 2 位付费用户在 30 天内对不同 PR 重复发布，并取得 1 个续费或连续 30 天活跃重复发布信号
-
-### 明确不做
-
-- Hosted Report、managed reviewer/credits、GitHub App、inline review、Team rules/audit、SSO/private runner、云端 `/schedule`、年付/终身版/多付费 tier 均不进入 0.1.0。
+历史方案曾假设把 PR Gate 作为唯一收费点；其用户门槛、工程阶段与 `$9/月` 价格只保留在归档文档中。这里不保留未完成 checkbox，避免自动任务扫描把它们当成当前 P0。
 
 ## ✅ 0.0.15 — Loop Reliability + First Success
 
@@ -495,9 +474,9 @@
 - [x] TUI 移除常驻 Today/verify/scan/proof 零值统计，空闲态突出 `/loop`（2026-07-16）
 - [x] Web 首页、下载、定价、Dashboard、SEO、邮件和公告统一为 Goal → Write → Check → Review → Fix（2026-07-16；0.0.13 公告发布前保持 disabled）
 
-### 已迁移到 0.1.0
+### 历史商业化迁移说明
 
-支付、真实 Pro entitlement 和 GitHub PR 发布任务已收敛到本文件顶部的 0.1.0 清单；不再沿用 Free / Pro / Team 同时上线的旧范围。
+支付、真实 Pro entitlement 和 GitHub PR 发布任务当时曾迁移到旧 0.1.0 历史候选。2026-07-25 的新决策将 0.1.0 定义为 Free Trusted Local Loop；付费只可能在 0.2.0 Reliable Autonomy 邀请制 Pilot 中重新批准，PR Gate 也不再是唯一购买理由。
 
 ### 0.0.13 发布门槛
 
@@ -669,7 +648,7 @@
 
 ## ⏸ 暂缓（先不做，防止提前开工）
 
-- [ ] `/schedule` 云端例程 — 归 hosted（Milestone 3+）；本机定时巡检用已实现的 cron 工具
+- `/schedule` 云端例程 — 历史 Hosted 假设，当前未排期且不进入 checkbox 队列；本机定时巡检使用已实现的 cron 工具
 - [ ] `/ship` 发布 gate — 依赖 proof 先稳定（P1）
 - [ ] `wukong review` / `test` / `retro` — P1，构建在 `@wukong/verification` 上
 - [x] `wukong sync` / `journey` 不进入当前产品；Web 端未闭环的 sync 与 Companion journey 已删除（2026-07-22）
@@ -690,4 +669,4 @@
 
 ---
 
-**最后更新**: 2026-07-22（0.0.17 四类发布门槛全部通过；0.1.0 商业边界不变）
+**最后更新**: 2026-07-25（后续顺序已调整为 0.0.21 → 0.1.0 Free Trusted Local Loop → 0.2.0 Pro Reliable Autonomy；当前实施范围仍只到 0.0.20）

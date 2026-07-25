@@ -1,13 +1,16 @@
-# 0.1.0 Pro PR Gate 与 Billing 设计
+# 历史候选：Pro PR Gate 与 Billing
 
-> 状态：PLANNED
+> 状态：HISTORICAL CANDIDATE / SUPERSEDED；本文件只保留 2026-07-20 的旧商业实验假设，不再占用 `0.1.0` 版本号。
 > 规划日期：2026-07-20
 > 一句话目标：保留完整的本地 BYOK Loop，用一个可验证的付费能力——把 Gate 结论安全地发布回 GitHub Pull Request——验证 Wukong 是否值得付费。
+> 取代方案：[0.1.0 Trusted Local Loop](0.1.0-trusted-local-loop.md) / [0.2.0 Pro Reliable Autonomy](0.2.0-pro-reliable-autonomy.md)
 > 长期能力方向：[Wukong 能力体系与商业化原则](../business/WUKONG_CAPABILITY_MODEL.md)
+
+> 阅读边界：以下全部产品边界、Phase、发布门槛、价格和命令均是 2026-07-20 的条件性历史方案。即使正文保留设计语态，也不代表当前批准、排期或计划实施；当前真相源是 ROADMAP 与 TODO。
 
 ## 1. 决策摘要
 
-`0.1.0` 只做一条商业闭环：
+历史方案曾设想 `0.1.0` 只做一条商业闭环：
 
 ```text
 本地 Loop 得到 Gate 结论
@@ -18,9 +21,9 @@
   → Web 可查看和管理订阅
 ```
 
-本版本不把本地 Loop 次数作为 entitlement 或购买理由。用户已经自带模型 API Key，本地检查和本地 reviewer 的推理成本由用户承担；给这条本地路径设置账号额度墙，价值弱、容易绕过，也会伤害产品采用。
+当时方案明确不把本地 Loop 次数作为 entitlement 或购买理由。用户已经自带模型 API Key，本地检查和本地 reviewer 的推理成本由用户承担；给这条本地路径设置账号额度墙，价值弱、容易绕过，也会伤害产品采用。
 
-`0.1.0` 的首个付费假设是：个人开发者愿意为**减少 PR 手工整理、让 Gate 结论进入既有 GitHub review 流程**付费。候选试验价格为 **$9/月**，只设一个月付方案；这不是公开价格承诺。达到“产品使用门槛”和工程 pilot 条件后，先通过 `0.1.0-rc.N` + feature flag 进入邀请制试验；取得真实付款/续费证据后，才满足正式 `0.1.0` 公开门槛。
+历史方案的首个付费假设是：个人开发者愿意为**减少 PR 手工整理、让 Gate 结论进入既有 GitHub review 流程**付费。候选试验价格曾设为 **$9/月**，只设一个月付方案；这不是公开价格承诺。文中 `0.1.0-rc.N`、邀请制试验和正式发布门槛都没有获得当前批准。
 
 ## 2. 当前生产基线
 
@@ -292,7 +295,7 @@ GitHub credential 只允许来自 `gh` credential store 或环境变量；不得
 - payment failure 进入短 grace（初始建议 7 天），成功重试后恢复；最终失效后降级。
 - Dashboard 每次从数据库读取当前 billing/entitlement，不依赖最长 30 天的旧 JWT tier。
 
-## 10. 实施阶段
+## 10. 历史条件性实施阶段（未批准）
 
 ### Phase 0：激活修复，Checkout 关闭
 
@@ -329,7 +332,7 @@ GitHub credential 只允许来自 `gh` credential store 或环境变量；不得
 
 只有发布门槛全部满足，才打开公开 Checkout、更新 Pricing 并发布正式版本。
 
-## 11. 发布门槛
+## 11. 历史条件性发布门槛（未批准）
 
 ### 产品使用门槛
 
