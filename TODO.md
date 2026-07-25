@@ -145,7 +145,8 @@
 - [x] schema/catalog/digest/CAS/source-trust/provider-consent/origin-lock/broker/redaction/secret-exclusion/prompt-injection/durable-join tests 通过（2026-07-25；全仓 9343 tests passed）
 - [x] standalone/flat order/restart/continuation/V1-V2-V3 compatibility 和 fault-injection 通过（2026-07-25；本机自动化）
 - [x] macOS/Linux/Windows catalog/path/digest/broker CI 通过（2026-07-25）
-- [ ] 六平台 SEA/native smoke 通过
+- [ ] 六平台 SEA/native smoke 通过（pre-release RC workflow 已增加；2026-07-25 run 30148508532 在启动 runner 前被账户 Actions budget 拒绝，需恢复预算后重跑）
+- [x] installer 使用公开 `wukong-code` release、Windows exact `win32-*` asset 名，并兼容 `sha256sum`/`shasum`；本地 Bats 9/9 通过（2026-07-25）
 - [ ] 至少完成 API compatibility、migration/log-security、frontend/design、monorepo package 四类真实 criteria
 - [ ] 无 Skill 新建 V2 的 TUI/Headless brokered reviewer E2E；遗留 V1 未确认时零 attempt、确认后 Revised V2；遗留 active V2 接受 consent 后 additive 恢复，以及拒绝后零 provider/出站/状态漂移 E2E
 - [ ] Skill/selected-ref/subject drift、contract-creation catalog CAS、provider consent、workspace/Gate-evidence secret exclusion、subject/evidence limit、irrelevant task、model hint isolation 和 reviewer capability 负向 E2E 通过

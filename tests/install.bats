@@ -86,7 +86,7 @@ teardown() {
     [ "$status" -eq 0 ]
     [ -x "$HOME/.wukong/bin/wukong" ]
     [[ "$output" == *"Installing Wukong CLI for darwin-x64"* ]]
-    [[ "$output" == *"wukong-cli/releases/latest/download"* ]]
+    [[ "$output" == *"wukong-code/releases/latest/download"* ]]
     [[ "$output" == *"Wukong CLI installed to:"* ]]
 }
 
@@ -165,14 +165,14 @@ EOF
 }
 
 @test "prints PATH hint when install dir is not on PATH" {
-    export PATH="/usr/bin:/bin"
+    export PATH="$MOCK_BIN:/usr/bin:/bin"
     run ./install.sh
     [ "$status" -eq 0 ]
     [[ "$output" == *"Add the following to your shell profile"* ]]
 }
 
 @test "does not print PATH hint when install dir is already on PATH" {
-    export PATH="$HOME/.wukong/bin:/usr/bin:/bin"
+    export PATH="$MOCK_BIN:$HOME/.wukong/bin:/usr/bin:/bin"
     run ./install.sh
     [ "$status" -eq 0 ]
     [[ "$output" != *"Add the following to your shell profile"* ]]
@@ -190,6 +190,22 @@ EOF
 
     run ./install.sh
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Installing Wukong CLI for win-x64"* ]]
+    [[ "$output" == *"Installing Wukong CLI for win32-x64"* ]]
+    [ -x "$HOME/.wukong/bin/wukong.exe" ]
+}
+
+@test "selects windows arm64 release target" {
+    cat > "$MOCK_BIN/uname" <<'EOF'
+#!/bin/sh
+case "$1" in
+    -s) echo "MINGW64_NT-10.0" ;;
+    -m) echo "arm64" ;;
+esac
+EOF
+    chmod +x "$MOCK_BIN/uname"
+
+    run ./install.sh
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Installing Wukong CLI for win32-arm64"* ]]
     [ -x "$HOME/.wukong/bin/wukong.exe" ]
 }

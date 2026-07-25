@@ -2,7 +2,7 @@
 set -euo pipefail
 
 REPO_OWNER="mutnpc"
-REPO_NAME="wukong-cli"
+REPO_NAME="wukong-code"
 INSTALL_DIR="${WUKONG_INSTALL_DIR:-$HOME/.wukong/bin}"
 BINARY_NAME="wukong"
 
@@ -40,7 +40,7 @@ case "$ARCH" in
 esac
 
 if [ "$PLATFORM" = "win" ]; then
-  TARGET="win-${ARCH}"
+  TARGET="win32-${ARCH}"
   BINARY_NAME="wukong.exe"
 else
   TARGET="${PLATFORM}-${ARCH}"
@@ -59,7 +59,16 @@ curl -fsSL "$RELEASE_URL" -o "${TMP_DIR}/${ARTIFACT}"
 curl -fsSL "${RELEASE_URL}.sha256" -o "${TMP_DIR}/${ARTIFACT}.sha256"
 
 cd "$TMP_DIR"
-shasum -a 256 -c "${ARTIFACT}.sha256" || { echo "Checksum verification failed"; exit 1; }
+if command -v sha256sum >/dev/null 2>&1; then
+  sha256sum -c "${ARTIFACT}.sha256" \
+    || { echo "Checksum verification failed"; exit 1; }
+elif command -v shasum >/dev/null 2>&1; then
+  shasum -a 256 -c "${ARTIFACT}.sha256" \
+    || { echo "Checksum verification failed"; exit 1; }
+else
+  echo "Checksum verification failed: install sha256sum or shasum"
+  exit 1
+fi
 
 mkdir -p "$INSTALL_DIR"
 unzip -o "$ARTIFACT" -d "$INSTALL_DIR"
