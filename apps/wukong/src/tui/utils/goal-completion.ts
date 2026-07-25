@@ -1,6 +1,6 @@
 import type { GoalSnapshot } from '@wukong/wukong-sdk';
 
-import { parseLoopTerminalReason } from '#/utils/loop-result';
+import { loopNextAction, parseLoopTerminalReason } from '#/utils/loop-result';
 
 interface GoalCompletionStats {
   readonly terminalReason?: string | undefined;
@@ -35,9 +35,7 @@ export function buildLoopResultCard(result: NonNullable<GoalSnapshot['loopResult
   const next = blocker?.nextAction
     ?? (result.status === 'PASS'
       ? 'Ready to ship.'
-      : result.status === 'ERROR'
-        ? 'Run wukong doctor, then retry the Loop.'
-        : 'Fix the blocker, then continue the Loop.');
+      : loopNextAction(result.reasonCode));
   return [
     `Gate        ${result.status}`,
     `Iterations  ${String(result.iterations)}`,

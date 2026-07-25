@@ -301,7 +301,7 @@ export const WUKONG_ERROR_INFO = {
     title: 'Turn exceeded max steps',
     retryable: false,
     public: true,
-    action: 'Increase loop_control.max_steps_per_turn in config.toml or split the task.',
+    action: 'For a user turn, increase loop_control.max_steps_per_turn or split the task; for an internal workflow, follow its parent result.',
   },
   'provider.api_error': {
     title: 'Provider API error',

@@ -83,4 +83,27 @@ describe('buildGoalCompletionMessage', () => {
       'Next        Fix the fixture and continue the Loop.',
     ].join('\n'));
   });
+
+  it('shows reviewer-specific recovery instead of a doctor hint when the Gate budget is exhausted', () => {
+    const text = buildGoalCompletionMessage(snapshot({
+      status: 'blocked',
+      loopResult: {
+        schemaVersion: 2,
+        status: 'ERROR',
+        reasonCode: 'reviewer_limit_exceeded',
+        summary: 'Fresh reviewer reached its dedicated Gate budget.',
+        iterations: 4,
+        checks: [],
+        blockers: [],
+      },
+    }));
+
+    expect(text).toBe([
+      'Gate        ERROR',
+      'Iterations  4',
+      'Blocker     Fresh reviewer reached its dedicated Gate budget.',
+      'Next        Retry the Gate with the same contract; if the limit repeats, narrow the review scope or choose a faster reviewer model.',
+    ].join('\n'));
+    expect(text).not.toContain('wukong doctor');
+  });
 });

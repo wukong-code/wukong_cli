@@ -8,7 +8,7 @@ export function createMaxStepsExceededError(maxSteps: number, message?: string):
   return new WukongError(
     ErrorCodes.LOOP_MAX_STEPS_EXCEEDED,
     message ??
-      `Turn exceeded maxSteps=${maxSteps}. If max_steps_per_turn is too small, raise it in config.toml (loop_control.max_steps_per_turn), or run "/update-config" to update it, then "/reload".`,
+      `Turn exceeded maxSteps=${maxSteps}. For a user turn, raise loop_control.max_steps_per_turn or split the task. For a bounded internal workflow, follow the parent result's recovery guidance.`,
     {
       details: { maxSteps },
     },

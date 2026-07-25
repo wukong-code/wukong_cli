@@ -1236,7 +1236,7 @@ describe('Agent turn flow', () => {
           reason: 'failed',
           error: expect.objectContaining({
             code: 'loop.max_steps_exceeded',
-            message: expect.stringContaining('config.toml'),
+            message: expect.stringContaining('loop_control.max_steps_per_turn'),
             details: expect.objectContaining({
               maxSteps: 1,
             }),
@@ -1275,6 +1275,9 @@ describe('Agent turn flow', () => {
           reason: 'failed',
           error: expect.objectContaining({
             code: ErrorCodes.LOOP_MAX_STEPS_EXCEEDED,
+            message: expect.stringContaining(
+              "For a bounded internal workflow, follow the parent result's recovery guidance.",
+            ),
             details: expect.objectContaining({ maxSteps: 1 }),
           }),
         }),

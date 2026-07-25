@@ -263,6 +263,10 @@ describe('UpdateGoalTool verification gate', () => {
     }));
     const reviewerPrompt = (spawn.mock.calls[0]?.[0] as { readonly prompt: string }).prompt;
     expect(reviewerPrompt).toContain('Do not attempt Bash, shell commands, or test execution.');
+    expect(reviewerPrompt).toContain(
+      `Finish repository inspection by step ${String(FRESH_REVIEWER_MAX_STEPS - 4)}`,
+    );
+    expect(reviewerPrompt).toContain('reserve the final 4 steps');
   });
 
   it('keeps non-blocking findings without making them Loop blockers', async () => {
@@ -637,7 +641,10 @@ VERDICT_JSON: ${JSON.stringify({
       },
     });
     expect(store.getGoal().goal?.terminalReason).toContain(
-      `Fresh reviewer exceeded the ${String(FRESH_REVIEWER_MAX_STEPS)}-step safety limit`,
+      `dedicated ${String(FRESH_REVIEWER_MAX_STEPS)}-step Gate budget`,
+    );
+    expect(store.getGoal().goal?.terminalReason).toContain(
+      'loop_control.max_steps_per_turn cannot raise this reviewer ceiling',
     );
   });
 
@@ -676,7 +683,10 @@ VERDICT_JSON: ${JSON.stringify({
         },
       });
       expect(store.getGoal().goal?.terminalReason).toContain(
-        `Fresh reviewer exceeded the ${String(FRESH_REVIEWER_TIMEOUT_MS / 1000)}-second safety timeout`,
+        `dedicated ${String(FRESH_REVIEWER_TIMEOUT_MS / 1000)}-second Gate budget`,
+      );
+      expect(store.getGoal().goal?.terminalReason).toContain(
+        'loop_control.max_steps_per_turn does not change this timeout',
       );
     } finally {
       vi.useRealTimers();

@@ -44,9 +44,10 @@ export function loopNextAction(reasonCode: string): string {
       return 'Review the remaining blocker and start a new Loop with a narrower goal.';
     case 'workspace_changed':
       return 'Stop other workspace writers, then rerun the Loop.';
+    case 'reviewer_limit_exceeded':
+      return 'Retry the Gate with the same contract; if the limit repeats, narrow the review scope or choose a faster reviewer model.';
     case 'reviewer_error':
     case 'reviewer_invalid_output':
-    case 'reviewer_limit_exceeded':
     case 'reviewer_unavailable':
     case 'verification_error':
       return 'Resolve the model or verification runtime error, then rerun the Loop.';
