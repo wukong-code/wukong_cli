@@ -16,6 +16,7 @@ import {
   type Session,
   type SessionStatus,
   type TelemetryClient,
+  type WukongConfig,
 } from '@wukong/wukong-sdk';
 import { resolve } from 'pathe';
 
@@ -43,6 +44,7 @@ import {
 import {
   formatLoopPreflightBlocked,
   formatLoopPreflightReady,
+  resolveLoopReviewProvider,
   runLoopPreflight,
   type LoopPreflightReady,
 } from './lib/loop-preflight';
@@ -142,6 +144,7 @@ export async function runPrompt(
         objective: goalCreate.objective,
         model: undefined,
         workspace: workDir,
+        reviewProvider: resolveLoopReviewProvider(config, opts.model),
         getActiveGoal: async () => null,
       });
       if (!preflight.ready) {
@@ -179,7 +182,15 @@ export async function runPrompt(
     // waiter blocks until the goal is terminal; we then emit a summary and set a
     // distinct exit code.
     if (goalCreate !== undefined) {
-      await runHeadlessGoal(session, goalCreate, goalModel, outputFormat, stdout, stderr);
+      await runHeadlessGoal(
+        session,
+        goalCreate,
+        goalModel,
+        config,
+        outputFormat,
+        stdout,
+        stderr,
+      );
     } else {
       await runPromptTurn(session, opts.prompt!, outputFormat, stdout, stderr);
     }
@@ -197,6 +208,7 @@ async function runHeadlessGoal(
   session: Session,
   goal: HeadlessGoalCreate,
   model: string | undefined,
+  config: WukongConfig,
   outputFormat: PromptOutputFormat,
   stdout: PromptOutput,
   stderr: PromptOutput,
@@ -217,6 +229,12 @@ async function runHeadlessGoal(
       approveGatePlanDigest: goal.approveGatePlanDigest,
       acknowledgeWarningSetDigest: goal.acknowledgeWarningSetDigest,
       trustWorkspaceChallenge: goal.trustWorkspaceChallenge,
+      verificationCatalogDigest: goal.verificationCatalogDigest,
+      verificationSkills: goal.verificationSkills,
+      trustReviewSubjectProposalDigest: goal.trustReviewSubjectProposalDigest,
+      acknowledgeReviewSubjectConsentDigest:
+        goal.acknowledgeReviewSubjectConsentDigest,
+      reviewProvider: resolveLoopReviewProvider(config, resolvedModel),
       getActiveGoal: async () => (await session.getGoal()).goal,
     });
     if (!preflight.ready) {
@@ -233,6 +251,16 @@ async function runHeadlessGoal(
   const maxIterations = goal.kind === 'loop' ? goal.maxIterations ?? 10 : goal.maxIterations;
   let createdGoal: GoalSnapshot;
   try {
+    const reviewSettings = loopPreflight?.brokerReviewTrust === undefined
+      || loopPreflight.reviewSubjectConsent === undefined
+      ? undefined
+      : {
+          brokerReviewTrust: loopPreflight.brokerReviewTrust,
+          reviewSubjectConsent: loopPreflight.reviewSubjectConsent,
+        };
+    if (loopPreflight !== undefined && reviewSettings === undefined) {
+      throw new Error('Loop preflight did not freeze exact broker trust and provider consent.');
+    }
     createdGoal = await session.createGoal({
       objective: goal.objective,
       completionCriterion: goal.completionCriterion,
@@ -243,19 +271,60 @@ async function runHeadlessGoal(
       ...(goal.minIntervalMs === undefined ? {} : { minIntervalMs: goal.minIntervalMs }),
       ...(loopPreflight !== undefined
         ? {
-            loopContract: {
-              schemaVersion: 2 as const,
-              objective: loopPreflight.proposal.objective,
-              completionCriterion: loopPreflight.proposal.completionCriterion,
-              constraints: loopPreflight.proposal.constraints,
-              finishLineReview: loopPreflight.proposal.finishLineReview,
-              workspaceIdentity: loopPreflight.proposal.workspaceIdentity,
-              workspaceTrust: loopPreflight.proposal.workspaceTrust,
-              gateApproval: loopPreflight.proposal.gateApproval,
-              gatePlan: loopPreflight.proposal.gatePlan,
-              reviewPolicy: loopPreflight.proposal.reviewPolicy,
-              source: 'user' as const,
-            },
+            loopContract: loopPreflight.contractSchemaVersion === 3
+              ? {
+                  schemaVersion: 3 as const,
+                  objective: loopPreflight.proposal.objective,
+                  completionCriterion: loopPreflight.proposal.completionCriterion,
+                  constraints: loopPreflight.proposal.constraints,
+                  finishLineReview: loopPreflight.proposal.finishLineReview,
+                  workspaceIdentity: loopPreflight.proposal.workspaceIdentity,
+                  workspaceTrust: loopPreflight.proposal.gateApproval.hasExecutableChecks
+                    ? {
+                        schemaVersion: 2 as const,
+                        workspaceIdentityDigest:
+                          loopPreflight.proposal.workspaceIdentity.workspaceIdentityDigest,
+                        reviewSubjectPolicyVersion:
+                          loopPreflight.reviewSubjectConsentProposal
+                            .reviewSubjectPolicyVersion,
+                        hasExecutableChecks: true as const,
+                        scopes: [
+                          'loop-project-checks',
+                          'brokered-review-subject',
+                        ] as const,
+                      }
+                    : {
+                        schemaVersion: 2 as const,
+                        workspaceIdentityDigest:
+                          loopPreflight.proposal.workspaceIdentity.workspaceIdentityDigest,
+                        reviewSubjectPolicyVersion:
+                          loopPreflight.reviewSubjectConsentProposal
+                            .reviewSubjectPolicyVersion,
+                        hasExecutableChecks: false as const,
+                        scopes: ['brokered-review-subject'] as const,
+                      },
+                  gateApproval: loopPreflight.proposal.gateApproval,
+                  legacyGatePlan: loopPreflight.proposal.gatePlan,
+                  reviewPolicy: loopPreflight.proposal.reviewPolicy,
+                  verificationCriteria: loopPreflight.verificationSelection!,
+                  selectedRecipes: loopPreflight.selectedRecipes,
+                  reviewSettings: reviewSettings!,
+                  source: 'user' as const,
+                }
+              : {
+                  schemaVersion: 2 as const,
+                  objective: loopPreflight.proposal.objective,
+                  completionCriterion: loopPreflight.proposal.completionCriterion,
+                  constraints: loopPreflight.proposal.constraints,
+                  finishLineReview: loopPreflight.proposal.finishLineReview,
+                  workspaceIdentity: loopPreflight.proposal.workspaceIdentity,
+                  workspaceTrust: loopPreflight.proposal.workspaceTrust,
+                  gateApproval: loopPreflight.proposal.gateApproval,
+                  gatePlan: loopPreflight.proposal.gatePlan,
+                  reviewPolicy: loopPreflight.proposal.reviewPolicy,
+                  reviewSettings: reviewSettings!,
+                  source: 'user' as const,
+                },
           }
         : {}),
     });

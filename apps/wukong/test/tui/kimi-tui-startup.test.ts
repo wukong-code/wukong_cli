@@ -54,12 +54,81 @@ vi.mock('#/cli/lib/loop-lifecycle', () => ({
   completeTuiLoop: vi.fn(async () => ({ repeatedCompletedWithin7d: false })),
 }));
 vi.mock('#/cli/lib/loop-preflight', () => ({
+  resolveLoopReviewProvider: () => ({
+    providerId: 'openai',
+    endpoint: 'https://api.openai.com/v1',
+  }),
   runLoopPreflight: vi.fn(async (input: { objective: string; model: string; workspace: string }) => ({
     ready: true,
     model: input.model,
     workspace: input.workspace,
     checks: [],
     trustChallenge: 'challenge.signature',
+    contractSchemaVersion: 2,
+    verificationCatalog: {
+      schemaVersion: 1,
+      policyVersion: 'verification-catalog/1',
+      entries: [],
+      failures: [],
+      suggestions: [],
+      catalogDigest: 'sha256:catalog',
+    },
+    selectedRecipes: [],
+    brokerTrustProposal: {
+      schemaVersion: 1,
+      workspaceIdentityDigest: 'sha256:workspace',
+      scope: 'brokered-review-subject',
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      intent: 'once',
+      trustProposalDigest: 'sha256:broker',
+    },
+    brokerReviewTrust: {
+      trustGrantId: 'broker-grant',
+      workspaceIdentityDigest: 'sha256:workspace',
+      scope: 'brokered-review-subject',
+      trustProposalDigest: 'sha256:broker',
+    },
+    reviewSubjectConsentProposal: {
+      schemaVersion: 1,
+      workspaceIdentityDigest: 'sha256:workspace',
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      hardExclusionPolicyVersion: 'review-subject-hard-exclusion/1',
+      allowedOrigins: ['changed-tracked'],
+      limits: {
+        maxFiles: 200,
+        maxTotalBytes: 2_097_152,
+        maxFileBytes: 262_144,
+        maxGateEvidenceTotalBytes: 524_288,
+        maxGateEvidenceBytes: 131_072,
+      },
+      provider: {
+        providerId: 'openai',
+        endpointOrigin: { scheme: 'https', host: 'api.openai.com', port: 443 },
+        endpointOriginDigest: 'sha256:origin',
+      },
+      consentProposalDigest: 'sha256:consent',
+    },
+    reviewSubjectConsent: {
+      schemaVersion: 1,
+      workspaceIdentityDigest: 'sha256:workspace',
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      hardExclusionPolicyVersion: 'review-subject-hard-exclusion/1',
+      allowedOrigins: ['changed-tracked'],
+      limits: {
+        maxFiles: 200,
+        maxTotalBytes: 2_097_152,
+        maxFileBytes: 262_144,
+        maxGateEvidenceTotalBytes: 524_288,
+        maxGateEvidenceBytes: 131_072,
+      },
+      provider: {
+        providerId: 'openai',
+        endpointOriginDigest: 'sha256:origin',
+      },
+      consentProposalDigest: 'sha256:consent',
+      acknowledgedAt: 1,
+      consentDigest: 'sha256:consent-binding',
+    },
     proposal: {
       schemaVersion: 1,
       objective: input.objective,
@@ -1008,6 +1077,10 @@ describe('WukongTUI startup', () => {
         handleInput(data: string): void;
       };
       finishLine.handleInput('\r');
+      const consent = driver.state.editorContainer.children[0] as {
+        handleInput(data: string): void;
+      };
+      consent.handleInput('\r');
 
       await vi.waitFor(() => {
         expect(createGoal).toHaveBeenCalledWith(expect.objectContaining({

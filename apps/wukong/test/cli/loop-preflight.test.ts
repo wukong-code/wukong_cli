@@ -11,6 +11,7 @@ import {
 
 describe('Loop preflight', () => {
   const homes: string[] = [];
+  const reviewProvider = { providerId: 'test', endpoint: 'https://api.example.test' };
 
   afterEach(async () => {
     await Promise.all(homes.splice(0).map((home) => rm(home, { recursive: true, force: true })));
@@ -28,6 +29,7 @@ describe('Loop preflight', () => {
       objective: 'fix tests',
       model: 'glm-5.2',
       workspace: await realpath(cwd),
+      reviewProvider,
       getActiveGoal: async () => null,
       discoverChecks: async () => ['pnpm test', 'pnpm typecheck'],
     });
@@ -51,6 +53,7 @@ describe('Loop preflight', () => {
       objective: 'create a module',
       model: 'glm-5.2',
       workspace: cwd,
+      reviewProvider,
       getActiveGoal: async () => null,
       discoverChecks: async () => [],
     });
@@ -69,6 +72,7 @@ describe('Loop preflight', () => {
       objective: 'fix tests',
       model: 'glm-5.2',
       workspace: cwd,
+      reviewProvider,
       getActiveGoal: async () => null,
       discoverChecks: async () => ['pnpm test'],
     };
@@ -97,6 +101,7 @@ describe('Loop preflight', () => {
       objective: 'fix tests',
       model: 'glm-5.2',
       workspace: cwd,
+      reviewProvider,
       mode: 'headless' as const,
       discoveredCheckDecision: 'accept' as const,
       getActiveGoal: async () => null,
@@ -138,7 +143,35 @@ describe('Loop preflight', () => {
       approveGatePlanDigest: approvedWarning.proposal.gateApproval.approvalSetDigest,
       trustWorkspaceChallenge: approvedPlan.trustChallenge,
     });
-    expect(ready).toMatchObject({ ready: true, checks: ['pnpm test'] });
+    expect(ready).toMatchObject({
+      ready: false,
+      reasonCode: 'review_subject_trust_required',
+    });
+    if (ready.ready || ready.brokerTrustProposal === undefined) return;
+
+    const trusted = await runLoopPreflight({
+      ...base,
+      acknowledgeWarningSetDigest: warning.proposal.finishLineReview.warningSetDigest,
+      approveGatePlanDigest: approvedWarning.proposal.gateApproval.approvalSetDigest,
+      trustWorkspaceChallenge: approvedPlan.trustChallenge,
+      trustReviewSubjectProposalDigest: ready.brokerTrustProposal.trustProposalDigest,
+    });
+    expect(trusted).toMatchObject({
+      ready: false,
+      reasonCode: 'review_subject_consent_required',
+    });
+    if (trusted.ready || trusted.reviewSubjectConsentProposal === undefined) return;
+
+    const consented = await runLoopPreflight({
+      ...base,
+      acknowledgeWarningSetDigest: warning.proposal.finishLineReview.warningSetDigest,
+      approveGatePlanDigest: approvedWarning.proposal.gateApproval.approvalSetDigest,
+      trustWorkspaceChallenge: approvedPlan.trustChallenge,
+      trustReviewSubjectProposalDigest: ready.brokerTrustProposal.trustProposalDigest,
+      acknowledgeReviewSubjectConsentDigest:
+        trusted.reviewSubjectConsentProposal.consentProposalDigest,
+    });
+    expect(consented).toMatchObject({ ready: true, checks: ['pnpm test'] });
   });
 
   it('rejects stale headless approval after the Finish Line changes', async () => {
@@ -148,6 +181,7 @@ describe('Loop preflight', () => {
       completionCriterion: 'All tests pass cleanly',
       model: 'glm-5.2',
       workspace: cwd,
+      reviewProvider,
       mode: 'headless',
       discoveredCheckDecision: 'accept',
       getActiveGoal: async () => null,
@@ -162,6 +196,7 @@ describe('Loop preflight', () => {
       completionCriterion: 'All tests pass cleanly',
       model: 'glm-5.2',
       workspace: cwd,
+      reviewProvider,
       mode: 'headless',
       discoveredCheckDecision: 'accept',
       getActiveGoal: async () => null,

@@ -9,7 +9,7 @@ import { registerExportCommand } from './sub/export';
 import { registerGuardCommand } from './sub/guard';
 import { registerJudgeCommand } from './sub/judge';
 import { registerLoginCommand } from './sub/login';
-import { registerLoopCommand } from './sub/loop';
+import { parseVerificationSkills, registerLoopCommand } from './sub/loop';
 import { registerProofCommand } from './sub/proof';
 import { registerProviderCommand } from './sub/provider';
 import { registerReviewCommand } from './sub/review';
@@ -144,6 +144,22 @@ export function createProgram(
         ...(loop.acknowledgeWarningSetDigest === undefined
           ? {}
           : { acknowledgeWarningSetDigest: loop.acknowledgeWarningSetDigest }),
+        ...(loop.verificationCatalogDigest === undefined
+          ? {}
+          : { verificationCatalogDigest: loop.verificationCatalogDigest }),
+        verificationSkills: parseVerificationSkills(loop.verificationSkills),
+        ...(loop.trustReviewSubjectProposalDigest === undefined
+          ? {}
+          : {
+              trustReviewSubjectProposalDigest:
+                loop.trustReviewSubjectProposalDigest,
+            }),
+        ...(loop.acknowledgeReviewSubjectConsentDigest === undefined
+          ? {}
+          : {
+              acknowledgeReviewSubjectConsentDigest:
+                loop.acknowledgeReviewSubjectConsentDigest,
+            }),
       },
       skillsDirs: raw['skillsDir'] as string[],
       addDirs: raw['addDir'] as string[],

@@ -175,6 +175,30 @@ export interface LoopAcceptanceCriterion {
   readonly source: 'objective' | 'completion_criterion' | 'constraint' | 'derived';
 }
 
+export interface LoopAcceptanceCriterionV3 {
+  readonly id: string;
+  readonly text: string;
+  readonly evidenceExpectation?: string;
+  readonly criterionProvenanceDigest: string;
+  readonly source:
+    | 'objective'
+    | 'completion_criterion'
+    | 'constraint'
+    | 'derived'
+    | 'verification_recipe';
+  readonly provenance:
+    | {
+        readonly kind: 'v2-criterion';
+        readonly v2CriterionId: string;
+        readonly v2Source: LoopAcceptanceCriterion['source'];
+      }
+    | {
+        readonly kind: 'verification-recipe';
+        readonly recipeProvenanceDigest: string;
+        readonly recipeCriterionId: string;
+      };
+}
+
 export interface LoopVerificationStep {
   readonly id: string;
   readonly kind: 'project_check' | 'review';
@@ -266,6 +290,117 @@ export interface LoopContractV2 {
   readonly createdAt: number;
 }
 
+interface VerificationCriteriaRefBaseV1 {
+  readonly format: 'agent-skills';
+  readonly skillName: string;
+  readonly criteriaId: string;
+  readonly logicalLocator: string;
+  readonly skillMdDigest: string;
+  readonly criteriaDigest: string;
+  readonly provenanceDigest: string;
+}
+
+type VerificationCriteriaRefV1 =
+  | (VerificationCriteriaRefBaseV1 & {
+      readonly source: { readonly kind: 'personal' };
+      readonly sourceTrust: {
+        readonly kind: 'personal-local';
+        readonly rootIdentityDigest: string;
+        readonly ownerIdentityDigest: string;
+        readonly accessPolicyVersion: string;
+        readonly accessControlDigest: string;
+      };
+    })
+  | (VerificationCriteriaRefBaseV1 & {
+      readonly source: { readonly kind: 'project' };
+      readonly sourceTrust: {
+        readonly kind: 'workspace';
+        readonly workspaceIdentityDigest: string;
+        readonly scope: 'verification-criteria-source';
+      };
+    })
+  | (VerificationCriteriaRefBaseV1 & {
+      readonly source: { readonly kind: 'package'; readonly packagePath: string };
+      readonly sourceTrust: {
+        readonly kind: 'workspace';
+        readonly workspaceIdentityDigest: string;
+        readonly scope: 'verification-criteria-source';
+      };
+    })
+  | (VerificationCriteriaRefBaseV1 & {
+      readonly source: { readonly kind: 'extra'; readonly sourceId: string };
+      readonly sourceTrust: {
+        readonly kind: 'extra-local-grant';
+        readonly sourceId: string;
+        readonly trustGrantId: string;
+        readonly rootIdentityDigest: string;
+      };
+    })
+  | (VerificationCriteriaRefBaseV1 & {
+      readonly source: { readonly kind: 'builtin'; readonly version: string };
+      readonly sourceTrust: {
+        readonly kind: 'builtin-release';
+        readonly version: string;
+        readonly assetDigest: string;
+      };
+    });
+
+interface VerificationCriteriaSelectionV1 {
+  readonly schemaVersion: 1;
+  readonly preflightCatalogDigest: string;
+  readonly selected: readonly {
+    readonly selectionOrder: number;
+    readonly ref: VerificationCriteriaRefV1;
+  }[];
+  readonly selectionDigest: string;
+}
+
+export interface LoopContractV3 {
+  readonly schemaVersion: 3;
+  readonly contractId: string;
+  readonly supersedesContractId?: string;
+  readonly supersedesGoalId?: string;
+  readonly goalId: string;
+  readonly objective: string;
+  readonly completionCriterion?: string;
+  readonly constraints: readonly { readonly id: string; readonly text: string }[];
+  readonly finishLineReview: LoopContractV2['finishLineReview'];
+  readonly workspaceIdentity: LoopContractV2['workspaceIdentity'];
+  readonly workspaceTrust:
+    | {
+        readonly schemaVersion: 2;
+        readonly workspaceIdentityDigest: string;
+        readonly reviewSubjectPolicyVersion: string;
+        readonly hasExecutableChecks: false;
+        readonly scopes: readonly ['brokered-review-subject'];
+      }
+    | {
+        readonly schemaVersion: 2;
+        readonly workspaceIdentityDigest: string;
+        readonly reviewSubjectPolicyVersion: string;
+        readonly hasExecutableChecks: true;
+        readonly scopes: readonly ['loop-project-checks', 'brokered-review-subject'];
+      };
+  readonly gateApproval: LoopContractV2['gateApproval'];
+  readonly acceptanceCriteria: readonly LoopAcceptanceCriterionV3[];
+  readonly verificationPlan: readonly LoopVerificationStep[];
+  readonly verificationCriteria: VerificationCriteriaSelectionV1;
+  readonly gatePlan: {
+    readonly schemaVersion: 2;
+    readonly stopCondition: 'proof-pass';
+    readonly legacySnapshot: GatePlan;
+    readonly criteriaSelectionDigest: string;
+    readonly criterionIds: readonly string[];
+    readonly builtinScanPolicyVersion: string;
+    readonly freshReviewerPolicyVersion: string;
+    readonly reviewSubjectPolicyVersion: string;
+    readonly planDigest: string;
+  };
+  readonly reviewPolicy: LoopContractV2['reviewPolicy'];
+  readonly source: 'user' | 'planner' | 'fallback';
+  readonly createdAt: number;
+}
+
 interface GateApprovalOrderedCheck {
   readonly checkId: string;
   readonly resolution: 'resolved' | 'expected-unresolved';
@@ -323,7 +458,7 @@ type GatePlanCheck =
       readonly expectedSourceLocator?: string;
     };
 
-export type LoopContract = LoopContractV1 | LoopContractV2;
+export type LoopContract = LoopContractV1 | LoopContractV2 | LoopContractV3;
 
 export interface LoopConvergenceSummary {
   readonly reviewAttempts: number;
@@ -1238,9 +1373,157 @@ const loopContractV2Schema = z.object({
   createdAt: z.number(),
 }) satisfies z.ZodType<LoopContractV2>;
 
+const loopAcceptanceCriterionV3Schema = z.object({
+  id: z.string(),
+  text: z.string(),
+  evidenceExpectation: z.string().optional(),
+  criterionProvenanceDigest: z.string(),
+  source: z.enum([
+    'objective',
+    'completion_criterion',
+    'constraint',
+    'derived',
+    'verification_recipe',
+  ]),
+  provenance: z.discriminatedUnion('kind', [
+    z.object({
+      kind: z.literal('v2-criterion'),
+      v2CriterionId: z.string(),
+      v2Source: z.enum(['objective', 'completion_criterion', 'constraint', 'derived']),
+    }),
+    z.object({
+      kind: z.literal('verification-recipe'),
+      recipeProvenanceDigest: z.string(),
+      recipeCriterionId: z.string(),
+    }),
+  ]),
+}) satisfies z.ZodType<LoopAcceptanceCriterionV3>;
+
+const verificationCriteriaRefBaseShape = {
+  format: z.literal('agent-skills'),
+  skillName: z.string(),
+  criteriaId: z.string(),
+  logicalLocator: z.string(),
+  skillMdDigest: z.string(),
+  criteriaDigest: z.string(),
+  provenanceDigest: z.string(),
+} as const;
+
+const verificationCriteriaRefSchema = z.union([
+  z.object({
+    ...verificationCriteriaRefBaseShape,
+    source: z.object({ kind: z.literal('personal') }),
+    sourceTrust: z.object({
+      kind: z.literal('personal-local'),
+      rootIdentityDigest: z.string(),
+      ownerIdentityDigest: z.string(),
+      accessPolicyVersion: z.string(),
+      accessControlDigest: z.string(),
+    }),
+  }),
+  z.object({
+    ...verificationCriteriaRefBaseShape,
+    source: z.object({ kind: z.literal('project') }),
+    sourceTrust: z.object({
+      kind: z.literal('workspace'),
+      workspaceIdentityDigest: z.string(),
+      scope: z.literal('verification-criteria-source'),
+    }),
+  }),
+  z.object({
+    ...verificationCriteriaRefBaseShape,
+    source: z.object({ kind: z.literal('package'), packagePath: z.string() }),
+    sourceTrust: z.object({
+      kind: z.literal('workspace'),
+      workspaceIdentityDigest: z.string(),
+      scope: z.literal('verification-criteria-source'),
+    }),
+  }),
+  z.object({
+    ...verificationCriteriaRefBaseShape,
+    source: z.object({ kind: z.literal('extra'), sourceId: z.string() }),
+    sourceTrust: z.object({
+      kind: z.literal('extra-local-grant'),
+      sourceId: z.string(),
+      trustGrantId: z.string(),
+      rootIdentityDigest: z.string(),
+    }),
+  }),
+  z.object({
+    ...verificationCriteriaRefBaseShape,
+    source: z.object({ kind: z.literal('builtin'), version: z.string() }),
+    sourceTrust: z.object({
+      kind: z.literal('builtin-release'),
+      version: z.string(),
+      assetDigest: z.string(),
+    }),
+  }),
+]) satisfies z.ZodType<VerificationCriteriaRefV1>;
+
+const verificationCriteriaSelectionSchema = z.object({
+  schemaVersion: z.literal(1),
+  preflightCatalogDigest: z.string(),
+  selected: z.array(z.object({
+    selectionOrder: z.number(),
+    ref: verificationCriteriaRefSchema,
+  })),
+  selectionDigest: z.string(),
+}) satisfies z.ZodType<VerificationCriteriaSelectionV1>;
+
+const loopContractV3Schema = z.object({
+  schemaVersion: z.literal(3),
+  contractId: z.string(),
+  supersedesContractId: z.string().optional(),
+  supersedesGoalId: z.string().optional(),
+  goalId: z.string(),
+  objective: z.string(),
+  completionCriterion: z.string().optional(),
+  constraints: z.array(z.object({ id: z.string(), text: z.string() })),
+  finishLineReview: loopContractV2Schema.shape.finishLineReview,
+  workspaceIdentity: loopContractV2Schema.shape.workspaceIdentity,
+  workspaceTrust: z.discriminatedUnion('hasExecutableChecks', [
+    z.object({
+      schemaVersion: z.literal(2),
+      workspaceIdentityDigest: z.string(),
+      reviewSubjectPolicyVersion: z.string(),
+      hasExecutableChecks: z.literal(false),
+      scopes: z.tuple([z.literal('brokered-review-subject')]),
+    }),
+    z.object({
+      schemaVersion: z.literal(2),
+      workspaceIdentityDigest: z.string(),
+      reviewSubjectPolicyVersion: z.string(),
+      hasExecutableChecks: z.literal(true),
+      scopes: z.tuple([
+        z.literal('loop-project-checks'),
+        z.literal('brokered-review-subject'),
+      ]),
+    }),
+  ]),
+  gateApproval: gateApprovalSchema,
+  acceptanceCriteria: z.array(loopAcceptanceCriterionV3Schema),
+  verificationPlan: z.array(loopVerificationStepSchema),
+  verificationCriteria: verificationCriteriaSelectionSchema,
+  gatePlan: z.object({
+    schemaVersion: z.literal(2),
+    stopCondition: z.literal('proof-pass'),
+    legacySnapshot: gatePlanSchema,
+    criteriaSelectionDigest: z.string(),
+    criterionIds: z.array(z.string()),
+    builtinScanPolicyVersion: z.string(),
+    freshReviewerPolicyVersion: z.string(),
+    reviewSubjectPolicyVersion: z.string(),
+    planDigest: z.string(),
+  }),
+  reviewPolicy: loopContractV2Schema.shape.reviewPolicy,
+  source: z.enum(['user', 'planner', 'fallback']),
+  createdAt: z.number(),
+}) satisfies z.ZodType<LoopContractV3>;
+
 export const loopContractSchema = z.discriminatedUnion('schemaVersion', [
   loopContractV1Schema,
   loopContractV2Schema,
+  loopContractV3Schema,
 ]) satisfies z.ZodType<LoopContract>;
 
 export const loopConvergenceSummarySchema = z.object({

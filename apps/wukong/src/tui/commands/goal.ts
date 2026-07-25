@@ -3,6 +3,7 @@ import {
   isWukongError,
   type GoalSnapshot,
   type LoopContractV2Input,
+  type LoopContractV3Input,
   type PermissionMode,
 } from '@wukong/wukong-sdk';
 import type { FinishLineProposal } from '@wukong/verification';
@@ -17,6 +18,7 @@ import {
 import {
   formatLoopPreflightBlocked,
   formatLoopPreflightReady,
+  resolveLoopReviewProvider,
   runLoopPreflight,
   type LoopPreflightReady,
   type DiscoveredCheckDecision,
@@ -35,6 +37,10 @@ import {
   FinishLineReviewComponent,
   type FinishLineReviewChoice,
 } from '../components/dialogs/finish-line-review';
+import {
+  VerificationCriteriaSelectorComponent,
+  type VerificationCriteriaChoice,
+} from '../components/dialogs/verification-criteria-selector';
 import { ChoicePickerComponent } from '../components/dialogs/choice-picker';
 import {
   GoalStartPermissionPromptComponent,
@@ -87,7 +93,7 @@ export interface GoalStartOptions {
   readonly prepareCreate?: () => Promise<{
     readonly maxIterations?: number;
     readonly completionCriterion?: string;
-    readonly loopContract?: LoopContractV2Input;
+    readonly loopContract?: LoopContractV2Input | LoopContractV3Input;
   } | false>;
   readonly afterCreate?: (snapshot: GoalSnapshot) => void | Promise<void>;
   readonly onCreateError?: () => void | Promise<void>;
@@ -802,8 +808,11 @@ export async function handleLoopSlashCommand(host: SlashCommandHost, args: strin
     case 'create':
       if (revising) {
         const current = await getLoopGoal(host);
-        if (current?.loopContract?.schemaVersion !== 2) {
-          host.showStatus('No V2 Loop is available to revise.');
+        if (
+          current?.loopContract?.schemaVersion !== 2
+          && current?.loopContract?.schemaVersion !== 3
+        ) {
+          host.showStatus('No Loop contract is available to revise.');
           return;
         }
         const revised: Extract<ParsedLoopCommand, { kind: 'create' }> = {
@@ -832,7 +841,14 @@ async function openFinishLineReview(
   draft: FinishLineDraft,
   rawArgs: string,
   discoveredCheckDecision: DiscoveredCheckDecision = 'tui-default',
+  verificationSkills: readonly VerificationCriteriaChoice[] = [],
+  verificationCatalogDigest?: string,
 ): Promise<void> {
+  const config = await host.harness.getConfig();
+  const reviewProvider = resolveLoopReviewProvider(
+    config,
+    parsed.reviewModel ?? host.state.appState.model,
+  );
   const result = await runLoopPreflight({
     objective: draft.objective,
     completionCriterion: draft.completionCriterion,
@@ -841,6 +857,9 @@ async function openFinishLineReview(
     model: host.state.appState.model,
     workspace: host.state.appState.workDir ?? process.cwd(),
     mode: 'tui-proposal',
+    verificationSkills,
+    verificationCatalogDigest,
+    reviewProvider,
     getActiveGoal: async () => (await host.requireSession().getGoal()).goal,
   });
   if (!result.ready) {
@@ -862,6 +881,9 @@ function showFinishLineReview(
     new FinishLineReviewComponent({
       proposal: preflight.proposal,
       maxIterations: parsed.maxIterations,
+      selectedCriteriaCount: preflight.verificationSelection?.selected.length ?? 0,
+      suggestedCriteriaCount: preflight.verificationCatalog.suggestions.length,
+      reviewProviderOrigin: formatReviewProviderOrigin(preflight),
       onSelect: (choice) => {
         void handleFinishLineReviewChoice(
           host,
@@ -913,6 +935,8 @@ async function handleFinishLineReviewChoice(
             result.draft,
             rawArgs,
             discoveredCheckDecision,
+            selectedCriteriaChoices(preflight),
+            preflight.verificationCatalog.catalogDigest,
           );
         }),
       );
@@ -927,6 +951,37 @@ async function handleFinishLineReviewChoice(
         discoveredCheckDecision,
       );
       return;
+    case 'criteria':
+      host.mountEditorReplacement(
+        new VerificationCriteriaSelectorComponent({
+          catalog: preflight.verificationCatalog,
+          selected: selectedCriteriaChoices(preflight),
+          onDone: (selected) => {
+            void openFinishLineReview(
+              host,
+              parsed,
+              draft,
+              rawArgs,
+              discoveredCheckDecision,
+              selected,
+              selected.length === 0
+                ? undefined
+                : preflight.verificationCatalog.catalogDigest,
+            );
+          },
+          onCancel: () => {
+            showFinishLineReview(
+              host,
+              parsed,
+              draft,
+              rawArgs,
+              preflight,
+              discoveredCheckDecision,
+            );
+          },
+        }),
+      );
+      return;
     case 'advanced':
       showAdvancedLoopSettings(
         host,
@@ -938,13 +993,12 @@ async function handleFinishLineReviewChoice(
       );
       return;
     case 'start':
-      host.restoreEditor();
-      await startConfirmedLoop(
+      await confirmReviewSubjectAccess(
         host,
         parsed,
         draft,
         rawArgs,
-        preflight.proposal,
+        preflight,
         discoveredCheckDecision,
       );
       return;
@@ -1038,7 +1092,17 @@ function showFrozenChecks(
           ],
       onSelect: (value) => {
         if (value === 'only-explicit') {
-          void openFinishLineReview(host, parsed, draft, rawArgs, 'only-explicit');
+          void openFinishLineReview(
+            host,
+            parsed,
+            draft,
+            rawArgs,
+            'only-explicit',
+            selectedCriteriaChoices(preflight),
+            preflight.verificationSelection === undefined
+              ? undefined
+              : preflight.verificationCatalog.catalogDigest,
+          );
           return;
         }
         showFinishLineReview(
@@ -1064,12 +1128,85 @@ function showFrozenChecks(
   );
 }
 
+async function confirmReviewSubjectAccess(
+  host: SlashCommandHost,
+  parsed: Extract<ParsedLoopCommand, { kind: 'create' }>,
+  draft: FinishLineDraft,
+  rawArgs: string,
+  preflight: LoopPreflightReady,
+  discoveredCheckDecision: DiscoveredCheckDecision,
+): Promise<void> {
+  await new Promise<void>((resolve) => {
+    host.mountEditorReplacement(
+      new ChoicePickerComponent({
+        title: 'Allow bounded review input for this run?',
+        hint: '↑↓ navigate · Enter select · Esc cancel',
+        notice: [
+          `Provider       ${formatReviewProviderOrigin(preflight)}`,
+          'Allowed input  changed tracked files, explicitly selected untracked files,',
+          '               scope-matched files, and redacted project-check evidence',
+          'Always exclude secrets, private keys, generated output, and binary files',
+          'Limits         200 files · 2 MiB source · 512 KiB Gate evidence',
+          'Destination    your configured BYOK provider; Wukong does not retain file contents',
+        ].join('\n'),
+        noticeTone: 'warning',
+        options: [
+          {
+            value: 'allow',
+            label: 'Allow once and start',
+            description: 'Bind this exact provider, policy, workspace, and run only.',
+          },
+          {
+            value: 'cancel',
+            label: 'Cancel',
+            description: 'Create no trust binding, consent binding, contract, or run.',
+          },
+        ],
+        onSelect: (value) => {
+          if (value !== 'allow') {
+            showFinishLineReview(
+              host,
+              parsed,
+              draft,
+              rawArgs,
+              preflight,
+              discoveredCheckDecision,
+            );
+            resolve();
+            return;
+          }
+          host.restoreEditor();
+          void startConfirmedLoop(
+            host,
+            parsed,
+            draft,
+            rawArgs,
+            preflight,
+            discoveredCheckDecision,
+          ).finally(resolve);
+        },
+        onCancel: () => {
+          showFinishLineReview(
+            host,
+            parsed,
+            draft,
+            rawArgs,
+            preflight,
+            discoveredCheckDecision,
+          );
+          resolve();
+        },
+      }),
+    );
+  });
+}
+
 async function startConfirmedLoop(
   host: SlashCommandHost,
   parsed: Extract<ParsedLoopCommand, { kind: 'create' }>,
   draft: FinishLineDraft,
   rawArgs: string,
-  proposal: FinishLineProposal,
+  initialPreflight: LoopPreflightReady,
   discoveredCheckDecision: DiscoveredCheckDecision,
 ): Promise<void> {
   let run: Awaited<ReturnType<typeof beginLoopRun>> | undefined;
@@ -1089,6 +1226,7 @@ async function startConfirmedLoop(
     {
       commandName: 'loop',
       prepareCreate: async () => {
+        const config = await host.harness.getConfig();
         const result = await runLoopPreflight({
           objective: draft.objective,
           completionCriterion: draft.completionCriterion,
@@ -1097,7 +1235,22 @@ async function startConfirmedLoop(
           model: host.state.appState.model,
           workspace: host.state.appState.workDir ?? process.cwd(),
           mode: 'tui-confirmed',
-          acknowledgeWarningSetDigest: proposal.finishLineReview.warningSetDigest,
+          acknowledgeWarningSetDigest:
+            initialPreflight.proposal.finishLineReview.warningSetDigest,
+          verificationSkills:
+            selectedCriteriaChoices(initialPreflight),
+          verificationCatalogDigest:
+            initialPreflight.verificationSelection === undefined
+              ? undefined
+              : initialPreflight.verificationCatalog.catalogDigest,
+          trustReviewSubjectProposalDigest:
+            initialPreflight.brokerTrustProposal.trustProposalDigest,
+          acknowledgeReviewSubjectConsentDigest:
+            initialPreflight.reviewSubjectConsentProposal.consentProposalDigest,
+          reviewProvider: resolveLoopReviewProvider(
+            config,
+            parsed.reviewModel ?? host.state.appState.model,
+          ),
           getActiveGoal: async () => (await host.requireSession().getGoal()).goal,
         });
         if (!result.ready) {
@@ -1122,7 +1275,7 @@ async function startConfirmedLoop(
           maxIterations: parsed.maxIterations,
           completionCriterion: result.proposal.completionCriterion,
           loopContract: loopContractInput(
-            trustedProposal,
+            finalized,
             parsed.supersedesGoalId,
             parsed.supersedesContractId,
           ),
@@ -1218,10 +1371,58 @@ async function ensureTuiWorkspaceTrust(
 }
 
 function loopContractInput(
-  proposal: FinishLineProposal,
+  preflight: LoopPreflightReady,
   supersedesGoalId?: string,
   supersedesContractId?: string,
-): LoopContractV2Input {
+): LoopContractV2Input | LoopContractV3Input {
+  const proposal = preflight.proposal;
+  if (
+    preflight.brokerReviewTrust === undefined
+    || preflight.reviewSubjectConsent === undefined
+  ) {
+    throw new Error('Loop preflight did not freeze exact broker trust and provider consent.');
+  }
+  const reviewSettings = {
+    brokerReviewTrust: preflight.brokerReviewTrust,
+    reviewSubjectConsent: preflight.reviewSubjectConsent,
+  };
+  if (preflight.contractSchemaVersion === 3) {
+    const workspaceTrust = proposal.gateApproval.hasExecutableChecks
+      ? {
+          schemaVersion: 2 as const,
+          workspaceIdentityDigest: proposal.workspaceIdentity.workspaceIdentityDigest,
+          reviewSubjectPolicyVersion:
+            preflight.reviewSubjectConsentProposal.reviewSubjectPolicyVersion,
+          hasExecutableChecks: true as const,
+          scopes: ['loop-project-checks', 'brokered-review-subject'] as const,
+        }
+      : {
+          schemaVersion: 2 as const,
+          workspaceIdentityDigest: proposal.workspaceIdentity.workspaceIdentityDigest,
+          reviewSubjectPolicyVersion:
+            preflight.reviewSubjectConsentProposal.reviewSubjectPolicyVersion,
+          hasExecutableChecks: false as const,
+          scopes: ['brokered-review-subject'] as const,
+        };
+    return {
+      schemaVersion: 3,
+      objective: proposal.objective,
+      completionCriterion: proposal.completionCriterion,
+      constraints: proposal.constraints,
+      finishLineReview: proposal.finishLineReview,
+      workspaceIdentity: proposal.workspaceIdentity,
+      workspaceTrust,
+      gateApproval: proposal.gateApproval,
+      legacyGatePlan: proposal.gatePlan,
+      reviewPolicy: proposal.reviewPolicy,
+      verificationCriteria: preflight.verificationSelection!,
+      selectedRecipes: preflight.selectedRecipes,
+      reviewSettings,
+      source: 'user',
+      supersedesGoalId,
+      supersedesContractId,
+    };
+  }
   return {
     schemaVersion: 2,
     objective: proposal.objective,
@@ -1233,10 +1434,33 @@ function loopContractInput(
     gateApproval: proposal.gateApproval,
     gatePlan: proposal.gatePlan,
     reviewPolicy: proposal.reviewPolicy,
+    reviewSettings,
     source: 'user',
     supersedesGoalId,
     supersedesContractId,
   };
+}
+
+function formatReviewProviderOrigin(preflight: LoopPreflightReady): string {
+  const origin = preflight.reviewSubjectConsentProposal.provider.endpointOrigin;
+  return `${origin.scheme}://${origin.host}:${String(origin.port)}`;
+}
+
+function selectedCriteriaChoices(
+  preflight: LoopPreflightReady,
+): readonly VerificationCriteriaChoice[] {
+  return preflight.verificationSelection?.selected.map(({ ref }) => {
+    const entry = preflight.verificationCatalog.entries.find(
+      (candidate) => candidate.ref.provenanceDigest === ref.provenanceDigest,
+    );
+    if (entry === undefined) {
+      throw new Error(`Selected verification criteria is absent from the current catalog: ${ref.skillName}`);
+    }
+    return {
+      selectionId: entry.selectionId,
+      provenanceDigest: ref.provenanceDigest,
+    };
+  }) ?? [];
 }
 
 function cancelFinishLine(host: SlashCommandHost, rawArgs: string): void {

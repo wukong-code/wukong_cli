@@ -14,7 +14,7 @@ import type {
   LoopEvidenceSnapshotCreatedV1,
   LoopResult,
   LoopReviewAttempt,
-  LoopRunCreatedV1,
+  LoopRunCreated,
   LoopRunTerminalV1,
   LoopStrategyAttempt,
   ProofAggregateRecordedV1,
@@ -137,7 +137,7 @@ export interface AgentRecordEvents {
     supersedesContractId: string;
   };
   'loop.run.create': {
-    run: LoopRunCreatedV1;
+    run: LoopRunCreated;
   };
   'loop.gate-attempt.create': {
     attempt: GateAttemptCreatedV1;

@@ -1,16 +1,34 @@
 import { access, stat } from 'node:fs/promises';
 import { constants } from 'node:fs';
+import { homedir } from 'node:os';
+import { join } from 'node:path';
 import { randomUUID } from 'node:crypto';
 
 import {
+  acknowledgeReviewSubjectConsent,
   buildFinishLine,
   classifyGateCommand,
+  createBrokerReviewTrustProposal,
+  createReviewSubjectConsentProposal,
+  createVerificationCriteriaSelection,
   createTrustChallenge,
+  discoverVerificationCriteriaCatalog,
+  grantBrokerReviewTrust,
+  inspectGit,
+  REVIEW_SUBJECT_POLICY_VERSION,
   verifyTrustChallenge,
+  type BrokerReviewTrustBindingV1,
+  type BrokerReviewTrustProposalV1,
   type FinishLineProposal,
+  type ReviewSubjectConsentBindingV1,
+  type ReviewSubjectConsentProposalV1,
   type VerificationCommand,
+  type VerificationCriteriaCatalogV1,
+  type VerificationCriteriaRecipeV1,
+  type VerificationCriteriaSelectionV1,
+  type VerificationCriteriaSourceRootV1,
 } from '@wukong/verification';
-import type { GoalSnapshot } from '@wukong/wukong-sdk';
+import type { GoalSnapshot, WukongConfig } from '@wukong/wukong-sdk';
 
 import {
   findWorkspaceTrust,
@@ -28,6 +46,17 @@ export interface LoopPreflightReady {
   readonly proposal: FinishLineProposal;
   readonly trustChallenge: string;
   readonly trustGrant?: WorkspaceTrustGrant;
+  readonly contractSchemaVersion: 2 | 3;
+  readonly verificationCatalog: VerificationCriteriaCatalogV1;
+  readonly verificationSelection?: VerificationCriteriaSelectionV1;
+  readonly selectedRecipes: readonly {
+    readonly recipe: VerificationCriteriaRecipeV1;
+    readonly provenanceDigest: string;
+  }[];
+  readonly brokerTrustProposal: BrokerReviewTrustProposalV1;
+  readonly brokerReviewTrust?: BrokerReviewTrustBindingV1;
+  readonly reviewSubjectConsentProposal: ReviewSubjectConsentProposalV1;
+  readonly reviewSubjectConsent?: ReviewSubjectConsentBindingV1;
 }
 
 export interface LoopPreflightBlocked {
@@ -48,9 +77,16 @@ export interface LoopPreflightBlocked {
     | 'gate_approval_mismatch'
     | 'check_permission_required'
     | 'finish_line_warning_ack_required'
-    | 'inline_secret_rejected';
+    | 'inline_secret_rejected'
+    | 'verification_catalog_changed'
+    | 'verification_criteria_invalid'
+    | 'review_subject_trust_required'
+    | 'review_subject_consent_required';
   readonly proposal?: FinishLineProposal;
   readonly trustChallenge?: string;
+  readonly brokerTrustProposal?: BrokerReviewTrustProposalV1;
+  readonly reviewSubjectConsentProposal?: ReviewSubjectConsentProposalV1;
+  readonly verificationCatalog?: VerificationCriteriaCatalogV1;
 }
 
 export type LoopPreflightResult = LoopPreflightReady | LoopPreflightBlocked;
@@ -68,6 +104,18 @@ export interface LoopPreflightOptions {
   readonly approveGatePlanDigest?: string;
   readonly acknowledgeWarningSetDigest?: string;
   readonly trustWorkspaceChallenge?: string;
+  readonly verificationCatalogDigest?: string;
+  readonly verificationSkills?: readonly {
+    readonly selectionId: string;
+    readonly provenanceDigest: string;
+  }[];
+  readonly trustReviewSubjectProposalDigest?: string;
+  readonly acknowledgeReviewSubjectConsentDigest?: string;
+  readonly reviewProvider?: {
+    readonly providerId: string;
+    readonly endpoint: string;
+  };
+  readonly criteriaRoots?: readonly VerificationCriteriaSourceRootV1[];
   readonly homeDir?: string;
   readonly requireModel?: boolean;
   readonly discoverChecks?: (workspace: string) => Promise<readonly string[]>;
@@ -201,6 +249,108 @@ export async function runLoopPreflight(
     { homeDir: options.homeDir },
   );
 
+  const criteriaRoots = options.criteriaRoots
+    ?? await defaultCriteriaRoots(
+      proposal.workspaceIdentity.canonicalRealpath,
+      proposal.workspaceIdentity.workspaceIdentityDigest,
+      options.homeDir,
+    );
+  const git = await inspectGit(proposal.workspaceIdentity.canonicalRealpath);
+  const verificationCatalog = await discoverVerificationCriteriaCatalog({
+    workspaceRoot: proposal.workspaceIdentity.canonicalRealpath,
+    roots: criteriaRoots,
+    changedPaths: git.changedFiles.map((file) => file.path),
+  });
+  let verificationSelection: VerificationCriteriaSelectionV1 | undefined;
+  let selectedRecipes: LoopPreflightReady['selectedRecipes'] = [];
+  const requestedSkills = options.verificationSkills ?? [];
+  if (requestedSkills.length > 0) {
+    if (options.verificationCatalogDigest === undefined) {
+      return blocked(
+        'verification_catalog_changed',
+        'Verification Skill selection requires the exact dry-run catalog digest.',
+        `Re-run with --verification-catalog-digest ${verificationCatalog.catalogDigest}`,
+        proposal,
+        trustChallenge,
+        undefined,
+        undefined,
+        verificationCatalog,
+      );
+    }
+    try {
+      verificationSelection = createVerificationCriteriaSelection(
+        verificationCatalog,
+        requestedSkills,
+        options.verificationCatalogDigest,
+      );
+    } catch (error) {
+      return blocked(
+        error instanceof Error && error.message.includes('catalog')
+          ? 'verification_catalog_changed'
+          : 'verification_criteria_invalid',
+        error instanceof Error ? error.message : String(error),
+        'Run --dry-run again and select exact current Verification Skill identities.',
+        proposal,
+        trustChallenge,
+        undefined,
+        undefined,
+        verificationCatalog,
+      );
+    }
+    const byIdentity = new Map(
+      verificationCatalog.entries.map((entry) => [entry.selectionId, entry]),
+    );
+    selectedRecipes = requestedSkills.map((request) => {
+      const entry = byIdentity.get(request.selectionId);
+      if (entry === undefined) {
+        throw new Error(`Selected Verification Skill disappeared: ${request.selectionId}`);
+      }
+      return {
+        recipe: entry.recipe,
+        provenanceDigest: entry.ref.provenanceDigest,
+      };
+    });
+  } else if (options.verificationCatalogDigest !== undefined) {
+    return blocked(
+      'verification_criteria_invalid',
+      'Catalog digest is not applicable when no Verification Skill is selected.',
+      'Remove --verification-catalog-digest or add an exact --verification-skill.',
+      proposal,
+      trustChallenge,
+      undefined,
+      undefined,
+      verificationCatalog,
+    );
+  }
+
+  const provider = options.reviewProvider;
+  if (provider === undefined) {
+    return blocked(
+      'model_not_configured',
+      'The actual reviewer provider endpoint could not be resolved.',
+      'Configure the selected model provider with an exact base_url, then retry.',
+      proposal,
+      trustChallenge,
+      undefined,
+      undefined,
+      verificationCatalog,
+    );
+  }
+  const brokerTrustProposal = createBrokerReviewTrustProposal({
+    workspaceIdentityDigest: proposal.workspaceIdentity.workspaceIdentityDigest,
+    intent: 'once',
+  });
+  const reviewSubjectConsentProposal = createReviewSubjectConsentProposal({
+    workspaceIdentityDigest: proposal.workspaceIdentity.workspaceIdentityDigest,
+    allowedOrigins: [
+      'changed-tracked',
+      'explicit-untracked',
+      'scope-match',
+      'gate-evidence',
+    ],
+    providerId: provider.providerId,
+    endpoint: provider.endpoint,
+  });
   if (mode === 'headless' || mode === 'tui-confirmed') {
     if (
       proposal.finishLineReview.warnings.length > 0
@@ -287,6 +437,49 @@ export async function runLoopPreflight(
     }
   }
 
+  let brokerReviewTrust: BrokerReviewTrustBindingV1 | undefined;
+  let reviewSubjectConsent: ReviewSubjectConsentBindingV1 | undefined;
+  if (mode === 'headless' || mode === 'tui-confirmed') {
+    if (
+      options.trustReviewSubjectProposalDigest
+        !== brokerTrustProposal.trustProposalDigest
+    ) {
+      return blocked(
+        'review_subject_trust_required',
+        'Exact local broker trust is required before Wukong can read bounded review subjects.',
+        `Re-run with --trust-review-subject ${brokerTrustProposal.trustProposalDigest}`,
+        proposal,
+        trustChallenge,
+        brokerTrustProposal,
+        reviewSubjectConsentProposal,
+        verificationCatalog,
+      );
+    }
+    if (
+      options.acknowledgeReviewSubjectConsentDigest
+        !== reviewSubjectConsentProposal.consentProposalDigest
+    ) {
+      return blocked(
+        'review_subject_consent_required',
+        'Exact run-scoped consent is required before review subjects can be sent to the selected BYOK provider.',
+        `Re-run with --ack-review-subject ${reviewSubjectConsentProposal.consentProposalDigest}`,
+        proposal,
+        trustChallenge,
+        brokerTrustProposal,
+        reviewSubjectConsentProposal,
+        verificationCatalog,
+      );
+    }
+    brokerReviewTrust = grantBrokerReviewTrust(
+      brokerTrustProposal,
+      options.trustReviewSubjectProposalDigest,
+    );
+    reviewSubjectConsent = acknowledgeReviewSubjectConsent(
+      reviewSubjectConsentProposal,
+      options.acknowledgeReviewSubjectConsentDigest,
+    );
+  }
+
   const trustedProposal: FinishLineProposal = trustGrant === undefined
     || proposal.workspaceTrust === undefined
     ? proposal
@@ -305,6 +498,14 @@ export async function runLoopPreflight(
     proposal: trustedProposal,
     trustChallenge,
     trustGrant,
+    contractSchemaVersion: verificationSelection === undefined ? 2 : 3,
+    verificationCatalog,
+    verificationSelection,
+    selectedRecipes,
+    brokerTrustProposal,
+    brokerReviewTrust,
+    reviewSubjectConsentProposal,
+    reviewSubjectConsent,
   };
 }
 
@@ -329,6 +530,9 @@ export function formatLoopPreflightReady(
     `Done when    ${contract.completionCriterion ?? 'Not specified separately'}`,
     `Must not     ${String(contract.constraints.length)} constraint${contract.constraints.length === 1 ? '' : 's'}`,
     `Verification ${String(contract.gatePlan.requiredChecks.length)} required project check${contract.gatePlan.requiredChecks.length === 1 ? '' : 's'}`,
+    `Skill criteria ${String(result.verificationSelection?.selected.length ?? 0)} selected · ${String(result.verificationCatalog.suggestions.length)} suggested`,
+    `Reviewer     brokered fresh context → ${result.reviewSubjectConsentProposal.provider.endpointOrigin.scheme}://${result.reviewSubjectConsentProposal.provider.endpointOrigin.host}:${String(result.reviewSubjectConsentProposal.provider.endpointOrigin.port)}`,
+    'Input        bounded changed/scope files and redacted Gate evidence; secrets excluded',
     `Run          up to ${String(maxIterations)} iterations`,
   ].join('\n');
 }
@@ -356,6 +560,14 @@ export function formatLoopDryRun(
       resolution: check.resolution,
     })),
     excludedChecks: proposal.gatePlan.excludedChecks,
+    contractSchemaVersion: result.contractSchemaVersion,
+    selectionState: result.verificationSelection === undefined ? 'none' : 'selected',
+    verificationCatalog: result.verificationCatalog,
+    verificationSelection: result.verificationSelection ?? null,
+    selectedRecipes: result.selectedRecipes,
+    reviewSubjectPolicyVersion: REVIEW_SUBJECT_POLICY_VERSION,
+    brokerTrustProposal: result.brokerTrustProposal,
+    reviewSubjectConsentProposal: result.reviewSubjectConsentProposal,
     trustChallenge: result.trustChallenge,
     approvalSetDigest: proposal.gateApproval.approvalSetDigest,
     warningSetDigest: proposal.finishLineReview.warningSetDigest,
@@ -368,8 +580,21 @@ function blocked(
   next: string,
   proposal?: FinishLineProposal,
   trustChallenge?: string,
+  brokerTrustProposal?: BrokerReviewTrustProposalV1,
+  reviewSubjectConsentProposal?: ReviewSubjectConsentProposalV1,
+  verificationCatalog?: VerificationCriteriaCatalogV1,
 ): LoopPreflightBlocked {
-  return { ready: false, reasonCode, reason, next, proposal, trustChallenge };
+  return {
+    ready: false,
+    reasonCode,
+    reason,
+    next,
+    proposal,
+    trustChallenge,
+    brokerTrustProposal,
+    reviewSubjectConsentProposal,
+    verificationCatalog,
+  };
 }
 
 function proposalFailure(failure: {
@@ -383,4 +608,67 @@ function proposalFailure(failure: {
     failure.message,
     'Edit the Finish Line and retry.',
   );
+}
+
+export function resolveLoopReviewProvider(
+  config: Pick<WukongConfig, 'defaultModel' | 'models' | 'providers'>,
+  requestedModel?: string,
+): { readonly providerId: string; readonly endpoint: string } | undefined {
+  const requested = requestedModel?.trim();
+  const model = requested === undefined || requested.length === 0
+    ? config.defaultModel
+    : requested;
+  if (model === undefined) return undefined;
+  const alias = config.models?.[model];
+  const providerId = alias?.provider ?? model.split('/')[0];
+  if (providerId === undefined || providerId === '') return undefined;
+  const provider = config.providers[providerId];
+  if (provider === undefined) return undefined;
+  const endpoint = provider.baseUrl ?? defaultProviderEndpoint(provider.type);
+  return endpoint === undefined ? undefined : { providerId, endpoint };
+}
+
+async function defaultCriteriaRoots(
+  workspace: string,
+  workspaceIdentityDigest: string,
+  homeDir?: string,
+): Promise<readonly VerificationCriteriaSourceRootV1[]> {
+  const candidates: VerificationCriteriaSourceRootV1[] = [
+    {
+      kind: 'project',
+      root: join(workspace, '.wukong', 'skills'),
+      workspaceIdentityDigest,
+    },
+    {
+      kind: 'personal',
+      root: join(homeDir ?? homedir(), '.wukong', 'skills'),
+    },
+  ];
+  const roots: VerificationCriteriaSourceRootV1[] = [];
+  for (const candidate of candidates) {
+    try {
+      if ((await stat(candidate.root)).isDirectory()) roots.push(candidate);
+    } catch {
+      continue;
+    }
+  }
+  return roots;
+}
+
+function defaultProviderEndpoint(
+  type: WukongConfig['providers'][string]['type'],
+): string | undefined {
+  switch (type) {
+    case 'anthropic':
+      return 'https://api.anthropic.com';
+    case 'openai':
+    case 'openai_responses':
+      return 'https://api.openai.com/v1';
+    case 'google-genai':
+      return 'https://generativelanguage.googleapis.com';
+    case 'wukong':
+      return 'https://api.wukong.ai/v1';
+    case 'vertexai':
+      return undefined;
+  }
 }

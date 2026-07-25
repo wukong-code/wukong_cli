@@ -1,5 +1,6 @@
 import type {
   ExportSessionManifest,
+  LoopContractV3Input,
   LoopContractV2Input,
   ResumeSessionResult,
   ShellEnvironment,
@@ -46,6 +47,8 @@ export type {
   LoopContract,
   LoopContractV2,
   LoopContractV2Input,
+  LoopContractV3,
+  LoopContractV3Input,
   WukongConfig,
   WukongConfigPatch,
   LoopControl,
@@ -88,7 +91,7 @@ export interface CreateGoalInput {
   readonly reviewModel?: string;
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
-  readonly loopContract?: LoopContractV2Input;
+  readonly loopContract?: LoopContractV2Input | LoopContractV3Input;
 }
 
 export type TextPromptPart = Extract<ContentPart, { type: 'text' }>;

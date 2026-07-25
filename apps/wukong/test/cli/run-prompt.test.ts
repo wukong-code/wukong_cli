@@ -79,10 +79,84 @@ const mocks = vi.hoisted(() => {
     },
     reviewPolicy: { mode: 'advisory-live' as const },
   };
+  const preflightReady = {
+    ready: true as const,
+    model: 'k2',
+    workspace: process.cwd(),
+    checks: ['pnpm test'],
+    proposal: finishLineProposal,
+    trustChallenge: 'challenge',
+    contractSchemaVersion: 2 as const,
+    verificationCatalog: {
+      schemaVersion: 1 as const,
+      policyVersion: 'verification-catalog/1',
+      entries: [],
+      failures: [],
+      suggestions: [],
+      catalogDigest: 'sha256:catalog',
+    },
+    selectedRecipes: [],
+    brokerTrustProposal: {
+      schemaVersion: 1 as const,
+      workspaceIdentityDigest: 'sha256:workspace',
+      scope: 'brokered-review-subject' as const,
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      intent: 'once' as const,
+      trustProposalDigest: 'sha256:broker-trust',
+    },
+    brokerReviewTrust: {
+      trustGrantId: 'broker-grant',
+      workspaceIdentityDigest: 'sha256:workspace',
+      scope: 'brokered-review-subject' as const,
+      trustProposalDigest: 'sha256:broker-trust',
+    },
+    reviewSubjectConsentProposal: {
+      schemaVersion: 1 as const,
+      workspaceIdentityDigest: 'sha256:workspace',
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      hardExclusionPolicyVersion: 'review-subject-hard-exclusion/1',
+      allowedOrigins: ['changed-tracked'] as const,
+      limits: {
+        maxFiles: 500,
+        maxTotalBytes: 4_194_304,
+        maxFileBytes: 262_144,
+        maxGateEvidenceTotalBytes: 1_048_576,
+        maxGateEvidenceBytes: 131_072,
+      },
+      provider: {
+        providerId: 'example',
+        endpointOrigin: { scheme: 'https' as const, host: 'example.test', port: 443 },
+        endpointOriginDigest: 'sha256:origin',
+      },
+      consentProposalDigest: 'sha256:consent',
+    },
+    reviewSubjectConsent: {
+      schemaVersion: 1 as const,
+      workspaceIdentityDigest: 'sha256:workspace',
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      hardExclusionPolicyVersion: 'review-subject-hard-exclusion/1',
+      allowedOrigins: ['changed-tracked'] as const,
+      limits: {
+        maxFiles: 500,
+        maxTotalBytes: 4_194_304,
+        maxFileBytes: 262_144,
+        maxGateEvidenceTotalBytes: 1_048_576,
+        maxGateEvidenceBytes: 131_072,
+      },
+      provider: {
+        providerId: 'example',
+        endpointOriginDigest: 'sha256:origin',
+      },
+      consentProposalDigest: 'sha256:consent',
+      acknowledgedAt: 1,
+      consentDigest: 'sha256:consent-binding',
+    },
+  } satisfies Extract<LoopPreflightResult, { ready: true }>;
 
   return {
     session,
     finishLineProposal,
+    preflightReady,
     eventHandlers,
     agentEvent,
     mainEvent,
@@ -132,14 +206,9 @@ const mocks = vi.hoisted(() => {
     beginLoopRun: vi.fn(async () => ({ runId: 'run123' })),
     completeLoopRun: vi.fn(async () => ({ repeatedCompletedWithin7d: false })),
     registerTuiLoop: vi.fn(async () => {}),
-    runLoopPreflight: vi.fn<() => Promise<LoopPreflightResult>>(async () => ({
-      ready: true as const,
-      model: 'k2',
-      workspace: process.cwd(),
-      checks: ['pnpm test'],
-      proposal: finishLineProposal,
-      trustChallenge: 'challenge',
-    })),
+    runLoopPreflight: vi.fn<() => Promise<LoopPreflightResult>>(
+      async () => preflightReady,
+    ),
   };
 });
 
@@ -232,6 +301,10 @@ vi.mock('#/cli/lib/loop-lifecycle', () => ({
 
 vi.mock('#/cli/lib/loop-preflight', () => ({
   runLoopPreflight: mocks.runLoopPreflight,
+  resolveLoopReviewProvider: () => ({
+    providerId: 'example',
+    endpoint: 'https://example.test',
+  }),
   formatLoopPreflightBlocked: (result: { reason: string; next: string }) =>
     `Loop not started\nReason   ${result.reason}\nNext     ${result.next}`,
   formatLoopPreflightReady: (_result: unknown, maxIterations: number) =>
@@ -316,14 +389,7 @@ describe('runPrompt', () => {
     );
     mocks.goalExitCode.mockReturnValue(0);
     mocks.beginLoopRun.mockResolvedValue({ runId: 'run123' });
-    mocks.runLoopPreflight.mockResolvedValue({
-      ready: true,
-      model: 'k2',
-      workspace: process.cwd(),
-      checks: ['pnpm test'],
-      proposal: mocks.finishLineProposal,
-      trustChallenge: 'challenge',
-    });
+    mocks.runLoopPreflight.mockResolvedValue(mocks.preflightReady);
     mocks.createWukongCodeHostIdentity.mockImplementation((version: string) => ({
       userAgentProduct: 'wukong-code',
       version,

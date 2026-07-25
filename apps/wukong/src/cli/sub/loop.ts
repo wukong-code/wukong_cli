@@ -1,11 +1,14 @@
 import type { Command } from 'commander';
+import { createWukongHarness } from '@wukong/wukong-sdk';
 
 import {
   formatLoopDryRun,
   formatLoopPreflightBlocked,
   formatLoopPreflightReady,
+  resolveLoopReviewProvider,
   runLoopPreflight,
 } from '#/cli/lib/loop-preflight';
+import { createWukongCodeHostIdentity } from '#/cli/version';
 import { parseLoopDuration } from '#/utils/duration';
 
 const MAX_LOOP_OBJECTIVE_LENGTH = 8000;
@@ -26,6 +29,10 @@ export interface LoopCliOptions {
   readonly trustWorkspaceChallenge?: string;
   readonly approveGatePlanDigest?: string;
   readonly acknowledgeWarningSetDigest?: string;
+  readonly verificationCatalogDigest?: string;
+  readonly verificationSkills?: readonly string[];
+  readonly trustReviewSubjectProposalDigest?: string;
+  readonly acknowledgeReviewSubjectConsentDigest?: string;
 }
 
 export type RunLoopHandler = (options: LoopCliOptions) => void;
@@ -48,6 +55,10 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
     .option('--trust-workspace <challenge>', 'Exact short-lived workspace trust challenge from --dry-run.')
     .option('--approve-gate-plan <digest>', 'Exact Gate approval-set digest from --dry-run.')
     .option('--ack-finish-line-warnings <digest>', 'Exact Finish Line warning-set digest from --dry-run.')
+    .option('--verification-catalog-digest <digest>', 'Exact Verification Criteria catalog digest from --dry-run.')
+    .option('--verification-skill <identity@digest>', 'Select an exact Verification Skill identity and provenance digest. Repeat to set flat order.', collectOption, [])
+    .option('--trust-review-subject <digest>', 'Exact local broker trust proposal digest from --dry-run.')
+    .option('--ack-review-subject <digest>', 'Exact run-scoped BYOK review-subject consent digest from --dry-run.')
     .option('--dry-run', 'Validate arguments and print the planned loop without running it.', false)
     .action(async (objective: string, raw: RawLoopOptions, command: Command) => {
       const everyResult = parseEvery(raw.every);
@@ -78,6 +89,10 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
         trustWorkspaceChallenge: raw.trustWorkspace,
         approveGatePlanDigest: raw.approveGatePlan,
         acknowledgeWarningSetDigest: raw.ackFinishLineWarnings,
+        verificationCatalogDigest: raw.verificationCatalogDigest,
+        verificationSkills: raw.verificationSkill,
+        trustReviewSubjectProposalDigest: raw.trustReviewSubject,
+        acknowledgeReviewSubjectConsentDigest: raw.ackReviewSubject,
       };
 
       const validated = validateLoopOptions(options);
@@ -88,18 +103,32 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
       }
 
       if (options.dryRun === true) {
-        const result = await runLoopPreflight({
-          objective,
-          completionCriterion: options.doneWhen,
-          constraints: options.constraints,
-          explicitChecks: options.checks,
-          discoveredCheckDecision: options.onlyExplicitChecks === true ? 'only-explicit' : 'accept',
-          model: options.model,
-          workspace: process.cwd(),
-          mode: 'tui-proposal',
-          requireModel: false,
-          getActiveGoal: async () => null,
+        const harness = createWukongHarness({
+          identity: createWukongCodeHostIdentity(),
         });
+        let result;
+        try {
+          await harness.ensureConfigFile();
+          const config = await harness.getConfig();
+          const model = options.model ?? config.defaultModel;
+          result = await runLoopPreflight({
+            objective,
+            completionCriterion: options.doneWhen,
+            constraints: options.constraints,
+            explicitChecks: options.checks,
+            discoveredCheckDecision: options.onlyExplicitChecks === true ? 'only-explicit' : 'accept',
+            model,
+            workspace: process.cwd(),
+            mode: 'tui-proposal',
+            requireModel: false,
+            reviewProvider: resolveLoopReviewProvider(config, model),
+            verificationCatalogDigest: options.verificationCatalogDigest,
+            verificationSkills: parseVerificationSkills(options.verificationSkills),
+            getActiveGoal: async () => null,
+          });
+        } finally {
+          await harness.close();
+        }
         if (!result.ready) {
           process.stderr.write(`${formatLoopPreflightBlocked(result)}\n`);
           process.exit(2);
@@ -118,7 +147,10 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
               + `${formatLoopPreflightReady(result, options.maxIterations ?? 10)}\n\n`
               + `Gate approval  ${result.proposal.gateApproval.approvalSetDigest}\n`
               + `Warnings       ${result.proposal.finishLineReview.warningSetDigest}\n`
-              + `Trust          ${result.trustChallenge}\n`,
+              + `Project trust  ${result.trustChallenge}\n`
+              + `Broker trust   ${result.brokerTrustProposal.trustProposalDigest}\n`
+              + `Review consent ${result.reviewSubjectConsentProposal.consentProposalDigest}\n`
+              + `Catalog        ${result.verificationCatalog.catalogDigest}\n`,
         );
         process.exit(0);
         return;
@@ -148,6 +180,10 @@ interface RawLoopOptions {
   readonly trustWorkspace?: string;
   readonly approveGatePlan?: string;
   readonly ackFinishLineWarnings?: string;
+  readonly verificationCatalogDigest?: string;
+  readonly verificationSkill: string[];
+  readonly trustReviewSubject?: string;
+  readonly ackReviewSubject?: string;
 }
 
 type ValidationResult = { readonly kind: 'ok' } | { readonly kind: 'error'; readonly message: string };
@@ -184,6 +220,14 @@ export function validateLoopOptions(options: LoopCliOptions): ValidationResult {
     return {
       kind: 'error',
       message: '--accept-discovered-checks and --only-explicit-checks are mutually exclusive.',
+    };
+  }
+  try {
+    parseVerificationSkills(options.verificationSkills);
+  } catch (error) {
+    return {
+      kind: 'error',
+      message: error instanceof Error ? error.message : String(error),
     };
   }
   return { kind: 'ok' };
@@ -232,4 +276,21 @@ export function formatDuration(ms: number): string {
 
 function collectOption(value: string, previous: string[]): string[] {
   return [...previous, value];
+}
+
+export function parseVerificationSkills(
+  values: readonly string[] | undefined,
+): readonly { readonly selectionId: string; readonly provenanceDigest: string }[] {
+  return (values ?? []).map((value) => {
+    const marker = value.lastIndexOf('@sha256:');
+    if (marker <= 0) {
+      throw new Error('--verification-skill must be <exact-selection-id>@sha256:<digest>.');
+    }
+    const selectionId = value.slice(0, marker);
+    const provenanceDigest = value.slice(marker + 1);
+    if (!/^sha256:[a-f0-9]{64}$/u.test(provenanceDigest)) {
+      throw new Error('--verification-skill requires a full lowercase SHA-256 provenance digest.');
+    }
+    return { selectionId, provenanceDigest };
+  });
 }

@@ -4,6 +4,27 @@ import { formatDuration, formatLoopPlan, parseEvery, parseMaxIterations, validat
 import { createProgram } from '#/cli/commands';
 import type { CLIOptions } from '#/cli/options';
 
+vi.mock('@wukong/wukong-sdk', async (importOriginal) => {
+    const actual = await importOriginal<typeof import('@wukong/wukong-sdk')>();
+    return {
+        ...actual,
+        createWukongHarness: () => ({
+            ensureConfigFile: vi.fn(async () => {}),
+            getConfig: vi.fn(async () => ({
+                defaultModel: 'fast',
+                models: {
+                    fast: { provider: 'openai', model: 'writer' },
+                    slow: { provider: 'openai', model: 'reviewer' },
+                },
+                providers: {
+                    openai: { type: 'openai', apiKey: 'test' },
+                },
+            })),
+            close: vi.fn(async () => {}),
+        }),
+    };
+});
+
 describe('loop pure helpers', () => {
     it('parseEvery accepts undefined', () => {
         expect(parseEvery(undefined)).toEqual({ kind: 'ok', ms: undefined });

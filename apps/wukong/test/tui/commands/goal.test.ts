@@ -45,6 +45,10 @@ vi.mock('#/cli/lib/loop-lifecycle', () => ({
 
 vi.mock('#/cli/lib/loop-preflight', () => ({
   runLoopPreflight: loopPreflightMocks.run,
+  resolveLoopReviewProvider: () => ({
+    providerId: 'openai',
+    endpoint: 'https://api.openai.com/v1',
+  }),
   formatLoopPreflightBlocked: (result: { reason: string; next: string }) =>
     `Loop not started\nReason   ${result.reason}\nNext     ${result.next}`,
   formatLoopPreflightReady: (_result: unknown, maxIterations: number) =>
@@ -147,6 +151,82 @@ function finishLineProposal(objective: string) {
   } as const;
 }
 
+function loopPreflightReady(objective: string) {
+  return {
+    ready: true as const,
+    model: 'wukong-model',
+    workspace: '/workspace',
+    checks: [],
+    proposal: finishLineProposal(objective),
+    trustChallenge: 'challenge.signature',
+    contractSchemaVersion: 2 as const,
+    verificationCatalog: {
+      schemaVersion: 1 as const,
+      policyVersion: 'verification-catalog/1',
+      entries: [],
+      failures: [],
+      suggestions: [],
+      catalogDigest: 'sha256:catalog',
+    },
+    selectedRecipes: [],
+    brokerTrustProposal: {
+      schemaVersion: 1 as const,
+      workspaceIdentityDigest: 'sha256:workspace',
+      scope: 'brokered-review-subject' as const,
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      intent: 'once' as const,
+      trustProposalDigest: 'sha256:broker',
+    },
+    brokerReviewTrust: {
+      trustGrantId: 'broker-grant',
+      workspaceIdentityDigest: 'sha256:workspace',
+      scope: 'brokered-review-subject' as const,
+      trustProposalDigest: 'sha256:broker',
+    },
+    reviewSubjectConsentProposal: {
+      schemaVersion: 1 as const,
+      workspaceIdentityDigest: 'sha256:workspace',
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      hardExclusionPolicyVersion: 'review-subject-hard-exclusion/1',
+      allowedOrigins: ['changed-tracked'] as const,
+      limits: {
+        maxFiles: 200,
+        maxTotalBytes: 2_097_152,
+        maxFileBytes: 262_144,
+        maxGateEvidenceTotalBytes: 524_288,
+        maxGateEvidenceBytes: 131_072,
+      },
+      provider: {
+        providerId: 'openai',
+        endpointOrigin: { scheme: 'https' as const, host: 'api.openai.com', port: 443 },
+        endpointOriginDigest: 'sha256:origin',
+      },
+      consentProposalDigest: 'sha256:consent',
+    },
+    reviewSubjectConsent: {
+      schemaVersion: 1 as const,
+      workspaceIdentityDigest: 'sha256:workspace',
+      reviewSubjectPolicyVersion: 'review-subject/1',
+      hardExclusionPolicyVersion: 'review-subject-hard-exclusion/1',
+      allowedOrigins: ['changed-tracked'] as const,
+      limits: {
+        maxFiles: 200,
+        maxTotalBytes: 2_097_152,
+        maxFileBytes: 262_144,
+        maxGateEvidenceTotalBytes: 524_288,
+        maxGateEvidenceBytes: 131_072,
+      },
+      provider: {
+        providerId: 'openai',
+        endpointOriginDigest: 'sha256:origin',
+      },
+      consentProposalDigest: 'sha256:consent',
+      acknowledgedAt: 1,
+      consentDigest: 'sha256:consent-binding',
+    },
+  };
+}
+
 function stripAnsi(text: string): string {
   return text.replaceAll(/\u001B\[[0-9;]*m/g, '');
 }
@@ -187,6 +267,17 @@ function makeHost(
     },
     session: hasSession ? session : undefined,
     skillCommandMap: new Map<string, string>(),
+    harness: {
+      getConfig: vi.fn(async () => ({
+        defaultModel: 'wukong-model',
+        models: {
+          'wukong-model': { provider: 'openai', model: 'test' },
+        },
+        providers: {
+          openai: { type: 'openai', apiKey: 'test' },
+        },
+      })),
+    },
     requireSession: () => session,
     setAppState: vi.fn((patch: Record<string, unknown>) => Object.assign(host.state.appState, patch)),
     showError: vi.fn(),
@@ -216,6 +307,11 @@ function mountedPicker(host: SlashCommandHost): TestPicker {
 function latestMountedPicker(host: SlashCommandHost): TestPicker {
   const mock = host.mountEditorReplacement as ReturnType<typeof vi.fn>;
   return mock.mock.calls.at(-1)?.[0] as TestPicker;
+}
+
+function confirmLoopStart(host: SlashCommandHost): void {
+  mountedPicker(host).handleInput(ENTER);
+  latestMountedPicker(host).handleInput(ENTER);
 }
 
 describe('parseGoalCommand', () => {
@@ -912,21 +1008,16 @@ describe('handleLoopSlashCommand', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     loopLifecycleMocks.begin.mockResolvedValue({ runId: 'run123' });
-    loopPreflightMocks.run.mockImplementation(async (input?: { objective: string }) => ({
-      ready: true,
-      model: 'wukong-model',
-      workspace: '/workspace',
-      checks: [],
-      proposal: finishLineProposal(input?.objective ?? ''),
-      trustChallenge: 'challenge.signature',
-    }));
+    loopPreflightMocks.run.mockImplementation(
+      async (input?: { objective: string }) => loopPreflightReady(input?.objective ?? ''),
+    );
   });
 
   it('creates a loop goal with stop condition, max iterations, and min interval', async () => {
     const { host, session } = makeHost();
 
     await handleLoopSlashCommand(host, '--until verify-pass --every 5m --max-iterations 3 fix tests');
-    mountedPicker(host).handleInput(ENTER);
+    confirmLoopStart(host);
     await vi.waitFor(() => {
       expect(session.createGoal).toHaveBeenCalled();
     });
@@ -952,7 +1043,7 @@ describe('handleLoopSlashCommand', () => {
     const { host, session } = makeHost();
 
     await handleLoopSlashCommand(host, '--max-iterations 12 fix tests');
-    mountedPicker(host).handleInput(ENTER);
+    confirmLoopStart(host);
     await vi.waitFor(() => {
       expect(session.createGoal).toHaveBeenCalled();
     });
@@ -982,7 +1073,7 @@ describe('handleLoopSlashCommand', () => {
     session.createGoal.mockRejectedValueOnce(new Error('goal store unavailable'));
 
     await handleLoopSlashCommand(host, 'fix tests');
-    mountedPicker(host).handleInput(ENTER);
+    confirmLoopStart(host);
     await vi.waitFor(() => {
       expect(host.showError).toHaveBeenCalled();
     });
@@ -1030,6 +1121,7 @@ describe('handleLoopSlashCommand', () => {
 
     await handleLoopSlashCommand(host, '--max-iterations 3 fix tests');
     mountedPicker(host).handleInput(ENTER);
+    latestMountedPicker(host).handleInput(ENTER);
     latestMountedPicker(host).handleInput(ESCAPE);
 
     expect(host.restoreInputText).toHaveBeenCalledWith('/loop --max-iterations 3 fix tests');
@@ -1042,6 +1134,7 @@ describe('handleLoopSlashCommand', () => {
 
     await handleLoopSlashCommand(host, 'fix tests');
     mountedPicker(host).handleInput(ENTER);
+    latestMountedPicker(host).handleInput(ENTER);
     latestMountedPicker(host).handleInput(ENTER);
 
     await vi.waitFor(() => {

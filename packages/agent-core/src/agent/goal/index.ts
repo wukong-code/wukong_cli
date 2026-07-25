@@ -6,12 +6,19 @@ import {
   containsInlineSecret,
   BUILTIN_RISK_SCAN_POLICY_VERSION,
   FINISH_LINE_WARNING_POLICY_VERSION,
+  FRESH_REVIEWER_POLICY_VERSION,
   GATE_GUARD_POLICY_VERSION,
+  REVIEW_SUBJECT_POLICY_VERSION,
+  validateVerificationCriteriaSelection,
   validateFrozenGatePlan,
+  type BrokerReviewTrustBindingV1,
   type FinishLineReview,
   type GateApprovalBinding,
   type GatePlan,
+  type ReviewSubjectConsentBindingV1,
   type ReviewPolicyBinding,
+  type VerificationCriteriaRecipeV1,
+  type VerificationCriteriaSelectionV1,
   type WorkspaceIdentity,
   type WorkspaceTrustBinding,
 } from '@wukong/verification';
@@ -159,6 +166,30 @@ export interface LoopAcceptanceCriterion {
   readonly source: 'objective' | 'completion_criterion' | 'constraint' | 'derived';
 }
 
+export interface LoopAcceptanceCriterionV3 {
+  readonly id: string;
+  readonly text: string;
+  readonly evidenceExpectation?: string;
+  readonly criterionProvenanceDigest: string;
+  readonly source:
+    | 'objective'
+    | 'completion_criterion'
+    | 'constraint'
+    | 'derived'
+    | 'verification_recipe';
+  readonly provenance:
+    | {
+        readonly kind: 'v2-criterion';
+        readonly v2CriterionId: string;
+        readonly v2Source: LoopAcceptanceCriterion['source'];
+      }
+    | {
+        readonly kind: 'verification-recipe';
+        readonly recipeProvenanceDigest: string;
+        readonly recipeCriterionId: string;
+      };
+}
+
 export interface LoopVerificationStep {
   readonly id: string;
   readonly kind: 'project_check' | 'review';
@@ -203,7 +234,60 @@ export interface LoopContractV2 {
   readonly createdAt: number;
 }
 
-export type LoopContract = LoopContractV1 | LoopContractV2;
+export type WorkspaceTrustBindingV2 =
+  | {
+      readonly schemaVersion: 2;
+      readonly workspaceIdentityDigest: string;
+      readonly reviewSubjectPolicyVersion: string;
+      readonly hasExecutableChecks: false;
+      readonly scopes: readonly ['brokered-review-subject'];
+    }
+  | {
+      readonly schemaVersion: 2;
+      readonly workspaceIdentityDigest: string;
+      readonly reviewSubjectPolicyVersion: string;
+      readonly hasExecutableChecks: true;
+      readonly scopes: readonly ['loop-project-checks', 'brokered-review-subject'];
+    };
+
+export interface GatePlanV2 {
+  readonly schemaVersion: 2;
+  readonly stopCondition: 'proof-pass';
+  readonly legacySnapshot: GatePlan;
+  readonly criteriaSelectionDigest: string;
+  readonly criterionIds: readonly string[];
+  readonly builtinScanPolicyVersion: string;
+  readonly freshReviewerPolicyVersion: string;
+  readonly reviewSubjectPolicyVersion: string;
+  readonly planDigest: string;
+}
+
+export interface LoopContractV3 {
+  readonly schemaVersion: 3;
+  readonly contractId: string;
+  readonly supersedesContractId?: string;
+  readonly supersedesGoalId?: string;
+  readonly goalId: string;
+  readonly objective: string;
+  readonly completionCriterion?: string;
+  readonly constraints: readonly {
+    readonly id: string;
+    readonly text: string;
+  }[];
+  readonly finishLineReview: FinishLineReview;
+  readonly workspaceIdentity: WorkspaceIdentity;
+  readonly workspaceTrust: WorkspaceTrustBindingV2;
+  readonly gateApproval: GateApprovalBinding;
+  readonly acceptanceCriteria: readonly LoopAcceptanceCriterionV3[];
+  readonly verificationPlan: readonly LoopVerificationStep[];
+  readonly verificationCriteria: VerificationCriteriaSelectionV1;
+  readonly gatePlan: GatePlanV2;
+  readonly reviewPolicy: ReviewPolicyBinding;
+  readonly source: 'user' | 'planner' | 'fallback';
+  readonly createdAt: number;
+}
+
+export type LoopContract = LoopContractV1 | LoopContractV2 | LoopContractV3;
 
 export interface LoopContractV2Input {
   readonly schemaVersion: 2;
@@ -222,6 +306,32 @@ export interface LoopContractV2Input {
   readonly source: 'user';
   readonly supersedesContractId?: string;
   readonly supersedesGoalId?: string;
+  readonly reviewSettings?: LoopRunReviewSettingsInput;
+}
+
+export interface LoopContractV3Input {
+  readonly schemaVersion: 3;
+  readonly objective: string;
+  readonly completionCriterion?: string;
+  readonly constraints: readonly {
+    readonly id: string;
+    readonly text: string;
+  }[];
+  readonly finishLineReview: FinishLineReview;
+  readonly workspaceIdentity: WorkspaceIdentity;
+  readonly workspaceTrust: WorkspaceTrustBindingV2;
+  readonly gateApproval: GateApprovalBinding;
+  readonly legacyGatePlan: GatePlan;
+  readonly reviewPolicy: ReviewPolicyBinding;
+  readonly verificationCriteria: VerificationCriteriaSelectionV1;
+  readonly selectedRecipes: readonly {
+    readonly recipe: VerificationCriteriaRecipeV1;
+    readonly provenanceDigest: string;
+  }[];
+  readonly reviewSettings: LoopRunReviewSettingsInput;
+  readonly source: 'user';
+  readonly supersedesContractId?: string;
+  readonly supersedesGoalId?: string;
 }
 
 export interface LoopRunSettings {
@@ -230,6 +340,20 @@ export interface LoopRunSettings {
   readonly permissionMode: 'manual' | 'auto' | 'yolo';
   readonly maxIterations: number;
   readonly minIntervalMs?: number;
+}
+
+export interface LoopRunReviewSettingsInput {
+  readonly brokerReviewTrust: BrokerReviewTrustBindingV1;
+  readonly reviewSubjectConsent: ReviewSubjectConsentBindingV1;
+}
+
+export interface LoopRunSettingsV2 {
+  readonly schemaVersion: 2;
+  readonly legacy: LoopRunSettings;
+  readonly legacySettingsDigest: string;
+  readonly brokerReviewTrust: BrokerReviewTrustBindingV1;
+  readonly reviewSubjectConsent: ReviewSubjectConsentBindingV1;
+  readonly settingsDigest: string;
 }
 
 export interface LoopRunCreatedV1 {
@@ -243,6 +367,21 @@ export interface LoopRunCreatedV1 {
   readonly runDigest: string;
   readonly createdAt: number;
 }
+
+export interface LoopRunCreatedV2 {
+  readonly schemaVersion: 2;
+  readonly runId: string;
+  readonly goalId: string;
+  readonly contractId: string;
+  readonly continuedFromRunId?: string;
+  readonly carriedBlockerKeys: readonly string[];
+  readonly runSettingsRef: string;
+  readonly runSettings: LoopRunSettingsV2;
+  readonly runDigest: string;
+  readonly createdAt: number;
+}
+
+export type LoopRunCreated = LoopRunCreatedV1 | LoopRunCreatedV2;
 
 export interface ContinuationPolicyV1 {
   readonly mode: 'same-contract' | 'restore-or-revise' | 'revised-loop' | 'blocked';
@@ -519,7 +658,7 @@ interface GoalState {
   loopResult?: LoopResult;
   loopContract?: LoopContract;
   legacyContractId?: string;
-  currentLoopRun?: LoopRunCreatedV1;
+  currentLoopRun?: LoopRunCreated;
   loopRunTerminals: Map<string, LoopRunTerminalV1>;
   gateAttemptCompletions: Map<string, GateAttemptCompletedV1>;
   restoredGateAudits: Map<string, RestoredGateAudit>;
@@ -619,7 +758,7 @@ export interface CreateGoalInput {
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
   readonly replace?: boolean;
-  readonly loopContract?: LoopContractV2Input;
+  readonly loopContract?: LoopContractV2Input | LoopContractV3Input;
 }
 
 interface GoalReasonInput {
@@ -886,7 +1025,10 @@ export class GoalMode {
         input.loopContract?.supersedesGoalId !== undefined
         && (
           existing.goalId !== input.loopContract.supersedesGoalId
-          || existing.loopContract?.schemaVersion !== 2
+          || (
+            existing.loopContract?.schemaVersion !== 2
+            && existing.loopContract?.schemaVersion !== 3
+          )
           || existing.loopContract.contractId !== input.loopContract.supersedesContractId
         )
       ) {
@@ -942,7 +1084,11 @@ export class GoalMode {
     });
     this.trackGoalCreated(actor, input.replace === true);
     if (input.loopContract !== undefined) {
-      this.createLoopContractV2(state, input.loopContract);
+      if (input.loopContract.schemaVersion === 3) {
+        this.createLoopContractV3(state, input.loopContract);
+      } else {
+        this.createLoopContractV2(state, input.loopContract);
+      }
     } else if (state.stopCondition !== undefined) {
       this.ensureLoopContract('user');
     }
@@ -1009,7 +1155,7 @@ export class GoalMode {
       goalId: state.goalId,
       contract,
     });
-    const run = this.createLoopRun(state, contract);
+    const run = this.createLoopRun(state, contract, input.reviewSettings);
     state.currentLoopRun = run;
     this.agent.records.logRecord({ type: 'loop.run.create', run });
     if (contract.supersedesContractId !== undefined && contract.supersedesGoalId !== undefined) {
@@ -1025,6 +1171,186 @@ export class GoalMode {
       contract_source: contract.source,
       criteria_count: contract.acceptanceCriteria.length,
       contract_schema_version: 2,
+    });
+    this.persistState(state);
+    return contract;
+  }
+
+  private createLoopContractV3(
+    state: GoalState,
+    input: LoopContractV3Input,
+  ): LoopContractV3 {
+    validateVerificationCriteriaSelection(input.verificationCriteria);
+    if (
+      input.selectedRecipes.length !== input.verificationCriteria.selected.length
+      || input.selectedRecipes.some((selected, index) => (
+        selected.provenanceDigest
+          !== input.verificationCriteria.selected[index]?.ref.provenanceDigest
+        || selected.recipe.id
+          !== input.verificationCriteria.selected[index]?.ref.criteriaId
+      ))
+    ) {
+      throw new WukongError(
+        ErrorCodes.REQUEST_INVALID,
+        'Selected Verification Criteria recipes do not match the frozen ordered selection',
+      );
+    }
+    if (input.gateApproval.gatePlanDigest !== input.legacyGatePlan.planDigest) {
+      throw new WukongError(
+        ErrorCodes.REQUEST_INVALID,
+        'Gate approval must bind the exact legacy Gate Plan',
+      );
+    }
+    if (
+      input.workspaceTrust.workspaceIdentityDigest
+        !== input.workspaceIdentity.workspaceIdentityDigest
+      || input.workspaceTrust.reviewSubjectPolicyVersion !== REVIEW_SUBJECT_POLICY_VERSION
+      || input.workspaceTrust.hasExecutableChecks
+        !== input.gateApproval.hasExecutableChecks
+    ) {
+      throw new WukongError(
+        ErrorCodes.REQUEST_INVALID,
+        'V3 workspace trust does not match the frozen Gate and review-subject policy',
+      );
+    }
+    const contractId = randomUUID();
+    const v2Criteria: LoopAcceptanceCriterion[] = [
+      { id: 'objective', text: state.objective, source: 'objective' },
+    ];
+    if (state.completionCriterion !== undefined) {
+      v2Criteria.push({
+        id: 'completion-criterion',
+        text: state.completionCriterion,
+        source: 'completion_criterion',
+      });
+    }
+    for (const constraint of input.constraints) {
+      v2Criteria.push({ id: constraint.id, text: constraint.text, source: 'constraint' });
+    }
+    const acceptanceCriteria: LoopAcceptanceCriterionV3[] = v2Criteria.map((criterion) => {
+      const provenance = {
+        kind: 'v2-criterion' as const,
+        v2CriterionId: criterion.id,
+        v2Source: criterion.source,
+      };
+      const core = {
+        contractId,
+        id: criterion.id,
+        text: criterion.text,
+        evidenceExpectation: null,
+        source: criterion.source,
+        provenance,
+      };
+      return {
+        id: criterion.id,
+        text: criterion.text,
+        source: criterion.source,
+        provenance,
+        criterionProvenanceDigest: canonicalDigest(
+          'wukong/acceptance-criterion/v3',
+          core,
+        ),
+      };
+    });
+    for (const [selectionOrder, selected] of input.selectedRecipes.entries()) {
+      for (const criterion of selected.recipe.criteria) {
+        const id = `recipe-${String(selectionOrder)}-${criterion.id}`;
+        const provenance = {
+          kind: 'verification-recipe' as const,
+          recipeProvenanceDigest: selected.provenanceDigest,
+          recipeCriterionId: criterion.id,
+        };
+        const core = {
+          contractId,
+          id,
+          text: criterion.text,
+          evidenceExpectation: criterion.evidence,
+          source: 'verification_recipe' as const,
+          provenance,
+        };
+        acceptanceCriteria.push({
+          id,
+          text: criterion.text,
+          evidenceExpectation: criterion.evidence,
+          source: 'verification_recipe',
+          provenance,
+          criterionProvenanceDigest: canonicalDigest(
+            'wukong/acceptance-criterion/v3',
+            core,
+          ),
+        });
+      }
+    }
+    const gatePlanCore = {
+      schemaVersion: 2 as const,
+      stopCondition: 'proof-pass' as const,
+      legacySnapshot: input.legacyGatePlan,
+      criteriaSelectionDigest: input.verificationCriteria.selectionDigest,
+      criterionIds: acceptanceCriteria.map((criterion) => criterion.id),
+      builtinScanPolicyVersion: input.legacyGatePlan.builtinRiskScanPolicyVersion,
+      freshReviewerPolicyVersion: FRESH_REVIEWER_POLICY_VERSION,
+      reviewSubjectPolicyVersion: REVIEW_SUBJECT_POLICY_VERSION,
+    };
+    const gatePlan: GatePlanV2 = {
+      ...gatePlanCore,
+      planDigest: canonicalDigest('wukong/gate-plan/v2', gatePlanCore),
+    };
+    const contract: LoopContractV3 = {
+      schemaVersion: 3,
+      contractId,
+      supersedesContractId: input.supersedesContractId,
+      supersedesGoalId: input.supersedesGoalId,
+      goalId: state.goalId,
+      objective: state.objective,
+      completionCriterion: state.completionCriterion,
+      constraints: input.constraints,
+      finishLineReview: input.finishLineReview,
+      workspaceIdentity: input.workspaceIdentity,
+      workspaceTrust: input.workspaceTrust,
+      gateApproval: input.gateApproval,
+      acceptanceCriteria,
+      verificationPlan: [
+        {
+          id: 'project-checks',
+          kind: 'project_check',
+          description: 'Run the frozen deterministic Gate Plan in order.',
+          blocking: true,
+        },
+        {
+          id: 'fresh-review',
+          kind: 'review',
+          description: 'Use one bounded brokered reviewer against every criterion.',
+          blocking: true,
+        },
+      ],
+      verificationCriteria: input.verificationCriteria,
+      gatePlan,
+      reviewPolicy: input.reviewPolicy,
+      source: input.source,
+      createdAt: Date.now(),
+    };
+    state.loopContract = contract;
+    this.agent.records.logRecord({
+      type: 'goal.contract.create',
+      goalId: state.goalId,
+      contract,
+    });
+    const run = this.createLoopRun(state, contract, input.reviewSettings);
+    state.currentLoopRun = run;
+    this.agent.records.logRecord({ type: 'loop.run.create', run });
+    if (contract.supersedesContractId !== undefined && contract.supersedesGoalId !== undefined) {
+      this.agent.records.logRecord({
+        type: 'goal.lineage.create',
+        goalId: state.goalId,
+        supersedesGoalId: contract.supersedesGoalId,
+        contractId: contract.contractId,
+        supersedesContractId: contract.supersedesContractId,
+      });
+    }
+    this.track('loop_contract_created', {
+      contract_source: contract.source,
+      criteria_count: contract.acceptanceCriteria.length,
+      contract_schema_version: 3,
     });
     this.persistState(state);
     return contract;
@@ -1372,25 +1698,58 @@ export class GoalMode {
 
   private createLoopRun(
     state: GoalState,
-    contract: LoopContractV2,
+    contract: LoopContractV2 | LoopContractV3,
+    reviewSettings?: LoopRunReviewSettingsInput,
     continuedFromRunId?: string,
     carriedBlockerKeys: readonly string[] = [],
-  ): LoopRunCreatedV1 {
-    const base = {
-      schemaVersion: 1 as const,
+  ): LoopRunCreated {
+    const legacy: LoopRunSettings = {
+      writerModel: this.agent.config.modelAlias,
+      reviewerModel: state.reviewModel,
+      permissionMode: this.agent.permission.mode,
+      maxIterations: state.maxIterations ?? 10,
+      minIntervalMs: state.minIntervalMs,
+    };
+    const shared = {
       runId: randomUUID(),
       goalId: state.goalId,
       contractId: contract.contractId,
       continuedFromRunId,
       carriedBlockerKeys: [...new Set(carriedBlockerKeys)].toSorted(),
-      runSettings: {
-        writerModel: this.agent.config.modelAlias,
-        reviewerModel: state.reviewModel,
-        permissionMode: this.agent.permission.mode,
-        maxIterations: state.maxIterations ?? 10,
-        minIntervalMs: state.minIntervalMs,
-      },
       createdAt: Date.now(),
+    };
+    if (reviewSettings !== undefined) {
+      validateLoopRunReviewSettings(contract, reviewSettings);
+      const legacySettingsDigest = canonicalDigest(
+        'wukong/loop-run-settings/legacy/v1',
+        legacy,
+      );
+      const settingsCore = {
+        schemaVersion: 2 as const,
+        legacy,
+        legacySettingsDigest,
+        brokerReviewTrust: reviewSettings.brokerReviewTrust,
+        reviewSubjectConsent: reviewSettings.reviewSubjectConsent,
+      };
+      const runSettings: LoopRunSettingsV2 = {
+        ...settingsCore,
+        settingsDigest: canonicalDigest('wukong/loop-run-settings/v2', settingsCore),
+      };
+      const base = {
+        schemaVersion: 2 as const,
+        ...shared,
+        runSettingsRef: randomUUID(),
+        runSettings,
+      };
+      return {
+        ...base,
+        runDigest: canonicalDigest('wukong/loop-run/v2', base),
+      };
+    }
+    const base = {
+      schemaVersion: 1 as const,
+      ...shared,
+      runSettings: legacy,
     };
     return {
       ...base,
@@ -1561,7 +1920,7 @@ export class GoalMode {
       : state.loopRunTerminals.get(currentRun.runId);
     if (
       state.status === 'blocked'
-      && contract?.schemaVersion === 2
+      && (contract?.schemaVersion === 2 || contract?.schemaVersion === 3)
       && currentRun !== undefined
       && terminal !== undefined
     ) {
@@ -1571,7 +1930,10 @@ export class GoalMode {
           'This Loop requires restoring the approved workspace or starting a Revised Loop.',
         );
       }
-      const revalidation = await validateFrozenGatePlan(this.agent.config.cwd, contract);
+      const revalidation = await validateFrozenGatePlan(
+        this.agent.config.cwd,
+        contract.schemaVersion === 2 ? contract : legacyFinishLineProjection(contract),
+      );
       if (!revalidation.ok) {
         throw new WukongError(
           ErrorCodes.GOAL_NOT_RESUMABLE,
@@ -1581,6 +1943,12 @@ export class GoalMode {
       const nextRun = this.createLoopRun(
         state,
         contract,
+        currentRun.schemaVersion === 2
+          ? {
+              brokerReviewTrust: currentRun.runSettings.brokerReviewTrust,
+              reviewSubjectConsent: currentRun.runSettings.reviewSubjectConsent,
+            }
+          : undefined,
         currentRun.runId,
         terminal.blockerKeys,
       );
@@ -2168,11 +2536,14 @@ function normalizeReviewModel(value: string | undefined): string | undefined {
 }
 
 function validateLoopContractInput(
-  input: LoopContractV2Input,
+  input: LoopContractV2Input | LoopContractV3Input,
   objective: string,
   completionCriterion: string | undefined,
 ): void {
-  if (input.schemaVersion !== 2 || input.objective.trim() !== objective) {
+  if (
+    (input.schemaVersion !== 2 && input.schemaVersion !== 3)
+    || input.objective.trim() !== objective
+  ) {
     throw new WukongError(
       ErrorCodes.REQUEST_INVALID,
       'Loop Finish Line does not match the requested objective',
@@ -2218,21 +2589,34 @@ function validateLoopContractInput(
       'Finish Line warnings must be acknowledged before starting the Loop',
     );
   }
-  const hasExecutableChecks = input.gatePlan.requiredChecks.some(
+  const gatePlan = input.schemaVersion === 2 ? input.gatePlan : input.legacyGatePlan;
+  const hasExecutableChecks = gatePlan.requiredChecks.some(
     (check) => check.resolution === 'resolved',
   );
   if (
     hasExecutableChecks !== input.gateApproval.hasExecutableChecks
-    || input.gateApproval.gatePlanDigest !== input.gatePlan.planDigest
+    || input.gateApproval.gatePlanDigest !== gatePlan.planDigest
       || input.gateApproval.warningSetDigest !== input.finishLineReview.warningSetDigest
       || input.gateApproval.guardPolicyVersion !== GATE_GUARD_POLICY_VERSION
-      || input.gatePlan.builtinRiskScanPolicyVersion !== BUILTIN_RISK_SCAN_POLICY_VERSION
+      || gatePlan.builtinRiskScanPolicyVersion !== BUILTIN_RISK_SCAN_POLICY_VERSION
       || input.finishLineReview.warningPolicyVersion !== FINISH_LINE_WARNING_POLICY_VERSION
-    || input.gateApproval.orderedChecks.length !== input.gatePlan.requiredChecks.length
+    || input.gateApproval.orderedChecks.length !== gatePlan.requiredChecks.length
   ) {
     throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Loop Gate approval does not match the frozen plan');
   }
-  if (hasExecutableChecks) {
+  if (input.schemaVersion === 3) {
+    if (
+      input.workspaceTrust.hasExecutableChecks !== hasExecutableChecks
+      || input.workspaceTrust.workspaceIdentityDigest
+        !== input.workspaceIdentity.workspaceIdentityDigest
+      || input.workspaceTrust.reviewSubjectPolicyVersion !== REVIEW_SUBJECT_POLICY_VERSION
+    ) {
+      throw new WukongError(
+        ErrorCodes.REQUEST_INVALID,
+        'V3 Loop trust must bind exact project-check and broker scopes',
+      );
+    }
+  } else if (hasExecutableChecks) {
     if (
       input.workspaceTrust === undefined
       || input.gateApproval.workspaceIdentityDigest
@@ -2245,8 +2629,8 @@ function validateLoopContractInput(
   } else if (input.workspaceTrust !== undefined) {
     throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Non-executable Loop plans cannot carry workspace trust');
   }
-  for (let index = 0; index < input.gatePlan.requiredChecks.length; index += 1) {
-    const check = input.gatePlan.requiredChecks[index]!;
+  for (let index = 0; index < gatePlan.requiredChecks.length; index += 1) {
+    const check = gatePlan.requiredChecks[index]!;
     const approval = input.gateApproval.orderedChecks[index]!;
     if (
       check.id !== approval.checkId
@@ -2258,15 +2642,15 @@ function validateLoopContractInput(
     }
   }
   const gatePlanWithoutDigest = {
-    schemaVersion: input.gatePlan.schemaVersion,
-    stopCondition: input.gatePlan.stopCondition,
-    requiredChecks: input.gatePlan.requiredChecks,
-    excludedChecks: input.gatePlan.excludedChecks,
-    builtinRiskScanPolicyVersion: input.gatePlan.builtinRiskScanPolicyVersion,
+    schemaVersion: gatePlan.schemaVersion,
+    stopCondition: gatePlan.stopCondition,
+    requiredChecks: gatePlan.requiredChecks,
+    excludedChecks: gatePlan.excludedChecks,
+    builtinRiskScanPolicyVersion: gatePlan.builtinRiskScanPolicyVersion,
   };
   if (
     canonicalDigest('wukong/gate-plan/v1', gatePlanWithoutDigest)
-      !== input.gatePlan.planDigest
+      !== gatePlan.planDigest
   ) {
     throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Loop Gate Plan digest is invalid');
   }
@@ -2274,7 +2658,7 @@ function validateLoopContractInput(
     objective,
     completionCriterion: completionCriterion ?? null,
     constraints: input.constraints,
-    gatePlanDigest: input.gatePlan.planDigest,
+    gatePlanDigest: gatePlan.planDigest,
   };
   if (
     canonicalDigest('wukong/finish-line/v1', finishLineCore)
@@ -2321,6 +2705,47 @@ function validateLoopContractInput(
   ) {
     throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Loop workspace identity digest is invalid');
   }
+}
+
+function validateLoopRunReviewSettings(
+  contract: LoopContractV2 | LoopContractV3,
+  reviewSettings: LoopRunReviewSettingsInput,
+): void {
+  if (
+    reviewSettings.brokerReviewTrust.workspaceIdentityDigest
+      !== contract.workspaceIdentity.workspaceIdentityDigest
+    || reviewSettings.brokerReviewTrust.scope !== 'brokered-review-subject'
+    || reviewSettings.reviewSubjectConsent.workspaceIdentityDigest
+      !== contract.workspaceIdentity.workspaceIdentityDigest
+    || reviewSettings.reviewSubjectConsent.reviewSubjectPolicyVersion
+      !== REVIEW_SUBJECT_POLICY_VERSION
+  ) {
+    throw new WukongError(
+      ErrorCodes.REQUEST_INVALID,
+      'Loop review settings do not match the exact workspace and broker policy',
+    );
+  }
+}
+
+function legacyFinishLineProjection(contract: LoopContractV3): {
+  readonly workspaceIdentity: WorkspaceIdentity;
+  readonly workspaceTrust?: WorkspaceTrustBinding;
+  readonly gateApproval: GateApprovalBinding;
+  readonly gatePlan: GatePlan;
+  readonly reviewPolicy: ReviewPolicyBinding;
+} {
+  return {
+    workspaceIdentity: contract.workspaceIdentity,
+    workspaceTrust: contract.workspaceTrust.hasExecutableChecks
+      ? {
+          workspaceIdentityDigest: contract.workspaceTrust.workspaceIdentityDigest,
+          scope: 'loop-project-checks',
+        }
+      : undefined,
+    gateApproval: contract.gateApproval,
+    gatePlan: contract.gatePlan.legacySnapshot,
+    reviewPolicy: contract.reviewPolicy,
+  };
 }
 
 function normalizeGateCheckStatus(

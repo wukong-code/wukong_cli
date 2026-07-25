@@ -16,6 +16,13 @@ export interface CLIHeadlessGoal {
   readonly trustWorkspaceChallenge?: string;
   readonly approveGatePlanDigest?: string;
   readonly acknowledgeWarningSetDigest?: string;
+  readonly verificationCatalogDigest?: string;
+  readonly verificationSkills?: readonly {
+    readonly selectionId: string;
+    readonly provenanceDigest: string;
+  }[];
+  readonly trustReviewSubjectProposalDigest?: string;
+  readonly acknowledgeReviewSubjectConsentDigest?: string;
 }
 
 export interface CLIOptions {
