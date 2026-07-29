@@ -32,6 +32,7 @@ import {
   resolveCandidateBootstrapEnvironment,
 } from '../src/candidate-bootstrap-environment';
 import { withTrustedExecutablePath } from '../src/trusted-executable';
+import { removeTestTree } from './fixtures/remove-test-tree';
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
@@ -42,7 +43,7 @@ const LOCKFILE_DIGEST = canonicalDigest('test/lockfile', 'lockfile');
 
 afterEach(async () => {
   await Promise.all(roots.splice(0).map(
-    (root) => rm(root, { recursive: true, force: true }),
+    (root) => removeTestTree(root),
   ));
 });
 

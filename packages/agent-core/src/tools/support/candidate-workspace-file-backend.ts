@@ -1,10 +1,11 @@
 import { randomBytes } from 'node:crypto';
 import {
-  closeSync,
+  closeSync as closeNodeDescriptor,
   constants as importedFsConstants,
   fchmodSync,
   fstatSync,
   fsyncSync,
+  openSync,
   readFileSync,
   realpathSync,
   readSync,
@@ -36,6 +37,17 @@ import {
 } from '../../windows-private-root-security';
 
 const require = createRequire(import.meta.url);
+const candidateDescriptorClosers = new Map<number, () => void>();
+
+function closeSync(fd: number): void {
+  const close = candidateDescriptorClosers.get(fd);
+  if (close === undefined) {
+    closeNodeDescriptor(fd);
+    return;
+  }
+  candidateDescriptorClosers.delete(fd);
+  close();
+}
 
 const PROTECTED_SEGMENTS = new Set(['.git', '.wukong']);
 const MAX_ATOMIC_FILE_BYTES = 16 * 1024 * 1024;
@@ -181,6 +193,11 @@ interface OpenedNode {
   bytes?: Buffer;
 }
 
+interface FileIdentity {
+  readonly dev: bigint;
+  readonly ino: bigint;
+}
+
 interface PosixOpenConstants {
   readonly O_RDONLY: number;
   readonly O_WRONLY: number;
@@ -216,6 +233,10 @@ interface WindowsFunctions {
     output: Buffer,
     outputBytes: number,
   ) => number;
+  readonly getFileInformationByHandle: (
+    handle: unknown,
+    output: Buffer,
+  ) => number;
   readonly setFileInformation: (
     handle: unknown,
     informationClass: number,
@@ -237,11 +258,6 @@ interface WindowsFunctions {
     eaLength: number,
   ) => number;
   readonly rtlNtStatusToDosError: (status: number) => number;
-  readonly openOsFileHandle: (
-    handleAddress: bigint,
-    flags: number,
-  ) => number;
-  readonly getOsFileHandle: (fd: number) => bigint | number;
   readonly getSecurityInfo: (
     handle: unknown,
     objectType: number,
@@ -766,6 +782,8 @@ class PosixNative implements CandidateHandleNative {
 }
 
 class WindowsHandleNative implements CandidateHandleNative {
+  private readonly rawHandles = new Map<number, unknown>();
+
   private constructor(
     private readonly koffi: KoffiModule,
     private readonly functions: WindowsFunctions,
@@ -781,7 +799,6 @@ class WindowsHandleNative implements CandidateHandleNative {
     const koffi = require('koffi') as KoffiModule;
     const kernel32 = koffi.load('kernel32.dll');
     const ntdll = koffi.load('ntdll.dll');
-    const ucrt = koffi.load('ucrtbase.dll');
     const advapi32 = koffi.load('advapi32.dll');
     const functions: WindowsFunctions = {
       createFile: kernel32.func(
@@ -799,6 +816,9 @@ class WindowsHandleNative implements CandidateHandleNative {
       getFileInformation: kernel32.func(
         'int __stdcall GetFileInformationByHandleEx(void *, int, void *, uint32_t)',
       ) as WindowsFunctions['getFileInformation'],
+      getFileInformationByHandle: kernel32.func(
+        'int __stdcall GetFileInformationByHandle(void *, void *)',
+      ) as WindowsFunctions['getFileInformationByHandle'],
       setFileInformation: kernel32.func(
         'int __stdcall SetFileInformationByHandle(void *, int, void *, uint32_t)',
       ) as WindowsFunctions['setFileInformation'],
@@ -811,12 +831,6 @@ class WindowsHandleNative implements CandidateHandleNative {
       rtlNtStatusToDosError: ntdll.func(
         'uint32_t __stdcall RtlNtStatusToDosError(uint32_t)',
       ) as WindowsFunctions['rtlNtStatusToDosError'],
-      openOsFileHandle: ucrt.func(
-        'int _open_osfhandle(intptr_t, int)',
-      ) as WindowsFunctions['openOsFileHandle'],
-      getOsFileHandle: ucrt.func(
-        'intptr_t _get_osfhandle(int)',
-      ) as WindowsFunctions['getOsFileHandle'],
       getSecurityInfo: advapi32.func(
         'uint32_t __stdcall GetSecurityInfo(void *, uint32_t, uint32_t, _Out_ void **, void **, _Out_ void **, void **, _Out_ void **)',
       ) as WindowsFunctions['getSecurityInfo'],
@@ -897,7 +911,7 @@ class WindowsHandleNative implements CandidateHandleNative {
         observation,
       );
       assertWindowsPrivateRootSecurityProof(proof, canonicalRoot);
-      fd = this.adoptHandle(
+      fd = this.bindNodeDescriptor(
         handle,
         WINDOWS_O_RDONLY | WINDOWS_O_BINARY,
       );
@@ -956,7 +970,7 @@ class WindowsHandleNative implements CandidateHandleNative {
           'A Windows candidate path component is not a non-reparse directory.',
         );
       }
-      return this.adoptHandle(
+      return this.bindNodeDescriptor(
         handle,
         WINDOWS_O_RDONLY | WINDOWS_O_BINARY,
       );
@@ -985,7 +999,7 @@ class WindowsHandleNative implements CandidateHandleNative {
           'A Windows candidate path resolved to a reparse point.',
         );
       }
-      return this.adoptHandle(
+      return this.bindNodeDescriptor(
         handle,
         WINDOWS_O_RDONLY | WINDOWS_O_BINARY,
       );
@@ -1019,7 +1033,7 @@ class WindowsHandleNative implements CandidateHandleNative {
           'A Windows candidate temporary is a reparse point.',
         );
       }
-      return this.adoptHandle(
+      return this.bindNodeDescriptor(
         handle,
         WINDOWS_O_WRONLY | WINDOWS_O_BINARY,
       );
@@ -1244,30 +1258,46 @@ class WindowsHandleNative implements CandidateHandleNative {
     return handle;
   }
 
-  private adoptHandle(handle: unknown, flags: number): number {
-    const fd = this.functions.openOsFileHandle(
-      this.koffi.address(handle),
+  private bindNodeDescriptor(handle: unknown, flags: number): number {
+    const identity = this.rawHandleIdentity(handle);
+    const fd = openSync(
+      usableWindowsPath(this.finalPath(handle)),
       flags,
     );
-    if (!Number.isInteger(fd) || fd < 0) {
+    const selected = fstatSync(fd, { bigint: true });
+    if (selected.dev !== identity.dev
+      || selected.ino !== identity.ino) {
+      closeNodeDescriptor(fd);
       throw new CandidateWorkspaceFileBackendError(
-        'candidate_atomic_backend_unavailable',
-        'The Windows handle could not be adopted as a Node file descriptor.',
+        'candidate_atomic_path_unsafe',
+        'The Windows candidate path changed while binding its descriptor.',
       );
     }
+    this.rawHandles.set(fd, handle);
+    candidateDescriptorClosers.set(fd, () => {
+      this.rawHandles.delete(fd);
+      try {
+        closeNodeDescriptor(fd);
+      } finally {
+        this.functions.closeHandle(handle);
+      }
+    });
     return fd;
   }
 
   private rawHandle(fd: number): unknown {
-    const address = this.rawHandleAddress(fd);
-    return address;
+    const handle = this.rawHandles.get(fd);
+    if (isInvalidWindowsHandle(this.koffi, handle)) {
+      throw new CandidateWorkspaceFileBackendError(
+        'candidate_atomic_backend_unavailable',
+        'The Node descriptor has no bound Windows handle.',
+      );
+    }
+    return handle;
   }
 
   private rawHandleAddress(fd: number): bigint {
-    const value = this.functions.getOsFileHandle(fd);
-    const address = typeof value === 'bigint'
-      ? value
-      : BigInt(value);
+    const address = this.koffi.address(this.rawHandle(fd));
     if (address <= 0n
       || address === windowsInvalidHandleAddress()) {
       throw new CandidateWorkspaceFileBackendError(
@@ -1276,6 +1306,25 @@ class WindowsHandleNative implements CandidateHandleNative {
       );
     }
     return address;
+  }
+
+  private rawHandleIdentity(handle: unknown): FileIdentity {
+    const output = Buffer.alloc(52);
+    if (this.functions.getFileInformationByHandle(
+      handle,
+      output,
+    ) === 0) {
+      throw this.win32Error(
+        'GetFileInformationByHandle',
+        this.functions.getLastError(),
+      );
+    }
+    return {
+      dev: BigInt(output.readUInt32LE(28)),
+      ino: (
+        BigInt(output.readUInt32LE(44)) << 32n
+      ) | BigInt(output.readUInt32LE(48)),
+    };
   }
 
   private queryAttributes(handle: unknown): number {
@@ -2414,6 +2463,10 @@ function windowsInvalidHandleAddress(): bigint {
 }
 
 function normalizeWindowsPath(value: string): string {
+  return usableWindowsPath(value).toLowerCase();
+}
+
+function usableWindowsPath(value: string): string {
   let normalized = value.replaceAll('/', '\\');
   if (normalized.startsWith('\\\\?\\UNC\\')) {
     normalized = `\\\\${normalized.slice(8)}`;
@@ -2424,7 +2477,7 @@ function normalizeWindowsPath(value: string): string {
     && !/^\\\\[^\\]+\\[^\\]+\\$/u.test(normalized)) {
     normalized = normalized.replace(/\\+$/u, '');
   }
-  return normalized.toLowerCase();
+  return normalized;
 }
 
 function assertWindowsHandleLeaf(

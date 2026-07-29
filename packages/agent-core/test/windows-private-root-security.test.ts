@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from 'vitest';
+import { resolve } from 'node:path';
 
 import {
   assertExactWindowsPrivateRootSddl,
@@ -25,6 +26,12 @@ const exactSddl =
   `O:${currentUserSid}D:P`
   + `(A;OICI;FA;;;${currentUserSid})`
   + '(A;CIOI;FA;;;SY)';
+const exactRoot = resolve(
+  'test-fixtures/windows-private-root/isolated-loop',
+);
+const otherRoot = resolve(
+  'test-fixtures/windows-private-root/target-promotions',
+);
 
 describe('Windows private durable root security', () => {
   it('resolves native ACL primitives without touching a path', () => {
@@ -73,20 +80,20 @@ describe('Windows private durable root security', () => {
 
   it('binds an exact protected owner DACL observation to one root', () => {
     const proof = attestWindowsPrivateRootSecurity(
-      '/C:/Users/test/.wukong/runtime/isolated-loop',
+      exactRoot,
       exactObservation,
     );
 
     expect(() => {
       assertWindowsPrivateRootSecurityProof(
         proof,
-        '/C:/Users/test/.wukong/runtime/isolated-loop',
+        exactRoot,
       );
     }).not.toThrow();
     expect(() => {
       assertWindowsPrivateRootSecurityProof(
         proof,
-        '/C:/Users/test/.wukong/runtime/target-promotions',
+        otherRoot,
       );
     }).toThrow(/does not bind/u);
     expect(proof.toJSON()).toEqual({
@@ -172,7 +179,7 @@ describe('Windows private durable root security', () => {
     ['non-inheritable ACL', { inheritableToChildren: false }],
   ])('rejects an unsafe %s observation', (_name, patch) => {
     expect(() => attestWindowsPrivateRootSecurity(
-      '/C:/Users/test/.wukong/runtime/isolated-loop',
+      exactRoot,
       {
         ...exactObservation,
         ...patch,

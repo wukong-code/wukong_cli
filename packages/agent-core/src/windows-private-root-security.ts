@@ -1,3 +1,4 @@
+import { realpathSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { isAbsolute, resolve } from 'node:path';
 
@@ -353,12 +354,13 @@ export function protectWindowsPrivateRootSecurity(
       'The Windows private root security backend is unavailable.',
     );
   }
-  const canonicalRoot = resolve(rootDirectory);
-  if (!isAbsolute(rootDirectory) || canonicalRoot !== rootDirectory) {
+  const requestedRoot = resolve(rootDirectory);
+  if (!isAbsolute(rootDirectory) || requestedRoot !== rootDirectory) {
     throw new TypeError(
       'The Windows private root path is invalid.',
     );
   }
+  const canonicalRoot = realpathSync.native(requestedRoot);
   const { koffi, functions } = loadWindowsPrivateRootNative();
   const handle = functions.createFile(
     canonicalRoot,
@@ -416,12 +418,13 @@ export function attestWindowsPrivateRootPathSecurity(
       'The Windows private root security backend is unavailable.',
     );
   }
-  const canonicalRoot = resolve(rootDirectory);
-  if (!isAbsolute(rootDirectory) || canonicalRoot !== rootDirectory) {
+  const requestedRoot = resolve(rootDirectory);
+  if (!isAbsolute(rootDirectory) || requestedRoot !== rootDirectory) {
     throw new TypeError(
       'The Windows private root path is invalid.',
     );
   }
+  const canonicalRoot = realpathSync.native(requestedRoot);
   const { koffi, functions } = loadWindowsPrivateRootNative();
   const handle = functions.createFile(
     canonicalRoot,

@@ -1,10 +1,11 @@
 import { createHash } from 'node:crypto';
 import {
-  closeSync,
+  closeSync as closeNodeDescriptor,
   constants as importedFsConstants,
   fchmodSync,
   fstatSync,
-  fsyncSync,
+  fsyncSync as syncNodeDescriptor,
+  openSync,
   readSync,
   realpathSync,
   writeSync,
@@ -29,6 +30,28 @@ import {
 } from './windows-handle-relative-layout';
 
 const require = createRequire(import.meta.url);
+const targetDescriptorClosers = new Map<number, () => void>();
+const targetDescriptorSyncers = new Map<number, () => void>();
+
+function closeSync(fd: number): void {
+  const close = targetDescriptorClosers.get(fd);
+  if (close === undefined) {
+    closeNodeDescriptor(fd);
+    return;
+  }
+  targetDescriptorClosers.delete(fd);
+  targetDescriptorSyncers.delete(fd);
+  close();
+}
+
+function fsyncSync(fd: number): void {
+  const sync = targetDescriptorSyncers.get(fd);
+  if (sync === undefined) {
+    syncNodeDescriptor(fd);
+    return;
+  }
+  sync();
+}
 
 const PROTECTED_SEGMENTS = new Set(['.git', '.wukong']);
 const TRANSACTION_STAGE_NAME = 'stage';
@@ -160,6 +183,10 @@ interface WindowsTargetFunctions {
     output: Buffer,
     outputBytes: number,
   ) => number;
+  readonly getFileInformationByHandle: (
+    handle: unknown,
+    output: Buffer,
+  ) => number;
   readonly setFileInformation: (
     handle: unknown,
     informationClass: number,
@@ -181,11 +208,6 @@ interface WindowsTargetFunctions {
     eaLength: number,
   ) => number;
   readonly rtlNtStatusToDosError: (status: number) => number;
-  readonly openOsFileHandle: (
-    handleAddress: bigint,
-    flags: number,
-  ) => number;
-  readonly getOsFileHandle: (fd: number) => bigint | number;
 }
 
 const WINDOWS_FILE_ATTRIBUTE_DIRECTORY = 0x0000_0010;
@@ -2640,6 +2662,7 @@ export class TargetPromotionWorkspaceBackend {
 
 class WindowsTargetNative implements TargetHandleNative {
   readonly replaceStrategy = 'quarantine' as const;
+  private readonly rawHandles = new Map<number, unknown>();
 
   private constructor(
     private readonly koffi: KoffiModule,
@@ -2656,7 +2679,6 @@ class WindowsTargetNative implements TargetHandleNative {
     const koffi = require('koffi') as KoffiModule;
     const kernel32 = koffi.load('kernel32.dll');
     const ntdll = koffi.load('ntdll.dll');
-    const ucrt = koffi.load('ucrtbase.dll');
     const functions: WindowsTargetFunctions = {
       createFile: kernel32.func(
         'void * __stdcall CreateFileW(str16, uint32_t, uint32_t, void *, uint32_t, uint32_t, void *)',
@@ -2673,6 +2695,9 @@ class WindowsTargetNative implements TargetHandleNative {
       getFileInformation: kernel32.func(
         'int __stdcall GetFileInformationByHandleEx(void *, int, void *, uint32_t)',
       ) as WindowsTargetFunctions['getFileInformation'],
+      getFileInformationByHandle: kernel32.func(
+        'int __stdcall GetFileInformationByHandle(void *, void *)',
+      ) as WindowsTargetFunctions['getFileInformationByHandle'],
       setFileInformation: kernel32.func(
         'int __stdcall SetFileInformationByHandle(void *, int, void *, uint32_t)',
       ) as WindowsTargetFunctions['setFileInformation'],
@@ -2685,12 +2710,6 @@ class WindowsTargetNative implements TargetHandleNative {
       rtlNtStatusToDosError: ntdll.func(
         'uint32_t __stdcall RtlNtStatusToDosError(uint32_t)',
       ) as WindowsTargetFunctions['rtlNtStatusToDosError'],
-      openOsFileHandle: ucrt.func(
-        'int _open_osfhandle(intptr_t, int)',
-      ) as WindowsTargetFunctions['openOsFileHandle'],
-      getOsFileHandle: ucrt.func(
-        'intptr_t _get_osfhandle(int)',
-      ) as WindowsTargetFunctions['getOsFileHandle'],
     };
     for (const [name, value] of Object.entries(functions)) {
       if (typeof value !== 'function') {
@@ -2728,7 +2747,7 @@ class WindowsTargetNative implements TargetHandleNative {
         handle,
         canonicalRoot,
       );
-      const fd = this.adoptHandle(
+      const fd = this.bindNodeDescriptor(
         handle,
         WINDOWS_O_RDONLY | WINDOWS_O_BINARY,
       );
@@ -2762,10 +2781,11 @@ class WindowsTargetNative implements TargetHandleNative {
     );
     try {
       this.assertDirectoryHandle(handle);
-      return this.adoptHandle(
+      const fd = this.bindNodeDescriptor(
         handle,
         WINDOWS_O_RDONLY | WINDOWS_O_BINARY,
       );
+      return fd;
     } catch (error) {
       this.functions.closeHandle(handle);
       throw error;
@@ -2791,7 +2811,7 @@ class WindowsTargetNative implements TargetHandleNative {
           'A Windows Target path resolved to a reparse point.',
         );
       }
-      return this.adoptHandle(
+      return this.bindNodeDescriptor(
         handle,
         WINDOWS_O_RDONLY | WINDOWS_O_BINARY,
       );
@@ -2821,7 +2841,7 @@ class WindowsTargetNative implements TargetHandleNative {
           'A Windows Target mutation resolved to a reparse point.',
         );
       }
-      return this.adoptHandle(
+      return this.bindNodeDescriptor(
         handle,
         WINDOWS_O_RDONLY | WINDOWS_O_BINARY,
       );
@@ -2855,7 +2875,7 @@ class WindowsTargetNative implements TargetHandleNative {
           'A Windows Target temporary is a reparse point.',
         );
       }
-      return this.adoptHandle(
+      return this.bindNodeDescriptor(
         handle,
         WINDOWS_O_WRONLY | WINDOWS_O_BINARY,
       );
@@ -3129,29 +3149,49 @@ class WindowsTargetNative implements TargetHandleNative {
     }
   }
 
-  private adoptHandle(handle: unknown, flags: number): number {
-    const fd = this.functions.openOsFileHandle(
-      this.koffi.address(handle),
+  private bindNodeDescriptor(handle: unknown, flags: number): number {
+    const identity = this.rawHandleIdentity(handle);
+    const fd = openSync(
+      usableWindowsPath(this.finalPath(handle)),
       flags,
     );
-    if (!Number.isInteger(fd) || fd < 0) {
+    const selected = fstatSync(fd, { bigint: true });
+    if (selected.dev !== identity.dev
+      || selected.ino !== identity.ino) {
+      closeSync(fd);
       throw new TargetPromotionWorkspaceBackendError(
-        'target_promotion_atomic_backend_native_unavailable',
-        'The Windows Target handle could not become a Node descriptor.',
+        'target_promotion_atomic_path_unsafe',
+        'The Windows Target path changed while binding its descriptor.',
       );
     }
+    this.rawHandles.set(fd, handle);
+    targetDescriptorClosers.set(fd, () => {
+      this.rawHandles.delete(fd);
+      try {
+        closeNodeDescriptor(fd);
+      } finally {
+        this.functions.closeHandle(handle);
+      }
+    });
+    targetDescriptorSyncers.set(fd, () => {
+      this.flush(handle);
+    });
     return fd;
   }
 
   private rawHandle(fd: number): unknown {
-    return this.rawHandleAddress(fd);
+    const handle = this.rawHandles.get(fd);
+    if (isInvalidWindowsTargetHandle(this.koffi, handle)) {
+      throw new TargetPromotionWorkspaceBackendError(
+        'target_promotion_atomic_backend_native_unavailable',
+        'The Node descriptor has no bound Windows Target handle.',
+      );
+    }
+    return handle;
   }
 
   private rawHandleAddress(fd: number): bigint {
-    const value = this.functions.getOsFileHandle(fd);
-    const address = typeof value === 'bigint'
-      ? value
-      : BigInt(value);
+    const address = this.koffi.address(this.rawHandle(fd));
     if (address <= 0n
       || address === invalidWindowsTargetHandleAddress()) {
       throw new TargetPromotionWorkspaceBackendError(
@@ -3160,6 +3200,25 @@ class WindowsTargetNative implements TargetHandleNative {
       );
     }
     return address;
+  }
+
+  private rawHandleIdentity(handle: unknown): FileIdentity {
+    const output = Buffer.alloc(52);
+    if (this.functions.getFileInformationByHandle(
+      handle,
+      output,
+    ) === 0) {
+      throw this.win32Error(
+        'GetFileInformationByHandle',
+        this.functions.getLastError(),
+      );
+    }
+    return {
+      dev: BigInt(output.readUInt32LE(28)),
+      ino: (
+        BigInt(output.readUInt32LE(44)) << 32n
+      ) | BigInt(output.readUInt32LE(48)),
+    };
   }
 
   private ntStatusError(

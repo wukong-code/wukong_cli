@@ -3,7 +3,6 @@ import {
   mkdir,
   mkdtemp,
   readFile,
-  rm,
   writeFile,
 } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
@@ -36,6 +35,7 @@ import {
 import {
   testAgent,
 } from './agent/harness/agent';
+import { removeTestTree } from './fixtures/remove-test-tree';
 
 const execFileAsync = promisify(execFile);
 const roots: string[] = [];
@@ -53,7 +53,7 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   clearBrokerReviewTrustBindingsForTests();
   await Promise.all(roots.splice(0).map((root) =>
-    rm(root, { recursive: true, force: true })));
+    removeTestTree(root)));
 });
 
 describe('isolated Loop real ecosystem release harness', () => {
