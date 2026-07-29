@@ -26,13 +26,25 @@ async function makeOwnerWritable(absolutePath: string): Promise<void> {
   }
   if (stats.isSymbolicLink()) return;
 
-  await chmod(
-    absolutePath,
-    (stats.mode & 0o777) | (stats.isDirectory() ? 0o700 : 0o600),
-  );
+  try {
+    await chmod(
+      absolutePath,
+      (stats.mode & 0o777) | (stats.isDirectory() ? 0o700 : 0o600),
+    );
+  } catch (error) {
+    if (isMissingError(error)) return;
+    throw error;
+  }
   if (!stats.isDirectory()) return;
 
-  for (const name of await readdir(absolutePath)) {
+  let names: string[];
+  try {
+    names = await readdir(absolutePath);
+  } catch (error) {
+    if (isMissingError(error)) return;
+    throw error;
+  }
+  for (const name of names) {
     await makeOwnerWritable(join(absolutePath, name));
   }
 }

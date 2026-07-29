@@ -782,7 +782,7 @@ class PosixNative implements CandidateHandleNative {
 }
 
 class WindowsHandleNative implements CandidateHandleNative {
-  private readonly rawHandles = new Map<number, unknown>();
+  private readonly rawHandles = new Map<number, bigint>();
 
   private constructor(
     private readonly koffi: KoffiModule,
@@ -1260,6 +1260,7 @@ class WindowsHandleNative implements CandidateHandleNative {
 
   private bindNodeDescriptor(handle: unknown, flags: number): number {
     const identity = this.rawHandleIdentity(handle);
+    const handleAddress = this.koffi.address(handle);
     const fd = openSync(
       usableWindowsPath(this.finalPath(handle)),
       flags,
@@ -1273,13 +1274,13 @@ class WindowsHandleNative implements CandidateHandleNative {
         'The Windows candidate path changed while binding its descriptor.',
       );
     }
-    this.rawHandles.set(fd, handle);
+    this.rawHandles.set(fd, handleAddress);
     candidateDescriptorClosers.set(fd, () => {
       this.rawHandles.delete(fd);
       try {
         closeNodeDescriptor(fd);
       } finally {
-        this.functions.closeHandle(handle);
+        this.functions.closeHandle(handleAddress);
       }
     });
     return fd;
@@ -1287,7 +1288,9 @@ class WindowsHandleNative implements CandidateHandleNative {
 
   private rawHandle(fd: number): unknown {
     const handle = this.rawHandles.get(fd);
-    if (isInvalidWindowsHandle(this.koffi, handle)) {
+    if (handle === undefined
+      || handle <= 0n
+      || handle === windowsInvalidHandleAddress()) {
       throw new CandidateWorkspaceFileBackendError(
         'candidate_atomic_backend_unavailable',
         'The Node descriptor has no bound Windows handle.',
@@ -1297,15 +1300,7 @@ class WindowsHandleNative implements CandidateHandleNative {
   }
 
   private rawHandleAddress(fd: number): bigint {
-    const address = this.koffi.address(this.rawHandle(fd));
-    if (address <= 0n
-      || address === windowsInvalidHandleAddress()) {
-      throw new CandidateWorkspaceFileBackendError(
-        'candidate_atomic_backend_unavailable',
-        'The Node descriptor has no valid Windows handle.',
-      );
-    }
-    return address;
+    return this.rawHandle(fd) as bigint;
   }
 
   private rawHandleIdentity(handle: unknown): FileIdentity {

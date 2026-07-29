@@ -170,6 +170,16 @@ interface WindowsTargetFunctions {
     templateFile: null,
   ) => unknown;
   readonly closeHandle: (handle: unknown) => number;
+  readonly getCurrentProcess: () => unknown;
+  readonly duplicateHandle: (
+    sourceProcess: unknown,
+    sourceHandle: unknown,
+    targetProcess: unknown,
+    targetHandle: unknown[],
+    desiredAccess: number,
+    inheritHandle: number,
+    options: number,
+  ) => number;
   readonly getLastError: () => number;
   readonly getFinalPathName: (
     handle: unknown,
@@ -235,6 +245,7 @@ const WINDOWS_FILE_FLAG_OPEN_REPARSE_POINT = 0x0020_0000;
 const WINDOWS_FILE_ATTRIBUTE_TAG_INFO = 9;
 const WINDOWS_FILE_RENAME_INFO = 3;
 const WINDOWS_FILE_DISPOSITION_INFO = 4;
+const WINDOWS_DUPLICATE_SAME_ACCESS = 0x0000_0002;
 const WINDOWS_O_RDONLY = 0;
 const WINDOWS_O_WRONLY = 1;
 const WINDOWS_O_BINARY = 0x8000;
@@ -2662,7 +2673,7 @@ export class TargetPromotionWorkspaceBackend {
 
 class WindowsTargetNative implements TargetHandleNative {
   readonly replaceStrategy = 'quarantine' as const;
-  private readonly rawHandles = new Map<number, unknown>();
+  private readonly rawHandles = new Map<number, bigint>();
 
   private constructor(
     private readonly koffi: KoffiModule,
@@ -2686,6 +2697,12 @@ class WindowsTargetNative implements TargetHandleNative {
       closeHandle: kernel32.func(
         'int __stdcall CloseHandle(void *)',
       ) as WindowsTargetFunctions['closeHandle'],
+      getCurrentProcess: kernel32.func(
+        'void * __stdcall GetCurrentProcess()',
+      ) as WindowsTargetFunctions['getCurrentProcess'],
+      duplicateHandle: kernel32.func(
+        'int __stdcall DuplicateHandle(void *, void *, void *, _Out_ void **, uint32_t, int, uint32_t)',
+      ) as WindowsTargetFunctions['duplicateHandle'],
       getLastError: kernel32.func(
         'uint32_t __stdcall GetLastError()',
       ) as WindowsTargetFunctions['getLastError'],
@@ -2761,7 +2778,39 @@ class WindowsTargetNative implements TargetHandleNative {
   }
 
   duplicateDirectory(fd: number): number {
-    return this.openDirectoryAt(fd, '.');
+    const processHandle = this.functions.getCurrentProcess();
+    const output: unknown[] = [null];
+    if (this.functions.duplicateHandle(
+      processHandle,
+      this.rawHandle(fd),
+      processHandle,
+      output,
+      0,
+      0,
+      WINDOWS_DUPLICATE_SAME_ACCESS,
+    ) === 0) {
+      throw this.win32Error(
+        'DuplicateHandle',
+        this.functions.getLastError(),
+      );
+    }
+    const handle = output[0];
+    if (isInvalidWindowsTargetHandle(this.koffi, handle)) {
+      throw new TargetPromotionWorkspaceBackendError(
+        'target_promotion_atomic_backend_native_unavailable',
+        'DuplicateHandle returned an invalid Windows Target handle.',
+      );
+    }
+    try {
+      this.assertDirectoryHandle(handle);
+      return this.bindNodeDescriptor(
+        handle,
+        WINDOWS_O_RDONLY | WINDOWS_O_BINARY,
+      );
+    } catch (error) {
+      this.functions.closeHandle(handle);
+      throw error;
+    }
   }
 
   openDirectoryAt(directoryFd: number, name: string): number {
@@ -3151,6 +3200,7 @@ class WindowsTargetNative implements TargetHandleNative {
 
   private bindNodeDescriptor(handle: unknown, flags: number): number {
     const identity = this.rawHandleIdentity(handle);
+    const handleAddress = this.koffi.address(handle);
     const fd = openSync(
       usableWindowsPath(this.finalPath(handle)),
       flags,
@@ -3164,24 +3214,26 @@ class WindowsTargetNative implements TargetHandleNative {
         'The Windows Target path changed while binding its descriptor.',
       );
     }
-    this.rawHandles.set(fd, handle);
+    this.rawHandles.set(fd, handleAddress);
     targetDescriptorClosers.set(fd, () => {
       this.rawHandles.delete(fd);
       try {
         closeNodeDescriptor(fd);
       } finally {
-        this.functions.closeHandle(handle);
+        this.functions.closeHandle(handleAddress);
       }
     });
     targetDescriptorSyncers.set(fd, () => {
-      this.flush(handle);
+      this.flush(handleAddress);
     });
     return fd;
   }
 
   private rawHandle(fd: number): unknown {
     const handle = this.rawHandles.get(fd);
-    if (isInvalidWindowsTargetHandle(this.koffi, handle)) {
+    if (handle === undefined
+      || handle <= 0n
+      || handle === invalidWindowsTargetHandleAddress()) {
       throw new TargetPromotionWorkspaceBackendError(
         'target_promotion_atomic_backend_native_unavailable',
         'The Node descriptor has no bound Windows Target handle.',
@@ -3191,15 +3243,7 @@ class WindowsTargetNative implements TargetHandleNative {
   }
 
   private rawHandleAddress(fd: number): bigint {
-    const address = this.koffi.address(this.rawHandle(fd));
-    if (address <= 0n
-      || address === invalidWindowsTargetHandleAddress()) {
-      throw new TargetPromotionWorkspaceBackendError(
-        'target_promotion_atomic_backend_native_unavailable',
-        'The Node descriptor has no valid Windows Target handle.',
-      );
-    }
-    return address;
+    return this.rawHandle(fd) as bigint;
   }
 
   private rawHandleIdentity(handle: unknown): FileIdentity {
