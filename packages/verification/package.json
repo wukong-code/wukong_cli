@@ -35,5 +35,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run",
     "clean": "rm -rf dist"
+  },
+  "optionalDependencies": {
+    "koffi": "^2.16.0"
   }
 }

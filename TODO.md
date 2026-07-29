@@ -1,6 +1,6 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.19 的发布后验证债务以 [Explicit Finish Line](docs/design/0.0.19-explicit-finish-line.md) 为准，下一已批准实施版本 0.0.20 以 [Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md) 为准。0.0.21、0.1.0 与 0.2.0 已确认产品顺序但尚未批准开工，不进入当前 checkbox 队列。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.19 与 0.0.20 已发布，未完成真实产品证据继续作为发布后验证债务保留。当前批准实施版本为 [0.0.21 Isolated Loop Worktrees](docs/design/0.0.21-isolated-loop-worktrees.md)，先执行只读 Source Snapshot dry-run；0.1.0、0.1.1 与 0.2.0 仍未批准开工。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
@@ -86,7 +86,7 @@
 
 - Verification Skill 执行/chaining、托管模型/推理、支付、credits/quota、Hosted Terminal/Report、云同步、telemetry 指标后端、`/schedule`、`/ship`、PR Gate、Team、新顶层合同命令、新 workflow DSL、自动 policy/Role/Skill/contract 修改和 feedback 附件均不进入 0.0.19。
 
-## ⏳ 0.0.20 — Reusable Verification Criteria
+## ✅ 0.0.20 — Reusable Verification Criteria（已发布；验证债务保留）
 
 > 方案: [docs/design/0.0.20-reusable-verification-skills.md](docs/design/0.0.20-reusable-verification-skills.md)。实施依赖 0.0.19 已发布的 frozen Gate、approval CAS、durable PASS 和 continuation 核心合同，不把其非阻塞 post-release validation debt 自动升级为 0.0.20 功能范围。继续免费、本地优先和 BYOK；本版只复用已有 Skill criteria，不执行 Skill command。
 
@@ -158,33 +158,135 @@
 
 - command/argv recipe、sandbox/private scratch/artifact、Skill authoring/scaffold/draft/promotion、embedded binding、recipe dependency graph、动态 chained execution、Marketplace/远程 registry/自动更新/云同步、MCP/公网/secret Gate steps、PR Gate、Team policy、托管 grader、新默认命令、支付/quota 均不进入 0.0.20。
 
+## 🚧 0.0.21 — Isolated Loop Worktrees（开发中）
+
+> 方案：[docs/design/0.0.21-isolated-loop-worktrees.md](docs/design/0.0.21-isolated-loop-worktrees.md)。默认关闭的 Agent RPC/Node SDK/TUI/Headless/stream-json Candidate → exact Promote challenge → Apply → target Final Gate 产品链已形成未发布实现候选。macOS 本地真实临时 dirty Git 仓库 harness 已覆盖 Node/Python/Rust/Go 无依赖 4/4；四生态 fixed-lock dependencyful harness 也已接入，Node/Python/Rust 3/3 本地通过，Go 因本机直连官方 proxy 超时保留给远端门槛。这些 fixture 证据不能替代授权真实项目、远端 CI 或跨平台证据。Target Promotion 与 Worktree/Bootstrap dead-owner recovery 已有本地覆盖；POSIX Target Apply 现使用 descriptor-rooted no-replace/exchange、checked inode 后验与两阶段事务 receipt，只有绑定 preimage/stage inode 的 committed receipt 才能在 outcome 前认领 postimage，普通编辑器并发 atomic-save 不会被 Promote 静默覆盖；POSIX component-level hard-signal matrix 38/38 通过。Windows Candidate/Target 的 NtCreateFile handle-relative、reparse 拒绝、严格私有 ACL、Candidate atomic replace 与 Target no-clobber quarantine transaction 已形成本地实现候选；原生 integration 与 Windows 强制终止恢复用例已接入手动门槛，但尚未在真实 Windows runner 执行。最新分层全仓回归 10122 passed，typecheck/lint/sherif/build/CLI bundle smoke 通过；三 OS/六平台、fixed-SHA CI、授权真实项目和固定五用户验收仍未完成，不能视为可发布。
+
+### Phase 1：Source Snapshot dry-run
+
+- [x] 增加默认关闭的 `isolated_loop_worktrees` experimental flag 和隐藏 Headless untracked selection（2026-07-28）
+- [x] 实现 policy/limits、repository identity、repository-relative cwd 与 snapshot digest 绑定（2026-07-28）
+- [x] 冻结最低 Git `2.29.0` 要求并在任何 repository 读取前返回稳定 `isolated_loop_git_unsupported` blocker；兼容 Apple/Windows vendor version suffix（2026-07-29）
+- [x] 实现 clean、staged、unstaged 和 selected-untracked source projection（2026-07-28）
+- [x] 对 secret/generated/oversize/symlink/gitlink/path escape/case collision/index flags/Git environment 与已识别外部 helper fail closed（2026-07-28）
+- [x] 接入 `/loop --dry-run` 输出；隔离失败与显式 selection exclusion 均返回稳定 blocker，不静默回退或丢弃（2026-07-28）
+- [x] 补齐 snapshot contract、负向策略、preflight 与 CLI targeted tests（2026-07-28）
+- [x] 冻结 stream-json Candidate Gate、promotion challenge、target Final Gate 与 resume hint 的完整 JSONL golden；Candidate/Promotion 固定为 `candidateOnly: true`、`terminalPass: false`、`completionSealCommitted: false`、target 未改变且仍需 Final Gate。Final 事件只有完成真实 target Final Gate、completion seal 与 terminal join 后才输出；PASS 或 non-PASS seal 都明确 `completionSealCommitted: true`，仅完整 PASS lineage 允许 `terminalPass: true`。TUI 与 Headless text 使用同一语义，不再显示歧义的泛化 `Gate: PASS`（2026-07-30；CLI/TUI 定向 132/132 通过）
+- [x] 完成 TUI Source Snapshot 只读确认 UX：显式多选 eligible untracked 后重新冻结 snapshot；在创建 Goal/candidate 前展示 branch、base、tracked/untracked/exclusion 口径与 exact digest，Cancel 保持零 Goal/run/worktree/source write（2026-07-29）
+- [x] 完成分层全仓 test/typecheck/lint/sherif/build/CLI bundle smoke 验证（2026-07-30；root projects 9855 passed，root 外 Wukong Web/Vis 267 passed，合计 10122 passed）
+
+### Phase 2：Blob 与确定物化
+
+- [x] 实现 `WKSMAT01` 不可压缩容器、双 index/worktree postimage、Git index object ID 与 source/policy digest 绑定（2026-07-29）
+- [x] 实现私有短生命周期 `SnapshotBlobLeaseV1` 的 stage/seal/confirm/consume/destroy、跨进程锁、CAS/fencing、journal、expiry 与安全 tombstone（2026-07-29）
+- [x] 补齐容器截断/尾随/篡改、source mismatch、权限、symlink/hardlink、stale binding、并发 consume、callback failure 与 journal 漂移负向测试（2026-07-29）
+- [x] 实现从 source workspace 读取 exact index/worktree bytes 的 sealer，在读取前后复核 snapshot drift，并将 rename 展开为 delete + add（2026-07-29）
+- [x] 将 effective snapshot limits 固化进 durable snapshot，sealer 与 candidate 复核不再依赖调用方重建 defaults（2026-07-29）
+- [x] 创建 detached `--no-checkout` candidate，确定写入 base/source-index/worktree postimage，复核 materialized source digest 后销毁 blob；仍不接 Agent writer（2026-07-29）
+- [x] 阻断 implicit Git conversion、LFS pointer、base symlink/gitlink、candidate root overlap、portable collision 与 concurrent duplicate claim（2026-07-29）
+- [x] 实现 Worktree Lease 的跨进程锁、CAS/fencing、hash-chained journal、单步 journal-ahead 修复和 exact-owner resume（2026-07-29）
+- [x] 实现 materialization intent/record 到 Worktree Lease 的绑定，以及 record 已落盘、lease 未提交时的幂等恢复（2026-07-29）
+- [x] 实现 active-only candidate-root capability、使用前后 identity/fencing 重验，以及当前 holder 的 crash-safe explicit handoff（2026-07-29）
+- [x] 冻结并接入 POSIX process liveness proof：PID + OS start marker digest，只有明确不存在或 PID 已复用才判 dead；探测失败、超时、跨平台均 unknown/fail closed，并以 crash-safe pending/event/capability 原子轮换 Target Promotion Lease owner/fencing（2026-07-29）
+- [x] 完成 Target Promotion 的 dead-owner runtime recovery：`acquired` 可直接接管；`applying` 先接管 lease 再单调重绑 Apply journal，并逐 change 以 preimage/postimage 决定 apply/reconcile/conflict；`final_verifying` 保留 durable evidence/result/seal 的原 token provenance，通过 attempt lineage 恢复并幂等完成 terminal join（2026-07-29；live/unknown owner、并发接管、PID 复用和 durable boundary 测试通过）
+- [x] 完成 Worktree `creating`/`materializing`/`bootstrapping` 的无当前 holder runtime liveness adoption：PID + OS start marker 明确判 dead 后才轮换 process identity/fencing；live/unknown fail closed；materialization record 仅沿同状态 authenticated ownership ancestry 恢复，bootstrap journal 仅在 `ready` 且无 reserved/running step 时重绑，未知 step 保留 attention，重复恢复幂等（2026-07-29）
+- [x] 冻结 excluded tracked 与 candidate materialization policy/digest：0.0.21 不实现 overlay，任一 exclusion 均 fail closed，禁止静默丢弃；只有显式批准的 selected-untracked 可物化，决策与 limits 一并进入 policy digest（2026-07-29）
+- [x] 冻结 canonical `CandidateBootstrapPlanV1`/step schema、digest、generated scope、deny/explicit-once network 与 lifecycle-scripts-deny 不变量（2026-07-29）
+- [x] 冻结 bootstrap budget/reservation/event CAS 合同，unknown usage 保留完整预留，只有 verified actual usage 才释放额度（2026-07-29）
+- [x] 冻结 bootstrap execution journal、step 顺序、generated-scope reconciliation 与 no-inflight ownership adoption 不变量（2026-07-29）
+- [x] 实现 Bootstrap exact argv/env 私有引用、跨进程锁、回调内使用、先 tombstone 后 exact unlink 的崩溃可恢复销毁（2026-07-29）
+- [x] 实现原子 Bootstrap state store，在同一 fsync 边界提交 budget/reservation/journal/event/lease fencing，支持幂等 retry、竞争 prepare 与 retained-unknown recovery（2026-07-29）
+- [x] 实现并接入 confirmed `/loop` 产品路径的 POSIX executor：durable prepared/started 后 exact spawn，冻结 env、bounded output/time/generated usage、source projection before/after 与 process-group termination（2026-07-29）
+- [x] 补齐 executor exact env、source 越界写、output 超限、timeout、完成后 retry 不重跑、prepared crash recovery 与 Worktree bootstrapping capability targeted tests（2026-07-29）
+- [x] 冻结 Node/Python/Rust/Go lockfile/bootstrap 支持矩阵，unsupported/ambiguous/unlocked/runtime-missing 环境稳定阻断；Node 仅接受 package-lock + npm ignore-scripts，Python 仅接受 exact pin + sha256 hash + binary-only requirements，Rust 拒绝 git source，Go 拒绝 replace（2026-07-29）
+- [x] 实现 trusted native executable identity/version，拒绝 repo/candidate/generated scope、symlink/hardlink、PATH 间接解析与 inspect/spawn drift；常见 npm script shim 以 native Node + frozen npm package bundle 形成复合 identity；rustup proxy 在 source toolchain 作用域解析并冻结真实 Cargo + rustc 复合 identity，避免把 rustup 当 Cargo 执行；Go module/build cache 通过受限 candidate-relative env binding 固定在 `.wukong-bootstrap`，Node/Python 也禁用全局 cache 与 ambient registry config（2026-07-29）
+
+### 后续阶段
+
+- [x] 增加不可由绝对路径或调用方 policy override 降级的 `workspace-only` 文件工具路径模式，并由 candidate-root view 生成 strict workspace config（2026-07-29）
+- [x] 将不可序列化 candidate workspace capability 接入 Read/Write/Edit/Glob/Grep/ReadMediaFile，I/O 前后重验 root/ancestor identity，拒绝 symlink/hardlink 与 Git/Wukong control path；缺 capability fail closed（2026-07-29）
+- [x] 为 macOS/Linux candidate 文件工具实现 descriptor-rooted backend：root/逐级目录 fd、`openat(O_NOFOLLOW)`、`mkdirat/renameat/unlinkat`、同目录临时文件 + fsync，以及 bounded descriptor walker；Read/Write/Edit/ReadMediaFile/Glob/Grep 不再依赖路径式 candidate I/O。该边界阻止 path escape，但不宣称对同 UID 恶意进程提供完整 sandbox 或 leaf compare-and-swap（2026-07-29）
+- [x] 冻结 Windows 私有 durable root ACL/preflight 合同：原生符号探测零路径写入；proof 必须绑定 normalized root digest，并要求 handle-relative、final path exact、directory/non-reparse、current-user owner、present/non-null/protected DACL、仅 CURRENT_USER + LOCAL_SYSTEM 且对子项继承；Candidate/Target capability 分别区分 ACL 与 handle backend unavailable，任一失败均在 Agent access/durable write 前阻断，定向 24/24 通过（2026-07-30）。该合同证据早于原生实现，不能单独证明 Windows 可用
+- [x] 实现 Windows Candidate/Target 本地 backend 候选：NtCreateFile handle-relative open/create、逐级 non-reparse、严格 owner/System DACL、Candidate replace、Target create/delete/rename 与 update quarantine no-clobber transaction、inode-bound receipt/recovery；补 Unicode UTF-16 layout、junction 拒绝、外部 destination 保留与中间 quarantine 恢复（2026-07-30；仅跨平台编译和纯测试，尚无真实 Windows 运行证据）
+- [ ] 在真实 Windows runner 验证 handle-relative Candidate/Target、reparse-point/ACL/atomic replace/no-clobber recovery；当前 8 个原生 integration 与 19 个强制终止恢复用例已接入手动 implementation gate，但未运行
+- [x] 把 exact guarded workspace 接入受限 Candidate Agent Writer 生命周期；API 强制在 Agent 创建前初始化 exact post-bootstrap baseline，工具面固定为 Read/Write/Edit/ReadMediaFile/Glob/Grep，拒绝 Bash/MCP/Skill/Web/子 Agent/自定义工具/额外目录，并在每次 tool call 前后重验 exact lease digest、fencing、状态、过期时间与 worktree identity；回调结束后泄露工具 fail closed（2026-07-29）
+- [x] 实现 Node/Python/Rust/Go deterministic bootstrap preflight/recipe registry，把 executor/state/private-input 基础设施接入 exact confirmation 产品路径；四生态只读 preflight、immutable recipe、exact runtime/argv/env/budget plan、CLI/TUI/Headless review、plan digest confirmation、RPC/runtime 独立重建比对，以及 `materialized → bootstrapping → private input + budget/journal + executor → active` 已接通；常见 npm script shim 使用 native Node + frozen npm package bundle 复合 identity，并在 spawn 前后重验（2026-07-29）
+- [x] 实现 canonical Candidate projection/change manifest/delta；bootstrap 后基线与 Agent create/update/delete/rename/mode 分离，generated scopes 排除，原始 dirty snapshot 不重复进入 Agent delta（2026-07-29）
+- [x] 实现 capability-bound durable CandidateDelta store；baseline 与 revision-scoped immutable seal 使用私有权限、跨进程锁、原子 fsync，支持失败 Gate 修复后追加新 seal，并对 post-seal mutation、tamper、hardlink、portable collision 与 recovery fail closed（2026-07-29）
+- [x] 实现 capability-bound deterministic Candidate Gate：以 shared Git common-dir identity + exact Worktree Lease gate-plan/candidateDelta seal 把 source-approved Gate 重绑到 detached worktree，执行前后复核冻结定义、candidate delta 与 checks/scan；PASS/阻断、失败后修复、check 改写与 definition drift 测试通过（2026-07-29）
+- [x] 冻结 canonical `CandidateGateResultV1`：只允许 exact candidate/delta/attempt 与 `PASS|NEEDS_WORK|ERROR`，digest tamper/unknown outcome/stale identity 均拒绝；deterministic 段不得单独生成完整 PASS（2026-07-29）
+- [x] 将 exact CandidateDelta 投影为 bounded broker review plan：只发送 Agent 实际 postimage paths，delete/rename/mode 与 pre/post digests 作为 brokered evidence，未变的原始 dirty snapshot 不进入 reviewer subject，并交给后续 origin-locked fresh reviewer（2026-07-29）
+- [x] 将 review plan 接入现有 attempt-scoped Review Subject Broker 生命周期：exact verifying lease/source trust/consent/delta seal 前后重验，broker 逃逸、trust revoke、subject drift 与 reviewer 期间 candidate mutation fail closed；broker 只向本轮 origin-locked fresh reviewer开放（2026-07-29）
+- [x] 新增 durable Candidate Gate attempt/store：exact lease/delta/Gate/review binding、CAS、event-first journal、单步 crash recovery；invalid reviewer output 只保存 payload digest 并映射 ERROR（2026-07-29）
+- [x] 接入 origin-locked brokered fresh reviewer 与 Candidate Gate join：provider consent/redirect lock、broker-only tools、reviewing-before-provider、完整 CandidateGateResult 重读后才进入 awaiting_promotion；NEEDS_WORK 回 active，ERROR 记录 exact recovery transition 后回 active，后续显式 rerun 使用新 verifying revision/attempt（2026-07-29）
+- [x] 增加 durable run → candidate binding、Goal record/replay/public summary 与验证 revision 派生的稳定 Gate attempt UUID；候选创建在任何物化写入前先提交 binding，重启可从私有 capability 载体恢复 exact Blob/Worktree owner 与 active/verifying/awaiting_promotion candidate root（2026-07-29）
+- [x] 增加 candidate preparer 与单轮内部 orchestration：exact sealer → Blob stage/confirm → Worktree reserve/bind/materialize → optional exact bootstrap → active → 受限 Writer → verifying Candidate Gate；NEEDS_WORK 回 active，PASS 只停在 awaiting_promotion（2026-07-29）
+- [x] 增加默认关闭的 Agent RPC/Node SDK/TUI/Headless/stream-json 调用面：实验开启后确认 Finish Line 才启动 Candidate Writer；candidate PASS 只返回 exact promotion challenge，TUI 必须选择 `Promote`，Headless 必须恢复同一 session 并提交 `--promote-candidate <proposalDigest>`（2026-07-29）
+- [x] 冻结 Promote 安全前置合同：canonical target fingerprint/registry key、exact candidate/Gate/source/permission consent，以及只保存 fencing-token digest 的单调 Target Promotion Lease；stale consent/token、非法回退和 digest tamper fail closed（2026-07-29）
+- [x] 实现用户级 target-global promotion registry/store：每个 canonical target key 使用跨进程锁、隐藏 raw fencing token、CAS revision、event-first journal、单步 journal-ahead recovery、exact-owner resume；并发 owner、旧 binding、篡改 event/capability fail closed（2026-07-29）
+- [x] 实现完整 target fingerprint builder、durable Apply journal 与逐 change Apply：锁内重验 exact consent/source/fingerprint，prepared-before-write，create/update/delete/rename/mode 的 pre/postimage 验证，crash 后 postimage reconciliation，外部 drift/conflict fail closed；Apply 后重建完整 target fingerprint 才进入 final_verifying（2026-07-29）
+- [x] 冻结 `TargetGateCompletionSealV1` 纯合同：三类 private artifact 必须恰好各一个且顺序固定，长度/hash/lineage/coverage/fencing 全部进入独立 digest；完整 NEEDS_WORK/ERROR 可留证，但只有 PASS seal 可作为 terminal PASS 候选（2026-07-29）
+- [x] 实现 target Final Gate durable attempt/store/orchestrator，并把现有 Goal Gate ordered checks/risk/criteria/fresh reviewer/proof audit 重新绑定到 exact post-Apply fingerprint、journal head 和 fencing token（2026-07-29）
+- [x] 实现 private completion artifact store、seal 后 exact-byte 重读校验、一次性 terminal authorization、Goal completion-seal record 与幂等 terminal join；覆盖 terminal 已提交但 target lease release 失败后的 exact retry 和 record replay（2026-07-29）
+- [x] 接入默认关闭的 Candidate Writer → Gate → exact consent → Promote Apply → target Final Gate → completion seal → terminal join 产品 orchestration；Candidate/Goal workspace digest 使用各自 canonical namespace，不能误作相同 digest，只有 completion seal 后才可显示根 PASS；Target Promotion 从 pre-Apply 到 historical seal/terminal release 的 dead-owner recovery，以及 Worktree/Bootstrap 无 holder adoption 已接 runtime（2026-07-29；发布门槛仍待完成）
+- [x] 增加真实临时 Git 仓库完整 E2E：确认前 source 零写入、stale digest 零写入、exact Promote 后 Apply、target Final Gate PASS、completion seal 与 terminal join；并修复首次 Candidate 私有状态根未创建、target Final Gate 未持久化 exact Goal audit 两个产品接线缺陷（2026-07-29）
+- [x] Promote 在 terminal 前失败时，Headless/TUI 都重新暂停 Goal 并保留 exact candidate/challenge，避免恢复后遗留 active Loop（2026-07-29）
+- [x] 补 Target Final Gate 两个 durable boundary：evidence 前 cancel 只保留 prepared/non-terminal 且可精确恢复；evidence 已落盘后重启不重复调用 producer，直接完成同一 attempt（2026-07-29）
+- [x] 完成 promotion Apply cooperative cancel boundary：已取消 signal 在首个 write 前零写入；每个 change 的 durable `applied`/`reconciled` event 后再次检查 signal，取消时保持 `applying` 和 journal 可恢复，retry 不重复已提交 change；Target Final Gate evidence 前取消保持 prepared/non-terminal（2026-07-29）
+- [x] 完成 durable error pre-redaction 审计：Worktree/Bootstrap/Apply/Final Gate journal 只持久化固定 reason/status/digest；fresh reviewer exception 的任意 message/reasonCode 在写 Candidate Gate attempt 前映射为固定 allowlist，provider secret sentinel 不进入 durable attempt（2026-07-29）
+- [x] 完成 late-write fencing 与 Apply operation fault matrix：Candidate Writer 泄露工具在 callback 后失效；Target Apply 独占 OS lock 覆盖整个 callback，escaped authority 失效；create/update/delete/rename/mode 全路径通过。五类 operation 只有在私有 identity + committed receipt 能证明 Wukong 已完成原子 syscall 时，才会在 outcome 未提交的恢复中追加单个 `reconciled`；prepared 后由外部写出的同内容 postimage 没有 receipt 会 fail closed（2026-07-30）
+- [x] 完成 POSIX Target Apply final-leaf no-clobber：Linux `renameat2` / macOS `renameatx_np` 的 no-replace/exchange、held-FD `(dev, ino)` 后验、deterministic owner/identity/committed markers、rename parent fsync 与 nested delete recovery 已接入；receipt 会在 syscall 前持久化 preimage/stage `(dev, ino)`，先 durable `applied/reconciled`，再以 identity-bound cleanup manifest 把整个事务目录原子隔离到 cleanup namespace 后幂等删除。cleanup manifest 准备、目录隔离、部分 artifact 删除或 manifest 删除后的中断均可恢复，篡改则 fail closed；create/update/delete/rename/mode 在 final check 前后的同 bytes/mode atomic-save 都保持外部 inode，无 receipt postimage 均阻断。最新 Target/Promotion 相关回归 86/86、cleanup 中断/篡改 5/5 通过（2026-07-30）。该边界不宣称隔离专门伪造内部 artifact 的同 UID 恶意进程；完整 process sandbox 明确不进入 0.0.21
+- [x] 完成 POSIX OS hard SIGINT/SIGTERM 进程级故障注入：Source Snapshot sealer 四边界 8/8 保持 source HEAD/index/staged/unstaged/untracked 逻辑状态不变；materializer 在 candidate record 已同步后的 2/2 按 exact ancestry 回收 stranded source Blob；Bootstrap `step_running` 2/2；Candidate Writer temporary fsync、final-leaf check 与 atomic replace 两侧 6/6 只暴露完整旧/新 leaf；Target Apply、Final Gate 与 completion seal production-path 10 个 signal case、synthetic target durable/terminal boundaries 10 个 case 已通过，含 outcome durable、receipt 尚未清理的恢复（2026-07-30）
+- [ ] 在真实 Windows runner 执行已接入的 19 个 forced-termination 等价用例：Source sealer 4、materializer 1、Bootstrap 1、Candidate Writer 3、Target Apply/Final Gate/completion 10；POSIX 38/38 与本地 skipped/编译结果不能外推为 Windows 通过
+- [x] 增加 macOS 本地 Node/Python/Rust/Go 四生态 dirty-workspace Candidate → Gate → Promote → target Final PASS harness，4/4 通过；fixture 主要无外部依赖，不计作依赖完整真实项目或跨平台证据（2026-07-29）
+- [x] 增加 Node/Python/Rust/Go 四生态 fixed-lock dependencyful bootstrap 完整 Loop：分别绑定 npm lock integrity、Python exact hash/binary-only wheel、Cargo.lock checksum 与 Go sum/vendor，依赖代码必须在 Candidate Gate 和 target Final Gate 被真实执行。Node/Python/Rust 3/3 本地通过；Go 的官方 `proxy.golang.org` 在本机只能经 ambient proxy 访问，而 bootstrap 按设计不继承未批准 proxy，因此本地直连超时且不计为通过（2026-07-30）
+- [x] 增加仅手动触发、不发布 artifact 的 isolated-loop implementation-gates workflow；只接受精确 40 位 lowercase commit SHA，每个 job checkout 后复核 exact HEAD 且不持久化凭据，包含分层全仓门槛、三 OS dirty-loop、POSIX hard-signal、Windows 原生 backend/termination 和四生态 dependencyful job；移除 dirty-loop harness 对 Windows 的主动 skip，并按平台选择 `python`/`python3`；network job 严格要求四个 fixed-lock Loop 4/4，不接受 skip（2026-07-30；全部 workflow 通过 actionlint v1.7.7；macOS 按 workflow 原命令生成的 Vitest JSON 为 8 total / 4 passed / 4 intentionally skipped / 0 failed，四个 dependency-free ecosystem 标题和四个 dependencyful skip 标题均精确匹配；dependencyful 3/4 本地复核，尚未提交或远端运行）
+- [x] 将日常 CI 测试分为 affected + 208 个 mandatory safety anchors；完整 suite、CLI coverage、root Vitest 未覆盖的 wukong-web/vis suite，以及 macOS/Windows criteria 移到 nightly。Nightly 以 coverage 结果替代重复的普通 CLI 全量执行，少执行约 2400 项；release workflow 继续保留完整自动化、hard-signal、真实生态与跨平台门槛（2026-07-30；208/208 本地通过，workflow 尚未提交或远端运行）
+- [x] 完成稳定的分层全仓 test/typecheck/lint/sherif/build 回归（2026-07-30）：`test:full:bounded` 将 verification、agent-core、CLI 与其余 root projects 隔离执行，root 合计 753 files / 9855 tests passed、11 files / 71 tests skipped、2 todo；root Vitest 未覆盖的 Wukong Web 173/173、Vis Server 93/93、Vis Web 1/1 通过，总计 781 files / 10122 tests passed。typecheck、lint（0 warning/error）、sherif、build、CLI bundle smoke、CLI coverage gate（statements 76.72%、branches 67.57%、functions 79.40%、lines 78.87%）、publint/attw 与 `git diff --check` 通过；Node 26 `shell: true + args` 弃用/安全警告已改为位置参数探测与无 args shell spawn，并由 Verification 295/295、Server 666/666 的 `--trace-deprecation` 回归证明无 `DEP0190`；该本地证据不替代 fixed-SHA CI 或真实 Windows runner
+- [x] 完成本地 recovery/cleanup 与 Windows backend 实现候选：Worktree/Bootstrap/Promotion/Final Gate/completion/terminal dead-owner 或 hard-signal 恢复、Target quarantine 中间态重入及安全清理均有定向测试；本地无遗留测试进程或生成物漂移（2026-07-30；真实 Windows 结果仍由独立门槛约束）
+- [x] 接入仅手动触发、无发布权限的 full release-candidate workflow：单一 exact lowercase 40 位 source SHA 先调用完整 implementation gates，全部通过后才允许六平台 native matrix 启动，避免不同 SHA 的证据错配并在功能门槛失败时节省六平台额度；native 阶段另强制 package version `0.0.21`，每个平台从本矩阵 ZIP/SHA 运行 `install.sh` fresh install，再从公开 `0.0.20` 升级到同一本地 artifact 并执行 `wukong --version`。安装器新增严格 `WUKONG_VERSION`、测试专用 artifact base 与 target override，13/13 Bats 通过（2026-07-30；临时完整工作区执行真实 `changeset version` 已确认只修改 CLI package/changelog、消费该 changeset 并得到 `0.0.21`，lockfile 与其他 package 不漂移；changeset 已正式应用，当前 CLI package 为 0.0.21；本机 darwin-arm64 已从当前源码构建 ZIP/SHA，并通过本地 0.0.21 fresh install 与公开 0.0.20 → 本地 0.0.21 upgrade，两个阶段实际执行安装后的 `wukong --version` 均匹配；尚未形成或运行 fixed-SHA 六平台 RC）
+- [ ] 在固定 SHA 的真实 runners 完成三 OS worktree E2E、六平台 fresh install 与 0.0.20 → 0.0.21 upgrade；workflow 存在、本机旧版本控制路径或 artifact 上传都不能替代六个平台的实际结果
+- [ ] 按 [0.0.21 用户验收协议](docs/test/0.0.21-user-acceptance.md) 完成预先冻结的 5 名目标用户单次验收：5/5 区分 Candidate PASS 与 Final PASS、5/5 理解非完整 sandbox、4/5 独立 Promote 或处理 source drift；协议已冻结但尚无真人结果，不能用内部测试者、重试或自动化替代
+- [ ] 四类发布门槛全部取得固定 SHA 的真实 evidence；本地 harness 文件、skip 或未运行 workflow 不能替代
+
+### 明确不做
+
+- 多 Agent 并行、完整 sandbox、自动 stash/commit/reset/push、云端 runner、付费/quota/telemetry 或新默认顶层命令不进入 0.0.21。
+
 ## 🧭 已确认后续版本（未批准开工）
 
-> 本节只保证候选方向可发现，不是当前执行任务。只有前置版本完成发布门槛并经过新的产品决策后，才把对应规格展开成可勾选 TODO。
-
-### 0.0.21 — Isolated Loop Worktrees
-
-- 规格：[docs/design/0.0.21-isolated-loop-worktrees.md](docs/design/0.0.21-isolated-loop-worktrees.md)
-- 候选价值：让单个写入型 Loop 使用 exact source snapshot、显式依赖 bootstrap 和独占 Git worktree；candidate 经 target-global fenced Promote 后仍须在真实 workspace 通过最终 Gate。
-- 进入实施前：0.0.20 broker/criteria/consent 四类门槛全部完成，并确认 dirty snapshot、依赖准备、target fencing 和跨平台 worktree 的实现成本可接受。
-- 不提前做：多 Agent 并行、完整 sandbox、自动 stash/commit/reset/push、云端 runner 或新默认命令。
+> 本节只保证候选方向可发现，不是当前执行任务。只有 0.0.21 完成发布门槛并经过新的产品决策后，才把对应规格展开成可勾选 TODO。
 
 ### 0.1.0 — Trusted Local Loop
 
 - 规格：[docs/design/0.1.0-trusted-local-loop.md](docs/design/0.1.0-trusted-local-loop.md)
 - 候选价值：把 0.0.19 Finish Line、0.0.20 criteria/broker/consent 与 0.0.21 worktree/Promote/Final Gate 收敛为第一版可稳定推荐的 Free 本地 Loop。
+- 可靠性收口：冻结 repository-stable `findingId` / per-attempt `occurrenceId`、coverage-aware `new/persisting/reopened/resolved/unknown`、immutable observation + mutable feedback；只有验证并 seal 的完整 evidence 才能提交 terminal。
+- 发行收口：GitHub Actions full-SHA pin、`persist-credentials: false`、tag/version/main/release identity 校验、build-once/publish-exact verified artifact 与 OIDC provenance。
 - 进入实施前：0.0.20 与 0.0.21 四类门槛完成；RC 只修稳定、兼容、安装升级、恢复和 public truth，不再加大功能。
 - 公开门槛：25 名 opt-in 外部测试者、15 名首次 target Final Gate `PASS`、7 名在 14 天内对第二个不同 Goal 再次 `PASS`、3 个授权案例；P0/P1、false PASS、workspace damage 和隐私误解未解决项为 0；RC 连续稳定 14 天。
 - 条件性窗口：0.1.0 RC 目标 2026 年 10 月，公开版最早 2026 年 11 月；门槛未过就顺延。
 - 不提前做：并行、Detach/Supervisor、PR Gate、Billing、managed model、云端执行、Team 或 telemetry 后端。
 
+### 0.1.1 — Security Evidence Adapters
+
+- 规格：[docs/design/0.1.1-security-evidence-adapters.md](docs/design/0.1.1-security-evidence-adapters.md)
+- 候选价值：Free、local-first、默认关闭的 provider-neutral evidence contract；首批支持 Codex Security canonical JSON 与 generic SARIF，后续 scanner 只能实现同一 adapter。
+- 两种路径：显式导入已存在 artifact；或用户确认 exact adapter/package、resolved child executable、target/scope/budget/credential 边界后调用本机 producer。两者都先验证 schema、target、coverage、hash/seal，再进入 Wukong Gate。
+- 复用边界：可选 adapter 精确锁定 `@openai/codex-security@0.1.1`；public SDK 直接使用，小型 `trusted-executable` 原语可带 attribution vendor/adapt；不把 Python/SQLite Workbench、Codex Skills/MCP 整体引入 core。
+- Gate 边界：external evidence 只能增加 blocker 或满足 frozen required producer，不能覆盖 deterministic failure、Promote/Final Gate 或单独产生 root PASS；partial/cancel/error/corrupt evidence 一律 unknown/inconclusive。
+- 进入实施前：0.1.0 stable；finding/coverage/seal contract 固定；许可证/attribution 已审计；corrupt-resume、cancel/late-write、pre-persist redaction、budget exhaustion 与 Windows path 负向测试通过。
+- 不提前做：bulk/deep multi-agent scan、Detach/Supervisor、Git hook、自动 patch/push/PR write、云端 runner、Billing 或 Team policy。
+
 ### 0.2.0 — Pro Reliable Autonomy
 
 - 主规格：[docs/design/0.2.0-pro-reliable-autonomy.md](docs/design/0.2.0-pro-reliable-autonomy.md)
 - 组件：[Bounded Parallel Loop](docs/design/0.2.0-bounded-parallel-loop.md) / [Local Loop Supervisor](docs/design/0.2.0-local-loop-supervisor.md)
-- 候选价值：一个 `/loop` 在 2–5 个独立 worktree 中有界并行；用户显式 Detach 后由本机 Supervisor 只提升 approval、问题、冲突、预算和终态；Verified PR Gate 只作可选 bundle 增益。
-- Free 永久保留：单前台 Loop、BYOK、Resume、Finish Line、criteria、isolated worktree、safe Promote 和 target Final Gate；不对 Loop/token 设 quota。
-- 进入实施前：0.1.0 发布并稳定观察至少 30 天，15 位外部完成、7 位重复，且 5 位目标用户出现重复多任务监督需求。
+- 候选价值：一个 `/loop` 在 2–5 个独立 worktree 中有界并行；用户显式 Detach 后由本机 Supervisor 只提升 approval、问题、冲突、预算和终态；可选 external evidence job 是 bounded leaf，Verified PR Gate 只作 exact evidence-bound bundle 增益。
+- Free 永久保留：单前台 Loop、BYOK、Resume、Finish Line、criteria、isolated worktree、safe Promote、target Final Gate 与 0.1.1 单 producer import/execute；不对 Loop/token 或基础安全检查设 quota。
+- 编排边界：planner/child/retry/reviewer/security evidence/integration/Final Gate 共用 aggregate hard budget；partial coverage、corrupt artifact、cancel 或 late completion 不能被其他 child PASS 抵消。
+- Supervisor/PR Gate：resume 重新验证 producer/version/coverage/seal 与 fencing；Cancel durable terminal 拒绝 late write；PR write 绑定 exact commit SHA、Final Gate digest 和 evidence bundle digest。
+- 进入实施前：0.1.0 发布并稳定观察至少 30 天，0.1.1 adapter contract/负向测试稳定，15 位外部完成、7 位重复，且 5 位目标用户出现重复多任务监督需求。
 - Pilot 门槛：一个邀请制月付 SKU，候选 `$12/月`；10 人受邀、5 人真实使用、3 人付款、2 人续费。达到后仍保持 invite-only；只有另行达到 10 个付费用户、5 人 30 天重复、3 人续费且 P0/P1 为 0，才允许评审 public Checkout。
 - 不提前做：无界 Agent Tree、云端/跨设备执行、自动审批/加预算、开机自启、Team/SSO/audit、managed credits 或 telemetry 后端。
 
@@ -671,4 +773,4 @@
 
 ---
 
-**最后更新**: 2026-07-25（后续顺序已调整为 0.0.21 → 0.1.0 Free Trusted Local Loop → 0.2.0 Pro Reliable Autonomy；当前实施范围仍只到 0.0.20）
+**最后更新**: 2026-07-30（0.0.21 Candidate → Promote → target Final Gate 本地主链已形成未发布实现候选；POSIX Target Apply no-clobber、macOS 四生态无依赖 dirty-loop 4/4、fixed-lock dependencyful Node/Python/Rust 3/3、POSIX component-level hard-signal 38/38 与 dead-owner recovery 已有本地证据；dependencyful Go 因本机不允许把 ambient proxy 注入 bootstrap 而直连官方 proxy 超时，远端门槛仍强制四生态 4/4。Windows Candidate/Target handle-relative backend 与 19 个 forced-termination 等价用例已形成本地候选，三 OS dirty-loop 已移除 Windows skip；单一 exact-SHA full RC 已把 implementation gates 设为六平台 native fresh/upgrade 的硬前置，但真实 runners 尚未运行。CLI package 已应用 changeset 成为 0.0.21，本机 darwin-arm64 0.0.21 fresh install 与公开 0.0.20 → 本地 0.0.21 upgrade 已通过，尚未提交、推送或发布。最新分层全仓回归 10122 passed，typecheck/lint/sherif/build/smoke 通过；fixed-SHA CI、三 OS/六平台、授权真实项目和固定五用户发布门槛尚未完成）

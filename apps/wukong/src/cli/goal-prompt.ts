@@ -1,4 +1,9 @@
 import type { GoalSnapshot } from '@wukong/wukong-sdk';
+import {
+  containsSensitiveText,
+  redactSensitiveText,
+  redactSensitiveValue,
+} from '@wukong/verification';
 
 import { parseGoalCommand, parseLoopCommand } from '#/tui/commands/index';
 import { loopNextAction, loopOutcomeFromGoal, type LoopStatus } from '#/utils/loop-result';
@@ -28,6 +33,7 @@ export interface HeadlessGoalCreate {
   readonly discoveredCheckDecision?: 'accept' | 'only-explicit';
   readonly trustWorkspaceChallenge?: string;
   readonly approveGatePlanDigest?: string;
+  readonly approveBootstrapPlanDigest?: string;
   readonly acknowledgeWarningSetDigest?: string;
   readonly verificationCatalogDigest?: string;
   readonly verificationSkills?: readonly {
@@ -36,6 +42,8 @@ export interface HeadlessGoalCreate {
   }[];
   readonly trustReviewSubjectChallenge?: string;
   readonly acknowledgeReviewSubjectConsentDigest?: string;
+  readonly selectedUntrackedPaths?: readonly string[];
+  readonly promoteCandidateDigest?: string;
 }
 
 /**
@@ -127,23 +135,34 @@ export const LOOP_EXIT_CODES = {
 
 export function loopSummaryJson(goal: GoalSnapshot | null): LoopSummary {
   if (goal?.loopResult !== undefined) {
+    const redacted = redactSensitiveValue(
+      goal.loopResult,
+    ) as NonNullable<GoalSnapshot['loopResult']>;
+    const reasonCode = publicReasonCode(redacted.reasonCode);
     return {
       type: 'loop.result',
-      ...goal.loopResult,
+      ...redacted,
+      reasonCode,
     };
   }
   const outcome = loopOutcomeFromGoal(goal);
+  const reasonCode = publicReasonCode(outcome.reasonCode);
+  const summary = redactSensitiveText(outcome.summary);
   return {
     type: 'loop.result',
     schemaVersion: 2,
     status: outcome.status,
-    reasonCode: outcome.reasonCode,
-    summary: outcome.summary,
+    reasonCode,
+    summary,
     iterations: goal?.iteration ?? 0,
     checks: [],
     blockers: outcome.status === 'PASS'
       ? []
-      : [{ id: outcome.reasonCode, summary: outcome.summary, nextAction: loopNextAction(outcome.reasonCode) }],
+      : [{
+          id: reasonCode,
+          summary,
+          nextAction: loopNextAction(reasonCode),
+        }],
   };
 }
 
@@ -183,7 +202,9 @@ export function goalSummaryJson(goal: GoalSnapshot | null): GoalSummary {
     type: 'goal.summary',
     goalId: goal.goalId,
     status: goal.status,
-    reason: goal.terminalReason ?? null,
+    reason: goal.terminalReason === undefined
+      ? null
+      : redactSensitiveText(goal.terminalReason),
     turnsUsed: goal.turnsUsed,
     tokensUsed: goal.tokensUsed,
     wallClockMs: goal.wallClockMs,
@@ -192,7 +213,15 @@ export function goalSummaryJson(goal: GoalSnapshot | null): GoalSummary {
 
 export function formatGoalSummaryText(goal: GoalSnapshot | null): string {
   if (goal === null) return 'Goal: no goal found.';
+  const summary = goalSummaryJson(goal);
   const parts = [`Goal [${goal.status}]`];
-  if (goal.terminalReason !== undefined) parts.push(goal.terminalReason);
+  if (summary.reason !== null) parts.push(summary.reason);
   return `${parts.join(': ')} (turns: ${goal.turnsUsed}, tokens: ${goal.tokensUsed})`;
+}
+
+function publicReasonCode(value: string): string {
+  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u.test(value)
+      && !containsSensitiveText(value)
+    ? value
+    : 'runtime_error';
 }

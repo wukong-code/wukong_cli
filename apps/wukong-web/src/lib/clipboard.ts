@@ -35,25 +35,34 @@ function legacyCopy(text: string): boolean {
     return false;
   }
 
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  // Keep it off-screen and non-interactive so it doesn't affect layout or scroll.
-  textarea.setAttribute('readonly', '');
-  textarea.style.position = 'fixed';
-  textarea.style.top = '-9999px';
-  textarea.style.left = '-9999px';
-  textarea.style.opacity = '0';
-  document.body.append(textarea);
-
-  let ok = false;
+  let textarea: HTMLTextAreaElement | undefined;
+  let appended = false;
   try {
+    if (!document.body) return false;
+
+    textarea = document.createElement('textarea');
+    textarea.value = text;
+    // Keep it off-screen and non-interactive so it doesn't affect layout or scroll.
+    textarea.setAttribute('readonly', '');
+    textarea.style.position = 'fixed';
+    textarea.style.top = '-9999px';
+    textarea.style.left = '-9999px';
+    textarea.style.opacity = '0';
+    document.body.append(textarea);
+    appended = true;
+
     textarea.focus();
     textarea.select();
-    ok = document.execCommand('copy');
+    return document.execCommand('copy');
   } catch {
-    ok = false;
+    return false;
   } finally {
-    textarea.remove();
+    if (textarea && appended) {
+      try {
+        textarea.remove();
+      } catch {
+        // Cleanup failure must not reject a copy attempt.
+      }
+    }
   }
-  return ok;
 }

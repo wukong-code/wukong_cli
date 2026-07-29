@@ -1,7 +1,14 @@
-import { mkdir, writeFile } from 'node:fs/promises';
+import {
+  mkdir,
+  link,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { join } from 'node:path';
 
-import { beforeEach, describe, expect, it } from 'vitest';
+import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   acknowledgeReviewSubjectConsent,
@@ -17,6 +24,10 @@ import {
   verifyBrokerReviewTrustChallenge,
   revokeBrokerReviewTrustBinding,
 } from '../src/review-subject';
+import {
+  readReviewSubjectFileSecurely,
+  reviewSubjectFileBackendCapability,
+} from '../src/review-subject-file-reader';
 import {
   createFreshReviewerInputDigest,
   type FreshCriteriaVerdictV1,
@@ -150,6 +161,10 @@ describe('Review Subject consent and broker', () => {
     await mkdir(join(cwd, 'dist'), { recursive: true });
     await writeFile(join(cwd, 'src', 'safe.ts'), 'export const answer = 42;\n');
     await writeFile(join(cwd, 'src', 'config.ts'), 'const API_KEY = "YOUR_API_KEY";\n');
+    await writeFile(
+      join(cwd, 'src', 'quoted.json'),
+      '{"AWS_SECRET_ACCESS_KEY":"quoted-json-secret-sentinel"}\n',
+    );
     await writeFile(join(cwd, '.env'), 'API_KEY=YOUR_API_KEY\n');
     await writeFile(join(cwd, 'dist', 'built.js'), 'generated');
     await writeFile(join(cwd, 'image.bin'), Buffer.from([0, 1, 2, 3]));
@@ -168,6 +183,7 @@ describe('Review Subject consent and broker', () => {
         { logicalPath: 'image.bin', origin: 'changed-tracked' },
         { logicalPath: 'src/safe.ts', origin: 'changed-tracked' },
         { logicalPath: 'src/config.ts', origin: 'changed-tracked' },
+        { logicalPath: 'src/quoted.json', origin: 'changed-tracked' },
       ],
       gateEvidence: [
         {
@@ -192,7 +208,7 @@ describe('Review Subject consent and broker', () => {
     expect(broker.manifest.exclusions).toEqual(expect.arrayContaining([
       { reason: 'binary', count: 1 },
       { reason: 'generated', count: 1 },
-      { reason: 'secret-content', count: 1 },
+      { reason: 'secret-content', count: 2 },
       { reason: 'secret-path', count: 1 },
     ]));
     expect(broker.manifest.gateEvidence).toMatchObject([{
@@ -242,6 +258,227 @@ describe('Review Subject consent and broker', () => {
     await expect(broker.assertFresh('sha256:workspace-state')).rejects.toMatchObject({
       reasonCode: 'review_subject_changed',
     });
+  });
+
+  it('never follows an ancestor symlink outside the workspace', async () => {
+    const cwd = await makeTempDir('wukong-review-ancestor-link-');
+    const outside = await makeTempDir('wukong-review-outside-');
+    await writeFile(join(outside, 'leak.txt'), 'OUTSIDE_REVIEW_SENTINEL\n');
+    await symlink(outside, join(cwd, 'linked'), 'dir');
+
+    const broker = await ReviewSubjectBroker.build({
+      workspaceRoot: cwd,
+      attemptId: 'attempt-1',
+      runId: 'run-1',
+      contractId: 'contract-1',
+      planDigest: 'sha256:plan',
+      workspaceFingerprint: 'sha256:workspace-state',
+      consent: makeConsent(['changed-tracked']),
+      candidates: [{
+        logicalPath: 'linked/leak.txt',
+        origin: 'changed-tracked',
+      }],
+    });
+
+    expect(broker.manifest.entries).toEqual([]);
+    expect(broker.manifest.exclusions).toContainEqual({
+      reason: 'outside-workspace',
+      count: 1,
+    });
+    expect(broker.searchReviewSubjects('OUTSIDE_REVIEW_SENTINEL')).toEqual([]);
+  });
+
+  it('reads the held descriptor during a real ancestor replacement race', async () => {
+    const cwd = await makeTempDir('wukong-review-descriptor-race-');
+    const outside = await makeTempDir('wukong-review-race-outside-');
+    const source = join(cwd, 'src');
+    const detached = join(cwd, 'src-detached');
+    await mkdir(source);
+    await writeFile(join(source, 'subject.txt'), 'SAFE_DESCRIPTOR_BYTES\n');
+    await writeFile(
+      join(outside, 'subject.txt'),
+      'OUTSIDE_REPLACEMENT_BYTES\n',
+    );
+    let observed = '';
+
+    const bytes = await readReviewSubjectFileSecurely(
+      cwd,
+      'src/subject.txt',
+      1024,
+      {
+        beforeDescriptorRead: async () => {
+          await rename(source, detached);
+          await symlink(outside, source, 'dir');
+        },
+        observeDescriptorBytes: async (value) => {
+          observed = value.toString('utf8');
+          await rm(source);
+          await rename(detached, source);
+        },
+      },
+    );
+
+    expect(observed).toBe('SAFE_DESCRIPTOR_BYTES\n');
+    expect(bytes.toString('utf8')).toBe('SAFE_DESCRIPTOR_BYTES\n');
+    expect(observed).not.toContain('OUTSIDE_REPLACEMENT_BYTES');
+  });
+
+  it('rejects an outside hardlink before reading any descriptor bytes', async () => {
+    const cwd = await makeTempDir('wukong-review-hardlink-');
+    const outside = await makeTempDir('wukong-review-hardlink-outside-');
+    const outsidePath = join(outside, 'outside.txt');
+    await writeFile(outsidePath, 'OUTSIDE_HARDLINK_SENTINEL\n');
+    await link(outsidePath, join(cwd, 'subject.txt'));
+    let beforeRead = false;
+    let observed = false;
+
+    await expect(readReviewSubjectFileSecurely(
+      cwd,
+      'subject.txt',
+      1024,
+      {
+        beforeDescriptorRead: () => {
+          beforeRead = true;
+        },
+        observeDescriptorBytes: () => {
+          observed = true;
+        },
+      },
+    )).rejects.toMatchObject({ reason: 'unsafe-path' });
+    expect(beforeRead).toBe(false);
+    expect(observed).toBe(false);
+
+    const broker = await ReviewSubjectBroker.build({
+      workspaceRoot: cwd,
+      attemptId: 'attempt-1',
+      runId: 'run-1',
+      contractId: 'contract-1',
+      planDigest: 'sha256:plan',
+      workspaceFingerprint: 'sha256:workspace-state',
+      consent: makeConsent(['changed-tracked']),
+      candidates: [{
+        logicalPath: 'subject.txt',
+        origin: 'changed-tracked',
+      }],
+    });
+    expect(broker.manifest.entries).toEqual([]);
+    expect(broker.searchReviewSubjects('OUTSIDE_HARDLINK_SENTINEL')).toEqual([]);
+  });
+
+  it('rejects non-canonical path segments inside the descriptor reader', async () => {
+    const cwd = await makeTempDir('wukong-review-reader-path-');
+    await writeFile(join(cwd, 'safe.txt'), 'safe\n');
+    for (const logicalPath of [
+      '../safe.txt',
+      './safe.txt',
+      'dir//safe.txt',
+      'dir\\safe.txt',
+      '/safe.txt',
+      'safe.txt\u0000suffix',
+    ]) {
+      await expect(readReviewSubjectFileSecurely(
+        cwd,
+        logicalPath,
+        1024,
+      ), logicalPath).rejects.toMatchObject({ reason: 'unsafe-path' });
+    }
+  });
+
+  it('fails closed before projecting evidence when the file backend is unavailable', async () => {
+    expect(reviewSubjectFileBackendCapability('win32')).toEqual({
+      supported: false,
+      reasonCode: 'review_subject_backend_unavailable',
+    });
+    const cwd = await makeTempDir('wukong-review-backend-unavailable-');
+    await writeFile(join(cwd, 'safe.txt'), 'safe\n');
+    let evidenceReads = 0;
+    const platform = vi.spyOn(process, 'platform', 'get')
+      .mockReturnValue('win32');
+    try {
+      await expect(ReviewSubjectBroker.build({
+        workspaceRoot: cwd,
+        attemptId: 'attempt-1',
+        runId: 'run-1',
+        contractId: 'contract-1',
+        planDigest: 'sha256:plan',
+        workspaceFingerprint: 'sha256:workspace-state',
+        consent: makeConsent(['changed-tracked', 'gate-evidence']),
+        candidates: [],
+        gateEvidence: [{
+          producerId: 'check:test',
+          evidenceId: 'stdout',
+          get content() {
+            evidenceReads += 1;
+            return 'must not be projected';
+          },
+          mediaType: 'text/plain',
+        }],
+      })).rejects.toMatchObject({
+        reasonCode: 'review_subject_backend_unavailable',
+      });
+      expect(evidenceReads).toBe(0);
+    } finally {
+      platform.mockRestore();
+    }
+  });
+
+  it('redacts cloud, database, and JWT credentials before reviewer access', async () => {
+    const cwd = await makeTempDir('wukong-review-evidence-redaction-');
+    const accessKeyId = 'AKIAIOSFODNN7EXAMPLE';
+    const secretAccessKey = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
+    const databasePassword = 'database-password-sentinel';
+    const jwt = [
+      'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9',
+      'eyJzdWIiOiIxMjM0NTY3ODkwIiwibmFtZSI6IkpvaG4ifQ',
+      'SflKxwRJSMeKKF2QT4fwpMeJf36POk6yJV_adQssw5c',
+    ].join('.');
+    const broker = await ReviewSubjectBroker.build({
+      workspaceRoot: cwd,
+      attemptId: 'attempt-1',
+      runId: 'run-1',
+      contractId: 'contract-1',
+      planDigest: 'sha256:plan',
+      workspaceFingerprint: 'sha256:workspace-state',
+      consent: makeConsent(['gate-evidence']),
+      candidates: [],
+      gateEvidence: [{
+        producerId: 'candidate-check-0000',
+        evidenceId: 'stdout',
+        content: [
+          `AWS_ACCESS_KEY_ID=${accessKeyId}`,
+          `AWS_SECRET_ACCESS_KEY=${secretAccessKey}`,
+          `DATABASE_URL=postgresql://alice:${databasePassword}@db.example.test/app`,
+          `token=${jwt}`,
+          `payload={"AWS_SECRET_ACCESS_KEY":"${secretAccessKey}"}`,
+          `"password": "${databasePassword}"`,
+          'access token: fetch failed',
+          'refresh_token: refresh failed',
+        ].join('\n'),
+        mediaType: 'text/plain',
+      }, {
+        producerId: 'candidate-check-0000',
+        evidenceId: 'stderr',
+        content: `connection failed for redis://default:${databasePassword}@cache.example.test/0`,
+        mediaType: 'text/plain',
+      }],
+    });
+
+    const reviewerEvidence = [
+      broker.readGateEvidence('candidate-check-0000', 'stdout'),
+      broker.readGateEvidence('candidate-check-0000', 'stderr'),
+    ].join('\n');
+    for (const credential of [
+      accessKeyId,
+      secretAccessKey,
+      databasePassword,
+      jwt,
+      'alice',
+    ]) {
+      expect(reviewerEvidence).not.toContain(credential);
+    }
+    expect(reviewerEvidence).toContain('access token: fetch failed');
+    expect(reviewerEvidence).toContain('refresh_token: refresh failed');
+    expect(reviewerEvidence).toContain('[REDACTED]');
   });
 
   it('fails instead of truncating when total subject bytes exceed consent', async () => {

@@ -1,6 +1,6 @@
 # Wukong Code 文档索引
 
-> 最后更新: 2026-07-25
+> 最后更新: 2026-07-30
 > 当前事实基线: `wukong_cli` 内部实现仓库，产品名称为 **Wukong Code**
 > 状态说明: 本目录区分 **已发布/当前实现**、**已批准规划**、**候选方向** 与 **历史探索**；候选文档不代表已经开工或实现。
 
@@ -63,7 +63,8 @@
   实现候选：只复用用户本机已有 Skill 的严格 qualitative criteria，并通过受限 evidence broker 与逐 run BYOK provider consent 复审；不执行 Skill command。发布门槛验证中。
 - [0.0.20 Release Notes](releases/0.0.20.md)
 - [0.0.21 Isolated Loop Worktrees](design/0.0.21-isolated-loop-worktrees.md)
-  后续候选：exact snapshot、显式 bootstrap、独占 worktree、safe Promote 与 target Final Gate。
+  默认关闭的实验性版本：exact snapshot、显式 bootstrap、独占 worktree、safe Promote 与 target Final Gate。
+- [0.0.21 Release Notes](releases/0.0.21.md)
 - [0.1.0 Trusted Local Loop](design/0.1.0-trusted-local-loop.md)
   已确认产品范围、未批准实施：第一版可稳定推荐的 Free 本地 Loop；RC 不增加并行、Supervisor、付费或托管能力。
 - [0.2.0 Pro Reliable Autonomy](design/0.2.0-pro-reliable-autonomy.md)

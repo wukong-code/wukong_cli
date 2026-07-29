@@ -1,14 +1,23 @@
 import { createHmac, randomBytes, randomUUID } from 'node:crypto';
-import { lstat, readFile, realpath } from 'node:fs/promises';
+import { realpath } from 'node:fs/promises';
 import { isAbsolute, relative, resolve } from 'node:path';
 import { domainToASCII } from 'node:url';
 
 import { canonicalDigest } from './finish-line';
+import {
+  containsSensitiveText,
+  redactSensitiveText,
+} from './redaction';
+import {
+  readReviewSubjectFileSecurely,
+  ReviewSubjectFileReadError,
+  reviewSubjectFileBackendCapability,
+} from './review-subject-file-reader';
 
 export const REVIEW_SUBJECT_POLICY_VERSION = 'review-subject/1';
 export const REVIEW_SUBJECT_HARD_EXCLUSION_POLICY_VERSION = 'review-subject-hard-exclusion/1';
-export const REVIEW_SUBJECT_REDACTION_VERSION = 'review-subject-redaction/1';
-export const REVIEW_SUBJECT_SECRET_SCAN_VERSION = 'review-subject-secret-scan/1';
+export const REVIEW_SUBJECT_REDACTION_VERSION = 'review-subject-redaction/2';
+export const REVIEW_SUBJECT_SECRET_SCAN_VERSION = 'review-subject-secret-scan/2';
 
 export type ReviewSubjectOriginV1 =
   | 'changed-tracked'
@@ -190,6 +199,7 @@ export class ReviewSubjectError extends Error {
       | 'review_subject_consent_required'
       | 'review_evidence_excluded'
       | 'review_subject_changed'
+      | 'review_subject_backend_unavailable'
       | 'reviewer_evidence_stale',
     message: string,
   ) {
@@ -584,6 +594,12 @@ async function buildManifest(
   readonly subjects: ReadonlyMap<string, string>;
   readonly gateEvidence: ReadonlyMap<string, string>;
 }> {
+  if (!reviewSubjectFileBackendCapability().supported) {
+    throw new ReviewSubjectError(
+      'review_subject_backend_unavailable',
+      'Review subject file reads require a descriptor-relative local backend.',
+    );
+  }
   const workspaceRealpath = await realpath(options.workspaceRoot);
   const allowed = new Set(options.consent.allowedOrigins);
   const subjects = new Map<string, string>();
@@ -608,28 +624,35 @@ async function buildManifest(
       increment(exclusions, 'outside-workspace');
       continue;
     }
-    let info;
-    let canonicalPath;
+    let bytes: Buffer;
     try {
-      info = await lstat(absolutePath);
-      canonicalPath = await realpath(absolutePath);
-    } catch {
-      increment(exclusions, 'outside-workspace');
-      continue;
+      bytes = await readReviewSubjectFileSecurely(
+        workspaceRealpath,
+        logicalPath,
+        options.consent.limits.maxFileBytes,
+      );
+    } catch (error) {
+      if (error instanceof ReviewSubjectFileReadError) {
+        if (error.reason === 'backend-unavailable') {
+          throw new ReviewSubjectError(
+            'review_subject_backend_unavailable',
+            'Review subject file reads require a descriptor-relative local backend.',
+          );
+        }
+        if (error.reason === 'changed') {
+          throw new ReviewSubjectError(
+            'review_subject_changed',
+            'Review subject file identity changed while building the manifest.',
+          );
+        }
+        increment(
+          exclusions,
+          error.reason === 'oversize' ? 'oversize' : 'outside-workspace',
+        );
+        continue;
+      }
+      throw error;
     }
-    if (
-      !info.isFile()
-      || info.isSymbolicLink()
-      || !isContained(workspaceRealpath, canonicalPath)
-    ) {
-      increment(exclusions, 'outside-workspace');
-      continue;
-    }
-    if (info.size > options.consent.limits.maxFileBytes) {
-      increment(exclusions, 'oversize');
-      continue;
-    }
-    const bytes = await readFile(canonicalPath);
     if (isBinary(bytes)) {
       increment(exclusions, 'binary');
       continue;
@@ -965,13 +988,12 @@ function isBinary(value: Uint8Array): boolean {
 }
 
 function containsSecret(value: string): boolean {
-  return SECRET_CONTENT.some((pattern) => pattern.test(value));
+  return containsSensitiveText(value)
+    || SECRET_CONTENT.some((pattern) => pattern.test(value));
 }
 
 function redactEvidence(value: string): string {
-  return value
-    .replaceAll(/(?:api[_-]?key|access[_-]?token|auth[_-]?token|client[_-]?secret|password)\s*[:=]\s*\S+/giu, '[REDACTED]')
-    .replaceAll(/\bAuthorization\s*:\s*Bearer\s+\S+/giu, 'Authorization: [REDACTED]');
+  return redactSensitiveText(value);
 }
 
 function opaqueRef(key: Uint8Array, domain: string, value: string): string {

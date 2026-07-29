@@ -370,6 +370,9 @@ importers:
       retry:
         specifier: 0.13.1
         version: 0.13.1
+      safe-regex2:
+        specifier: ^5.1.1
+        version: 5.1.1
       smol-toml:
         specifier: ^1.6.1
         version: 1.7.0
@@ -428,6 +431,10 @@ importers:
       yazl:
         specifier: ^3.3.1
         version: 3.3.1
+    optionalDependencies:
+      koffi:
+        specifier: ^2.16.0
+        version: 2.16.2
 
   packages/kaos:
     dependencies:
@@ -600,7 +607,11 @@ importers:
 
   packages/telemetry: {}
 
-  packages/verification: {}
+  packages/verification:
+    optionalDependencies:
+      koffi:
+        specifier: ^2.16.0
+        version: 2.16.2
 
   packages/wukong-migration-legacy: {}
 

@@ -14,4 +14,28 @@ export * from './report';
 export * from './finish-line';
 export * from './criteria';
 export * from './review-subject';
+export {
+  reviewSubjectFileBackendCapability,
+  type ReviewSubjectFileBackendCapability,
+} from './review-subject-file-reader';
+export * from './redaction';
 export * from './fresh-reviewer';
+export * from './source-snapshot';
+export * from './source-snapshot-sealer';
+export * from './snapshot-blob-lease';
+export * from './snapshot-materialization';
+export * from './worktree-lease';
+export * from './candidate-bootstrap';
+export * from './candidate-bootstrap-preflight';
+export * from './candidate-bootstrap-budget';
+export * from './candidate-bootstrap-journal';
+export * from './trusted-executable';
+export * from './candidate-delta';
+export * from './candidate-gate';
+export * from './candidate-gate-attempt';
+export * from './target-promotion';
+export * from './target-state-fingerprint-builder';
+export * from './promotion-apply-journal';
+export * from './target-gate-completion-seal';
+export * from './target-final-gate';
+export * from './isolated-loop-candidate';

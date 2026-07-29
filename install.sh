@@ -5,6 +5,25 @@ REPO_OWNER="mutnpc"
 REPO_NAME="wukong-code"
 INSTALL_DIR="${WUKONG_INSTALL_DIR:-$HOME/.wukong/bin}"
 BINARY_NAME="wukong"
+VERSION="${WUKONG_VERSION:-}"
+ARTIFACT_BASE_URL="${WUKONG_ARTIFACT_BASE_URL:-}"
+INSTALL_TARGET="${WUKONG_INSTALL_TARGET:-}"
+
+if [ -n "$VERSION" ] && [[ ! "$VERSION" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+  echo "Invalid WUKONG_VERSION: expected vMAJOR.MINOR.PATCH"
+  exit 1
+fi
+
+if [ -n "$INSTALL_TARGET" ]; then
+  case "$INSTALL_TARGET" in
+    linux-x64|linux-arm64|darwin-x64|darwin-arm64|win32-x64|win32-arm64)
+      ;;
+    *)
+      echo "Invalid WUKONG_INSTALL_TARGET"
+      exit 1
+      ;;
+  esac
+fi
 
 # Determine platform and architecture
 PLATFORM="$(uname -s | tr '[:upper:]' '[:lower:]')"
@@ -45,11 +64,28 @@ if [ "$PLATFORM" = "win" ]; then
 else
   TARGET="${PLATFORM}-${ARCH}"
 fi
+if [ -n "$INSTALL_TARGET" ]; then
+  TARGET="$INSTALL_TARGET"
+  case "$TARGET" in
+    win32-*) BINARY_NAME="wukong.exe" ;;
+    *) BINARY_NAME="wukong" ;;
+  esac
+fi
 
 ARTIFACT="wukong-${TARGET}.zip"
-RELEASE_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/latest/download/${ARTIFACT}"
+if [ -n "$ARTIFACT_BASE_URL" ]; then
+  RELEASE_URL="${ARTIFACT_BASE_URL%/}/${ARTIFACT}"
+elif [ -n "$VERSION" ]; then
+  RELEASE_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${VERSION}/${ARTIFACT}"
+else
+  RELEASE_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/latest/download/${ARTIFACT}"
+fi
 
-echo "Installing Wukong CLI for ${TARGET}..."
+if [ -n "$VERSION" ]; then
+  echo "Installing Wukong CLI ${VERSION} for ${TARGET}..."
+else
+  echo "Installing Wukong CLI for ${TARGET}..."
+fi
 echo "Download URL: ${RELEASE_URL}"
 
 TMP_DIR="$(mktemp -d)"

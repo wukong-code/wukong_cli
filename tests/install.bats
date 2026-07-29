@@ -5,6 +5,9 @@ setup() {
     export TEST_DIR
     export HOME="$TEST_DIR/home"
     mkdir -p "$HOME"
+    unset WUKONG_VERSION
+    unset WUKONG_ARTIFACT_BASE_URL
+    unset WUKONG_INSTALL_TARGET
 
     # Put mock commands ahead of system PATH
     MOCK_BIN="$TEST_DIR/bin"
@@ -96,6 +99,40 @@ teardown() {
     run ./install.sh
     [ "$status" -eq 0 ]
     [ -x "$CUSTOM_DIR/wukong" ]
+}
+
+@test "pins an explicit release version instead of downloading latest" {
+    export WUKONG_VERSION="v0.0.21"
+    run ./install.sh
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"Installing Wukong CLI v0.0.21 for darwin-x64"* ]]
+    [[ "$output" == *"wukong-code/releases/download/v0.0.21/wukong-darwin-x64.zip"* ]]
+    [[ "$output" != *"/releases/latest/download/"* ]]
+}
+
+@test "rejects an unsafe explicit release version before downloading" {
+    export WUKONG_VERSION="v0.0.21;touch-pwned"
+    run ./install.sh
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Invalid WUKONG_VERSION"* ]]
+    [ ! -e "$TEST_DIR/touch-pwned" ]
+}
+
+@test "uses an explicit local or release-candidate artifact base" {
+    export WUKONG_VERSION="v0.0.21"
+    export WUKONG_ARTIFACT_BASE_URL="https://artifacts.example/download/rc/"
+    run ./install.sh
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"https://artifacts.example/download/rc/wukong-darwin-x64.zip"* ]]
+    [[ "$output" != *"github.com/"* ]]
+}
+
+@test "validates an explicit release-candidate target" {
+    export WUKONG_INSTALL_TARGET="linux-arm64;touch-pwned"
+    run ./install.sh
+    [ "$status" -eq 1 ]
+    [[ "$output" == *"Invalid WUKONG_INSTALL_TARGET"* ]]
+    [ ! -e "$TEST_DIR/touch-pwned" ]
 }
 
 @test "fails on unsupported platform" {

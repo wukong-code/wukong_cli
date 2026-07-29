@@ -18,7 +18,9 @@ import {
   discoverVerificationCriteriaCatalog,
   grantBrokerReviewTrust,
   inspectGit,
+  inspectSourceSnapshot,
   REVIEW_SUBJECT_POLICY_VERSION,
+  SOURCE_SNAPSHOT_MINIMUM_GIT_VERSION,
   registerBuiltinVerificationCriteriaRoot,
   verifyTrustChallenge,
   verifyBrokerReviewTrustChallenge,
@@ -27,13 +29,24 @@ import {
   type FinishLineProposal,
   type ReviewSubjectConsentBindingV1,
   type ReviewSubjectConsentProposalV1,
+  type SourceSnapshotDryRunV1,
+  type CandidateBootstrapPreflightV1,
+  type CandidateBootstrapPlanV1,
+  type BootstrapBudgetV1,
   type VerificationCommand,
   type VerificationCriteriaCatalogV1,
   type VerificationCriteriaRecipeV1,
   type VerificationCriteriaSelectionV1,
   type VerificationCriteriaSourceRootV1,
 } from '@wukong/verification';
-import type { GoalSnapshot, WukongConfig } from '@wukong/wukong-sdk';
+import {
+  buildCandidateBootstrapPlan,
+  inspectCandidateWorkspaceBackendCapability,
+  inspectCandidateBootstrapPreflight,
+  type CandidateWorkspaceBackendCapabilityV1,
+  type GoalSnapshot,
+  type WukongConfig,
+} from '@wukong/wukong-sdk';
 
 import { WUKONG_BUILD_INFO } from '../build-info';
 import { getNativePackageRoot } from '../../native/native-assets';
@@ -68,6 +81,11 @@ export interface LoopPreflightReady {
   readonly brokerReviewTrust?: BrokerReviewTrustBindingV1;
   readonly reviewSubjectConsentProposal: ReviewSubjectConsentProposalV1;
   readonly reviewSubjectConsent?: ReviewSubjectConsentBindingV1;
+  readonly sourceSnapshotDryRun?: SourceSnapshotDryRunV1;
+  readonly candidateBootstrapPreflight?: CandidateBootstrapPreflightV1;
+  readonly candidateBootstrapPlan?: CandidateBootstrapPlanV1;
+  readonly candidateBootstrapBudget?: BootstrapBudgetV1;
+  readonly sourceRepositoryRoot?: string;
 }
 
 export interface LoopPreflightBlocked {
@@ -92,13 +110,32 @@ export interface LoopPreflightBlocked {
     | 'verification_catalog_changed'
     | 'verification_criteria_invalid'
     | 'review_subject_trust_required'
-    | 'review_subject_consent_required';
+    | 'review_subject_consent_required'
+    | 'isolated_loop_not_git'
+    | 'isolated_loop_git_unsupported'
+    | 'source_snapshot_untrusted'
+    | 'snapshot_dependency_excluded'
+    | 'snapshot_selection_excluded'
+    | 'candidate_atomic_backend_unavailable'
+    | 'candidate_bootstrap_preflight_failed'
+    | 'candidate_bootstrap_lockfile_required'
+    | 'candidate_bootstrap_lockfile_ambiguous'
+    | 'candidate_bootstrap_lockfile_unsupported'
+    | 'candidate_bootstrap_manifest_invalid'
+    | 'candidate_bootstrap_runtime_unavailable'
+    | 'candidate_bootstrap_native_build_unsupported'
+    | 'candidate_bootstrap_confirmation_required'
+    | 'candidate_bootstrap_confirmation_mismatch';
   readonly proposal?: FinishLineProposal;
   readonly trustChallenge?: string;
   readonly brokerTrustProposal?: BrokerReviewTrustProposalV1;
   readonly brokerTrustChallenge?: string;
   readonly reviewSubjectConsentProposal?: ReviewSubjectConsentProposalV1;
   readonly verificationCatalog?: VerificationCriteriaCatalogV1;
+  readonly sourceSnapshotDryRun?: SourceSnapshotDryRunV1;
+  readonly candidateBootstrapPreflight?: CandidateBootstrapPreflightV1;
+  readonly candidateBootstrapPlan?: CandidateBootstrapPlanV1;
+  readonly candidateBootstrapBudget?: BootstrapBudgetV1;
 }
 
 export type LoopPreflightResult = LoopPreflightReady | LoopPreflightBlocked;
@@ -114,6 +151,7 @@ export interface LoopPreflightOptions {
   readonly mode?: LoopPreflightMode;
   readonly getActiveGoal: () => Promise<GoalSnapshot | null>;
   readonly approveGatePlanDigest?: string;
+  readonly approveBootstrapPlanDigest?: string;
   readonly acknowledgeWarningSetDigest?: string;
   readonly trustWorkspaceChallenge?: string;
   readonly verificationCatalogDigest?: string;
@@ -132,6 +170,19 @@ export interface LoopPreflightOptions {
   readonly homeDir?: string;
   readonly requireModel?: boolean;
   readonly discoverChecks?: (workspace: string) => Promise<readonly string[]>;
+  readonly inspectIsolatedSource?: boolean;
+  readonly selectedUntrackedPaths?: readonly string[];
+  /**
+   * Test/runtime injection for resolving an exact bootstrap executable.
+   * Product callers intentionally use the current process PATH.
+   */
+  readonly bootstrapPathEnvironment?: string;
+  /**
+   * Controlled capability injection for platform/native backend tests.
+   * Product callers use the packaged local capability probe.
+   */
+  readonly candidateWorkspaceBackendProbe?:
+    () => CandidateWorkspaceBackendCapabilityV1;
 }
 
 export interface LoopReviewSettingsProposal {
@@ -221,6 +272,22 @@ export async function runLoopPreflight(
     );
   }
 
+  if (options.inspectIsolatedSource === true) {
+    const backendCapability = (
+      options.candidateWorkspaceBackendProbe
+      ?? inspectCandidateWorkspaceBackendCapability
+    )();
+    if (!backendCapability.available) {
+      return blocked(
+        'candidate_atomic_backend_unavailable',
+        `The isolated Candidate file backend is unavailable: ${
+          backendCapability.reasonCode
+        }.`,
+        'Use macOS or Linux with the packaged native backend, then rerun the isolated Loop preflight.',
+      );
+    }
+  }
+
   try {
     const activeGoal = await options.getActiveGoal();
     if (activeGoal !== null) {
@@ -301,11 +368,145 @@ export async function runLoopPreflight(
   }
   if (!built.ok) return proposalFailure(built.failure);
   const proposal = built.proposal;
+  const sourceSnapshotDryRun = options.inspectIsolatedSource === true
+    ? await inspectSourceSnapshot({
+        cwd: proposal.workspaceIdentity.canonicalRealpath,
+        selectedUntrackedPaths: options.selectedUntrackedPaths,
+        requiredGatePaths: gateSourcePaths(proposal),
+      })
+    : undefined;
   const trustChallenge = createTrustChallenge({
     workspaceIdentityDigest: proposal.workspaceIdentity.workspaceIdentityDigest,
     approvalSetDigest: proposal.gateApproval.approvalSetDigest,
     warningSetDigest: proposal.finishLineReview.warningSetDigest,
   });
+  if (sourceSnapshotDryRun?.status === 'blocked') {
+    const reasonCode = sourceSnapshotDryRun.reasonCode;
+    if (reasonCode === null) throw new Error('Blocked source snapshot has no reason code.');
+    return {
+      ready: false,
+      reasonCode,
+      reason: reasonCode === 'isolated_loop_not_git'
+        ? 'Isolated Loop execution requires a supported Git workspace.'
+        : reasonCode === 'isolated_loop_git_unsupported'
+          ? `Isolated Loop execution requires Git ${SOURCE_SNAPSHOT_MINIMUM_GIT_VERSION} or newer.`
+        : reasonCode === 'snapshot_dependency_excluded'
+          ? 'A frozen Gate input is excluded by the source snapshot policy.'
+          : reasonCode === 'snapshot_selection_excluded'
+            ? 'An explicitly selected untracked file is excluded by the source snapshot policy.'
+          : 'The source workspace could not be frozen into one trustworthy snapshot.',
+      next: reasonCode === 'isolated_loop_not_git'
+        ? 'Run the Loop in a Git workspace or disable the isolated worktree experiment.'
+        : reasonCode === 'isolated_loop_git_unsupported'
+          ? `Upgrade Git to ${SOURCE_SNAPSHOT_MINIMUM_GIT_VERSION} or newer, then rerun the Source Snapshot dry-run.`
+        : reasonCode === 'snapshot_dependency_excluded'
+          ? 'Remove the excluded Gate dependency or provide it through an approved run-scoped input.'
+          : reasonCode === 'snapshot_selection_excluded'
+            ? 'Remove the excluded selection or choose an eligible regular file.'
+          : 'Resolve the Git state or path identity issue, then run the dry-run again.',
+      proposal,
+      trustChallenge,
+      sourceSnapshotDryRun,
+    };
+  }
+  let candidateBootstrapPreflight:
+    CandidateBootstrapPreflightV1 | undefined;
+  let candidateBootstrapPlan: CandidateBootstrapPlanV1 | undefined;
+  let candidateBootstrapBudget: BootstrapBudgetV1 | undefined;
+  if (sourceSnapshotDryRun?.status === 'ready'
+    && sourceSnapshotDryRun.proposedSnapshot !== null) {
+    try {
+      candidateBootstrapPreflight =
+        await inspectCandidateBootstrapPreflight({
+          sourceSnapshotCwd:
+            proposal.workspaceIdentity.canonicalRealpath,
+          sourceSnapshot: sourceSnapshotDryRun.proposedSnapshot,
+          gatePlan: proposal.gatePlan,
+        });
+    } catch {
+      return {
+        ready: false,
+        reasonCode: 'candidate_bootstrap_preflight_failed',
+        reason:
+          'The candidate dependency environment could not be frozen safely.',
+        next:
+          'Resolve source drift or unsafe manifest paths, then run the dry-run again.',
+        proposal,
+        trustChallenge,
+        sourceSnapshotDryRun,
+      };
+    }
+    if (candidateBootstrapPreflight.status === 'unsupported') {
+      const reasonCode = candidateBootstrapPreflight.reasonCode;
+      if (reasonCode === 'candidate_bootstrap_not_required'
+        || reasonCode === 'candidate_bootstrap_confirmation_required') {
+        throw new Error(
+          'An unsupported bootstrap preflight has a non-blocking reason.',
+        );
+      }
+      return {
+        ready: false,
+        reasonCode,
+        reason:
+          'The frozen checks require a dependency environment that the safe bootstrap policy cannot prepare.',
+        next:
+          'Use a supported exact lockfile/runtime, remove the unsupported dependency step, or disable isolated execution.',
+        proposal,
+        trustChallenge,
+        sourceSnapshotDryRun,
+        candidateBootstrapPreflight,
+      };
+    }
+    if (candidateBootstrapPreflight.status === 'ready') {
+      try {
+        const prepared = await buildCandidateBootstrapPlan({
+          preflight: candidateBootstrapPreflight,
+          expectedPreflightDigest:
+            candidateBootstrapPreflight.preflightDigest,
+          sourceWorkspaceRoot:
+            proposal.workspaceIdentity.canonicalRealpath,
+          pathEnvironment: options.bootstrapPathEnvironment,
+        });
+        candidateBootstrapPlan = prepared.plan;
+        candidateBootstrapBudget = prepared.budget;
+      } catch {
+        return {
+          ready: false,
+          reasonCode: 'candidate_bootstrap_runtime_unavailable',
+          reason:
+            'The package-manager runtime could not be frozen as an exact executable.',
+          next:
+            'Install a supported native runtime or use a lockfile recipe with a supported executable identity.',
+          proposal,
+          trustChallenge,
+          sourceSnapshotDryRun,
+          candidateBootstrapPreflight,
+        };
+      }
+      if (mode !== 'tui-proposal'
+        && options.approveBootstrapPlanDigest
+          !== candidateBootstrapPlan.bootstrapPlanDigest) {
+        const missing = options.approveBootstrapPlanDigest === undefined;
+        return {
+          ready: false,
+          reasonCode: missing
+            ? 'candidate_bootstrap_confirmation_required'
+            : 'candidate_bootstrap_confirmation_mismatch',
+          reason: missing
+            ? 'The exact dependency bootstrap plan requires explicit confirmation.'
+            : 'The confirmed dependency bootstrap plan is stale.',
+          next:
+            `Review and confirm bootstrap plan ${candidateBootstrapPlan.bootstrapPlanDigest}.`,
+          proposal,
+          trustChallenge,
+          sourceSnapshotDryRun,
+          candidateBootstrapPreflight,
+          candidateBootstrapPlan,
+          candidateBootstrapBudget,
+        };
+      }
+    }
+  }
   let trustGrant = await findWorkspaceTrust(
     proposal.workspaceIdentity.workspaceIdentityDigest,
     { homeDir: options.homeDir },
@@ -318,6 +519,12 @@ export async function runLoopPreflight(
       options.homeDir,
     );
   const git = await inspectGit(proposal.workspaceIdentity.canonicalRealpath);
+  if (sourceSnapshotDryRun?.status === 'ready'
+    && git.root === undefined) {
+    throw new Error(
+      'A ready isolated source snapshot has no repository root.',
+    );
+  }
   const verificationCatalog = await discoverVerificationCriteriaCatalog({
     workspaceRoot: proposal.workspaceIdentity.canonicalRealpath,
     roots: criteriaRoots,
@@ -587,16 +794,38 @@ export async function runLoopPreflight(
     brokerReviewTrust,
     reviewSubjectConsentProposal,
     reviewSubjectConsent,
+    sourceSnapshotDryRun,
+    candidateBootstrapPreflight,
+    candidateBootstrapPlan,
+    candidateBootstrapBudget,
+    sourceRepositoryRoot: sourceSnapshotDryRun === undefined
+      ? undefined
+      : git.root,
   };
 }
 
 export function formatLoopPreflightBlocked(result: LoopPreflightBlocked): string {
-  return [
+  const lines = [
     'Loop not started',
     `Code     ${result.reasonCode}`,
     `Reason   ${result.reason}`,
     `Next     ${result.next}`,
-  ].join('\n');
+  ];
+  if (result.sourceSnapshotDryRun !== undefined) {
+    lines.push(`Snapshot ${result.sourceSnapshotDryRun.dryRunDigest}`);
+  }
+  if (result.candidateBootstrapPreflight !== undefined) {
+    lines.push(
+      `Bootstrap     ${result.candidateBootstrapPreflight.status}`
+      + ` · ${result.candidateBootstrapPreflight.preflightDigest}`,
+    );
+  }
+  if (result.candidateBootstrapPlan !== undefined) {
+    lines.push(
+      `Bootstrap plan ${result.candidateBootstrapPlan.bootstrapPlanDigest}`,
+    );
+  }
+  return lines.join('\n');
 }
 
 export function formatLoopPreflightReady(
@@ -604,7 +833,7 @@ export function formatLoopPreflightReady(
   maxIterations: number,
 ): string {
   const contract = result.proposal;
-  return [
+  const lines = [
     'Finish line',
     '',
     `Goal         ${contract.objective}`,
@@ -615,7 +844,32 @@ export function formatLoopPreflightReady(
     `Reviewer     brokered fresh context → ${result.reviewSubjectConsentProposal.provider.endpointOrigin.scheme}://${result.reviewSubjectConsentProposal.provider.endpointOrigin.host}:${String(result.reviewSubjectConsentProposal.provider.endpointOrigin.port)}`,
     'Input        bounded changed/scope files and redacted Gate evidence; secrets excluded',
     `Run          up to ${String(maxIterations)} iterations`,
-  ].join('\n');
+  ];
+  if (result.sourceSnapshotDryRun !== undefined) {
+    const snapshot = result.sourceSnapshotDryRun.proposedSnapshot;
+    lines.push(
+      `Isolation    snapshot dry-run ${result.sourceSnapshotDryRun.status} · no worktree created`,
+      `Source       ${snapshot === null
+        ? result.sourceSnapshotDryRun.reasonCode
+        : `${snapshot.trackedDeltaDigest === null ? 'clean tracked state' : 'tracked changes'} · ${String(snapshot.includedUntracked.length)} selected untracked`}`,
+    );
+  }
+  if (result.candidateBootstrapPreflight !== undefined) {
+    lines.push(
+      `Bootstrap    ${result.candidateBootstrapPreflight.status}`
+      + ` · ${String(result.candidateBootstrapPreflight.entries.length)} environment`
+      + (result.candidateBootstrapPreflight.entries.length === 1 ? '' : 's'),
+      `Bootstrap ID ${result.candidateBootstrapPreflight.preflightDigest}`,
+    );
+  }
+  if (result.candidateBootstrapPlan !== undefined
+    && result.candidateBootstrapBudget !== undefined) {
+    lines.push(
+      `Bootstrap plan ${result.candidateBootstrapPlan.bootstrapPlanDigest}`,
+      `Bootstrap budget ${String(result.candidateBootstrapBudget.wallClockLimitMs)}ms · ${String(result.candidateBootstrapBudget.generatedByteLimit)} generated bytes · ${String(result.candidateBootstrapBudget.processOutputByteLimit)} output bytes`,
+    );
+  }
+  return lines.join('\n');
 }
 
 export function formatLoopDryRun(
@@ -656,6 +910,11 @@ export function formatLoopDryRun(
     brokerTrustProposal: result.brokerTrustProposal,
     brokerTrustChallenge: result.brokerTrustChallenge,
     reviewSubjectConsentProposal: result.reviewSubjectConsentProposal,
+    sourceSnapshotDryRun: result.sourceSnapshotDryRun ?? null,
+    candidateBootstrapPreflight:
+      result.candidateBootstrapPreflight ?? null,
+    candidateBootstrapPlan: result.candidateBootstrapPlan ?? null,
+    candidateBootstrapBudget: result.candidateBootstrapBudget ?? null,
     estimatedCost: {
       freshReviewerPassesPerGateAttempt: 1,
       additionalSkillCommands: 0,
@@ -664,6 +923,20 @@ export function formatLoopDryRun(
     approvalSetDigest: proposal.gateApproval.approvalSetDigest,
     warningSetDigest: proposal.finishLineReview.warningSetDigest,
   }, null, 2)}\n`;
+}
+
+function gateSourcePaths(proposal: FinishLineProposal): string[] {
+  const paths = new Set<string>();
+  for (const check of proposal.gatePlan.requiredChecks) {
+    const locator = check.sourceLocator
+      ?? (check.resolution === 'expected-unresolved' ? check.expectedSourceLocator : undefined);
+    const path = locator?.split('#', 1)[0];
+    if (path !== undefined && path.length > 0) paths.add(path);
+  }
+  if (proposal.reviewPolicy.mode === 'blocking-frozen') {
+    paths.add(proposal.reviewPolicy.sourceLocator);
+  }
+  return [...paths].toSorted();
 }
 
 function blocked(

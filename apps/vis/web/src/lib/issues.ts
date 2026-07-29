@@ -139,12 +139,15 @@ export function computeIssues(
       case "loop.gate-attempt.complete":
       case "loop.gate-attempt.create":
       case "loop.gate-check-result.create":
+      case "loop.isolated-candidate.bind":
+      case "loop.isolated-candidate.iteration":
       case "loop.proof-aggregate.create":
       case "loop.review-subject-manifest.create":
       case "loop.reviewer-result.create":
       case "loop.run.create":
       case "loop.run-review-settings.assign":
       case "loop.run.terminal":
+      case "loop.target-completion-seal.create":
       case "metadata":
       case "micro_compaction.apply":
       case "permission.set_mode":

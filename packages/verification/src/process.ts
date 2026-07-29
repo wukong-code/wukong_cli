@@ -39,14 +39,21 @@ function runSpawn(
     let timedOut = false;
     let settled = false;
     let killTimer: NodeJS.Timeout | undefined;
-    const child = spawn(file, args, {
-      cwd: options.cwd,
-      shell: options.shell,
-      stdio: ['ignore', 'pipe', 'pipe'],
-      // Give the child its own process group so a timeout can kill the whole
-      // subtree (e.g. shell + spawned Node process) without killing the parent.
-      detached: process.platform !== 'win32',
-    });
+    const child = options.shell
+      ? spawn(file, {
+          cwd: options.cwd,
+          shell: true,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          // Give the child its own process group so a timeout can kill the whole
+          // subtree without killing the parent.
+          detached: process.platform !== 'win32',
+        })
+      : spawn(file, [...args], {
+          cwd: options.cwd,
+          shell: false,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          detached: process.platform !== 'win32',
+        });
 
     function killSubtree(signal: NodeJS.Signals) {
       try {

@@ -1,3 +1,5 @@
+import { redactSensitiveText } from '@wukong/verification';
+
 import type { LogContext, LogEntry } from './types';
 
 export const MSG_MAX_CHARS = 200;
@@ -26,12 +28,6 @@ const SAFE_KEY_RE = /^[\w.-]+$/;
 const ELLIPSIS = '…';
 const TRUNCATED_TAIL = ` …truncated`;
 const REDACTED = '[REDACTED]';
-const RAW_SECRET_PATTERNS: readonly RegExp[] = [
-  /\b(authorization\s*[:=]\s*bearer\s+)[^\s"'`]+/gi,
-  /\b((?:api[_-]?key|access[_-]?token|refresh[_-]?token|id[_-]?token|token|password|secret)\s*[:=]\s*)[^\s"'`]+/gi,
-  /\b(cookie\s*[:=]\s*)[^\r\n]+/gi,
-];
-
 const LEVEL_LABEL: Record<Exclude<LogEntry['level'], never>, string> = {
   error: 'ERROR',
   warn: 'WARN ',
@@ -55,6 +51,7 @@ export function redactCtx(ctx: LogContext): LogContext {
   const seen = new WeakSet<object>();
   const walk = (value: unknown, depth: number): unknown => {
     if (depth > REDACT_MAX_DEPTH) return '[REDACTED:depth]';
+    if (typeof value === 'string') return redactSensitiveText(value);
     if (value === null || typeof value !== 'object') return value;
     if (seen.has(value)) return '[REDACTED:cycle]';
     seen.add(value);
@@ -87,7 +84,7 @@ function truncate(value: string, max: number): string {
 }
 
 function serializeValue(raw: unknown): string {
-  if (typeof raw === 'string') return redactString(raw);
+  if (typeof raw === 'string') return redactSensitiveText(raw);
   if (raw === undefined) return 'undefined';
   if (raw === null) return 'null';
   if (
@@ -106,14 +103,6 @@ function serializeValue(raw: unknown): string {
   }
   if (typeof raw === 'function') return raw.name === '' ? '[Function]' : `[Function: ${raw.name}]`;
   return Object.prototype.toString.call(raw);
-}
-
-function redactString(value: string): string {
-  let out = value;
-  for (const pattern of RAW_SECRET_PATTERNS) {
-    out = out.replace(pattern, `$1${REDACTED}`);
-  }
-  return out;
 }
 
 function quote(value: string): string {
@@ -161,7 +150,7 @@ function indentStack(stack: string): string {
 export function formatEntry(entry: LogEntry, options: FormatOptions = {}): FormattedEntry {
   const ctx = entry.ctx ? redactCtx(entry.ctx) : undefined;
   const omitContextKeys = new Set(options.omitContextKeys ?? []);
-  const msg = truncate(entry.msg, MSG_MAX_CHARS);
+  const msg = truncate(redactSensitiveText(entry.msg), MSG_MAX_CHARS);
   const pairs: string[] = [];
   if (ctx) {
     for (const [k, v] of Object.entries(ctx)) {
@@ -185,9 +174,9 @@ export function formatEntry(entry: LogEntry, options: FormatOptions = {}): Forma
   }
 
   if (entry.error?.stack) {
-    head = `${head}\n${indentStack(clipStack(redactString(entry.error.stack)))}`;
+    head = `${head}\n${indentStack(clipStack(redactSensitiveText(entry.error.stack)))}`;
   } else if (entry.error?.message) {
-    head = `${head}\n  Error: ${redactString(entry.error.message)}`;
+    head = `${head}\n  Error: ${redactSensitiveText(entry.error.message)}`;
   }
 
   return { text: head, dropped: false };

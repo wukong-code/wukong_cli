@@ -26,6 +26,14 @@ export * from './types';
 
 /** Foreground timeout (seconds) for a user-initiated `!` shell command. */
 const SHELL_FOREGROUND_TIMEOUT_S = 2 * 60;
+const CANDIDATE_WRITER_TOOL_NAMES = new Set([
+  'Read',
+  'ReadMediaFile',
+  'Write',
+  'Edit',
+  'Grep',
+  'Glob',
+]);
 
 interface McpToolEntry {
   readonly tool: ExecutableTool;
@@ -66,6 +74,7 @@ export class ToolManager {
   }
 
   attachMcpTools(): void {
+    if (this.agent.toolMode === 'candidate-writer') return;
     const mcp = this.agent.mcp;
     if (mcp === undefined) return;
     if (this.mcpToolStatusUnsubscribe !== undefined) return;
@@ -184,6 +193,7 @@ export class ToolManager {
   }
 
   registerUserTool(input: UserToolRegistration): void {
+    this.assertExtensibleToolSurface('register user tools');
     this.agent.records.logRecord({
       type: 'tools.register_user_tool',
       ...input,
@@ -223,6 +233,7 @@ export class ToolManager {
   }
 
   inheritUserTools(parent: ToolManager): void {
+    this.assertExtensibleToolSurface('inherit user tools');
     for (const tool of parent.userTools.values()) {
       if (!parent.enabledTools.has(tool.name)) continue;
       const activeUnderChildProfile = this.enabledTools.has(tool.name);
@@ -240,6 +251,7 @@ export class ToolManager {
    * is discarded after the bounded invocation.
    */
   installInternalToolsTransient(tools: readonly ExecutableTool[]): void {
+    this.assertExtensibleToolSurface('install internal tools');
     for (const tool of tools) {
       if (
         this.builtinTools.has(tool.name)
@@ -281,6 +293,7 @@ export class ToolManager {
     tools: readonly Tool[],
     enabledTools?: ReadonlySet<string>,
   ): McpServerRegistrationResult {
+    this.assertExtensibleToolSurface('register MCP tools');
     this.unregisterMcpServer(serverName);
     const qualifiedNames: string[] = [];
     const collisions: McpToolCollision[] = [];
@@ -458,6 +471,13 @@ export class ToolManager {
   }
 
   private applyActiveTools(names: readonly string[]): void {
+    if (this.agent.toolMode === 'candidate-writer') {
+      this.enabledTools = new Set(
+        names.filter((name) => CANDIDATE_WRITER_TOOL_NAMES.has(name)),
+      );
+      this.mcpAccessPatterns = [];
+      return;
+    }
     // MCP entries are glob patterns gated separately; the rest are exact
     // builtin/user tool names. The split keeps every caller on one string[].
     this.enabledTools = new Set(names.filter((name) => !isMcpToolName(name)));
@@ -465,6 +485,7 @@ export class ToolManager {
   }
 
   copyLoopToolsFrom(source: ToolManager): void {
+    this.assertExtensibleToolSurface('copy tool overrides');
     this.loopToolsOverride = source.loopTools;
   }
 
@@ -514,19 +535,26 @@ export class ToolManager {
       config: { cwd, provider, modelCapabilities },
       background,
     } = this.agent;
-    const videoUploader = this.createVideoUploader(provider);
-    const workspace = extendWorkspaceWithSkillRoots(
+    const candidateWriter = this.agent.toolMode === 'candidate-writer';
+    const videoUploader = candidateWriter
+      ? undefined
+      : this.createVideoUploader(provider);
+    const exactWorkspace = this.agent.getToolWorkspace();
+    const workspace = exactWorkspace ?? extendWorkspaceWithSkillRoots(
       {
         workspaceDir: cwd,
         additionalDirs: this.agent.getAdditionalDirs(),
       },
       this.agent.skills?.registry.getSkillRoots() ?? [],
     );
+    if (candidateWriter && exactWorkspace === undefined) {
+      throw new Error('Candidate Writer guarded workspace is missing.');
+    }
     const allowBackground =
       this.enabledTools.has('TaskList') &&
       this.enabledTools.has('TaskOutput') &&
       this.enabledTools.has('TaskStop');
-    const goalToolsEnabled = this.agent.type === 'main';
+    const goalToolsEnabled = !candidateWriter && this.agent.type === 'main';
     this.builtinTools = new Map(
       [
         new b.ReadTool(kaos, workspace),
@@ -534,23 +562,25 @@ export class ToolManager {
         new b.EditTool(kaos, workspace),
         new b.GrepTool(kaos, workspace, this.agent.telemetry),
         new b.GlobTool(kaos, workspace, this.agent.telemetry),
-        new b.BashTool(kaos, cwd, background, {
+        !candidateWriter && new b.BashTool(kaos, cwd, background, {
           allowBackground,
         }),
         (modelCapabilities.image_in || modelCapabilities.video_in) &&
           new b.ReadMediaFileTool(kaos, workspace, modelCapabilities, videoUploader),
-        new b.EnterPlanModeTool(this.agent),
-        new b.ExitPlanModeTool(this.agent),
+        !candidateWriter && new b.EnterPlanModeTool(this.agent),
+        !candidateWriter && new b.ExitPlanModeTool(this.agent),
         // Goal tools are main-agent-only.
         goalToolsEnabled && new b.CreateGoalTool(this.agent),
         goalToolsEnabled && new b.GetGoalTool(this.agent),
         goalToolsEnabled && new b.SetGoalBudgetTool(this.agent),
         goalToolsEnabled && new b.UpdateGoalTool(this.agent),
-        this.agent.rpc?.requestQuestion && new b.AskUserQuestionTool(this.agent),
-        new b.TodoListTool(this.toolStore),
-        new b.TaskListTool(background),
-        new b.TaskOutputTool(background),
-        new b.TaskStopTool(background),
+        !candidateWriter
+          && this.agent.rpc?.requestQuestion
+          && new b.AskUserQuestionTool(this.agent),
+        !candidateWriter && new b.TodoListTool(this.toolStore),
+        !candidateWriter && new b.TaskListTool(background),
+        !candidateWriter && new b.TaskOutputTool(background),
+        !candidateWriter && new b.TaskStopTool(background),
         this.agent.cron && new b.CronCreateTool(this.agent.cron),
         this.agent.cron && new b.CronListTool(this.agent.cron),
         this.agent.cron && new b.CronDeleteTool(this.agent.cron),
@@ -570,7 +600,7 @@ export class ToolManager {
           new b.AgentSwarmTool(this.agent.subagentHost, this.agent.swarmMode),
         toolServices?.webSearcher && new b.WebSearchTool(toolServices.webSearcher),
         toolServices?.urlFetcher && new b.FetchURLTool(toolServices.urlFetcher),
-        new b.WukongVerifyTool(cwd),
+        !candidateWriter && new b.WukongVerifyTool(cwd),
       ]
         .filter((tool) => !!tool)
         .map((tool) => [tool.name, tool] as const),
@@ -579,6 +609,12 @@ export class ToolManager {
 
   refreshBuiltinTools(): void {
     this.initializeBuiltinTools();
+  }
+
+  private assertExtensibleToolSurface(action: string): void {
+    if (this.agent.toolMode === 'candidate-writer') {
+      throw new Error(`Candidate Writer cannot ${action}.`);
+    }
   }
 
   private createVideoUploader(provider: ChatProvider): b.VideoUploader | undefined {

@@ -383,7 +383,7 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
   }
 }
 
-interface GateResult {
+export interface GateResult {
   readonly passed: boolean;
   readonly reason: string;
   readonly reasonCode?: string;
@@ -402,7 +402,7 @@ interface GateResult {
   readonly reviewerInputDigest?: string;
 }
 
-async function runGoalGate(
+export async function runGoalGate(
   stopCondition: GoalStopCondition,
   agent: Agent,
   objective: string,
@@ -411,6 +411,7 @@ async function runGoalGate(
   priorReview: LoopReviewAttempt | undefined,
   parentToolCallId: string,
   signal: AbortSignal,
+  exactAttemptId?: string,
 ): Promise<GateResult> {
   const cwd = agent.config.cwd;
   switch (stopCondition) {
@@ -459,7 +460,9 @@ async function runGoalGate(
           };
         }
       }
-      const gateReviewRuntime = agent.goal.createLoopGateReviewRuntime();
+      const gateReviewRuntime = agent.goal.createLoopGateReviewRuntime(
+        exactAttemptId,
+      );
       if (gateReviewRuntime === null) {
         return {
           passed: false,
@@ -1737,7 +1740,7 @@ function blockerKeysFromGate(gate: GateResult): string[] {
   return [...new Set([...reviewKeys, ...proofKeys])].toSorted();
 }
 
-function recordGateAudit(
+export function recordGateAudit(
   goal: Agent['goal'],
   gate: GateResult,
 ): GateAttemptCompletedV1 | null {

@@ -1,7 +1,16 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
+import { execFile } from 'node:child_process';
+import {
+  mkdir,
+  mkdtemp,
+  realpath,
+  rm,
+  symlink,
+  writeFile,
+} from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { afterEach, describe, expect, it } from 'vitest';
+import { promisify } from 'node:util';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import {
   formatLoopPreflightBlocked,
@@ -11,6 +20,7 @@ import {
 } from '#/cli/lib/loop-preflight';
 
 describe('Loop preflight', () => {
+  const execFileAsync = promisify(execFile);
   const homes: string[] = [];
   const reviewProvider = { providerId: 'test', endpoint: 'https://api.example.test' };
 
@@ -21,6 +31,51 @@ describe('Loop preflight', () => {
   async function workspace(): Promise<string> {
     const path = await mkdtemp(join(tmpdir(), 'wukong-loop-preflight-'));
     homes.push(path);
+    return path;
+  }
+
+  async function gitWorkspace(): Promise<string> {
+    const path = await workspace();
+    await execFileAsync('git', ['init'], { cwd: path });
+    await writeFile(join(path, 'package.json'), '{"scripts":{}}\n', 'utf8');
+    await execFileAsync('git', ['add', '.'], { cwd: path });
+    await execFileAsync(
+      'git',
+      [
+        '-c', 'user.name=Wukong Test',
+        '-c', 'user.email=test@example.test',
+        'commit', '-m', 'base',
+      ],
+      { cwd: path },
+    );
+    return path;
+  }
+
+  async function gitWorkspaceWithFiles(
+    files: Readonly<Record<string, string>>,
+  ): Promise<string> {
+    const path = await workspace();
+    await execFileAsync('git', ['init'], { cwd: path });
+    for (const [name, content] of Object.entries(files)) {
+      await writeFile(join(path, name), content, 'utf8');
+    }
+    await execFileAsync('git', ['add', '.'], { cwd: path });
+    await execFileAsync(
+      'git',
+      [
+        '-c', 'user.name=Wukong Test',
+        '-c', 'user.email=test@example.test',
+        'commit', '-m', 'base',
+      ],
+      { cwd: path },
+    );
+    return path;
+  }
+
+  async function nativeBootstrapPath(): Promise<string> {
+    const path = await workspace();
+    const executable = join(path, 'npm');
+    await symlink('/bin/echo', executable);
     return path;
   }
 
@@ -61,12 +116,257 @@ describe('Loop preflight', () => {
       discoverChecks: async () => [],
     });
 
-    expect(result.ready).toBe(true);
+    expect(result.ready, JSON.stringify(result, null, 2)).toBe(true);
     if (result.ready) {
       expect(formatLoopPreflightReady(result, 2)).toContain('Verification 0 required project checks');
       expect(result.proposal.finishLineReview.warnings.map((warning) => warning.code))
         .toContain('no_resolved_checks');
     }
+  });
+
+  it('attaches a read-only isolated source snapshot to an enabled dry-run', async () => {
+    const cwd = await gitWorkspace();
+    await writeFile(join(cwd, 'src-new.ts'), 'export const value = 1;\n', 'utf8');
+
+    const result = await runLoopPreflight({
+      objective: 'create a module',
+      model: 'glm-5.2',
+      workspace: cwd,
+      reviewProvider,
+      inspectIsolatedSource: true,
+      selectedUntrackedPaths: ['src-new.ts'],
+      getActiveGoal: async () => null,
+      discoverChecks: async () => [],
+    });
+
+    expect(result.ready, JSON.stringify(result, null, 2)).toBe(true);
+    if (!result.ready) return;
+    expect(result.sourceSnapshotDryRun).toMatchObject({
+      status: 'ready',
+      reasonCode: null,
+      proposedSnapshot: {
+        includedUntracked: [{ canonicalRelativePath: 'src-new.ts' }],
+      },
+    });
+    expect(formatLoopPreflightReady(result, 2))
+      .toContain('snapshot dry-run ready · no worktree created');
+    const serialized = JSON.parse(formatLoopDryRun(result));
+    expect(serialized.sourceSnapshotDryRun).toMatchObject({
+      status: 'ready',
+      proposedSnapshot: { schemaVersion: 1 },
+    });
+    expect(JSON.stringify(serialized.sourceSnapshotDryRun)).not.toContain(cwd);
+  });
+
+  it('attaches a safe exact-lockfile bootstrap proposal without starting it', async () => {
+    const cwd = await gitWorkspaceWithFiles({
+      'package.json': JSON.stringify({
+        scripts: { test: 'node --test' },
+        devDependencies: { example: '1.0.0' },
+      }),
+      'package-lock.json':
+        '{"lockfileVersion":3,"packages":{"":{}}}\n',
+    });
+    const result = await runLoopPreflight({
+      objective: 'verify the Node project',
+      completionCriterion: 'The frozen test check passes',
+      explicitChecks: ['npm test'],
+      discoveredCheckDecision: 'only-explicit',
+      model: 'glm-5.2',
+      workspace: cwd,
+      reviewProvider,
+      inspectIsolatedSource: true,
+      mode: 'tui-proposal',
+      bootstrapPathEnvironment: await nativeBootstrapPath(),
+      getActiveGoal: async () => null,
+    });
+
+    expect(result.ready).toBe(true);
+    if (!result.ready) return;
+    expect(result.candidateBootstrapPreflight).toMatchObject({
+      status: 'ready',
+      reasonCode: 'candidate_bootstrap_confirmation_required',
+      entries: [{
+        ecosystem: 'node',
+        recipe: { recipeRef: 'builtin:node:npm-ci' },
+      }],
+    });
+    expect(formatLoopPreflightReady(result, 2))
+      .toContain('Bootstrap    ready · 1 environment');
+    expect(JSON.parse(formatLoopDryRun(result)))
+      .toMatchObject({
+        candidateBootstrapPreflight: {
+          status: 'ready',
+          requiresExplicitNetworkConsent: true,
+        },
+        candidateBootstrapPlan: {
+          networkPolicy: 'explicit_once',
+        },
+      });
+  });
+
+  it('requires confirmation of the exact bootstrap plan before candidate creation', async () => {
+    const cwd = await gitWorkspaceWithFiles({
+      'package.json': JSON.stringify({
+        scripts: { test: 'node --test' },
+        devDependencies: { example: '1.0.0' },
+      }),
+      'package-lock.json':
+        '{"lockfileVersion":3,"packages":{"":{}}}\n',
+    });
+    const bootstrapPathEnvironment = await nativeBootstrapPath();
+    const proposal = await runLoopPreflight({
+      objective: 'verify the Node project',
+      completionCriterion: 'The frozen test check passes',
+      explicitChecks: ['npm test'],
+      discoveredCheckDecision: 'only-explicit',
+      model: 'glm-5.2',
+      workspace: cwd,
+      reviewProvider,
+      inspectIsolatedSource: true,
+      mode: 'tui-proposal',
+      bootstrapPathEnvironment,
+      getActiveGoal: async () => null,
+    });
+    expect(proposal.ready, JSON.stringify(proposal, null, 2)).toBe(true);
+    if (!proposal.ready) return;
+    const result = await runLoopPreflight({
+      objective: 'verify the Node project',
+      completionCriterion: 'The frozen test check passes',
+      explicitChecks: ['npm test'],
+      discoveredCheckDecision: 'only-explicit',
+      model: 'glm-5.2',
+      workspace: cwd,
+      reviewProvider,
+      inspectIsolatedSource: true,
+      mode: 'tui-confirmed',
+      bootstrapPathEnvironment,
+      getActiveGoal: async () => null,
+    });
+
+    expect(result).toMatchObject({
+      ready: false,
+      reasonCode: 'candidate_bootstrap_confirmation_required',
+      candidateBootstrapPreflight: {
+        status: 'ready',
+      },
+      candidateBootstrapPlan: {
+        bootstrapPlanDigest:
+          proposal.candidateBootstrapPlan?.bootstrapPlanDigest,
+      },
+    });
+  });
+
+  it('blocks unsupported lockfiles with a stable reason before candidate creation', async () => {
+    const cwd = await gitWorkspaceWithFiles({
+      'package.json': JSON.stringify({
+        scripts: { test: 'vitest run' },
+        devDependencies: { vitest: '1.0.0' },
+      }),
+      'pnpm-lock.yaml': 'lockfileVersion: "9.0"\n',
+    });
+    const result = await runLoopPreflight({
+      objective: 'verify the pnpm project',
+      completionCriterion: 'The frozen test check passes',
+      model: 'glm-5.2',
+      workspace: cwd,
+      reviewProvider,
+      inspectIsolatedSource: true,
+      mode: 'tui-proposal',
+      getActiveGoal: async () => null,
+    });
+
+    expect(result).toMatchObject({
+      ready: false,
+      reasonCode: 'candidate_bootstrap_lockfile_unsupported',
+      candidateBootstrapPreflight: {
+        status: 'unsupported',
+        entries: [{ lockfilePath: 'pnpm-lock.yaml' }],
+      },
+    });
+  });
+
+  it('fails the isolated dry-run closed instead of silently using serial execution', async () => {
+    const cwd = await workspace();
+
+    const result = await runLoopPreflight({
+      objective: 'create a module',
+      model: 'glm-5.2',
+      workspace: cwd,
+      reviewProvider,
+      inspectIsolatedSource: true,
+      getActiveGoal: async () => null,
+      discoverChecks: async () => [],
+    });
+
+    expect(result).toMatchObject({
+      ready: false,
+      reasonCode: 'isolated_loop_not_git',
+      sourceSnapshotDryRun: {
+        status: 'blocked',
+        proposedSnapshot: null,
+      },
+    });
+    if (result.ready) return;
+    expect(formatLoopPreflightBlocked(result)).toContain('Loop not started');
+    expect(formatLoopPreflightBlocked(result)).toContain('Snapshot sha256:');
+  });
+
+  it('blocks a Windows Candidate backend before Goal or discovery work can start', async () => {
+    const cwd = await gitWorkspace();
+    const getActiveGoal = vi.fn(async () => null);
+    const discoverChecks = vi.fn(async () => ['pnpm test']);
+
+    const result = await runLoopPreflight({
+      objective: 'create a module',
+      model: 'glm-5.2',
+      workspace: cwd,
+      reviewProvider,
+      inspectIsolatedSource: true,
+      getActiveGoal,
+      discoverChecks,
+      candidateWorkspaceBackendProbe: () => ({
+        available: false,
+        platform: 'win32',
+        backend: null,
+        reasonCode: 'candidate_atomic_backend_platform_unsupported',
+      }),
+    });
+
+    expect(result).toMatchObject({
+      ready: false,
+      reasonCode: 'candidate_atomic_backend_unavailable',
+      reason: expect.stringContaining(
+        'candidate_atomic_backend_platform_unsupported',
+      ),
+    });
+    expect(getActiveGoal).not.toHaveBeenCalled();
+    expect(discoverChecks).not.toHaveBeenCalled();
+  });
+
+  it('blocks an explicitly selected source file that snapshot policy excludes', async () => {
+    const cwd = await gitWorkspace();
+    await writeFile(join(cwd, '.env'), 'API_KEY=sk-example123456789\n', 'utf8');
+
+    const result = await runLoopPreflight({
+      objective: 'create a module',
+      model: 'glm-5.2',
+      workspace: cwd,
+      reviewProvider,
+      inspectIsolatedSource: true,
+      selectedUntrackedPaths: ['.env'],
+      getActiveGoal: async () => null,
+      discoverChecks: async () => [],
+    });
+
+    expect(result).toMatchObject({
+      ready: false,
+      reasonCode: 'snapshot_selection_excluded',
+      sourceSnapshotDryRun: {
+        status: 'blocked',
+        reasonCode: 'snapshot_selection_excluded',
+      },
+    });
   });
 
   it('blocks before quota when model, workspace, active Goal, or checks config is invalid', async () => {

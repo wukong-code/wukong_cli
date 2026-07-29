@@ -96,7 +96,7 @@ describe('formatter — error extraction', () => {
       }),
     );
     expect(stackText).toContain('token=[REDACTED]');
-    expect(stackText).toContain('Authorization: Bearer [REDACTED]');
+    expect(stackText).toContain('Authorization: [REDACTED]');
     expect(stackText).toContain('cookie: [REDACTED]');
     expect(stackText).not.toContain('abc123');
     expect(stackText).not.toContain('secret-token');
@@ -182,12 +182,36 @@ describe('formatter — auto-redact', () => {
         },
       }),
     );
-    expect(text).toContain('Authorization: Bearer [REDACTED]');
+    expect(text).toContain('Authorization: [REDACTED]');
     expect(text).toContain('api_key=[REDACTED]');
     expect(text).toContain('cookie: [REDACTED]');
     expect(text).not.toContain('abc123');
     expect(text).not.toContain('def456');
     expect(text).not.toContain('ghi789');
+  });
+
+  it('redacts URL credentials/query and exception secrets in every log field', () => {
+    const secret = 'sk_live_wukongPrivacySentinel123456789';
+    const awsSecret = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
+    const raw =
+      `https://alice:${secret}@example.test/v1?token=${secret}`;
+    const { text } = formatEntry(baseEntry({
+      msg: `request failed ${raw}`,
+      ctx: {
+        stderrTail:
+          `${raw}\nAuthorization: Bearer ${secret}\nAPI_KEY=${secret}`,
+        structured:
+          `{"AWS_SECRET_ACCESS_KEY":"${awsSecret}"}`,
+      },
+      error: {
+        message: `exception ${raw}`,
+      },
+    }));
+
+    expect(text).not.toContain(secret);
+    expect(text).not.toContain(awsSecret);
+    expect(text).not.toContain('alice');
+    expect(text).toContain('[REDACTED]');
   });
 
   it('recurses into nested objects', () => {

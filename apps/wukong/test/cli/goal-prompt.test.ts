@@ -129,6 +129,45 @@ describe('Loop result contract', () => {
     });
     expect(loopExitCode(snapshot)).toBe(LOOP_EXIT_CODES.ERROR);
   });
+
+  it('redacts durable diagnostics from stream-json/public Loop summaries', () => {
+    const secret = 'sk_live_wukongPrivacySentinel123456789';
+    const awsSecret = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
+    const url =
+      `https://alice:${secret}@example.test/v1?token=${secret}`;
+    const snapshot = {
+      status: 'blocked',
+      iteration: 1,
+      loopResult: {
+        schemaVersion: 2,
+        status: 'ERROR',
+        reasonCode: secret,
+        summary:
+          `exception from ${url} {"AWS_SECRET_ACCESS_KEY":"${awsSecret}"}`,
+        iterations: 1,
+        checks: [{
+          command: `OPENAI_API_KEY=${secret} npm test`,
+          status: 'failed',
+          exitCode: 1,
+          durationMs: 10,
+        }],
+        blockers: [{
+          id: secret,
+          kind: 'check',
+          summary: `Authorization: Bearer ${secret}`,
+          evidence: `stderr=${secret}`,
+          nextAction: `retry ${url}`,
+        }],
+      },
+    } as any;
+
+    const serialized = JSON.stringify(loopSummaryJson(snapshot));
+    expect(serialized).not.toContain(secret);
+    expect(serialized).not.toContain(awsSecret);
+    expect(serialized).not.toContain('alice');
+    expect(serialized).toContain('[REDACTED]');
+    expect(loopSummaryJson(snapshot).reasonCode).toBe('runtime_error');
+  });
 });
 
 describe('goalSummaryJson', () => {
@@ -163,6 +202,23 @@ describe('goalSummaryJson', () => {
       tokensUsed: 1200,
       wallClockMs: 3000,
     });
+  });
+
+  it('redacts terminal exceptions in public goal summaries', () => {
+    const secret = 'sk_live_wukongPrivacySentinel123456789';
+    const snapshot = {
+      goalId: 'goal-privacy',
+      status: 'blocked',
+      terminalReason:
+        `Authorization: Bearer ${secret} OPENAI_API_KEY=${secret}`,
+      turnsUsed: 1,
+      tokensUsed: 2,
+      wallClockMs: 3,
+    } as any;
+    const serialized = JSON.stringify(goalSummaryJson(snapshot));
+
+    expect(serialized).not.toContain(secret);
+    expect(serialized).toContain('[REDACTED]');
   });
 });
 

@@ -16,7 +16,11 @@ import type { ExecutableToolResult, ToolExecution } from '../../../loop/types';
 import { resolvePathAccessPath } from '../../policies/path-access';
 import { toInputJsonSchema } from '../../support/input-schema';
 import { literalRulePattern, matchesPathRuleSubject } from '../../support/rule-match';
-import type { WorkspaceConfig } from '../../support/workspace';
+import {
+  withWorkspacePathGuard,
+  type WorkspaceConfig,
+} from '../../support/workspace';
+import type { CandidateWorkspaceFileIO } from '../../support/candidate-workspace-file-backend';
 import WRITE_DESCRIPTION from './write.md?raw';
 
 /** Mask isolating the file-type bits of a stat mode. */
@@ -78,12 +82,21 @@ export class WriteTool implements BuiltinTool<WriteInput> {
           pathClass: this.kaos.pathClass(),
           homeDir: this.kaos.gethome(),
         }),
-      execute: () => this.execution(args, path),
+      execute: () => withWorkspacePathGuard(
+        this.workspace,
+        path,
+        'write',
+        (io) => this.execution(args, path, io ?? this.kaos),
+      ),
     };
   }
 
-  private async execution(args: WriteInput, safePath: string): Promise<ExecutableToolResult> {
-    const parentError = await this.ensureParentDirectory(safePath);
+  private async execution(
+    args: WriteInput,
+    safePath: string,
+    fileIO: Pick<CandidateWorkspaceFileIO, 'stat' | 'mkdir' | 'writeText'>,
+  ): Promise<ExecutableToolResult> {
+    const parentError = await this.ensureParentDirectory(safePath, fileIO);
     if (parentError !== undefined) {
       return { isError: true, output: parentError };
     }
@@ -91,9 +104,9 @@ export class WriteTool implements BuiltinTool<WriteInput> {
     try {
       const mode = args.mode ?? 'overwrite';
       if (mode === 'append') {
-        await this.kaos.writeText(safePath, args.content, { mode: 'a' });
+        await fileIO.writeText(safePath, args.content, { mode: 'a' });
       } else {
-        await this.kaos.writeText(safePath, args.content);
+        await fileIO.writeText(safePath, args.content);
       }
       // Report the number of UTF-8 bytes this call wrote to disk. The string
       // length would only equal the byte count for pure ASCII content, so it
@@ -133,15 +146,18 @@ export class WriteTool implements BuiltinTool<WriteInput> {
    * Returns an error string when the precondition is definitively violated,
    * or `undefined` otherwise.
    */
-  private async ensureParentDirectory(safePath: string): Promise<string | undefined> {
+  private async ensureParentDirectory(
+    safePath: string,
+    fileIO: Pick<CandidateWorkspaceFileIO, 'stat' | 'mkdir'>,
+  ): Promise<string | undefined> {
     const parent = dirname(safePath);
     let stat;
     try {
-      stat = await this.kaos.stat(parent);
+      stat = await fileIO.stat(parent);
     } catch (error) {
       if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
         try {
-          await this.kaos.mkdir(parent, { parents: true, existOk: true });
+          await fileIO.mkdir(parent, { parents: true, existOk: true });
           return undefined;
         } catch (mkdirError) {
           return mkdirError instanceof Error ? mkdirError.message : String(mkdirError);

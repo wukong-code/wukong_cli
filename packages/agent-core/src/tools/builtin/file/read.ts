@@ -9,7 +9,10 @@ import { resolvePathAccessPath } from '../../policies/path-access';
 import { MEDIA_SNIFF_BYTES, detectFileType } from '../../support/file-type';
 import { toInputJsonSchema } from '../../support/input-schema';
 import { literalRulePattern, matchesPathRuleSubject } from '../../support/rule-match';
-import type { WorkspaceConfig } from '../../support/workspace';
+import {
+  withWorkspacePathGuard,
+  type WorkspaceConfig,
+} from '../../support/workspace';
 import { makeCarriageReturnsVisible, type LineEndingStyle } from './line-endings';
 import readDescriptionTemplate from './read.md?raw';
 
@@ -79,7 +82,7 @@ interface FinishReadResultInput {
   readonly requestedLines: number;
 }
 
-type TextPreviewKaos = Kaos & {
+type TextPreviewKaos = Pick<Kaos, 'readBytes'> & {
   readTextPreview?: (path: string, n: number) => Promise<Buffer>;
 };
 
@@ -101,6 +104,11 @@ type RangeReadKaos = TextPreviewKaos & {
     options: { tailCount: number; errors?: 'strict' | 'replace' | 'ignore' },
   ) => AsyncGenerator<string>;
 };
+
+type ReadFileIO = Pick<
+  Kaos,
+  'stat' | 'readBytes' | 'readText' | 'readLines'
+> & Partial<RangeReadKaos>;
 
 async function readTextHeader(kaos: TextPreviewKaos, path: string, n: number): Promise<Buffer> {
   if (kaos.readTextPreview !== undefined) {
@@ -257,15 +265,24 @@ export class ReadTool implements BuiltinTool<ReadInput> {
           pathClass: this.kaos.pathClass(),
           homeDir: this.kaos.gethome(),
         }),
-      execute: () => this.execution(args, path),
+      execute: () => withWorkspacePathGuard(
+        this.workspace,
+        path,
+        'read',
+        (io) => this.execution(args, path, io ?? this.kaos),
+      ),
     };
   }
 
-  private async execution(args: ReadInput, safePath: string): Promise<ExecutableToolResult> {
+  private async execution(
+    args: ReadInput,
+    safePath: string,
+    fileIO: ReadFileIO,
+  ): Promise<ExecutableToolResult> {
     try {
       let stat: StatResult;
       try {
-        stat = await this.kaos.stat(safePath);
+        stat = await fileIO.stat(safePath);
       } catch (error) {
         if (isFileNotFoundError(error)) {
           return { isError: true, output: `"${args.path}" does not exist.` };
@@ -276,7 +293,7 @@ export class ReadTool implements BuiltinTool<ReadInput> {
         return { isError: true, output: `"${args.path}" is not a file.` };
       }
 
-      const header = await readTextHeader(this.kaos, safePath, MEDIA_SNIFF_BYTES);
+      const header = await readTextHeader(fileIO, safePath, MEDIA_SNIFF_BYTES);
       const fileType = detectFileType(safePath, header);
       if (fileType.kind === 'image' || fileType.kind === 'video') {
         return {
@@ -302,6 +319,7 @@ export class ReadTool implements BuiltinTool<ReadInput> {
           lineOffset,
           effectiveLimit,
           requestedLines,
+          fileIO,
         );
       }
       return await this.readForward(
@@ -310,6 +328,7 @@ export class ReadTool implements BuiltinTool<ReadInput> {
         lineOffset,
         effectiveLimit,
         requestedLines,
+        fileIO,
       );
     } catch (error) {
       if (isTextDecodeError(error)) {
@@ -328,8 +347,9 @@ export class ReadTool implements BuiltinTool<ReadInput> {
     lineOffset: number,
     effectiveLimit: number,
     requestedLines: number,
+    fileIO: ReadFileIO,
   ): Promise<ExecutableToolResult> {
-    const rangeKaos = this.kaos as RangeReadKaos;
+    const rangeKaos = fileIO as RangeReadKaos;
     if (rangeKaos.scanTextFile !== undefined && rangeKaos.readLineRange !== undefined) {
       const scan = await rangeKaos.scanTextFile(safePath);
       if (scan.hasNul) {
@@ -365,7 +385,7 @@ export class ReadTool implements BuiltinTool<ReadInput> {
     let maxLinesReached = false;
     let collectionClosed = false;
 
-    for await (const rawLine of this.kaos.readLines(safePath, { errors: 'strict' })) {
+    for await (const rawLine of fileIO.readLines(safePath, { errors: 'strict' })) {
       if (containsNulByte(rawLine)) {
         return { isError: true, output: notReadableFileOutput(displayPath) };
       }
@@ -415,9 +435,10 @@ export class ReadTool implements BuiltinTool<ReadInput> {
     lineOffset: number,
     effectiveLimit: number,
     requestedLines: number,
+    fileIO: ReadFileIO,
   ): Promise<ExecutableToolResult> {
     const tailCount = Math.abs(lineOffset);
-    const rangeKaos = this.kaos as RangeReadKaos;
+    const rangeKaos = fileIO as RangeReadKaos;
     if (rangeKaos.scanTextFile !== undefined && rangeKaos.readTailLines !== undefined) {
       const scan = await rangeKaos.scanTextFile(safePath);
       if (scan.hasNul) {
@@ -448,7 +469,7 @@ export class ReadTool implements BuiltinTool<ReadInput> {
     const flags: LineEndingFlags = { hasCrLf: false, hasLf: false, hasLoneCr: false };
     let currentLineNo = 0;
 
-    for await (const rawLine of this.kaos.readLines(safePath, { errors: 'strict' })) {
+    for await (const rawLine of fileIO.readLines(safePath, { errors: 'strict' })) {
       if (containsNulByte(rawLine)) {
         return { isError: true, output: notReadableFileOutput(displayPath) };
       }

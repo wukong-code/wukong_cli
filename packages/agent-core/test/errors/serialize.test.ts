@@ -1,7 +1,11 @@
 import { APIStatusError } from '@wukong/kosong';
 import { describe, expect, it } from 'vitest';
 
-import { toWukongErrorPayload } from '#/errors/serialize';
+import { ErrorCodes } from '#/errors';
+import {
+  makeErrorPayload,
+  toWukongErrorPayload,
+} from '#/errors/serialize';
 
 const NGINX_413_HTML =
   '413 <html>\r\n<head><title>413 Request Entity Too Large</title></head>\r\n' +
@@ -46,5 +50,39 @@ describe('toWukongErrorPayload — APIStatusError message sanitization', () => {
     expect(toWukongErrorPayload(new APIStatusError(401, 'Unauthorized')).code).toBe(
       'provider.auth_error',
     );
+  });
+
+  it('redacts synthetic credentials before crash/error payloads cross the wire', () => {
+    const secret = 'sk_live_wukongPrivacySentinel123456789';
+    const awsSecret = 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY';
+    const message = [
+      `provider failed at https://alice:${secret}@example.test/v1?token=${secret}`,
+      `Authorization: Bearer ${secret}`,
+      `OPENAI_API_KEY=${secret}`,
+      `provider json: {"AWS_SECRET_ACCESS_KEY":"${awsSecret}"}`,
+    ].join('\n');
+    const fromException = toWukongErrorPayload(new Error(message));
+    const synthetic = makeErrorPayload(
+      ErrorCodes.INTERNAL,
+      message,
+      {
+        details: {
+          headers: { Authorization: `Bearer ${secret}` },
+          environment: { API_KEY: secret, CI: '1' },
+        },
+      },
+    );
+
+    for (const payload of [fromException, synthetic]) {
+      const serialized = JSON.stringify(payload);
+      expect(serialized).not.toContain(secret);
+      expect(serialized).not.toContain(awsSecret);
+      expect(serialized).not.toContain('alice');
+      expect(serialized).toContain('[REDACTED]');
+    }
+    expect(synthetic.details).toMatchObject({
+      headers: { Authorization: '[REDACTED]' },
+      environment: { API_KEY: '[REDACTED]', CI: '1' },
+    });
   });
 });

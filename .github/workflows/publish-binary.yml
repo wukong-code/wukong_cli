@@ -31,6 +31,15 @@ jobs:
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
         run: |
+          RELEASE_VERSION="${RELEASE_TAG#v}"
+          RELEASE_NOTES="docs/releases/${RELEASE_VERSION}.md"
+
+          if [ -f "$RELEASE_NOTES" ]; then
+            cp "$RELEASE_NOTES" release-notes.md
+            cat release-notes.md
+            exit 0
+          fi
+
           # Find the previous semver tag
           PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | awk -v cur="$RELEASE_TAG" '$0 != cur {print; exit}')
 

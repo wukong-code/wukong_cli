@@ -815,6 +815,7 @@ export class Session {
       toolServices: this.options.toolServices,
       config: this.options.config,
       homedir,
+      wukongHomeDir: this.options.wukongHomeDir,
       skills: this.skills,
       rpc: proxyWithExtraPayload(this.rpc, { agentId: id }),
       modelProvider: this.options.providerManager,

@@ -1,4 +1,4 @@
-import type { Command } from 'commander';
+import { Option, type Command } from 'commander';
 import { createWukongHarness } from '@wukong/wukong-sdk';
 
 import {
@@ -28,11 +28,14 @@ export interface LoopCliOptions {
   readonly onlyExplicitChecks?: boolean;
   readonly trustWorkspaceChallenge?: string;
   readonly approveGatePlanDigest?: string;
+  readonly approveBootstrapPlanDigest?: string;
   readonly acknowledgeWarningSetDigest?: string;
   readonly verificationCatalogDigest?: string;
   readonly verificationSkills?: readonly string[];
   readonly trustReviewSubjectChallenge?: string;
   readonly acknowledgeReviewSubjectConsentDigest?: string;
+  readonly includeUntracked?: readonly string[];
+  readonly promoteCandidateDigest?: string;
 }
 
 export type RunLoopHandler = (options: LoopCliOptions) => void;
@@ -54,11 +57,24 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
     .option('--only-explicit-checks', 'Exclude discovered checks and use only --check values.', false)
     .option('--trust-workspace <challenge>', 'Exact short-lived workspace trust challenge from --dry-run.')
     .option('--approve-gate-plan <digest>', 'Exact Gate approval-set digest from --dry-run.')
+    .option('--approve-bootstrap-plan <digest>', 'Exact candidate bootstrap plan digest from --dry-run.')
     .option('--ack-finish-line-warnings <digest>', 'Exact Finish Line warning-set digest from --dry-run.')
     .option('--verification-catalog-digest <digest>', 'Exact Verification Criteria catalog digest from --dry-run.')
     .option('--verification-skill <identity@digest>', 'Select an exact Verification Skill identity and provenance digest. Repeat to set flat order.', collectOption, [])
     .option('--trust-review-subject <challenge>', 'Exact short-lived local broker trust challenge from --dry-run.')
     .option('--ack-review-subject <digest>', 'Exact run-scoped BYOK review-subject consent digest from --dry-run.')
+    .addOption(
+      new Option(
+        '--include-untracked <path>',
+        'Include an exact untracked file in the experimental isolated source snapshot.',
+      ).hideHelp().argParser(collectOption).default([]),
+    )
+    .addOption(
+      new Option(
+        '--promote-candidate <proposal-digest>',
+        'Resume an isolated Loop and promote the exact reviewed candidate challenge.',
+      ).hideHelp(),
+    )
     .option('--dry-run', 'Validate arguments and print the planned loop without running it.', false)
     .action(async (objective: string, raw: RawLoopOptions, command: Command) => {
       const everyResult = parseEvery(raw.every);
@@ -88,11 +104,14 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
         onlyExplicitChecks: raw.onlyExplicitChecks === true,
         trustWorkspaceChallenge: raw.trustWorkspace,
         approveGatePlanDigest: raw.approveGatePlan,
+        approveBootstrapPlanDigest: raw.approveBootstrapPlan,
         acknowledgeWarningSetDigest: raw.ackFinishLineWarnings,
         verificationCatalogDigest: raw.verificationCatalogDigest,
         verificationSkills: raw.verificationSkill,
         trustReviewSubjectChallenge: raw.trustReviewSubject,
         acknowledgeReviewSubjectConsentDigest: raw.ackReviewSubject,
+        includeUntracked: raw.includeUntracked,
+        promoteCandidateDigest: raw.promoteCandidate,
       };
 
       const validated = validateLoopOptions(options);
@@ -110,6 +129,17 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
         try {
           await harness.ensureConfigFile();
           const config = await harness.getConfig();
+          const experiments = await harness.getExperimentalFeatures();
+          const inspectIsolatedSource = experiments.some(
+            (feature) => feature.id === 'isolated_loop_worktrees' && feature.enabled,
+          );
+          if ((options.includeUntracked?.length ?? 0) > 0 && !inspectIsolatedSource) {
+            process.stderr.write(
+              'error: --include-untracked requires the Isolated Loop worktrees experiment.\n',
+            );
+            process.exit(2);
+            return;
+          }
           const model = options.model ?? config.defaultModel;
           result = await runLoopPreflight({
             objective,
@@ -124,6 +154,8 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
             reviewProvider: resolveLoopReviewProvider(config, model),
             verificationCatalogDigest: options.verificationCatalogDigest,
             verificationSkills: parseVerificationSkills(options.verificationSkills),
+            inspectIsolatedSource,
+            selectedUntrackedPaths: options.includeUntracked,
             getActiveGoal: async () => null,
           });
         } finally {
@@ -179,11 +211,14 @@ interface RawLoopOptions {
   readonly onlyExplicitChecks?: boolean;
   readonly trustWorkspace?: string;
   readonly approveGatePlan?: string;
+  readonly approveBootstrapPlan?: string;
   readonly ackFinishLineWarnings?: string;
   readonly verificationCatalogDigest?: string;
   readonly verificationSkill: string[];
   readonly trustReviewSubject?: string;
   readonly ackReviewSubject?: string;
+  readonly includeUntracked: string[];
+  readonly promoteCandidate?: string;
 }
 
 type ValidationResult = { readonly kind: 'ok' } | { readonly kind: 'error'; readonly message: string };
@@ -220,6 +255,16 @@ export function validateLoopOptions(options: LoopCliOptions): ValidationResult {
     return {
       kind: 'error',
       message: '--accept-discovered-checks and --only-explicit-checks are mutually exclusive.',
+    };
+  }
+  if (options.promoteCandidateDigest !== undefined
+    && !/^sha256:[a-f0-9]{64}$/u.test(
+      options.promoteCandidateDigest,
+    )) {
+    return {
+      kind: 'error',
+      message:
+        '--promote-candidate requires the full proposal SHA-256 digest.',
     };
   }
   try {

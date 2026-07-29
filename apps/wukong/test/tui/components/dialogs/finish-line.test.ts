@@ -54,6 +54,18 @@ describe('Finish Line TUI dialogs', () => {
     const review = new FinishLineReviewComponent({
       proposal: built.proposal,
       maxIterations: 10,
+      sourceSnapshot: {
+        selectedUntrackedCount: 1,
+        discoveredUntrackedCount: 3,
+      },
+      bootstrapPlan: {
+        planDigest: `sha256:${'a'.repeat(64)}`,
+        stepCount: 1,
+        networkPolicy: 'explicit_once',
+        wallClockLimitMs: 600_000,
+        generatedByteLimit: 2_147_483_648,
+        outputByteLimit: 8_388_608,
+      },
       onSelect,
       onCancel: vi.fn(),
     });
@@ -62,7 +74,13 @@ describe('Finish Line TUI dialogs', () => {
     const rendered = strip(review.render(72));
     expect(rendered).toContain('Acknowledge warnings and start');
     expect(rendered).toContain('Review checks');
+    expect(rendered).toContain('Review source snapshot');
+    expect(rendered).toContain('1 selected of 3 discovered untracked files');
     expect(rendered).toContain('Advanced settings');
+    expect(rendered).toContain('1 exact step');
+    expect(rendered).toContain('network explicit_once');
+    expect(rendered).toContain(`sha256:${'a'.repeat(64)}`);
+    expect(rendered).toContain('Starting confirms this exact bootstrap plan');
     expect(rendered).toContain('current OS account permissions');
     for (const line of review.render(39)) {
       expect(visibleWidth(line)).toBeLessThanOrEqual(39);

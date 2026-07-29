@@ -51,6 +51,7 @@ export class ConfigState {
 
   private apply(changed: AgentConfigUpdateData): void {
     if (changed.cwd) {
+      this.agent.assertCwdAllowed(changed.cwd);
       this._cwd = changed.cwd;
       void this.agent.kaos.chdir(changed.cwd);
     }

@@ -20,6 +20,10 @@ vi.mock('@wukong/wukong-sdk', async (importOriginal) => {
                     openai: { type: 'openai', apiKey: 'test' },
                 },
             })),
+            getExperimentalFeatures: vi.fn(async () => [{
+                id: 'isolated_loop_worktrees',
+                enabled: false,
+            }]),
             close: vi.fn(async () => {}),
         }),
     };
@@ -88,6 +92,33 @@ describe('loop pure helpers', () => {
             acceptDiscoveredChecks: true,
             onlyExplicitChecks: true,
         })).toMatchObject({ kind: 'error', message: expect.stringContaining('mutually exclusive') });
+    });
+
+    it('accepts explicit untracked snapshot selections for isolated execution', () => {
+        expect(validateLoopOptions({
+            objective: 'fix bugs',
+            until: 'proof-pass',
+            maxIterations: 5,
+            includeUntracked: ['src/new.ts'],
+        })).toEqual({ kind: 'ok' });
+    });
+
+    it('requires an exact digest for headless candidate promotion', () => {
+        expect(validateLoopOptions({
+            objective: 'fix bugs',
+            until: 'proof-pass',
+            maxIterations: 5,
+            promoteCandidateDigest: 'candidate-pass',
+        })).toMatchObject({
+            kind: 'error',
+            message: expect.stringContaining('SHA-256'),
+        });
+        expect(validateLoopOptions({
+            objective: 'fix bugs',
+            until: 'proof-pass',
+            maxIterations: 5,
+            promoteCandidateDigest: `sha256:${'a'.repeat(64)}`,
+        })).toEqual({ kind: 'ok' });
     });
 
     it('formatDuration formats cleanly', () => {
@@ -228,10 +259,14 @@ describe('loop command', () => {
             '--only-explicit-checks',
             '--approve-gate-plan',
             'approval-digest',
+            '--approve-bootstrap-plan',
+            `sha256:${'b'.repeat(64)}`,
             '--ack-finish-line-warnings',
             'warning-digest',
             '--trust-workspace',
             'trust-challenge',
+            '--include-untracked',
+            'src/new.ts',
         ]);
 
         expect(runs[0]?.headlessGoal).toMatchObject({
@@ -241,8 +276,11 @@ describe('loop command', () => {
             checks: ['pnpm test'],
             discoveredCheckDecision: 'only-explicit',
             approveGatePlanDigest: 'approval-digest',
+            approveBootstrapPlanDigest:
+                `sha256:${'b'.repeat(64)}`,
             acknowledgeWarningSetDigest: 'warning-digest',
             trustWorkspaceChallenge: 'trust-challenge',
+            selectedUntrackedPaths: ['src/new.ts'],
         });
     });
 

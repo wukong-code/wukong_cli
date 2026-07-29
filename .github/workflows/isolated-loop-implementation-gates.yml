@@ -1,0 +1,332 @@
+name: Isolated Loop 0.0.21 implementation gates
+
+on:
+  workflow_call:
+    inputs:
+      source_sha:
+        description: 'Exact lowercase 40-character commit SHA to validate without publishing'
+        required: true
+        type: string
+  workflow_dispatch:
+    inputs:
+      source_sha:
+        description: 'Exact lowercase 40-character commit SHA to validate without publishing'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+concurrency:
+  group: isolated-loop-implementation-${{ inputs.source_sha }}
+  cancel-in-progress: true
+
+jobs:
+  automated:
+    name: Full automation
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Verify exact source SHA
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "source_sha must be an exact lowercase 40-character commit SHA" >&2
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck
+        run: pnpm run typecheck
+
+      - name: Lint
+        run: pnpm run lint
+
+      - name: Dependency policy
+        run: pnpm run sherif
+
+      - name: Test with bounded workers
+        run: pnpm run test:full:bounded
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Reject whitespace errors
+        run: git diff --check
+
+  real-dirty-loop:
+    name: Real dirty Loop (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+          - windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Verify exact source SHA
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "source_sha must be an exact lowercase 40-character commit SHA" >&2
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run Windows handle-relative Candidate and Target backends
+        if: runner.os == 'Windows'
+        shell: bash
+        run: |
+          pnpm --dir packages/agent-core exec vitest run \
+            test/windows-candidate-workspace-file-backend.test.ts \
+            test/windows-target-promotion-workspace-backend.test.ts \
+            test/candidate-bootstrap-hard-signal.test.ts \
+            test/candidate-writer-hard-signal.test.ts \
+            test/snapshot-candidate-hard-signal.test.ts \
+            test/target-durable-hard-signal.test.ts \
+            test/windows-handle-relative-layout.test.ts \
+            test/windows-private-root-security.test.ts \
+            test/candidate-workspace-backend-capability.test.ts \
+            --testTimeout=180000
+          pnpm --dir packages/verification exec vitest run \
+            test/source-snapshot-sealer-hard-signal.test.ts \
+            --testTimeout=180000
+
+      - name: Run Node, Python, Rust, and Go dirty Loop harness
+        shell: bash
+        env:
+          WUKONG_REAL_ECOSYSTEM_SMOKE: '1'
+        run: |
+          pnpm --dir packages/agent-core exec vitest run \
+            test/isolated-loop-real-ecosystem.test.ts \
+            --reporter=json \
+            --outputFile="$RUNNER_TEMP/isolated-loop-real.json" \
+            --testTimeout=180000
+
+      - name: Require all four dependency-free ecosystem cases
+        shell: bash
+        run: |
+          node - "$RUNNER_TEMP/isolated-loop-real.json" <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const report = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          const total = Number(report.numTotalTests ?? 0);
+          const passed = Number(report.numPassedTests ?? 0);
+          const pending = Number(report.numPendingTests ?? 0);
+          const failed = Number(report.numFailedTests ?? 0);
+          const assertions = report.testResults
+            ?.flatMap((suite) => suite.assertionResults ?? []) ?? [];
+          const required = ['node', 'python', 'rust', 'go'];
+          const ecosystemsPassed = required.every((ecosystem) =>
+            assertions.some((test) =>
+              test.title?.startsWith(`${ecosystem} preserves dirty source`)
+              && test.status === 'passed'));
+          const dependencyfulSkipped = required.every((ecosystem) =>
+            assertions.some((test) =>
+              test.title?.startsWith(`dependencyful ${ecosystem} `)
+              && test.status === 'skipped'));
+          if (
+            total !== 8
+            || passed !== 4
+            || pending !== 4
+            || failed !== 0
+            || !ecosystemsPassed
+            || !dependencyfulSkipped
+          ) {
+            console.error(
+              `Expected all four dependency-free ecosystem Loops to pass; `
+              + `got ${passed}/${total}, pending=${pending}, `
+              + `failed=${failed}.`,
+            );
+            process.exit(1);
+          }
+          NODE
+
+  posix-hard-signal:
+    name: POSIX hard-signal recovery (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - macos-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Verify exact source SHA
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "source_sha must be an exact lowercase 40-character commit SHA" >&2
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run process-level recovery matrix
+        run: |
+          pnpm --dir packages/agent-core exec vitest run \
+            test/candidate-bootstrap-hard-signal.test.ts \
+            test/candidate-writer-hard-signal.test.ts \
+            test/snapshot-candidate-hard-signal.test.ts \
+            test/target-durable-hard-signal.test.ts \
+            --testTimeout=180000
+          pnpm --dir packages/verification exec vitest run \
+            test/source-snapshot-sealer-hard-signal.test.ts \
+            --testTimeout=180000
+
+  real-network-bootstrap:
+    name: Real registry bootstrap and dependencyful Loop
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.source_sha }}
+          persist-credentials: false
+
+      - name: Verify exact source SHA
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ inputs.source_sha }}
+        run: |
+          if [[ ! "$SOURCE_SHA" =~ ^[0-9a-f]{40}$ ]]; then
+            echo "source_sha must be an exact lowercase 40-character commit SHA" >&2
+            exit 1
+          fi
+          test "$(git rev-parse HEAD)" = "$SOURCE_SHA"
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run real network recipes
+        shell: bash
+        env:
+          WUKONG_REAL_NETWORK_SMOKE: '1'
+        run: |
+          pnpm --dir packages/agent-core exec vitest run \
+            test/candidate-bootstrap-plan-builder.test.ts \
+            --testTimeout=180000
+
+      - name: Run four dependencyful ecosystems through Candidate, Promote, and Final Gate
+        shell: bash
+        env:
+          WUKONG_REAL_NETWORK_SMOKE: '1'
+        run: |
+          pnpm --dir packages/agent-core exec vitest run \
+            test/isolated-loop-real-ecosystem.test.ts \
+            --reporter=json \
+            --outputFile="$RUNNER_TEMP/isolated-loop-dependencyful.json" \
+            --testTimeout=180000
+
+      - name: Reject skipped dependencyful Loop evidence
+        shell: bash
+        run: |
+          node - "$RUNNER_TEMP/isolated-loop-dependencyful.json" <<'NODE'
+          const { readFileSync } = require('node:fs');
+          const report = JSON.parse(readFileSync(process.argv[2], 'utf8'));
+          const total = Number(report.numTotalTests ?? 0);
+          const passed = Number(report.numPassedTests ?? 0);
+          const pending = Number(report.numPendingTests ?? 0);
+          const failed = Number(report.numFailedTests ?? 0);
+          const assertions = report.testResults
+            ?.flatMap((suite) => suite.assertionResults ?? []) ?? [];
+          const required = ['node', 'python', 'rust', 'go'];
+          const dependencyfulPassed = required.every((ecosystem) =>
+            assertions.some((test) =>
+              test.title?.startsWith(`dependencyful ${ecosystem} `)
+              && test.status === 'passed'));
+          const dependencyFreeSkipped = required.every((ecosystem) =>
+            assertions.some((test) =>
+              test.title?.startsWith(`${ecosystem} preserves dirty source`)
+              && test.status === 'skipped'));
+          if (
+            total !== 8
+            || passed !== 4
+            || pending !== 4
+            || failed !== 0
+            || !dependencyfulPassed
+            || !dependencyFreeSkipped
+          ) {
+            console.error(
+              `Expected all four opt-in exact-lock dependencyful Loops to pass `
+              + `without being skipped; got ${passed}/${total}, `
+              + `pending=${pending}, failed=${failed}.`,
+            );
+            process.exit(1);
+          }
+          NODE

@@ -106,6 +106,7 @@ export interface TestAgentOptions {
   readonly onEvent?: ((event: AgentRecord) => AgentRecord | undefined) | undefined;
   readonly persistence?: AgentRecordPersistence | undefined;
   readonly homedir?: AgentOptions['homedir'];
+  readonly wukongHomeDir?: AgentOptions['wukongHomeDir'];
   readonly telemetry?: TelemetryClient | undefined;
   readonly log?: Logger;
   readonly experimentalFlags?: AgentOptions['experimentalFlags'];
@@ -185,6 +186,7 @@ export class AgentTestContext {
       config: this.wukongConfig,
       rpc: this.createRpcProxy(),
       homedir: options.homedir,
+      wukongHomeDir: options.wukongHomeDir,
       persistence,
       generate: options.generate ?? this.scriptedGenerate.generate,
       compactionStrategy: options.compactionStrategy,

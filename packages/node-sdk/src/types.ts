@@ -3,6 +3,12 @@ import type {
   LoopContractV3Input,
   LoopContractV2Input,
   LoopRunReviewSettingsInput,
+  IsolatedLoopCandidateIterationPublicResultV1,
+  IsolatedLoopPromotionProposalPublicResultV1,
+  IsolatedLoopPromotionPublicResultV1,
+  PrepareIsolatedLoopPromotionPayloadV1,
+  PromoteIsolatedLoopCandidatePayloadV1,
+  RunIsolatedLoopCandidateIterationPayloadV1,
   ResumeSessionResult,
   ShellEnvironment,
   TelemetryClient,
@@ -76,6 +82,12 @@ export type {
   SkillSummary,
   ThinkingConfig,
   ToolInfo,
+  IsolatedLoopCandidateIterationPublicResultV1,
+  IsolatedLoopPromotionProposalPublicResultV1,
+  IsolatedLoopPromotionPublicResultV1,
+  PrepareIsolatedLoopPromotionPayloadV1,
+  PromoteIsolatedLoopCandidatePayloadV1,
+  RunIsolatedLoopCandidateIterationPayloadV1,
 } from '@wukong/agent-core';
 
 export type { WukongHostIdentity, OAuthRefreshOutcome };

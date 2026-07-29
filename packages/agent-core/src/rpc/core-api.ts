@@ -21,6 +21,14 @@ import type { ResumeSessionResult } from '#/rpc/resumed';
 import type { SessionMeta } from '#/session';
 import type { ContentPart } from '@wukong/kosong';
 import type { SessionWarning } from '@wukong/protocol';
+import type {
+  IsolatedLoopCandidateIterationPublicResultV1,
+  IsolatedLoopPromotionProposalPublicResultV1,
+  IsolatedLoopPromotionPublicResultV1,
+  PrepareIsolatedLoopPromotionPayloadV1,
+  PromoteIsolatedLoopCandidatePayloadV1,
+  RunIsolatedLoopCandidateIterationPayloadV1,
+} from '#/isolated-loop-runtime-types';
 
 import type { PluginInfo, PluginSummary, ReloadSummary } from '#/plugin';
 import type { UsageStatus } from './events';
@@ -412,6 +420,15 @@ export interface AgentAPI {
   activateSkill: (payload: ActivateSkillPayload) => void;
   startBtw: (payload: EmptyPayload) => string;
   createGoal: (payload: CreateGoalPayload) => GoalSnapshot;
+  runIsolatedLoopCandidateIteration: (
+    payload: RunIsolatedLoopCandidateIterationPayloadV1
+  ) => Promise<IsolatedLoopCandidateIterationPublicResultV1>;
+  prepareIsolatedLoopPromotion: (
+    payload: PrepareIsolatedLoopPromotionPayloadV1
+  ) => Promise<IsolatedLoopPromotionProposalPublicResultV1>;
+  promoteIsolatedLoopCandidate: (
+    payload: PromoteIsolatedLoopCandidatePayloadV1
+  ) => Promise<IsolatedLoopPromotionPublicResultV1>;
   getGoal: (payload: EmptyPayload) => GoalToolResult;
   pauseGoal: (payload: EmptyPayload) => GoalSnapshot;
   resumeGoal: (payload: ResumeGoalPayload) => GoalSnapshot;

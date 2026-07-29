@@ -52,6 +52,41 @@ export type {
   OAuthTokenProviderResolver,
   ResolvedRuntimeProvider,
 } from './session/provider-manager';
+export * from './snapshot-blob-lease-store';
+export * from './snapshot-candidate-materializer';
+export * from './worktree-lease-store';
+export * from './windows-private-root-security';
+export * from './windows-handle-relative-layout';
+export * from './trusted-executable';
+export * from './trusted-runtime-bundle';
+export * from './bootstrap-private-input-store';
+export * from './candidate-bootstrap-preflight';
+export * from './candidate-bootstrap-plan-builder';
+export * from './candidate-bootstrap-orchestrator';
+export * from './candidate-bootstrap-state-store';
+export * from './candidate-bootstrap-executor';
+export * from './candidate-workspace-backend-capability';
+export * from './candidate-agent-writer';
+export * from './candidate-gate-executor';
+export * from './candidate-delta-store';
+export * from './candidate-review-plan';
+export * from './candidate-review-broker';
+export * from './candidate-gate-attempt-store';
+export * from './candidate-fresh-reviewer';
+export * from './candidate-gate-orchestrator';
+export * from './target-promotion-lease-store';
+export * from './promotion-apply-journal-store';
+export * from './promotion-change-applier';
+export * from './target-promotion-apply-orchestrator';
+export * from './target-final-gate-attempt-store';
+export * from './target-final-gate-audit-bridge';
+export * from './target-final-gate-orchestrator';
+export * from './target-completion-seal-store';
+export * from './target-loop-terminal-finalizer';
+export * from './isolated-loop-candidate-preparer';
+export * from './isolated-loop-candidate-iteration';
+export * from './isolated-loop-runtime';
+export * from './isolated-loop-runtime-types';
 
 // ─── Wire records (for in-monorepo consumers like apps/vis) ────────────────
 export type {

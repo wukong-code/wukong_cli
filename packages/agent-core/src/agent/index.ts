@@ -51,6 +51,15 @@ import { LlmRequestLogger, splitGenerateOptions } from './llm-request-logger';
 import { resolveCompletionBudget } from '../utils/completion-budget';
 import type { Kaos } from '@wukong/kaos';
 import type { ToolServices } from '../tools/support/services';
+import type { WorkspaceConfig } from '../tools/support/workspace';
+import type {
+  IsolatedLoopCandidateIterationPublicResultV1,
+  IsolatedLoopPromotionProposalPublicResultV1,
+  IsolatedLoopPromotionPublicResultV1,
+  PrepareIsolatedLoopPromotionPayloadV1,
+  PromoteIsolatedLoopCandidatePayloadV1,
+  RunIsolatedLoopCandidateIterationPayloadV1,
+} from '../isolated-loop-runtime-types';
 
 export type { AgentRecord, AgentRecordPersistence } from './records';
 export type { SwarmModeTrigger } from './swarm';
@@ -58,11 +67,14 @@ export type { BuiltinTool, ToolInfo, ToolSource, UserToolRegistration } from './
 export * from './goal';
 
 export type AgentType = 'main' | 'sub' | 'independent';
+export type AgentToolMode = 'default' | 'candidate-writer';
 
 export interface AgentOptions {
   readonly kaos: Kaos;
   readonly config?: WukongConfig;
   readonly homedir?: string;
+  /** User-global Wukong home for cross-session runtime registries. */
+  readonly wukongHomeDir?: string;
   readonly rpc?: Partial<SDKAgentRPC>;
   readonly persistence?: AgentRecordPersistence;
   readonly type?: AgentType;
@@ -82,10 +94,18 @@ export interface AgentOptions {
   readonly experimentalFlags?: ExperimentalFlagResolver;
   readonly replay?: ReplayBuilderOptions;
   readonly additionalDirs?: readonly string[];
+  /**
+   * Restricts the Agent to the capability-bound candidate file tool surface.
+   * This mode is internal to the isolated Loop pipeline.
+   */
+  readonly toolMode?: AgentToolMode;
+  /** Exact guarded workspace object. It must not be cloned or extended. */
+  readonly workspace?: WorkspaceConfig;
 }
 
 export class Agent {
   readonly type: AgentType;
+  readonly toolMode: AgentToolMode;
   private _kaos: Kaos;
 
   get kaos(): Kaos {
@@ -94,6 +114,7 @@ export class Agent {
 
   readonly wukongConfig?: WukongConfig;
   readonly homedir?: string;
+  readonly wukongHomeDir?: string;
   readonly rpc?: Partial<SDKAgentRPC>;
   readonly toolServices?: ToolServices;
   readonly pluginSessionStarts: readonly EnabledPluginSessionStart[];
@@ -127,13 +148,21 @@ export class Agent {
   readonly replayBuilder: ReplayBuilder;
 
   private additionalDirs: readonly string[];
+  private readonly workspace: WorkspaceConfig | undefined;
   private providerRequestPolicy: ProviderRequestPolicy | undefined;
+  private isolatedLoopAbortController: AbortController | undefined;
 
   constructor(options: AgentOptions) {
-    this.type = options.type ?? 'main';
+    this.toolMode = options.toolMode ?? 'default';
+    this.workspace = options.workspace;
+    assertAgentToolModeOptions(options, this.toolMode);
+    this.type = options.type ?? (this.toolMode === 'candidate-writer'
+      ? 'independent'
+      : 'main');
     this._kaos = options.kaos;
     this.wukongConfig = options.config;
     this.homedir = options.homedir;
+    this.wukongHomeDir = options.wukongHomeDir;
     this.rpc = options.rpc;
     this.toolServices = options.toolServices;
     this.pluginSessionStarts = options.pluginSessionStarts ?? [];
@@ -179,12 +208,15 @@ export class Agent {
       this,
       this.homedir === undefined ? undefined : new BackgroundTaskPersistence(this.homedir),
     );
-    this.cron = this.type === 'sub' ? null : new CronManager(this);
+    this.cron = this.type === 'sub' || this.toolMode === 'candidate-writer'
+      ? null
+      : new CronManager(this);
     this.goal = new GoalMode(this);
     this.replayBuilder = new ReplayBuilder(this, options.replay);
   }
 
   setKaos(kaos: Kaos) {
+    this.assertCwdAllowed(kaos.getcwd());
     this._kaos = kaos;
   }
 
@@ -193,9 +225,23 @@ export class Agent {
   }
 
   setAdditionalDirs(additionalDirs: readonly string[]): void {
+    if (this.toolMode === 'candidate-writer') {
+      throw new Error('Candidate Writer additional directories are immutable.');
+    }
     this.additionalDirs = normalizeAdditionalDirs(additionalDirs);
     if (this.config.hasProvider) {
       this.tools.initializeBuiltinTools();
+    }
+  }
+
+  getToolWorkspace(): WorkspaceConfig | undefined {
+    return this.workspace;
+  }
+
+  assertCwdAllowed(cwd: string): void {
+    if (this.toolMode === 'candidate-writer'
+      && cwd !== this.workspace?.workspaceDir) {
+      throw new Error('Candidate Writer cwd is pinned to its guarded workspace.');
     }
   }
 
@@ -289,6 +335,90 @@ export class Agent {
     if (model !== undefined) this.modelProvider?.resolveProviderConfig(model);
   }
 
+  async runIsolatedLoopCandidateIteration(
+    payload: RunIsolatedLoopCandidateIterationPayloadV1,
+  ): Promise<IsolatedLoopCandidateIterationPublicResultV1> {
+    if (!this.experimentalFlags.enabled('isolated_loop_worktrees')) {
+      throw new WukongError(
+        ErrorCodes.REQUEST_INVALID,
+        'Isolated Loop worktree execution is experimental and disabled.',
+      );
+    }
+    if (this.isolatedLoopAbortController !== undefined) {
+      throw new WukongError(
+        ErrorCodes.TURN_AGENT_BUSY,
+        'An isolated Loop candidate iteration is already running.',
+      );
+    }
+    const controller = new AbortController();
+    this.isolatedLoopAbortController = controller;
+    try {
+      const { runAgentIsolatedLoopCandidateIteration } =
+        await import('../isolated-loop-runtime');
+      return await runAgentIsolatedLoopCandidateIteration(
+        this,
+        payload,
+        controller.signal,
+      );
+    } finally {
+      if (this.isolatedLoopAbortController === controller) {
+        this.isolatedLoopAbortController = undefined;
+      }
+    }
+  }
+
+  async prepareIsolatedLoopPromotion(
+    payload: PrepareIsolatedLoopPromotionPayloadV1,
+  ): Promise<IsolatedLoopPromotionProposalPublicResultV1> {
+    if (!this.experimentalFlags.enabled('isolated_loop_worktrees')) {
+      throw new WukongError(
+        ErrorCodes.REQUEST_INVALID,
+        'Isolated Loop worktree execution is experimental and disabled.',
+      );
+    }
+    if (this.isolatedLoopAbortController !== undefined) {
+      throw new WukongError(
+        ErrorCodes.TURN_AGENT_BUSY,
+        'The isolated Loop candidate is still running.',
+      );
+    }
+    const { prepareAgentIsolatedLoopPromotion } =
+      await import('../isolated-loop-runtime');
+    return prepareAgentIsolatedLoopPromotion(this, payload);
+  }
+
+  async promoteIsolatedLoopCandidate(
+    payload: PromoteIsolatedLoopCandidatePayloadV1,
+  ): Promise<IsolatedLoopPromotionPublicResultV1> {
+    if (!this.experimentalFlags.enabled('isolated_loop_worktrees')) {
+      throw new WukongError(
+        ErrorCodes.REQUEST_INVALID,
+        'Isolated Loop worktree execution is experimental and disabled.',
+      );
+    }
+    if (this.isolatedLoopAbortController !== undefined) {
+      throw new WukongError(
+        ErrorCodes.TURN_AGENT_BUSY,
+        'An isolated Loop operation is already running.',
+      );
+    }
+    const controller = new AbortController();
+    this.isolatedLoopAbortController = controller;
+    try {
+      const { promoteAgentIsolatedLoopCandidate } =
+        await import('../isolated-loop-runtime');
+      return await promoteAgentIsolatedLoopCandidate(
+        this,
+        payload,
+        controller.signal,
+      );
+    } finally {
+      if (this.isolatedLoopAbortController === controller) {
+        this.isolatedLoopAbortController = undefined;
+      }
+    }
+  }
+
   async resume(options?: AgentRecordsReplayOptions): Promise<{ warning?: string }> {
     const result = await this.records.replay(options);
     try {
@@ -320,6 +450,9 @@ export class Agent {
         if (this.turn.hasActiveTurn) {
           this.telemetry.track('cancel', { from: 'streaming' });
         }
+        this.isolatedLoopAbortController?.abort(
+          new Error('The isolated Loop operation was cancelled.'),
+        );
         this.turn.cancel(payload.turnId);
       },
       undoHistory: (payload) => {
@@ -412,6 +545,12 @@ export class Agent {
       },
       startBtw: () => this.subagentHost!.startBtw(),
       createGoal: (payload) => this.goal.createGoal(payload),
+      runIsolatedLoopCandidateIteration: (payload) =>
+        this.runIsolatedLoopCandidateIteration(payload),
+      prepareIsolatedLoopPromotion: (payload) =>
+        this.prepareIsolatedLoopPromotion(payload),
+      promoteIsolatedLoopCandidate: (payload) =>
+        this.promoteIsolatedLoopCandidate(payload),
       getGoal: () => this.goal.getGoal(),
       pauseGoal: () => this.goal.pauseGoal(),
       resumeGoal: (payload) => this.goal.resumeGoal(payload),
@@ -475,5 +614,31 @@ export class Agent {
         },
       ),
     });
+  }
+}
+
+function assertAgentToolModeOptions(
+  options: AgentOptions,
+  toolMode: AgentToolMode,
+): void {
+  if (toolMode !== 'candidate-writer') return;
+  if (options.workspace?.accessMode !== 'workspace-only'
+    || options.workspace.workspaceDir !== options.kaos.getcwd()
+    || options.kaos.name !== 'local'
+    || !Object.isFrozen(options.workspace)
+    || !Object.isFrozen(options.workspace.additionalDirs)
+    || (options.type !== undefined && options.type !== 'independent')
+    || options.additionalDirs !== undefined
+    || options.homedir !== undefined
+    || options.skills !== undefined
+    || options.mcp !== undefined
+    || options.subagentHost !== undefined
+    || options.toolServices !== undefined
+    || options.hookEngine !== undefined
+    || options.telemetry !== undefined
+    || (options.pluginSessionStarts?.length ?? 0) !== 0) {
+    throw new Error(
+      'Candidate Writer requires an exact guarded workspace and no extensible tool surface.',
+    );
   }
 }

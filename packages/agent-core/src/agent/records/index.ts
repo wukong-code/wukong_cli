@@ -141,6 +141,15 @@ function restoreAgentRecord(agent: Agent, input: AgentRecord): void {
     case 'loop.run-review-settings.assign':
       agent.goal.restoreLoopRunReviewSettingsAssignment(input);
       return;
+    case 'loop.isolated-candidate.bind':
+      agent.goal.restoreIsolatedLoopCandidateBinding(input);
+      return;
+    case 'loop.isolated-candidate.iteration':
+      agent.goal.restoreIsolatedLoopCandidateIteration(input);
+      return;
+    case 'loop.target-completion-seal.create':
+      agent.goal.restoreTargetCompletionSeal(input);
+      return;
     case 'loop.run.terminal':
       agent.goal.restoreLoopRunTerminal(input);
       return;

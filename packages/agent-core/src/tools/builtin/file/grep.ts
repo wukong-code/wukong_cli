@@ -18,7 +18,9 @@
  */
 
 import type { Kaos } from '@wukong/kaos';
-import { normalize } from 'pathe';
+import { normalize, relative } from 'pathe';
+import picomatch from 'picomatch';
+import safeRegex from 'safe-regex2';
 import { z } from 'zod';
 
 import type { BuiltinTool } from '../../../agent/tool';
@@ -41,7 +43,11 @@ import {
   runRipgrepOnce,
   shouldRetryRipgrepEagain,
 } from '../../support/run-rg';
-import type { WorkspaceConfig } from '../../support/workspace';
+import {
+  withWorkspacePathGuard,
+  type WorkspaceConfig,
+} from '../../support/workspace';
+import type { CandidateWorkspaceFileIO } from '../../support/candidate-workspace-file-backend';
 import GREP_DESCRIPTION from './grep.md?raw';
 
 export const GrepInputSchema = z.object({
@@ -144,6 +150,7 @@ export type GrepOutput = z.Infer<typeof GrepOutputSchema>;
 const RG_MAX_COLUMNS = 500;
 const DEFAULT_HEAD_LIMIT = 250;
 const MTIME_STAT_CONCURRENCY = 32;
+const MAX_CANDIDATE_PATTERN_LENGTH = 1_024;
 
 // Line formats produced by ripgrep:
 //   content match with --null:   "file.py<NUL>10:matched text"
@@ -186,7 +193,19 @@ export class GrepTool implements BuiltinTool<GrepInput> {
       display: { kind: 'file_io', operation: 'grep', path: searchPaths[0]! },
       approvalRule: literalRulePattern(this.name, args.pattern),
       matchesRule: (ruleArgs) => matchesGlobRuleSubject(ruleArgs, args.pattern),
-      execute: ({ signal }) => this.execution(args, signal, searchPaths),
+      execute: ({ signal }) => withWorkspacePathGuard(
+        this.workspace,
+        searchPaths[0]!,
+        'search',
+        (io) => io === undefined
+          ? this.execution(args, signal, searchPaths)
+          : this.atomicExecution(
+              args,
+              signal,
+              searchPaths[0]!,
+              io,
+            ),
+      ),
     };
   }
 
@@ -353,6 +372,200 @@ export class GrepTool implements BuiltinTool<GrepInput> {
     return builder.ok();
   }
 
+  private async atomicExecution(
+    args: GrepInput,
+    signal: AbortSignal,
+    searchRoot: string,
+    fileIO: Pick<
+      CandidateWorkspaceFileIO,
+      'listFiles' | 'readText' | 'stat'
+    >,
+  ): Promise<ExecutableToolResult> {
+    if (signal.aborted) {
+      return { isError: true, output: 'Aborted before search started' };
+    }
+    let matcher: RegExp;
+    try {
+      matcher = createCandidateSearchRegex(args);
+    } catch (error) {
+      return {
+        isError: true,
+        output:
+          'Candidate Grep uses a bounded ECMAScript safe-regex subset rather than ripgrep regex semantics and rejected this pattern: '
+          + (error instanceof Error ? error.message : String(error)),
+      };
+    }
+    let globMatcher: ((path: string) => boolean) | undefined;
+    if (args.glob !== undefined) {
+      try {
+        globMatcher = picomatch(args.glob, {
+          dot: true,
+          nocase: false,
+        });
+      } catch (error) {
+        return {
+          isError: true,
+          output: `Candidate Grep glob is invalid: ${
+            error instanceof Error ? error.message : String(error)
+          }`,
+        };
+      }
+    }
+    const typeExtensions = args.type === undefined
+      ? undefined
+      : CANDIDATE_GREP_TYPES[args.type];
+    if (args.type !== undefined && typeExtensions === undefined) {
+      return {
+        isError: true,
+        output:
+          `Candidate Grep type "${args.type}" is not supported by the descriptor-bound matcher.`,
+      };
+    }
+
+    try {
+      const entries = await fileIO.listFiles(searchRoot, {
+        signal,
+        includeIgnored: args.include_ignored === true,
+      });
+      const mode = args.output_mode ?? 'files_with_matches';
+      const rawLines: ParsedGrepLine[] = [];
+      const filteredSensitive = new Set<string>();
+      for (const entry of entries) {
+        if (signal.aborted) throw new GrepAbortedError();
+        if (isSensitiveFile(entry.path)) {
+          filteredSensitive.add(entry.path);
+          continue;
+        }
+        const relativePath =
+          relative(searchRoot, entry.path).replaceAll('\\', '/');
+        if (globMatcher !== undefined && !globMatcher(relativePath)) {
+          continue;
+        }
+        if (typeExtensions !== undefined
+          && !typeExtensions.some((extension) =>
+            relativePath.toLowerCase().endsWith(extension))) {
+          continue;
+        }
+        let text: string;
+        try {
+          text = await fileIO.readText(entry.path, {
+            encoding: 'utf8',
+            errors: 'strict',
+          });
+        } catch (error) {
+          if (isTextLikeDecodeError(error)) continue;
+          throw error;
+        }
+        if (text.includes('\u0000')) continue;
+        const result = matchCandidateText(
+          entry.path,
+          text,
+          matcher,
+          args,
+        );
+        if (result.occurrences === 0) continue;
+        if (mode === 'files_with_matches') {
+          rawLines.push({
+            kind: 'record',
+            filePath: entry.path,
+            payload: '',
+          });
+        } else if (mode === 'count_matches') {
+          rawLines.push({
+            kind: 'record',
+            filePath: entry.path,
+            payload: String(result.occurrences),
+          });
+        } else {
+          if (rawLines.length > 0
+            && result.content.length > 0
+            && rawLines.at(-1)?.kind !== 'separator') {
+            rawLines.push({ kind: 'separator' });
+          }
+          rawLines.push(...result.content);
+        }
+      }
+      let orderedLines =
+        mode === 'files_with_matches'
+          ? await sortFilesWithMatchesByMtime(rawLines, fileIO, signal)
+          : rawLines;
+      orderedLines = normalizeContextSeparators(orderedLines);
+
+      const offset = args.offset ?? 0;
+      const headLimit = args.head_limit ?? DEFAULT_HEAD_LIMIT;
+      const afterOffset = offset > 0
+        ? orderedLines.slice(offset)
+        : orderedLines;
+      const limitActive = headLimit > 0;
+      const limited = limitActive
+        ? afterOffset.slice(0, headLimit)
+        : afterOffset;
+      const paginationTruncated =
+        limitActive && afterOffset.length > headLimit;
+      const headerLines: string[] = [];
+      const messages: string[] = [];
+      if (filteredSensitive.size > 0) {
+        const displayed = [...filteredSensitive].map((path) =>
+          relativizeIfUnder(
+            path,
+            this.workspace.workspaceDir,
+            this.kaos.pathClass(),
+          ));
+        messages.push(
+          `Filtered ${String(filteredSensitive.size)} sensitive file(s): ${displayed.join(', ')}`,
+        );
+      }
+      if (mode === 'count_matches' && orderedLines.length > 0) {
+        headerLines.push(formatCountSummary(
+          orderedLines,
+          filteredSensitive.size > 0,
+        ));
+      }
+      if (paginationTruncated) {
+        const total = afterOffset.length + offset;
+        const nextOffset = offset + headLimit;
+        const notice =
+          `Results truncated to ${String(headLimit)} lines (total: ${String(total)}). `
+          + `Use offset=${String(nextOffset)} to see more.`;
+        if (mode === 'count_matches') headerLines.push(notice);
+        else messages.push(notice);
+      }
+      const includesLineNumbers =
+        mode === 'content' && args['-n'] !== false;
+      const displayedLines = limited.map((line) =>
+        formatDisplayLine(
+          line,
+          mode,
+          this.workspace.workspaceDir,
+          this.kaos.pathClass(),
+          includesLineNumbers,
+        ));
+      const visibleBody = displayedLines.join('\n');
+      const body = visibleBody === ''
+        ? filteredSensitive.size > 0
+          ? 'No non-sensitive matches found'
+          : 'No matches found'
+        : visibleBody;
+      const builder = new ToolResultBuilder();
+      builder.write(
+        [...headerLines, body, ...messages]
+          .filter((part) => part !== '')
+          .join('\n'),
+      );
+      return builder.ok();
+    } catch (error) {
+      if (error instanceof GrepAbortedError
+        || isAbortError(error)
+        || signal.aborted) {
+        return { isError: true, output: 'Grep aborted' };
+      }
+      return {
+        isError: true,
+        output: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
+
 }
 
 type GrepMode = 'content' | 'files_with_matches' | 'count_matches';
@@ -371,6 +584,30 @@ type ParsedGrepLine =
       readonly text: string;
     };
 
+const CANDIDATE_GREP_TYPES: Readonly<
+  Record<string, readonly string[]>
+> = Object.freeze({
+  c: Object.freeze(['.c', '.h']),
+  cpp: Object.freeze(['.cc', '.cpp', '.cxx', '.hh', '.hpp', '.hxx']),
+  css: Object.freeze(['.css']),
+  go: Object.freeze(['.go']),
+  html: Object.freeze(['.htm', '.html']),
+  js: Object.freeze(['.cjs', '.js', '.jsx', '.mjs']),
+  json: Object.freeze(['.json', '.jsonl']),
+  md: Object.freeze(['.md', '.mdx']),
+  py: Object.freeze(['.py', '.pyi']),
+  rust: Object.freeze(['.rs']),
+  sh: Object.freeze(['.bash', '.sh', '.zsh']),
+  toml: Object.freeze(['.toml']),
+  ts: Object.freeze(['.cts', '.mts', '.ts', '.tsx']),
+  yaml: Object.freeze(['.yaml', '.yml']),
+});
+
+interface CandidateTextMatch {
+  readonly occurrences: number;
+  readonly content: readonly ParsedGrepLine[];
+}
+
 class GrepAbortedError extends Error {
   constructor() {
     super('Grep aborted');
@@ -378,9 +615,142 @@ class GrepAbortedError extends Error {
   }
 }
 
+function createCandidateSearchRegex(args: GrepInput): RegExp {
+  if (args.pattern.length > MAX_CANDIDATE_PATTERN_LENGTH) {
+    throw new Error(
+      `pattern exceeds the ${String(MAX_CANDIDATE_PATTERN_LENGTH)} character Candidate limit`,
+    );
+  }
+  const flags = `gu${args['-i'] === true ? 'i' : ''}${
+    args.multiline === true ? 's' : ''
+  }`;
+  const matcher = new RegExp(args.pattern, flags);
+  if (!safeRegex(matcher)) {
+    throw new Error(
+      'pattern was rejected because it may require catastrophic backtracking',
+    );
+  }
+  return matcher;
+}
+
+function matchCandidateText(
+  filePath: string,
+  text: string,
+  matcher: RegExp,
+  args: GrepInput,
+): CandidateTextMatch {
+  const lines = splitCandidateTextLines(text);
+  const matchedLines = new Set<number>();
+  let occurrences = 0;
+  if (args.multiline === true) {
+    const starts = lineStartOffsets(text);
+    matcher.lastIndex = 0;
+    while (true) {
+      const match = matcher.exec(text);
+      if (match === null) break;
+      occurrences += 1;
+      const start = lineIndexAtOffset(starts, match.index);
+      const endOffset = match[0].length === 0
+        ? match.index
+        : match.index + match[0].length - 1;
+      const end = lineIndexAtOffset(starts, endOffset);
+      for (let index = start; index <= end; index += 1) {
+        matchedLines.add(index);
+      }
+      if (match[0].length === 0) matcher.lastIndex += 1;
+    }
+  } else {
+    for (const [index, line] of lines.entries()) {
+      matcher.lastIndex = 0;
+      while (true) {
+        const match = matcher.exec(line);
+        if (match === null) break;
+        occurrences += 1;
+        matchedLines.add(index);
+        if (match[0].length === 0) matcher.lastIndex += 1;
+      }
+    }
+  }
+  if (occurrences === 0
+    || (args.output_mode ?? 'files_with_matches') !== 'content') {
+    return { occurrences, content: [] };
+  }
+  const context = args['-C'];
+  const before = context ?? args['-B'] ?? 0;
+  const after = context ?? args['-A'] ?? 0;
+  const selected = new Set<number>();
+  for (const index of matchedLines) {
+    for (
+      let candidate = Math.max(0, index - before);
+      candidate <= Math.min(lines.length - 1, index + after);
+      candidate += 1
+    ) {
+      selected.add(candidate);
+    }
+  }
+  const content: ParsedGrepLine[] = [];
+  let previousIndex: number | undefined;
+  for (const index of [...selected].toSorted((left, right) => left - right)) {
+    if (previousIndex !== undefined && index > previousIndex + 1) {
+      content.push({ kind: 'separator' });
+    }
+    const matched = matchedLines.has(index);
+    const payload = args['-n'] === false
+      ? lines[index]!
+      : `${String(index + 1)}${matched ? ':' : '-'}${lines[index]!}`;
+    content.push({ kind: 'record', filePath, payload });
+    previousIndex = index;
+  }
+  return { occurrences, content };
+}
+
+function splitCandidateTextLines(text: string): string[] {
+  if (text === '') return [''];
+  const lines = text.split('\n').map(stripTrailingCarriageReturn);
+  if (text.endsWith('\n')) lines.pop();
+  return lines.length === 0 ? [''] : lines;
+}
+
+function lineStartOffsets(text: string): number[] {
+  const starts = [0];
+  for (let index = 0; index < text.length; index += 1) {
+    if (text.codePointAt(index) === 10 && index + 1 < text.length) {
+      starts.push(index + 1);
+    }
+  }
+  return starts;
+}
+
+function lineIndexAtOffset(
+  starts: readonly number[],
+  offset: number,
+): number {
+  let low = 0;
+  let high = starts.length - 1;
+  while (low <= high) {
+    const middle = Math.floor((low + high) / 2);
+    const start = starts[middle]!;
+    const next = starts[middle + 1] ?? Number.POSITIVE_INFINITY;
+    if (offset < start) high = middle - 1;
+    else if (offset >= next) low = middle + 1;
+    else return middle;
+  }
+  return Math.max(0, starts.length - 1);
+}
+
+function isTextLikeDecodeError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const code = 'code' in error
+    ? (error as { readonly code?: unknown }).code
+    : undefined;
+  return code === 'ERR_ENCODING_INVALID_ENCODED_DATA'
+    || /encoded data was not valid|invalid.*encoding|invalid.*utf-?8/iu
+      .test(error.message);
+}
+
 async function sortFilesWithMatchesByMtime(
   lines: readonly ParsedGrepLine[],
-  kaos: Kaos,
+  kaos: Pick<Kaos, 'stat'>,
   signal: AbortSignal,
 ): Promise<ParsedGrepLine[]> {
   const entries = await mapWithConcurrency(

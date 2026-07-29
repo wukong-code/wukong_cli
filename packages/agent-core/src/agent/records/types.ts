@@ -1,4 +1,8 @@
 import type { ContentPart, TokenUsage } from '@wukong/kosong';
+import type {
+  IsolatedLoopCandidateBindingV1,
+  TargetGateCompletionSealV1,
+} from '@wukong/verification';
 
 import type { LoopRecordedEvent } from '../../loop';
 import type {
@@ -19,6 +23,7 @@ import type {
   LoopRunReviewSettingsAssignedV1,
   LoopRunTerminalV1,
   LoopStrategyAttempt,
+  IsolatedLoopCandidateIterationRecordedV1,
   ProofAggregateRecorded,
   ReviewSubjectManifestRecordedV1,
   ReviewerResultRecordedV1,
@@ -145,6 +150,12 @@ export interface AgentRecordEvents {
   'loop.run-review-settings.assign': {
     assignment: LoopRunReviewSettingsAssignedV1;
   };
+  'loop.isolated-candidate.bind': {
+    binding: IsolatedLoopCandidateBindingV1;
+  };
+  'loop.isolated-candidate.iteration': {
+    iteration: IsolatedLoopCandidateIterationRecordedV1;
+  };
   'loop.gate-attempt.create': {
     attempt: GateAttemptCreated;
   };
@@ -171,6 +182,9 @@ export interface AgentRecordEvents {
   };
   'loop.gate-attempt.complete': {
     attempt: GateAttemptCompletedV1;
+  };
+  'loop.target-completion-seal.create': {
+    seal: TargetGateCompletionSealV1;
   };
   'loop.run.terminal': {
     terminal: LoopRunTerminalV1;

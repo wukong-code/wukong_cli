@@ -145,9 +145,13 @@ function commandExists(command: string, platform: NodeJS.Platform): boolean {
       });
       return result.status === 0;
     }
-    const result = spawnSync('command', ['-v', command], {
+    const result = spawnSync('/bin/sh', [
+      '-c',
+      'command -v -- "$1" >/dev/null 2>&1',
+      'wukong-command-exists',
+      command,
+    ], {
       stdio: 'ignore',
-      shell: true,
     });
     return result.status === 0;
   } catch {
@@ -220,11 +224,17 @@ function openInMacApp(
 export async function launchDetached(cmd: LaunchCommand): Promise<void> {
   return new Promise<void>((resolve, reject) => {
     let settled = false;
-    const child = spawn(cmd.command, cmd.args, {
-      detached: true,
-      stdio: 'ignore',
-      shell: cmd.shell,
-    });
+    const child = cmd.shell === true
+      ? spawn(cmd.command, {
+          detached: true,
+          stdio: 'ignore',
+          shell: true,
+        })
+      : spawn(cmd.command, [...cmd.args], {
+          detached: true,
+          stdio: 'ignore',
+          shell: false,
+        });
     child.once('error', (err) => {
       if (settled) return;
       settled = true;

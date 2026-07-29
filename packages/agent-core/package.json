@@ -45,9 +45,21 @@
       "types": "./src/session/store/index.ts",
       "default": "./src/session/store/index.ts"
     },
-    "./*": {
-      "types": "./src/*.ts",
-      "default": "./src/*.ts"
+    "./session/store/index": {
+      "types": "./src/session/store/index.ts",
+      "default": "./src/session/store/index.ts"
+    },
+    "./agent/records/migration/index": {
+      "types": "./src/agent/records/migration/index.ts",
+      "default": "./src/agent/records/migration/index.ts"
+    },
+    "./base/common/event": {
+      "types": "./src/base/common/event.ts",
+      "default": "./src/base/common/event.ts"
+    },
+    "./flags/registry": {
+      "types": "./src/flags/registry.ts",
+      "default": "./src/flags/registry.ts"
     }
   },
   "scripts": {
@@ -80,6 +92,7 @@
     "proper-lockfile": "^4.1.2",
     "regexp.escape": "^2.0.1",
     "retry": "0.13.1",
+    "safe-regex2": "^5.1.1",
     "smol-toml": "^1.6.1",
     "socks": "^2.8.9",
     "tar": "^7.5.13",
@@ -87,6 +100,9 @@
     "undici": "^7.27.1",
     "yauzl": "^3.3.0",
     "zod": "^4.4.3"
+  },
+  "optionalDependencies": {
+    "koffi": "^2.16.0"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",

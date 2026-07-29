@@ -17,6 +17,8 @@
     "lint:pkg": "pnpm --filter @wukong.today/code exec publint && npm_config_cache=${TMPDIR:-/tmp}/wukong-npm-cache pnpm --filter @wukong.today/code exec attw --pack . --profile node16 --ignore-rules cjs-resolves-to-esm",
     "sherif": "sherif",
     "test": "vitest run",
+    "test:full:bounded": "pnpm --dir packages/verification exec vitest run --maxWorkers=2 && pnpm --dir packages/agent-core exec vitest run --maxWorkers=2 && pnpm --dir apps/wukong exec vitest run --maxWorkers=2 && vitest run --maxWorkers=2 --project=acp-adapter --project=kaos --project=kosong --project=migration-legacy --project=wukong-sdk --project=wukong-oauth --project=protocol --project=server-e2e --project=server --project=wukong-telemetry",
+    "test:full:bounded:no-cli": "pnpm --dir packages/verification exec vitest run --maxWorkers=2 && pnpm --dir packages/agent-core exec vitest run --maxWorkers=2 && vitest run --maxWorkers=2 --project=acp-adapter --project=kaos --project=kosong --project=migration-legacy --project=wukong-sdk --project=wukong-oauth --project=protocol --project=server-e2e --project=server --project=wukong-telemetry",
     "test:watch": "vitest",
     "test:related": "vitest related --run --passWithNoTests",
     "test:changed": "vitest run --changed --passWithNoTests",
@@ -28,7 +30,7 @@
     "changeset": "changeset",
     "version": "changeset version",
     "version:release": "changeset version",
-    "publish": "pnpm run typecheck && pnpm run lint && pnpm run sherif && pnpm run test && pnpm run build && pnpm run lint:pkg && changeset publish",
+    "publish": "pnpm run typecheck && pnpm run lint && pnpm run sherif && pnpm run test:full:bounded && pnpm run build && pnpm run lint:pkg && changeset publish",
     "prepare": "simple-git-hooks"
   },
   "devDependencies": {
