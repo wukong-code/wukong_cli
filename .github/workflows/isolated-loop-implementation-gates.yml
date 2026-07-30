@@ -141,11 +141,17 @@ jobs:
         env:
           WUKONG_REAL_ECOSYSTEM_SMOKE: '1'
         run: |
+          set +e
           pnpm --dir packages/agent-core exec vitest run \
             test/isolated-loop-real-ecosystem.test.ts \
             --reporter=json \
             --outputFile="$RUNNER_TEMP/isolated-loop-real.json" \
             --testTimeout=180000
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            cat "$RUNNER_TEMP/isolated-loop-real.json"
+          fi
+          exit "$status"
 
       - name: Require all four dependency-free ecosystem cases
         shell: bash
@@ -278,20 +284,29 @@ jobs:
         env:
           WUKONG_REAL_NETWORK_SMOKE: '1'
         run: |
+          set +e
           pnpm --dir packages/agent-core exec vitest run \
             test/candidate-bootstrap-plan-builder.test.ts \
             --testTimeout=180000
+          status=$?
+          exit "$status"
 
       - name: Run four dependencyful ecosystems through Candidate, Promote, and Final Gate
         shell: bash
         env:
           WUKONG_REAL_NETWORK_SMOKE: '1'
         run: |
+          set +e
           pnpm --dir packages/agent-core exec vitest run \
             test/isolated-loop-real-ecosystem.test.ts \
             --reporter=json \
             --outputFile="$RUNNER_TEMP/isolated-loop-dependencyful.json" \
             --testTimeout=180000
+          status=$?
+          if [ "$status" -ne 0 ]; then
+            cat "$RUNNER_TEMP/isolated-loop-dependencyful.json"
+          fi
+          exit "$status"
 
       - name: Reject skipped dependencyful Loop evidence
         shell: bash
