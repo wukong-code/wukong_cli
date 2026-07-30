@@ -4,12 +4,12 @@
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
-## 🚧 0.0.21 — Loop Evidence Integrity（发布候选）
+## ✅ 0.0.21 — Loop Evidence Integrity（已发布）
 
 - [x] 同一种 builtin risk 出现在不同文件、行或 evidence 位置时，为每个不同 occurrence 生成稳定 evidence identity；完全相同的重复输入继续去重（2026-07-30）
 - [x] reviewer broker 保留全部不同风险 occurrence，并增加回归测试（2026-07-30）
 - [x] 删除隔离 worktree / Safe Promote 实现、测试、发布门槛和对外承诺；六平台保持同一功能面（2026-07-30）
-- [ ] 六平台 native RC、公开 Release 与安装脚本验收
+- [x] 六平台 native RC、公开 Release、官网 manifest/installer、fresh install 与 0.0.20 → 0.0.21 native upgrade 验收通过（2026-07-30）
 
 ## ✅ 0.0.19 — Explicit Finish Line（已发布；验证债务保留）
 
