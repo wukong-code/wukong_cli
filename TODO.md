@@ -1,8 +1,15 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.19 的发布后验证债务以 [Explicit Finish Line](docs/design/0.0.19-explicit-finish-line.md) 为准，下一已批准实施版本 0.0.20 以 [Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md) 为准。0.0.21、0.1.0 与 0.2.0 已确认产品顺序但尚未批准开工，不进入当前 checkbox 队列。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.21 只发布六平台一致的重复风险 evidence 修复，不包含隔离 worktree / Safe Promote。0.1.0 与 0.2.0 尚未批准开工，不进入当前 checkbox 队列。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
+
+## 🚧 0.0.21 — Loop Evidence Integrity（发布候选）
+
+- [x] 同一种 builtin risk 出现在不同文件、行或 evidence 位置时，为每个不同 occurrence 生成稳定 evidence identity；完全相同的重复输入继续去重（2026-07-30）
+- [x] reviewer broker 保留全部不同风险 occurrence，并增加回归测试（2026-07-30）
+- [x] 删除隔离 worktree / Safe Promote 实现、测试、发布门槛和对外承诺；六平台保持同一功能面（2026-07-30）
+- [ ] 六平台 native RC、公开 Release 与安装脚本验收
 
 ## ✅ 0.0.19 — Explicit Finish Line（已发布；验证债务保留）
 
@@ -158,35 +165,32 @@
 
 - command/argv recipe、sandbox/private scratch/artifact、Skill authoring/scaffold/draft/promotion、embedded binding、recipe dependency graph、动态 chained execution、Marketplace/远程 registry/自动更新/云同步、MCP/公网/secret Gate steps、PR Gate、Team policy、托管 grader、新默认命令、支付/quota 均不进入 0.0.20。
 
-## 🧭 已确认后续版本（未批准开工）
+## 🧭 后续版本（等待重新规划）
 
-> 本节只保证候选方向可发现，不是当前执行任务。只有前置版本完成发布门槛并经过新的产品决策后，才把对应规格展开成可勾选 TODO。
-
-### 0.0.21 — Isolated Loop Worktrees
-
-- 规格：[docs/design/0.0.21-isolated-loop-worktrees.md](docs/design/0.0.21-isolated-loop-worktrees.md)
-- 候选价值：让单个写入型 Loop 使用 exact source snapshot、显式依赖 bootstrap 和独占 Git worktree；candidate 经 target-global fenced Promote 后仍须在真实 workspace 通过最终 Gate。
-- 进入实施前：0.0.20 broker/criteria/consent 四类门槛全部完成，并确认 dirty snapshot、依赖准备、target fencing 和跨平台 worktree 的实现成本可接受。
-- 不提前做：多 Agent 并行、完整 sandbox、自动 stash/commit/reset/push、云端 runner 或新默认命令。
+> 隔离 worktree / Safe Promote 实验已经取消。依赖该架构的旧 0.1.0 和
+> 0.2.0 文档只作历史研究，不能直接进入 checkbox 队列或对外承诺。只有
+> 0.0.21 发布验收和真实用户验证完成后，才重新批准后续规格。
 
 ### 0.1.0 — Trusted Local Loop
 
-- 规格：[docs/design/0.1.0-trusted-local-loop.md](docs/design/0.1.0-trusted-local-loop.md)
-- 候选价值：把 0.0.19 Finish Line、0.0.20 criteria/broker/consent 与 0.0.21 worktree/Promote/Final Gate 收敛为第一版可稳定推荐的 Free 本地 Loop。
-- 进入实施前：0.0.20 与 0.0.21 四类门槛完成；RC 只修稳定、兼容、安装升级、恢复和 public truth，不再加大功能。
-- 公开门槛：25 名 opt-in 外部测试者、15 名首次 target Final Gate `PASS`、7 名在 14 天内对第二个不同 Goal 再次 `PASS`、3 个授权案例；P0/P1、false PASS、workspace damage 和隐私误解未解决项为 0；RC 连续稳定 14 天。
-- 条件性窗口：0.1.0 RC 目标 2026 年 10 月，公开版最早 2026 年 11 月；门槛未过就顺延。
+- 当前只保留“稳定现有本地 Loop”的产品方向，详细规格等待重新评审。
+- 候选范围：Finish Line、criteria/evidence、durable lifecycle、安装升级、恢复、跨平台与 public truth。
+- 不继承：isolated worktree、Candidate Gate、Safe Promote、lease/fencing 或 target Final Gate。
+- 进入实施前：0.0.21 六平台发布与安装升级验收完成；明确新的功能清单和验收合同。
+- 公开门槛仍要求 opt-in 外部测试、重复使用、P0/P1 清零和稳定观察，但具体数字随新规格重新确认。
 - 不提前做：并行、Detach/Supervisor、PR Gate、Billing、managed model、云端执行、Team 或 telemetry 后端。
 
-### 0.2.0 — Pro Reliable Autonomy
+### 0.2.0 — Reliable Autonomy 候选
 
-- 主规格：[docs/design/0.2.0-pro-reliable-autonomy.md](docs/design/0.2.0-pro-reliable-autonomy.md)
-- 组件：[Bounded Parallel Loop](docs/design/0.2.0-bounded-parallel-loop.md) / [Local Loop Supervisor](docs/design/0.2.0-local-loop-supervisor.md)
-- 候选价值：一个 `/loop` 在 2–5 个独立 worktree 中有界并行；用户显式 Detach 后由本机 Supervisor 只提升 approval、问题、冲突、预算和终态；Verified PR Gate 只作可选 bundle 增益。
-- Free 永久保留：单前台 Loop、BYOK、Resume、Finish Line、criteria、isolated worktree、safe Promote 和 target Final Gate；不对 Loop/token 设 quota。
-- 进入实施前：0.1.0 发布并稳定观察至少 30 天，15 位外部完成、7 位重复，且 5 位目标用户出现重复多任务监督需求。
-- Pilot 门槛：一个邀请制月付 SKU，候选 `$12/月`；10 人受邀、5 人真实使用、3 人付款、2 人续费。达到后仍保持 invite-only；只有另行达到 10 个付费用户、5 人 30 天重复、3 人续费且 P0/P1 为 0，才允许评审 public Checkout。
-- 不提前做：无界 Agent Tree、云端/跨设备执行、自动审批/加预算、开机自启、Team/SSO/audit、managed credits 或 telemetry 后端。
+- 当前没有已批准技术方案、收费 SKU、价格或公开 Checkout 计划。
+- 旧 Bounded Parallel Loop、Local Loop Supervisor 和 Pro 文档依赖已取消的 Promote/lease/fencing 架构，等待 0.1.0 后重新研究。
+- 只有真实用户出现重复多任务监督需求，才评审并行、Supervisor、PR Gate 或商业化。
+- Free 合同继续包括单前台 Loop、BYOK、Resume、Finish Line 和现有 Gate；不对用户自己的 API Key、Loop 次数或 token 设置 Wukong quota。
+
+### 已取消的历史实验
+
+- [0.0.21 Isolated Loop Worktrees](docs/design/0.0.21-isolated-loop-worktrees.md)
+  只作研究记录，不属于 0.0.21、0.1.0 或 0.2.0 的实现承诺。
 
 ## ✅ 0.0.18 — Loop-First Simplification
 
@@ -671,4 +675,4 @@
 
 ---
 
-**最后更新**: 2026-07-25（后续顺序已调整为 0.0.21 → 0.1.0 Free Trusted Local Loop → 0.2.0 Pro Reliable Autonomy；当前实施范围仍只到 0.0.20）
+**最后更新**: 2026-07-30（当前实施范围为 0.0.21 Loop Evidence Integrity；后续版本等待重新规划）

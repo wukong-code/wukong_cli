@@ -60,20 +60,23 @@
   已于 2026-07-25 发布：Loop 启动前确认 Goal、Done when、Must not 和真实 checks；冻结 Gate Plan、workspace trust 与 approval；区分 attempt、terminal、continuation 和 Revised Loop。跨平台、真实多语言 E2E 和五用户量化验收仍作为发布后验证债务保留。
 - [0.0.19 Release Notes](releases/0.0.19.md)
 - [0.0.20 Reusable Verification Criteria](design/0.0.20-reusable-verification-skills.md)
-  实现候选：只复用用户本机已有 Skill 的严格 qualitative criteria，并通过受限 evidence broker 与逐 run BYOK provider consent 复审；不执行 Skill command。发布门槛验证中。
+  已发布：只复用用户本机已有 Skill 的严格 qualitative criteria，并通过受限 evidence broker 与逐 run BYOK provider consent 复审；不执行 Skill command。
 - [0.0.20 Release Notes](releases/0.0.20.md)
-- [0.0.21 Isolated Loop Worktrees](design/0.0.21-isolated-loop-worktrees.md)
-  后续候选：exact snapshot、显式 bootstrap、独占 worktree、safe Promote 与 target Final Gate。
+- [0.0.21 Loop Evidence Integrity](design/0.0.21-loop-evidence-integrity.md)
+  发布候选：修复相同 risk kind 在不同文件、行或 evidence 位置时的 evidence identity 冲突；不新增命令、配置或平台专用能力。
+- [0.0.21 Release Notes](releases/0.0.21.md)
+- [已取消：0.0.21 Isolated Loop Worktrees](design/0.0.21-isolated-loop-worktrees.md)
+  历史实验记录：不属于 0.0.21 或任何已承诺的后续版本。
 - [0.1.0 Trusted Local Loop](design/0.1.0-trusted-local-loop.md)
-  已确认产品范围、未批准实施：第一版可稳定推荐的 Free 本地 Loop；RC 不增加并行、Supervisor、付费或托管能力。
+  旧规格等待重新规划；当前只保留“稳定现有 Free 本地 Loop”的方向。
 - [0.2.0 Pro Reliable Autonomy](design/0.2.0-pro-reliable-autonomy.md)
-  商业与产品候选：有界并行、显式 Detach、本机 Supervisor 与可选 Verified PR Gate；Free 单 Loop、BYOK 和安全 primitive 永久保留。
+  旧规格等待重新规划；当前没有已批准技术方案、收费 SKU 或 Checkout。
 - [历史候选：Pro PR Gate 与 Billing](design/historical-pro-pr-gate-billing.md)
   归档的 2026-07-20 单点 PR Gate 收费假设；已被新的 0.1.0 / 0.2.0 版本边界取代。
 - [跨 Agent Session Resume](design/cross-agent-resume.md)
   当前 `/resume` 恢复 Wukong 会话，`/resume codex|claude|cursor|kimi|grok` 显式发现对应 Agent 的本地会话，并通过内置 Skill 只读导入后在 Wukong 中继续。
 - [执行层 TODO](../TODO.md)
-  按 ROADMAP milestone 拆解的任务清单，记录 0.0.19 发布后验证债务、下一已批准实施版本 0.0.20 和已完成基线；0.0.21、0.1.0、0.2.0 尚未批准开工，不进入当前 checkbox 队列。
+  按 ROADMAP milestone 拆解的任务清单，记录已完成基线、0.0.21 跨平台修复版与后续版本边界。
 
 当前可用 top-level commands 以 `wukong --help` 为准，主要包括：
 
@@ -124,36 +127,29 @@ wukong upgrade
 - [Verification CLI 自动化测试计划](test/verification-cli-test-plan.md)
   记录 `verify`、`scan`、`guard`、TUI slash commands 和 `wukong_verify` 的核心测试、CLI smoke 和后续测试 TODO。
 
-## 后续版本（已确认范围、未批准实施）
+## 后续版本（等待重新规划）
 
-以下文档表达依赖顺序和产品边界，但尚未批准实施，也不代表已经开工或已经实现：
-
-- [0.0.21 Isolated Loop Worktrees](design/0.0.21-isolated-loop-worktrees.md)
-  候选：单个写入型 Loop 使用 exact snapshot、显式依赖 bootstrap 和独占 Git worktree；candidate 经 target-global fenced Promote 后必须在真实 workspace 再跑最终 Gate。worktree 是写入碰撞隔离，不是完整 sandbox。
-- [0.1.0 Trusted Local Loop](design/0.1.0-trusted-local-loop.md)
-  稳定里程碑：把 Finish Line、criteria/evidence、隔离 worktree、Promote 与 target Final Gate 收敛成可稳定推荐的 Free + BYOK 产品。条件目标最早 2026 年 11 月，取决于真实用户和 RC 门槛。
-- [0.2.0 Pro Reliable Autonomy](design/0.2.0-pro-reliable-autonomy.md)
-  商业候选：一个邀请制 `$12/月` 月付 Pilot，验证有界并行、本机 Supervisor 与可靠交付价值；未满足付款、复用、续费门槛前不开放 public Checkout。
-  - [Bounded Parallel Loop 组件](design/0.2.0-bounded-parallel-loop.md)
-  - [Local Loop Supervisor 组件](design/0.2.0-local-loop-supervisor.md)
-
-版本只按以下顺序推进：
+隔离 worktree / Safe Promote 实验已经取消。依赖它的旧 0.1.0、0.2.0
+文档只作历史研究，不代表已批准范围。当前只保留下列决策顺序：
 
 ```text
-可信验证
-  → 单 Loop 隔离
-  → 0.1.0 稳定发布
-  → 0.2.0 有界并行 + 本机例外式监督 Pilot
+0.0.21 evidence-integrity 发布验收
+  → 收集现有 Loop 的真实使用证据
+  → 重新规划 0.1.0
+  → 0.1.0 稳定后再决定是否需要 0.2.0
 ```
 
-每一版都必须在前置版本真实发布验收后重新批准实施；当前实施范围仍只到 0.0.20。0.1.0 继续免费，0.2.0 候选也不能对 Free 单 Loop 或 BYOK token 设置 quota。
+0.1.0 当前只保留稳定 Finish Line、criteria/evidence、durable lifecycle、
+安装升级、恢复、跨平台与 public truth 的方向；不继承 Candidate Gate、Safe
+Promote、lease/fencing 或 target Final Gate。0.2.0 没有已批准的技术方案、
+收费 SKU 或 Checkout。Free 本地 Loop 与用户自己的 BYOK token 不设置
+Wukong quota。
 
 ## 当前最高优先级 TODO
 
 任务级清单以 [../TODO.md](../TODO.md) 为准，本节只保留方向摘要：
 
-1. 结清 0.0.19 的跨平台、真实多语言 Loop E2E、Kimi/Grok smoke 和五用户量化验证债务。
-2. 实施 0.0.20 brokered reviewer、exact BYOK provider consent 和 existing-Skills criteria-only contract；不执行 Skill command。
-3. 0.0.21、0.1.0、0.2.0 只维护已确认规格，不在前置版本验收前开工。
-4. worktree 不能宣传成完整 sandbox，AgentSwarm 的 128 上限不能宣传成安全并行能力。
-5. 0.1.0 是 Free Trusted Local Loop；0.2.0 是未批准的 Pro Reliable Autonomy 候选。旧 PR Gate + Billing 文档只作历史归档。
+1. 完成 0.0.21 六平台 RC、公开 Release、fresh install 和 0.0.20 → 0.0.21 升级验收。
+2. 结清 0.0.19/0.0.20 保留的真实项目与外部用户验证债务。
+3. 在真实使用证据形成前，不实现或宣传 0.1.0、0.2.0 新执行架构。
+4. 已取消的 worktree/Promote、旧 PR Gate/Billing 和并行/Supervisor 文档只作历史研究。

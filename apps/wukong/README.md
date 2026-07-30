@@ -27,7 +27,12 @@ wukong migrate
 wukong upgrade
 ```
 
-The normal interactive path is `/resume` → `/loop` → Gate. In 0.0.20 every new
+The normal interactive path is `/resume` → `/loop` → Gate. Version 0.0.21
+preserves every distinct built-in risk occurrence under a stable evidence
+identity when the same risk kind appears at different files, lines, or evidence
+locations. Exact duplicate input remains deduplicated. It adds no commands or
+configuration and must ship the same behavior on macOS, Linux, and Windows.
+In 0.0.20 every new
 reviewer attempt reads only a bounded local broker and requires separate local
 read trust plus per-run consent for the exact BYOK provider endpoint. Existing
 Verification Skills may contribute strict qualitative criteria, but suggestions

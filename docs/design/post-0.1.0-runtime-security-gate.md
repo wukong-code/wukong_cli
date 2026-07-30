@@ -51,7 +51,7 @@ Wukong Code 的定位仍是交付型 coding agent，而不是通用 EDR、安全
 - macOS、Linux、Windows 的一致性；
 - 误报率、绕过风险和故障时的 fail-open / fail-closed 决策。
 
-在 0.1.0 之前引入这条能力线，会稀释 Trusted Local Loop 的安装、恢复、隔离、Promote 和 Final Gate 验证重点，也容易在安全边界尚未成立时产生过度承诺。
+在 0.1.0 之前引入这条能力线，会稀释 Trusted Local Loop 的安装、恢复、现有 Gate 和跨平台稳定性重点，也容易在安全边界尚未成立时产生过度承诺。已取消的隔离 worktree、Safe Promote 和 target Final Gate 不属于该前置基线。
 
 ## 4. 当前基础与缺口
 

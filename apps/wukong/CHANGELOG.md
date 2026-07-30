@@ -1,5 +1,17 @@
 # @wukong.today/code
 
+## 0.0.21
+
+### Patch Changes
+
+- Preserve every built-in risk finding when the same risk kind appears at
+  different files, lines, or evidence locations. Each distinct occurrence now
+  receives a stable evidence identity, so the Loop reviewer sees the complete
+  deterministic risk set while exact duplicate input remains deduplicated.
+- No command or configuration changes. The release must keep the same feature
+  surface on macOS, Linux, and Windows and does not include isolated
+  worktrees, Safe Promote, target Final Gate, or platform-specific FFI.
+
 ## 0.0.20
 
 ### Patch Changes

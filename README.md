@@ -8,7 +8,15 @@
 
 Wukong Code is a terminal AI coding agent built around one primary workflow: **Goal → Write → Check → Review → Fix**. Give `/loop` a goal and Wukong keeps working until an independent reviewer has no blocking findings or the iteration limit is reached.
 
-Version `0.0.20` adds reusable Verification Criteria without executing Skill
+Version `0.0.21` is a focused cross-platform reliability patch. When the same
+built-in risk kind is found at different files, lines, or evidence locations,
+`/loop` now preserves every distinct occurrence under a stable evidence
+identity instead of collapsing later findings as duplicates. Exact duplicate
+input remains deduplicated. There are no new commands or configuration
+changes. See the [0.0.21 feature list](docs/design/0.0.21-loop-evidence-integrity.md)
+and [release notes](docs/releases/0.0.21.md).
+
+Version `0.0.20` added reusable Verification Criteria without executing Skill
 commands. `/loop` discovers strict sidecars from existing personal, project,
 monorepo package, explicitly trusted local, and read-only built-in reference
 Skills. Suggested recipes remain unselected until the user chooses an exact
@@ -48,13 +56,12 @@ Login with an authenticated catalog that may honestly be empty. Login does not
 replace a BYOK default model. See the
 [0.0.18 design](docs/design/0.0.18-loop-first-simplification.md).
 
-The planned sequence is now `0.0.21`
-isolated Loop worktrees, and then `0.1.0` as the first stable **Trusted Local
-Loop**. Version `0.1.0` remains Free, local-first, and BYOK; it does not include
-parallel agents, a Supervisor, billing, or managed models. `0.2.0 Pro Reliable
-Autonomy` is a later candidate for bounded parallel work and an explicit local
-Supervisor pilot, not a current paid plan or Checkout commitment. See the
-[roadmap](ROADMAP.md).
+The isolated-worktree / Safe Promote experiment has been removed from the
+release roadmap; it is not part of `0.0.21` or a promised later version.
+The old `0.1.0` and `0.2.0` specifications that depended on that architecture
+now require replanning. The only retained `0.1.0` direction is stabilizing the
+existing Free, local-first, BYOK Loop; there is no approved `0.2.0` technical
+scope, paid plan, price, or Checkout commitment. See the [roadmap](ROADMAP.md).
 
 An older document explored charging for PR Gate alone under the `0.1.0` name.
 That proposal is now archived and no longer owns the version number.

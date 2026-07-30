@@ -35,7 +35,7 @@ const config = withMermaid(defineConfig({
     search: { provider: 'local' },
     nav: [
       { text: 'User Guide', link: '/user-guide' },
-      { text: '0.0.20 Plan', link: '/design/0.0.20-reusable-verification-skills' },
+      { text: '0.0.21 RC', link: '/design/0.0.21-loop-evidence-integrity' },
       { text: 'Architecture', link: '/tech/architecture' },
       { text: 'Updates & Announcements', link: '/operations/updates-and-announcements' },
       { text: 'Test Plan', link: '/test/verification-cli-test-plan' },
@@ -56,17 +56,18 @@ const config = withMermaid(defineConfig({
         text: 'Version Plans',
         items: [
           { text: '0.0.19 Explicit Finish Line (Released)', link: '/design/0.0.19-explicit-finish-line' },
-          { text: '0.0.20 Reusable Verification Criteria (Approved Plan)', link: '/design/0.0.20-reusable-verification-skills' },
-          { text: '0.0.21 Isolated Loop Worktrees (Candidate)', link: '/design/0.0.21-isolated-loop-worktrees' },
-          { text: '0.1.0 Trusted Local Loop (Planned)', link: '/design/0.1.0-trusted-local-loop' },
-          { text: '0.2.0 Pro Reliable Autonomy (Candidate)', link: '/design/0.2.0-pro-reliable-autonomy' },
-          { text: '↳ Bounded Parallel Loop', link: '/design/0.2.0-bounded-parallel-loop' },
-          { text: '↳ Local Loop Supervisor', link: '/design/0.2.0-local-loop-supervisor' },
+          { text: '0.0.20 Reusable Verification Criteria (Released)', link: '/design/0.0.20-reusable-verification-skills' },
+          { text: '0.0.21 Loop Evidence Integrity (RC)', link: '/design/0.0.21-loop-evidence-integrity' },
+          { text: '0.1.0 Trusted Local Loop (Needs Replan)', link: '/design/0.1.0-trusted-local-loop' },
+          { text: '0.2.0 Reliable Autonomy (Needs Replan)', link: '/design/0.2.0-pro-reliable-autonomy' },
         ],
       },
       {
         text: 'Historical Product & Commercial Research',
         items: [
+          { text: 'Canceled 0.0.21 Isolated Loop Worktrees', link: '/design/0.0.21-isolated-loop-worktrees' },
+          { text: 'Old Bounded Parallel Loop', link: '/design/0.2.0-bounded-parallel-loop' },
+          { text: 'Old Local Loop Supervisor', link: '/design/0.2.0-local-loop-supervisor' },
           { text: 'Archived Pro PR Gate + Billing', link: '/design/historical-pro-pr-gate-billing' },
           { text: 'Commercial Plan (Historical)', link: '/business/COMMERCIAL_REFACTOR_PLAN' },
           { text: 'Wukong Capability Model (Historical)', link: '/business/WUKONG_CAPABILITY_MODEL' },
