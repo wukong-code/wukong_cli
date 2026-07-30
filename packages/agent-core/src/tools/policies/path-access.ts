@@ -16,19 +16,13 @@ import * as pathe from 'pathe';
 
 import type { Kaos } from '@wukong/kaos';
 
-import {
-  assertWorkspacePathPolicyAllows,
-  type WorkspaceConfig,
-} from '../support/workspace';
+import type { WorkspaceConfig } from '../support/workspace';
 import { isSensitiveFile } from './sensitive';
 
 export type PathClass = 'posix' | 'win32';
 export type PathSecurityCode = 'PATH_OUTSIDE_WORKSPACE' | 'PATH_SENSITIVE' | 'PATH_INVALID';
 export type PathAccessOperation = 'read' | 'write' | 'search';
-export type WorkspaceGuardMode =
-  | 'absolute-outside-allowed'
-  | 'workspace-only'
-  | 'disabled';
+export type WorkspaceGuardMode = 'absolute-outside-allowed' | 'disabled';
 
 export interface WorkspaceAccessPolicy {
   readonly guardMode: WorkspaceGuardMode;
@@ -230,13 +224,6 @@ export function resolvePathAccess(
 
   if (outsideWorkspace) {
     switch (policy.guardMode) {
-      case 'workspace-only':
-        throw new PathSecurityError(
-          'PATH_OUTSIDE_WORKSPACE',
-          path,
-          canonical,
-          `"${path}" is outside the isolated candidate workspace.`,
-        );
       case 'absolute-outside-allowed':
         if (!rawIsAbsolute) {
           throw new PathSecurityError(
@@ -260,21 +247,12 @@ export function resolvePathAccessPath(
   options: ResolvePathAccessPathOptions,
 ): string {
   const { kaos, workspace, operation, policy, expandHome = true } = options;
-  const effectivePolicy = workspace.accessMode === 'workspace-only'
-    ? {
-        guardMode: 'workspace-only' as const,
-        checkSensitive:
-          policy?.checkSensitive ?? DEFAULT_WORKSPACE_ACCESS_POLICY.checkSensitive,
-      }
-    : policy;
-  const resolved = resolvePathAccess(path, workspace.workspaceDir, workspace, {
+  return resolvePathAccess(path, workspace.workspaceDir, workspace, {
     operation,
-    policy: effectivePolicy,
+    policy,
     pathClass: kaos.pathClass(),
     homeDir: expandHome ? kaos.gethome() : undefined,
   }).path;
-  assertWorkspacePathPolicyAllows(workspace, resolved, operation);
-  return resolved;
 }
 
 /**

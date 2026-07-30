@@ -8,18 +8,7 @@
 
 Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal → Write → Check → Review → Fix**。给 `/loop` 一个目标，它会持续修改，直到独立 reviewer 不再返回 blocking finding，或达到迭代上限。
 
-`0.0.21` 增加默认关闭的实验性 Isolated Loop：冻结用户确认的 dirty-workspace
-Source Snapshot，在 detached candidate 中完成确定性 bootstrap、受限写入与
-Candidate Gate，再由用户确认 exact Promote proposal 后逐项 Apply。Candidate
-PASS 永远不是 terminal PASS；只有目标 workspace 的 Final Gate 和重新读取验证的
-completion seal 才能完成 Loop。worktree 边界用于减少 workspace 写入碰撞，不是完整
-OS process sandbox。完整范围见
-[0.0.21 设计](docs/design/0.0.21-isolated-loop-worktrees.md)和
-[发布说明](docs/releases/0.0.21.md)。
-
-`0.0.20` 让 Loop 可以复用已有本地 Skill 的严格 qualitative criteria，但不会执行
-Skill command；exact selection、bounded broker 与逐 run BYOK provider consent
-边界继续保留。
+`0.0.20` 让 Loop 可以复用已有本地 Skill 的严格 qualitative criteria，但不会执行 Skill command。TUI 会发现 personal、project、monorepo package、显式受信的 extra 和只读 builtin reference source；suggested 保持未选，只有用户确认 exact source、full provenance digest 与 flat order 后才进入合同。所有新 V2/V3 reviewer 都只能读取 bounded、去密的本机 broker，并逐 run 确认实际 BYOK provider endpoint。Headless 可用 `wukong loop "<目标>" --dry-run --output-format stream-json` 查看同一 catalog、selection CAS、输入边界、provider 目的地和成本，且不会创建 run 或打开 provider connection。完整范围见 [0.0.20 设计](docs/design/0.0.20-reusable-verification-skills.md)和[发布说明](docs/releases/0.0.20.md)。
 
 `0.0.13` 增加结构化多 findings、`.wukong/review-policy.md` 项目规则、本地 finding feedback 与诊断统计，以及可选的独立 reviewer model。当前产品继续 Free + BYOK，没有付费计划或 entitlement。
 
@@ -31,11 +20,7 @@ Skill command；exact selection、bounded broker 与逐 run BYOK provider consen
 
 `0.0.18` 把默认 TUI 命令面收口到 Loop 主流程，同时通过 `/help advanced` 保留高级工具和兼容实现；新增 Kimi Code/Grok 只读 Resume、显式确认的纯文本 `/feedback`，以及由 CLI 发起、在网站通过 Google/GitHub 确认的 Device Login。当前 Wukong 模型目录可以为空，登录仍成功且不会覆盖用户的 BYOK 默认模型。完整范围见 [0.0.18 设计](docs/design/0.0.18-loop-first-simplification.md)。
 
-实验性 `0.0.21` worktree 版本之后，下一步是 `0.1.0` 第一版稳定的
-**Trusted Local Loop**。`0.1.0` 继续 Free、local-first、BYOK，不包含并行 Agent、
-Supervisor、Billing 或 managed model。`0.2.0 Pro Reliable Autonomy` 只是更后的
-有界并行与本机 Supervisor 邀请制候选，不代表当前已有付费计划或 Checkout。
-详见[路线图](ROADMAP.md)。
+后续顺序已调整为：`0.0.21` 单 Loop 隔离 worktree → `0.1.0` 第一版稳定的 **Trusted Local Loop**。`0.1.0` 继续 Free、local-first、BYOK，不包含并行 Agent、Supervisor、Billing 或 managed model。`0.2.0 Pro Reliable Autonomy` 只是更后的有界并行与本机 Supervisor 邀请制候选，不代表当前已有付费计划或 Checkout。详见[路线图](ROADMAP.md)。
 
 旧文档曾用 `0.1.0` 名称探索只为 PR Gate 收费；该方案现已归档，不再占用这个版本号。
 

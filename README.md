@@ -8,20 +8,17 @@
 
 Wukong Code is a terminal AI coding agent built around one primary workflow: **Goal → Write → Check → Review → Fix**. Give `/loop` a goal and Wukong keeps working until an independent reviewer has no blocking findings or the iteration limit is reached.
 
-Version `0.0.21` adds an experimental Isolated Loop pipeline, disabled by
-default. It freezes an exact approved dirty-workspace snapshot, materializes a
-detached candidate, runs confirmed deterministic bootstrap and bounded
-candidate verification, and requires an exact Promote decision before applying
-the Agent delta. Candidate PASS is never terminal PASS: only the target Final
-Gate and a durably re-read completion seal can complete the Loop. The worktree
-boundary reduces workspace collisions but is not a complete operating-system
-process sandbox. See the
-[0.0.21 design](docs/design/0.0.21-isolated-loop-worktrees.md) and
-[release notes](docs/releases/0.0.21.md).
-
-Version `0.0.20` added reusable Verification Criteria without executing Skill
-commands. Existing local criteria stay behind exact selection, bounded broker,
-and per-run BYOK provider consent.
+Version `0.0.20` adds reusable Verification Criteria without executing Skill
+commands. `/loop` discovers strict sidecars from existing personal, project,
+monorepo package, explicitly trusted local, and read-only built-in reference
+Skills. Suggested recipes remain unselected until the user chooses an exact
+source and digest; multiple selections keep a visible flat order. Every new
+V2/V3 reviewer uses a bounded, secret-filtering local broker and a separate
+per-run confirmation for the exact BYOK provider endpoint. Headless users can
+inspect the same catalog, selection CAS, input policy, provider destination,
+and cost with `--dry-run --output-format stream-json`. See the
+[0.0.20 design](docs/design/0.0.20-reusable-verification-skills.md) and
+[release notes](docs/releases/0.0.20.md).
 
 Version `0.0.13` added structured multi-finding reviews, project-specific rules in `.wukong/review-policy.md`, local finding feedback and diagnostics, plus an optional independent reviewer model. The current product remains Free and bring-your-own-key, with no paid plan or entitlement.
 
@@ -51,9 +48,9 @@ Login with an authenticated catalog that may honestly be empty. Login does not
 replace a BYOK default model. See the
 [0.0.18 design](docs/design/0.0.18-loop-first-simplification.md).
 
-The planned sequence after the experimental `0.0.21` worktree release is
-`0.1.0`, the first stable **Trusted Local Loop**. Version `0.1.0` remains Free,
-local-first, and BYOK; it does not include
+The planned sequence is now `0.0.21`
+isolated Loop worktrees, and then `0.1.0` as the first stable **Trusted Local
+Loop**. Version `0.1.0` remains Free, local-first, and BYOK; it does not include
 parallel agents, a Supervisor, billing, or managed models. `0.2.0 Pro Reliable
 Autonomy` is a later candidate for bounded parallel work and an explicit local
 Supervisor pilot, not a current paid plan or Checkout commitment. See the

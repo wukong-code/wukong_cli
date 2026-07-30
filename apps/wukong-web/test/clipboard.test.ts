@@ -7,14 +7,8 @@ import { copyTextToClipboard } from '../src/lib/clipboard';
 interface FakeDocument {
   execCommand: ReturnType<typeof vi.fn>;
   createElement: ReturnType<typeof vi.fn>;
-  body: { append: ReturnType<typeof vi.fn> };
-  textarea: {
-    value: string;
-    setAttribute: ReturnType<typeof vi.fn>;
-    focus: ReturnType<typeof vi.fn>;
-    select: ReturnType<typeof vi.fn>;
-    remove: ReturnType<typeof vi.fn>;
-  };
+  body: { appendChild: ReturnType<typeof vi.fn>; removeChild: ReturnType<typeof vi.fn> };
+  textarea: { value: string; setAttribute: ReturnType<typeof vi.fn>; focus: ReturnType<typeof vi.fn>; select: ReturnType<typeof vi.fn> };
 }
 
 function installDocument(execResult: boolean | Error): FakeDocument {
@@ -24,7 +18,6 @@ function installDocument(execResult: boolean | Error): FakeDocument {
     setAttribute: vi.fn(),
     focus: vi.fn(),
     select: vi.fn(),
-    remove: vi.fn(),
   };
   const doc: FakeDocument = {
     execCommand: vi.fn().mockImplementation(() => {
@@ -32,7 +25,7 @@ function installDocument(execResult: boolean | Error): FakeDocument {
       return execResult;
     }),
     createElement: vi.fn().mockReturnValue(textarea),
-    body: { append: vi.fn() },
+    body: { appendChild: vi.fn(), removeChild: vi.fn() },
     textarea: textarea as FakeDocument['textarea'],
   };
   vi.stubGlobal('document', doc);
@@ -64,8 +57,8 @@ describe('copyTextToClipboard', () => {
     await expect(copyTextToClipboard('abc')).resolves.toBe(true);
     expect(doc.execCommand).toHaveBeenCalledWith('copy');
     expect(doc.textarea.value).toBe('abc');
-    expect(doc.body.append).toHaveBeenCalledTimes(1);
-    expect(doc.textarea.remove).toHaveBeenCalledTimes(1);
+    expect(doc.body.appendChild).toHaveBeenCalledTimes(1);
+    expect(doc.body.removeChild).toHaveBeenCalledTimes(1);
   });
 
   it('falls back to execCommand when writeText rejects', async () => {

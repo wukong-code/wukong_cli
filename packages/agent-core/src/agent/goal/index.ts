@@ -4,30 +4,22 @@ import {
   canonicalDigest,
   canonicalJson,
   containsInlineSecret,
-  containsSensitiveText,
   createFreshReviewerInputDigest,
   BUILTIN_RISK_SCAN_POLICY_VERSION,
   FINISH_LINE_WARNING_POLICY_VERSION,
   FRESH_REVIEWER_POLICY_VERSION,
   GATE_GUARD_POLICY_VERSION,
   REVIEW_SUBJECT_POLICY_VERSION,
-  redactSensitiveText,
-  redactSensitiveValue,
   validateVerificationCriteriaSelection,
   validateFrozenGatePlan,
-  validateIsolatedLoopCandidateBinding,
-  validateTargetGateCompletionSeal,
   type BrokerReviewTrustBindingV1,
   type FinishLineReview,
   type GateApprovalBinding,
   type FreshCriteriaVerdictV1,
   type GatePlan,
-  type IsolatedLoopCandidateBindingV1,
   type ReviewSubjectManifestV1,
   type ReviewSubjectConsentBindingV1,
   type ReviewPolicyBinding,
-  type TargetFinalGateEvidenceSnapshotV1,
-  type TargetGateCompletionSealV1,
   type VerificationCriteriaRecipeV1,
   type VerificationCriteriaSelectionV1,
   type WorkspaceIdentity,
@@ -39,16 +31,6 @@ import type { AgentRecordOf } from '../records/types';
 import {
   type TelemetryProperties,
 } from '../../telemetry';
-import {
-  requireValidatedTargetCompletionSeal,
-  type TargetCompletionSealAuthorizationV1,
-} from '../../target-completion-seal-store';
-import {
-  createTargetFinalGateEvidenceFromGoalAudit,
-} from '../../target-final-gate-audit-bridge';
-import type {
-  TargetFinalGateAttemptStateV1,
-} from '../../target-final-gate-attempt-store';
 
 /**
  * Durable goal-mode state owned by {@link GoalMode}.
@@ -432,12 +414,6 @@ export interface LoopRunTerminalV1 {
   readonly blockerKeys: readonly string[];
   readonly terminalAttemptId?: string;
   readonly attemptResultDigest?: string;
-  readonly targetCompletionSealId?: string;
-  readonly targetCompletionSealDigest?: string;
-  readonly targetPromotionLeaseId?: string;
-  readonly targetFencingTokenDigest?: string;
-  readonly targetAfterFingerprintDigest?: string;
-  readonly promotionJournalHeadDigest?: string;
   readonly terminalDigest: string;
   readonly createdAt: number;
 }
@@ -703,42 +679,6 @@ export interface LoopGateReviewRuntimeV2 {
   readonly reviewPolicy: ReviewPolicyBinding;
 }
 
-export interface IsolatedLoopCandidateRuntimeContextV1 {
-  readonly schemaVersion: 1;
-  readonly goalId: string;
-  readonly contractId: string;
-  readonly runId: string;
-  readonly ownerRunId: string;
-  readonly objective: string;
-  readonly gatePlanDigest: string;
-  readonly criteriaSelectionDigest: string | null;
-  readonly writerModel?: string;
-  readonly reviewerModel?: string;
-  readonly loopContract: LoopContractV2 | LoopContractV3;
-  readonly gateContract: {
-    readonly workspaceIdentity: WorkspaceIdentity;
-    readonly workspaceTrust?: WorkspaceTrustBinding;
-    readonly gateApproval: GateApprovalBinding;
-    readonly gatePlan: GatePlan;
-    readonly reviewPolicy: ReviewPolicyBinding;
-  };
-  readonly gateRuntime: LoopGateReviewRuntimeV2;
-}
-
-export interface IsolatedLoopCandidateIterationRecordedV1 {
-  readonly schemaVersion: 1;
-  readonly goalId: string;
-  readonly contractId: string;
-  readonly runId: string;
-  readonly candidateId: string;
-  readonly bindingDigest: string;
-  readonly candidateGateAttemptId: string;
-  readonly candidateGateResultDigest: string;
-  readonly sequence: number;
-  readonly occurredAt: number;
-  readonly recordDigest: string;
-}
-
 export type PriorBlockerDispositionStatus = 'resolved' | 'still_open' | 'replaced_by';
 
 export interface PriorBlockerDisposition {
@@ -831,11 +771,7 @@ interface GoalState {
   legacyContractId?: string;
   currentLoopRun?: LoopRunCreated;
   loopRunReviewSettingsAssignments: Map<string, LoopRunReviewSettingsAssignedV1>;
-  isolatedLoopCandidates: Map<string, IsolatedLoopCandidateBindingV1>;
-  isolatedLoopIterations:
-    Map<string, IsolatedLoopCandidateIterationRecordedV1>;
   loopRunTerminals: Map<string, LoopRunTerminalV1>;
-  targetCompletionSeals: Map<string, TargetGateCompletionSealV1>;
   gateAttemptCompletions: Map<string, GateAttemptCompletedV1>;
   restoredGateAudits: Map<string, RestoredGateAudit>;
   gateCheckHistory: GateCheckResultRecordedV1[];
@@ -889,11 +825,6 @@ export interface GoalSnapshot {
   readonly loopContract?: LoopContract;
   readonly legacyContractId?: string;
   readonly loopRunId?: string;
-  readonly isolatedLoopCandidate?: {
-    readonly candidateId: string;
-    readonly worktreeLeaseId: string;
-    readonly bindingDigest: string;
-  };
   readonly loopChainIterations?: number;
   readonly loopTerminal?: LoopRunTerminalV1;
   readonly convergence?: LoopConvergenceSummary;
@@ -1037,10 +968,7 @@ export class GoalMode {
       wallClockMs: 0,
       budgetLimits: {},
       loopRunReviewSettingsAssignments: new Map(),
-      isolatedLoopCandidates: new Map(),
-      isolatedLoopIterations: new Map(),
       loopRunTerminals: new Map(),
-      targetCompletionSeals: new Map(),
       gateAttemptCompletions: new Map(),
       restoredGateAudits: new Map(),
       gateCheckHistory: [],
@@ -1172,15 +1100,6 @@ export class GoalMode {
     return this.state?.strategyHistory ?? [];
   }
 
-  getIsolatedLoopCandidateBinding():
-    IsolatedLoopCandidateBindingV1 | null {
-    const state = this.state;
-    if (state?.currentLoopRun === undefined) return null;
-    return state.isolatedLoopCandidates.get(
-      state.currentLoopRun.runId,
-    ) ?? null;
-  }
-
   // --- Creation ----------------------------------------------------------
 
   async createGoal(input: CreateGoalInput, actor: GoalActor = 'user'): Promise<GoalSnapshot> {
@@ -1263,10 +1182,7 @@ export class GoalMode {
       wallClockResumedAt: Date.now(),
       budgetLimits: {},
       loopRunReviewSettingsAssignments: new Map(),
-      isolatedLoopCandidates: new Map(),
-      isolatedLoopIterations: new Map(),
       loopRunTerminals: new Map(),
-      targetCompletionSeals: new Map(),
       gateAttemptCompletions: new Map(),
       restoredGateAudits: new Map(),
       gateCheckHistory: [],
@@ -1842,11 +1758,7 @@ export class GoalMode {
       result: manifestRecord,
     });
 
-    const verdict = input.freshCriteriaVerdict === undefined
-      ? undefined
-      : redactSensitiveValue(
-          input.freshCriteriaVerdict,
-        ) as FreshCriteriaVerdictV1;
+    const verdict = input.freshCriteriaVerdict;
     if (verdict === undefined) {
       this.persistState(state, { silent: true });
       return null;
@@ -1928,11 +1840,11 @@ export class GoalMode {
         ? 'passed'
         : unstableCheckIds.length > 0
           ? 'check_unstable'
-          : durableReasonCode(input.reasonCode),
-      blockerKeys: sanitizeBlockerKeys([
+          : input.reasonCode,
+      blockerKeys: [
         ...input.blockerKeys,
         ...unstableCheckIds.map((checkId) => `check:${checkId}:unstable`),
-      ]),
+      ].toSorted(),
       createdAt: now,
     };
     const aggregate: ProofAggregateRecordedV2 = {
@@ -2003,15 +1915,7 @@ export class GoalMode {
     return completed;
   }
 
-  createLoopGateReviewRuntime(
-    attemptId: string = randomUUID(),
-  ): LoopGateReviewRuntimeV2 | null {
-    if (!isUuid(attemptId)) {
-      throw new WukongError(
-        ErrorCodes.REQUEST_INVALID,
-        'Loop Gate attempt id is invalid',
-      );
-    }
+  createLoopGateReviewRuntime(): LoopGateReviewRuntimeV2 | null {
     const state = this.state;
     const contract = state?.loopContract;
     const run = state?.currentLoopRun;
@@ -2052,7 +1956,7 @@ export class GoalMode {
         text: criterion.text,
       }));
     return {
-      attemptId,
+      attemptId: randomUUID(),
       runId: run.runId,
       contractId: contract.contractId,
       planDigest,
@@ -2068,48 +1972,6 @@ export class GoalMode {
       carriedBlockerKeys: run.carriedBlockerKeys,
       reviewPolicy: contract.reviewPolicy,
     };
-  }
-
-  createIsolatedLoopCandidateRuntimeContext():
-    IsolatedLoopCandidateRuntimeContextV1 | null {
-    const state = this.state;
-    const contract = state?.loopContract;
-    const run = state?.currentLoopRun;
-    const gateRuntime = this.createLoopGateReviewRuntime();
-    if (state === undefined
-      || state.status !== 'active'
-      || contract === undefined
-      || contract.schemaVersion === 1
-      || run === undefined
-      || gateRuntime === null) {
-      return null;
-    }
-    const gateContract = contract.schemaVersion === 3
-      ? legacyFinishLineProjection(contract)
-      : {
-          workspaceIdentity: contract.workspaceIdentity,
-          workspaceTrust: contract.workspaceTrust,
-          gateApproval: contract.gateApproval,
-          gatePlan: contract.gatePlan,
-          reviewPolicy: contract.reviewPolicy,
-        };
-    return Object.freeze({
-      schemaVersion: 1,
-      goalId: state.goalId,
-      contractId: contract.contractId,
-      runId: run.runId,
-      ownerRunId: run.runId,
-      objective: state.objective,
-      gatePlanDigest: gateContract.gatePlan.planDigest,
-      criteriaSelectionDigest: contract.schemaVersion === 3
-        ? contract.verificationCriteria.selectionDigest
-        : null,
-      writerModel: gateRuntime.runSettings.legacy.writerModel,
-      reviewerModel: gateRuntime.runSettings.legacy.reviewerModel,
-      loopContract: contract,
-      gateContract,
-      gateRuntime,
-    });
   }
 
   recordLoopTerminal(input: {
@@ -2128,16 +1990,15 @@ export class GoalMode {
     ) return null;
     const existing = state.loopRunTerminals.get(run.runId);
     if (existing !== undefined) return existing;
-    const reasonCode = durableReasonCode(input.reasonCode);
-    const policy = continuationPolicyFor(input.status, reasonCode);
+    const policy = continuationPolicyFor(input.status, input.reasonCode);
     const base = {
       schemaVersion: 1 as const,
       runId: run.runId,
       contractId: contract.contractId,
       status: input.status,
-      reasonCode,
+      reasonCode: input.reasonCode,
       continuationPolicy: policy,
-      blockerKeys: sanitizeBlockerKeys(input.blockerKeys ?? []),
+      blockerKeys: [...new Set(input.blockerKeys ?? [])].toSorted(),
       terminalAttemptId: input.attempt?.attemptId,
       attemptResultDigest: input.attempt?.resultDigest,
       createdAt: Date.now(),
@@ -2153,246 +2014,6 @@ export class GoalMode {
     this.agent.records.logRecord({ type: 'loop.run.terminal', terminal });
     this.persistState(state, { silent: true });
     return terminal;
-  }
-
-  recordIsolatedLoopCandidateBinding(
-    binding: IsolatedLoopCandidateBindingV1,
-  ): IsolatedLoopCandidateBindingV1 {
-    const state = this.requireState();
-    assertIsolatedLoopCandidateBinding(state, binding);
-    if (state.loopRunTerminals.has(binding.runId)) {
-      throw new WukongError(
-        ErrorCodes.REQUEST_INVALID,
-        'A terminal Loop run cannot bind a new isolated candidate',
-      );
-    }
-    const existing = state.isolatedLoopCandidates.get(binding.runId);
-    if (existing !== undefined) {
-      if (existing.bindingDigest !== binding.bindingDigest) {
-        throw new WukongError(
-          ErrorCodes.REQUEST_INVALID,
-          'The Loop run is already bound to another isolated candidate',
-        );
-      }
-      return existing;
-    }
-    state.isolatedLoopCandidates.set(binding.runId, binding);
-    this.agent.records.logRecord({
-      type: 'loop.isolated-candidate.bind',
-      binding,
-    });
-    this.persistState(state, { silent: true });
-    return binding;
-  }
-
-  recordIsolatedLoopCandidateIteration(input: {
-    readonly bindingDigest: string;
-    readonly candidateGateAttemptId: string;
-    readonly candidateGateResultDigest: string;
-  }): GoalSnapshot {
-    const state = this.requireState();
-    const contract = state.loopContract;
-    const run = state.currentLoopRun;
-    const binding = run === undefined
-      ? undefined
-      : state.isolatedLoopCandidates.get(run.runId);
-    if (state.status !== 'active'
-      || contract === undefined
-      || contract.schemaVersion === 1
-      || run === undefined
-      || binding === undefined
-      || binding.bindingDigest !== input.bindingDigest
-      || !isUuid(input.candidateGateAttemptId)
-      || !isDigest(input.candidateGateResultDigest)) {
-      throw new WukongError(
-        ErrorCodes.REQUEST_INVALID,
-        'The isolated candidate iteration does not match the current Loop run',
-      );
-    }
-    const existing = state.isolatedLoopIterations.get(
-      input.candidateGateAttemptId,
-    );
-    if (existing !== undefined) {
-      if (existing.bindingDigest !== input.bindingDigest
-        || existing.candidateGateResultDigest
-          !== input.candidateGateResultDigest) {
-        throw new WukongError(
-          ErrorCodes.REQUEST_INVALID,
-          'The candidate Gate attempt is already bound to another iteration',
-        );
-      }
-      return this.toSnapshot(state);
-    }
-    const base = {
-      schemaVersion: 1 as const,
-      goalId: state.goalId,
-      contractId: contract.contractId,
-      runId: run.runId,
-      candidateId: binding.candidateId,
-      bindingDigest: binding.bindingDigest,
-      candidateGateAttemptId: input.candidateGateAttemptId,
-      candidateGateResultDigest: input.candidateGateResultDigest,
-      sequence: state.isolatedLoopIterations.size + 1,
-      occurredAt: Date.now(),
-    };
-    const iteration = Object.freeze({
-      ...base,
-      recordDigest: canonicalDigest(
-        'wukong/isolated-loop-candidate-iteration/v1',
-        base,
-      ),
-    });
-    state.isolatedLoopIterations.set(
-      iteration.candidateGateAttemptId,
-      iteration,
-    );
-    state.iteration += 1;
-    state.loopChainIterations += 1;
-    this.agent.records.logRecord({
-      type: 'loop.isolated-candidate.iteration',
-      iteration,
-    });
-    this.persistState(state);
-    this.appendGoalUpdate({ iteration: state.iteration });
-    return this.toSnapshot(state);
-  }
-
-  recordIsolatedLoopTerminal(input: {
-    readonly status: 'PASS' | 'NEEDS_WORK' | 'ERROR';
-    readonly reasonCode: string;
-    readonly blockerKeys?: readonly string[];
-    readonly completionAuthorization:
-      TargetCompletionSealAuthorizationV1;
-  }): LoopRunTerminalV1 | null {
-    const seal = requireValidatedTargetCompletionSeal(
-      input.completionAuthorization,
-    );
-    const state = this.state;
-    const contract = state?.loopContract;
-    const run = state?.currentLoopRun;
-    if (
-      state === undefined
-      || (contract?.schemaVersion !== 2 && contract?.schemaVersion !== 3)
-      || run === undefined
-    ) return null;
-    if (seal.runId !== run.runId
-      || seal.contractId !== contract.contractId
-      || seal.finalGateOutcome !== input.status
-      || (input.status === 'PASS'
-        && seal.finalGateOutcome !== 'PASS')) {
-      throw new WukongError(
-        ErrorCodes.REQUEST_INVALID,
-        'Isolated Loop terminal completion seal binding is stale',
-      );
-    }
-    const existing = state.loopRunTerminals.get(run.runId);
-    if (existing !== undefined) {
-      if (existing.targetCompletionSealDigest
-          !== seal.completionSealDigest
-        || existing.status !== input.status) {
-        throw new WukongError(
-          ErrorCodes.REQUEST_INVALID,
-          'Isolated Loop run already has another terminal binding',
-        );
-      }
-      return existing;
-    }
-    const existingSeal = state.targetCompletionSeals.get(
-      seal.completionSealId,
-    );
-    if (existingSeal !== undefined
-      && existingSeal.completionSealDigest
-        !== seal.completionSealDigest) {
-      throw new WukongError(
-        ErrorCodes.REQUEST_INVALID,
-        'Completion seal id is already bound to another digest',
-      );
-    }
-    if (existingSeal === undefined) {
-      state.targetCompletionSeals.set(seal.completionSealId, seal);
-      this.agent.records.logRecord({
-        type: 'loop.target-completion-seal.create',
-        seal,
-      });
-    }
-    const reasonCode = durableReasonCode(input.reasonCode);
-    const policy = continuationPolicyFor(input.status, reasonCode);
-    const base = {
-      schemaVersion: 1 as const,
-      runId: run.runId,
-      contractId: contract.contractId,
-      status: input.status,
-      reasonCode,
-      continuationPolicy: policy,
-      blockerKeys: sanitizeBlockerKeys(input.blockerKeys ?? []),
-      terminalAttemptId: seal.finalGateAttemptId,
-      attemptResultDigest: seal.finalGateAttemptResultDigest,
-      targetCompletionSealId: seal.completionSealId,
-      targetCompletionSealDigest: seal.completionSealDigest,
-      targetPromotionLeaseId: seal.targetPromotionLeaseId,
-      targetFencingTokenDigest: seal.targetFencingTokenDigest,
-      targetAfterFingerprintDigest:
-        seal.targetAfterFingerprintDigest,
-      promotionJournalHeadDigest:
-        seal.promotionJournalHeadDigest,
-      createdAt: Date.now(),
-    };
-    const terminal: LoopRunTerminalV1 = {
-      ...base,
-      terminalDigest: canonicalDigest(
-        'wukong/loop-terminal/v1',
-        base,
-      ),
-    };
-    state.loopRunTerminals.set(run.runId, terminal);
-    this.agent.records.logRecord({ type: 'loop.run.terminal', terminal });
-    this.persistState(state, { silent: true });
-    return terminal;
-  }
-
-  buildTargetFinalGateEvidence(input: {
-    readonly targetAttempt: TargetFinalGateAttemptStateV1;
-    readonly evidenceSnapshotId: string;
-  }): TargetFinalGateEvidenceSnapshotV1 {
-    const state = this.requireState();
-    const contract = state.loopContract;
-    const run = state.currentLoopRun;
-    const completed = state.gateAttemptCompletions.get(
-      input.targetAttempt.finalGateAttemptId,
-    );
-    const audit = state.restoredGateAudits.get(
-      input.targetAttempt.finalGateAttemptId,
-    );
-    if (contract === undefined
-      || contract.schemaVersion === 1
-      || run === undefined
-      || completed === undefined
-      || audit?.snapshot?.schemaVersion !== 2
-      || audit.scan === undefined
-      || audit.manifest === undefined
-      || audit.freshVerdict === undefined
-      || audit.aggregate?.schemaVersion !== 2
-      || state.loopRunTerminals.has(run.runId)) {
-      throw new WukongError(
-        ErrorCodes.REQUEST_INVALID,
-        'A complete unterminated brokered Goal Gate audit is required.',
-      );
-    }
-    return createTargetFinalGateEvidenceFromGoalAudit({
-      targetAttempt: input.targetAttempt,
-      evidenceSnapshotId: input.evidenceSnapshotId,
-      audit: {
-        contract,
-        run,
-        completedAttempt: completed,
-        evidenceSnapshot: audit.snapshot,
-        checkResults: audit.checks,
-        riskScan: audit.scan,
-        reviewSubjectManifest: audit.manifest,
-        freshCriteriaVerdict: audit.freshVerdict,
-        proofAggregate: audit.aggregate,
-      },
-    });
   }
 
   restoreLoopRunCreate(record: AgentRecordOf<'loop.run.create'>): void {
@@ -2459,179 +2080,23 @@ export class GoalMode {
     state.loopRunReviewSettingsAssignments.set(run.runId, record.assignment);
   }
 
-  restoreIsolatedLoopCandidateBinding(
-    record: AgentRecordOf<'loop.isolated-candidate.bind'>,
-  ): void {
-    const state = this.state;
-    if (state === undefined) {
-      throw new Error(
-        'Loop record replay failed: isolated candidate has no Goal',
-      );
-    }
-    try {
-      assertIsolatedLoopCandidateBinding(state, record.binding);
-    } catch (error) {
-      throw new Error(
-        'Loop record replay failed: isolated candidate binding mismatch',
-        { cause: error },
-      );
-    }
-    const existing = state.isolatedLoopCandidates.get(
-      record.binding.runId,
-    );
-    if (existing !== undefined
-      && existing.bindingDigest !== record.binding.bindingDigest) {
-      throw new Error(
-        'Loop record replay failed: duplicate isolated candidate binding',
-      );
-    }
-    state.isolatedLoopCandidates.set(record.binding.runId, record.binding);
-  }
-
-  restoreIsolatedLoopCandidateIteration(
-    record: AgentRecordOf<'loop.isolated-candidate.iteration'>,
-  ): void {
-    const state = this.state;
-    const contract = state?.loopContract;
-    const run = state?.currentLoopRun;
-    const binding = run === undefined
-      ? undefined
-      : state?.isolatedLoopCandidates.get(run.runId);
-    const { recordDigest, ...base } = record.iteration;
-    if (state === undefined
-      || contract === undefined
-      || contract.schemaVersion === 1
-      || run === undefined
-      || binding === undefined
-      || record.iteration.goalId !== state.goalId
-      || record.iteration.contractId !== contract.contractId
-      || record.iteration.runId !== run.runId
-      || record.iteration.candidateId !== binding.candidateId
-      || record.iteration.bindingDigest !== binding.bindingDigest
-      || record.iteration.sequence !== state.isolatedLoopIterations.size + 1
-      || !isUuid(record.iteration.candidateGateAttemptId)
-      || !isDigest(record.iteration.candidateGateResultDigest)
-      || canonicalDigest(
-        'wukong/isolated-loop-candidate-iteration/v1',
-        base,
-      ) !== recordDigest
-      || state.isolatedLoopIterations.has(
-        record.iteration.candidateGateAttemptId,
-      )) {
-      throw new Error(
-        'Loop record replay failed: isolated candidate iteration mismatch',
-      );
-    }
-    state.isolatedLoopIterations.set(
-      record.iteration.candidateGateAttemptId,
-      record.iteration,
-    );
-    state.iteration += 1;
-    state.loopChainIterations += 1;
-  }
-
   restoreLoopRunTerminal(record: AgentRecordOf<'loop.run.terminal'>): void {
     const state = this.state;
     if (state === undefined) return;
-    const contract = state.loopContract;
-    const run = state.currentLoopRun;
-    if (contract === undefined
-      || run === undefined
-      || record.terminal.runId !== run.runId
-      || record.terminal.contractId !== run.contractId
-      || (contract.schemaVersion !== 1
-        && record.terminal.contractId !== contract.contractId)) {
-      throw new Error(
-        'Loop record replay failed: terminal run binding mismatch',
-      );
-    }
     const { terminalDigest, ...base } = record.terminal;
     if (canonicalDigest('wukong/loop-terminal/v1', base) !== terminalDigest) {
       throw new Error('Loop record replay failed: terminal digest mismatch');
     }
-    if (record.terminal.targetCompletionSealDigest !== undefined) {
-      const sealId = record.terminal.targetCompletionSealId;
-      const seal = sealId === undefined
-        ? undefined
-        : state.targetCompletionSeals.get(sealId);
-      if (seal === undefined
-        || seal.completionSealDigest
-          !== record.terminal.targetCompletionSealDigest
-        || seal.finalGateOutcome !== record.terminal.status
-        || seal.finalGateAttemptId
-          !== record.terminal.terminalAttemptId
-        || seal.finalGateAttemptResultDigest
-          !== record.terminal.attemptResultDigest
-        || seal.targetPromotionLeaseId
-          !== record.terminal.targetPromotionLeaseId
-        || seal.targetFencingTokenDigest
-          !== record.terminal.targetFencingTokenDigest
-        || seal.targetAfterFingerprintDigest
-          !== record.terminal.targetAfterFingerprintDigest
-        || seal.promotionJournalHeadDigest
-          !== record.terminal.promotionJournalHeadDigest) {
-        throw new Error(
-          'Loop record replay failed: isolated terminal seal join mismatch',
-        );
-      }
-    } else if (
+    if (
       record.terminal.status === 'PASS'
       && (
         record.terminal.terminalAttemptId === undefined
-        || state.gateAttemptCompletions.get(
-          record.terminal.terminalAttemptId,
-        )?.status !== 'PASS'
+        || state.gateAttemptCompletions.get(record.terminal.terminalAttemptId)?.status !== 'PASS'
       )
     ) {
-      throw new Error(
-        'Loop record replay failed: PASS terminal lacks a complete PASS attempt',
-      );
-    }
-    const existing = state.loopRunTerminals.get(
-      record.terminal.runId,
-    );
-    if (existing !== undefined
-      && existing.terminalDigest !== record.terminal.terminalDigest) {
-      throw new Error(
-        'Loop record replay failed: duplicate terminal binding',
-      );
+      throw new Error('Loop record replay failed: PASS terminal lacks a complete PASS attempt');
     }
     state.loopRunTerminals.set(record.terminal.runId, record.terminal);
-  }
-
-  restoreTargetCompletionSeal(
-    record: AgentRecordOf<'loop.target-completion-seal.create'>,
-  ): void {
-    const state = this.state;
-    if (state === undefined) return;
-    const seal = record.seal;
-    const contract = state.loopContract;
-    const run = state.currentLoopRun;
-    const { completionSealDigest, ...core } = seal;
-    if (contract === undefined
-      || contract.schemaVersion === 1
-      || run === undefined
-      || seal.runId !== run.runId
-      || seal.contractId !== contract.contractId
-      || !validateTargetGateCompletionSeal(seal)
-      || canonicalDigest(
-      'wukong/target-gate-completion-seal/v1',
-      core,
-    ) !== completionSealDigest) {
-      throw new Error(
-        'Loop record replay failed: target completion seal mismatch',
-      );
-    }
-    const existing = state.targetCompletionSeals.get(
-      seal.completionSealId,
-    );
-    if (existing !== undefined
-      && existing.completionSealDigest !== completionSealDigest) {
-      throw new Error(
-        'Loop record replay failed: duplicate completion seal id',
-      );
-    }
-    state.targetCompletionSeals.set(seal.completionSealId, seal);
   }
 
   restoreGateAttemptComplete(record: AgentRecordOf<'loop.gate-attempt.complete'>): void {
@@ -2833,23 +2298,20 @@ export class GoalMode {
 
   recordReviewAttempt(attempt: LoopReviewAttempt): void {
     const state = this.requireState();
-    const sanitized = redactSensitiveValue(
-      attempt,
-    ) as LoopReviewAttempt;
     const previous = state.reviewHistory.at(-1);
-    state.reviewHistory.push(sanitized);
+    state.reviewHistory.push(attempt);
     this.agent.records.logRecord({
       type: 'goal.review.record',
       goalId: state.goalId,
-      attempt: sanitized,
+      attempt,
     });
     if (
-      sanitized.blockerFingerprint !== undefined
-      && sanitized.blockerFingerprint === previous?.blockerFingerprint
+      attempt.blockerFingerprint !== undefined
+      && attempt.blockerFingerprint === previous?.blockerFingerprint
     ) {
       this.track('loop_blocker_repeated', {
-        iteration: sanitized.iteration,
-        blocker_count: sanitized.blockerKeys.length,
+        iteration: attempt.iteration,
+        blocker_count: attempt.blockerKeys.length,
         repeated: true,
       });
     }
@@ -2858,18 +2320,15 @@ export class GoalMode {
 
   recordStrategyAttempt(attempt: LoopStrategyAttempt): void {
     const state = this.requireState();
-    const sanitized = redactSensitiveValue(
-      attempt,
-    ) as LoopStrategyAttempt;
-    state.strategyHistory.push(sanitized);
+    state.strategyHistory.push(attempt);
     this.agent.records.logRecord({
       type: 'goal.strategy.record',
       goalId: state.goalId,
-      attempt: sanitized,
+      attempt,
     });
     this.track('loop_strategist_terminal', {
-      iteration: sanitized.triggeredAtIteration,
-      strategist_outcome: sanitized.status,
+      iteration: attempt.triggeredAtIteration,
+      strategist_outcome: attempt.status,
     });
     this.persistState(state);
   }
@@ -2885,13 +2344,12 @@ export class GoalMode {
         `Cannot pause a goal in status "${state.status}"`,
       );
     }
-    const reason = sanitizeDiagnostic(input.reason);
     this.applyStatus(state, 'paused');
-    state.terminalReason = reason;
+    state.terminalReason = input.reason;
     this.persistState(state, {
-      change: { kind: 'lifecycle', status: 'paused', reason, actor },
+      change: { kind: 'lifecycle', status: 'paused', reason: input.reason, actor },
     });
-    this.appendStatusUpdate(state, actor, reason);
+    this.appendStatusUpdate(state, actor, input.reason);
     return this.toSnapshot(state);
   }
 
@@ -2906,13 +2364,12 @@ export class GoalMode {
   ): Promise<GoalSnapshot | null> {
     const state = this.state;
     if (state === undefined || state.status !== 'active') return null;
-    const reason = sanitizeDiagnostic(input.reason);
     this.applyStatus(state, 'paused');
-    state.terminalReason = reason;
+    state.terminalReason = input.reason;
     this.persistState(state, {
-      change: { kind: 'lifecycle', status: 'paused', reason, actor },
+      change: { kind: 'lifecycle', status: 'paused', reason: input.reason, actor },
     });
-    this.appendStatusUpdate(state, actor, reason);
+    this.appendStatusUpdate(state, actor, input.reason);
     return this.toSnapshot(state);
   }
 
@@ -3020,11 +2477,10 @@ export class GoalMode {
     // starts clean.
     state.terminalReason = undefined;
     this.applyStatus(state, 'active');
-    const reason = sanitizeDiagnostic(input.reason);
     this.persistState(state, {
-      change: { kind: 'lifecycle', status: 'active', reason, actor },
+      change: { kind: 'lifecycle', status: 'active', reason: input.reason, actor },
     });
-    this.appendStatusUpdate(state, actor, reason);
+    this.appendStatusUpdate(state, actor, input.reason);
     return this.toSnapshot(state);
   }
 
@@ -3081,24 +2537,22 @@ export class GoalMode {
   ): Promise<GoalSnapshot | null> {
     const state = this.state;
     if (state === undefined || state.status !== 'active') return null;
-    const reason = sanitizeDiagnostic(input.reason);
     if (
-      (state.loopContract?.schemaVersion === 2
-        || state.loopContract?.schemaVersion === 3)
+      state.loopContract?.schemaVersion === 2
       && state.currentLoopRun !== undefined
       && !state.loopRunTerminals.has(state.currentLoopRun.runId)
     ) {
       this.recordLoopTerminal({
         status: 'NEEDS_WORK',
-        reasonCode: blockedReasonCode(reason),
+        reasonCode: blockedReasonCode(input.reason),
       });
     }
     this.applyStatus(state, 'blocked');
-    state.terminalReason = reason;
+    state.terminalReason = input.reason;
     this.persistState(state, {
-      change: { kind: 'lifecycle', status: 'blocked', reason, actor },
+      change: { kind: 'lifecycle', status: 'blocked', reason: input.reason, actor },
     });
-    this.appendStatusUpdate(state, actor, reason);
+    this.appendStatusUpdate(state, actor, input.reason);
     return this.toSnapshot(state);
   }
 
@@ -3116,8 +2570,7 @@ export class GoalMode {
     const state = this.state;
     if (state === undefined || state.status !== 'active') return null;
     if (
-      (state.loopContract?.schemaVersion === 2
-        || state.loopContract?.schemaVersion === 3)
+      state.loopContract?.schemaVersion === 2
       && (
         state.currentLoopRun === undefined
         || state.loopRunTerminals.get(state.currentLoopRun.runId)?.status !== 'PASS'
@@ -3125,19 +2578,18 @@ export class GoalMode {
     ) {
       throw new WukongError(
         ErrorCodes.REQUEST_INVALID,
-        'A Loop cannot complete without a durable PASS terminal.',
+        'A V2 Loop cannot complete without a durable PASS terminal.',
       );
     }
-    const reason = sanitizeDiagnostic(input.reason);
     this.applyStatus(state, 'complete');
-    state.terminalReason = reason;
+    state.terminalReason = input.reason;
     const snapshot = this.toSnapshot(state);
     // Record + notify the UI of completion (with final stats) before clearing.
-    this.appendStatusUpdate(state, actor, reason);
+    this.appendStatusUpdate(state, actor, input.reason);
     this.emitGoalUpdated(snapshot, {
       kind: 'completion',
       status: 'complete',
-      reason,
+      reason: input.reason,
       stats: this.statsOf(state),
       actor,
     });
@@ -3197,12 +2649,8 @@ export class GoalMode {
   recordLoopResult(result: Omit<LoopResult, 'iterations'>): LoopResult | null {
     const state = this.state;
     if (state === undefined) return null;
-    const sanitized = redactSensitiveValue(
-      result,
-    ) as Omit<LoopResult, 'iterations'>;
     const loopResult: LoopResult = {
-      ...sanitized,
-      reasonCode: durableReasonCode(sanitized.reasonCode),
+      ...result,
       iterations: state.iteration,
     };
     state.loopResult = loopResult;
@@ -3341,11 +2789,6 @@ export class GoalMode {
       loopContract: state.loopContract,
       legacyContractId: state.legacyContractId,
       loopRunId: state.currentLoopRun?.runId,
-      isolatedLoopCandidate: state.currentLoopRun === undefined
-        ? undefined
-        : summarizeIsolatedLoopCandidate(
-            state.isolatedLoopCandidates.get(state.currentLoopRun.runId),
-          ),
       loopChainIterations: state.loopChainIterations,
       loopTerminal: state.currentLoopRun === undefined
         ? undefined
@@ -4025,48 +3468,6 @@ function reviewSettingsAssignmentIdempotencyKey(input: {
   });
 }
 
-function assertIsolatedLoopCandidateBinding(
-  state: GoalState,
-  binding: IsolatedLoopCandidateBindingV1,
-): void {
-  const contract = state.loopContract;
-  const run = state.currentLoopRun;
-  const gatePlanDigest = contract?.schemaVersion === 3
-    ? contract.gatePlan.legacySnapshot.planDigest
-    : contract?.schemaVersion === 2
-      ? contract.gatePlan.planDigest
-      : undefined;
-  const criteriaSelectionDigest = contract?.schemaVersion === 3
-    ? contract.verificationCriteria.selectionDigest
-    : null;
-  if (!validateIsolatedLoopCandidateBinding(binding)
-    || contract === undefined
-    || contract.schemaVersion === 1
-    || run === undefined
-    || binding.goalId !== state.goalId
-    || binding.contractId !== contract.contractId
-    || binding.runId !== run.runId
-    || binding.gatePlanDigest !== gatePlanDigest
-    || binding.criteriaSelectionDigest !== criteriaSelectionDigest) {
-    throw new WukongError(
-      ErrorCodes.REQUEST_INVALID,
-      'Isolated Loop candidate binding does not match the current run',
-    );
-  }
-}
-
-function summarizeIsolatedLoopCandidate(
-  binding: IsolatedLoopCandidateBindingV1 | undefined,
-): GoalSnapshot['isolatedLoopCandidate'] {
-  return binding === undefined
-    ? undefined
-    : {
-        candidateId: binding.candidateId,
-        worktreeLeaseId: binding.worktreeLeaseId,
-        bindingDigest: binding.bindingDigest,
-      };
-}
-
 function legacyFinishLineProjection(contract: LoopContractV3): {
   readonly workspaceIdentity: WorkspaceIdentity;
   readonly workspaceTrust?: WorkspaceTrustBinding;
@@ -4086,17 +3487,6 @@ function legacyFinishLineProjection(contract: LoopContractV3): {
     gatePlan: contract.gatePlan.legacySnapshot,
     reviewPolicy: contract.reviewPolicy,
   };
-}
-
-function isUuid(value: unknown): value is string {
-  return typeof value === 'string'
-    && /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/u
-      .test(value);
-}
-
-function isDigest(value: unknown): value is string {
-  return typeof value === 'string'
-    && /^sha256:[a-f0-9]{64}$/u.test(value);
 }
 
 function normalizeGateCheckStatus(
@@ -4175,37 +3565,6 @@ function blockedReasonCode(reason: string | undefined): string {
   }
   if (normalized.includes('hook')) return 'hook_blocked';
   return 'runtime_blocked';
-}
-
-function sanitizeDiagnostic(
-  value: string | undefined,
-): string | undefined {
-  return value === undefined
-    ? undefined
-    : redactSensitiveText(value);
-}
-
-function durableReasonCode(
-  value: string,
-  fallback = 'runtime_error',
-): string {
-  return /^[A-Za-z0-9][A-Za-z0-9._:-]{0,255}$/u.test(value)
-      && !containsSensitiveText(value)
-    ? value
-    : fallback;
-}
-
-function sanitizeBlockerKeys(
-  values: readonly string[],
-): readonly string[] {
-  return [...new Set(values.map((value) =>
-    containsSensitiveText(value)
-      ? `redacted:${canonicalDigest(
-          'wukong/redacted-blocker-key/v1',
-          value,
-        )}`
-      : redactSensitiveText(value),
-  ))].toSorted();
 }
 
 function legacyContractRecordIdentity(state: GoalState): string {

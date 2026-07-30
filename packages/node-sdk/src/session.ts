@@ -17,9 +17,6 @@ import type {
   CreateGoalInput,
   GoalSnapshot,
   GoalToolResult,
-  IsolatedLoopCandidateIterationPublicResultV1,
-  IsolatedLoopPromotionProposalPublicResultV1,
-  IsolatedLoopPromotionPublicResultV1,
   McpServerInfo,
   McpStartupMetrics,
   PermissionMode,
@@ -28,9 +25,6 @@ import type {
   PromptInput,
   ReloadSessionOptions,
   ResumeGoalInput,
-  PrepareIsolatedLoopPromotionPayloadV1,
-  PromoteIsolatedLoopCandidatePayloadV1,
-  RunIsolatedLoopCandidateIterationPayloadV1,
   ReloadSummary,
   RoleSummary,
   ResumedSessionState,
@@ -403,36 +397,6 @@ export class Session {
   async createGoal(input: CreateGoalInput): Promise<GoalSnapshot> {
     this.ensureOpen();
     return this.rpc.createGoal({ sessionId: this.id, ...input });
-  }
-
-  async runIsolatedLoopCandidateIteration(
-    input: RunIsolatedLoopCandidateIterationPayloadV1,
-  ): Promise<IsolatedLoopCandidateIterationPublicResultV1> {
-    this.ensureOpen();
-    return this.rpc.runIsolatedLoopCandidateIteration({
-      sessionId: this.id,
-      ...input,
-    });
-  }
-
-  async prepareIsolatedLoopPromotion(
-    input: PrepareIsolatedLoopPromotionPayloadV1,
-  ): Promise<IsolatedLoopPromotionProposalPublicResultV1> {
-    this.ensureOpen();
-    return this.rpc.prepareIsolatedLoopPromotion({
-      sessionId: this.id,
-      ...input,
-    });
-  }
-
-  async promoteIsolatedLoopCandidate(
-    input: PromoteIsolatedLoopCandidatePayloadV1,
-  ): Promise<IsolatedLoopPromotionPublicResultV1> {
-    this.ensureOpen();
-    return this.rpc.promoteIsolatedLoopCandidate({
-      sessionId: this.id,
-      ...input,
-    });
   }
 
   async getGoal(): Promise<GoalToolResult> {

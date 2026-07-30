@@ -15,10 +15,7 @@ const mocks = vi.hoisted(() => ({
   getGuardStats: vi.fn(),
 }));
 
-vi.mock('@wukong/verification', async (importOriginal) => ({
-  ...await importOriginal<typeof import('@wukong/verification')>(),
-  ...mocks,
-}));
+vi.mock('@wukong/verification', () => mocks);
 
 const {
   handleGuardSlashCommand,

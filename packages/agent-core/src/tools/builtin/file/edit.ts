@@ -17,11 +17,7 @@ import type { ExecutableToolResult, ToolExecution } from '../../../loop/types';
 import { resolvePathAccessPath } from '../../policies/path-access';
 import { toInputJsonSchema } from '../../support/input-schema';
 import { literalRulePattern, matchesPathRuleSubject } from '../../support/rule-match';
-import {
-  withWorkspacePathGuard,
-  type WorkspaceConfig,
-} from '../../support/workspace';
-import type { CandidateWorkspaceFileIO } from '../../support/candidate-workspace-file-backend';
+import type { WorkspaceConfig } from '../../support/workspace';
 import { materializeModelText, toModelTextView } from './line-endings';
 import EDIT_DESCRIPTION from './edit.md?raw';
 
@@ -92,20 +88,11 @@ export class EditTool implements BuiltinTool<EditInput> {
           pathClass: this.kaos.pathClass(),
           homeDir: this.kaos.gethome(),
         }),
-      execute: () => withWorkspacePathGuard(
-        this.workspace,
-        path,
-        'write',
-        (io) => this.execution(args, path, io ?? this.kaos),
-      ),
+      execute: () => this.execution(args, path),
     };
   }
 
-  private async execution(
-    args: EditInput,
-    safePath: string,
-    fileIO: Pick<CandidateWorkspaceFileIO, 'readText' | 'writeText'>,
-  ): Promise<ExecutableToolResult> {
+  private async execution(args: EditInput, safePath: string): Promise<ExecutableToolResult> {
     if (args.old_string === args.new_string) {
       return {
         isError: true,
@@ -114,7 +101,7 @@ export class EditTool implements BuiltinTool<EditInput> {
     }
 
     try {
-      const raw = await fileIO.readText(safePath);
+      const raw = await this.kaos.readText(safePath);
       const modelView = toModelTextView(raw);
       const content = modelView.text;
       const replaceAll = args.replace_all ?? false;
@@ -143,7 +130,7 @@ export class EditTool implements BuiltinTool<EditInput> {
         }
 
         const newContent = replaceOnceLiteral(content, args.old_string, args.new_string);
-        await fileIO.writeText(
+        await this.kaos.writeText(
           safePath,
           materializeModelText(newContent, modelView.lineEndingStyle),
         );
@@ -158,7 +145,7 @@ export class EditTool implements BuiltinTool<EditInput> {
       }
 
       const newContent = parts.join(args.new_string);
-      await fileIO.writeText(
+      await this.kaos.writeText(
         safePath,
         materializeModelText(newContent, modelView.lineEndingStyle),
       );

@@ -1,19 +1,5 @@
 # @wukong.today/code
 
-## 0.0.21
-
-### Patch Changes
-
-- Add the experimental Isolated Loop pipeline: freeze an exact dirty-workspace
-  Source Snapshot, materialize a detached Candidate, run confirmed deterministic
-  bootstrap and bounded Candidate verification, require exact Promote consent,
-  apply changes through a fenced no-clobber transaction, and issue terminal PASS
-  only after the target Final Gate and completion seal are durably verified.
-
-  The feature remains experimental and disabled by default in 0.0.21. It must
-  be explicitly enabled, and its worktree/file backends do not claim to provide
-  a complete operating-system process sandbox.
-
 ## 0.0.20
 
 ### Patch Changes

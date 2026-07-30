@@ -5,10 +5,6 @@ import {
   APITimeoutError,
   ChatProviderError,
 } from '@wukong/kosong';
-import {
-  redactSensitiveText,
-  redactSensitiveValue,
-} from '@wukong/verification';
 
 import { WukongError } from './classes';
 import { ErrorCodes, WUKONG_ERROR_INFO, type WukongErrorCode } from './codes';
@@ -47,13 +43,13 @@ export function makeErrorPayload(
   message: string,
   options?: { readonly details?: Record<string, unknown>; readonly name?: string },
 ): WukongErrorPayload {
-  return sanitizeErrorPayload({
+  return {
     code,
     message,
     name: options?.name,
     details: options?.details,
     retryable: WUKONG_ERROR_INFO[code].retryable,
-  });
+  };
 }
 
 /**
@@ -69,12 +65,6 @@ export function makeErrorPayload(
  * the wire.
  */
 export function toWukongErrorPayload(error: unknown): WukongErrorPayload {
-  return sanitizeErrorPayload(toRawWukongErrorPayload(error));
-}
-
-function toRawWukongErrorPayload(
-  error: unknown,
-): WukongErrorPayload {
   if (isWukongError(error)) {
     return {
       code: error.code,
@@ -148,22 +138,6 @@ function toRawWukongErrorPayload(
     code: ErrorCodes.INTERNAL,
     message: String(error),
     retryable: WUKONG_ERROR_INFO[ErrorCodes.INTERNAL].retryable,
-  };
-}
-
-function sanitizeErrorPayload(
-  payload: WukongErrorPayload,
-): WukongErrorPayload {
-  const details = payload.details === undefined
-    ? undefined
-    : redactSensitiveValue(payload.details) as Record<string, unknown>;
-  return {
-    ...payload,
-    message: redactSensitiveText(payload.message),
-    ...(payload.name === undefined
-      ? {}
-      : { name: redactSensitiveText(payload.name) }),
-    ...(details === undefined ? {} : { details }),
   };
 }
 

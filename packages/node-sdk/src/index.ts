@@ -47,26 +47,6 @@ export {
   toWukongErrorPayload,
 } from '@wukong/agent-core';
 
-export {
-  buildCandidateBootstrapPlan,
-  CandidateBootstrapPreflightInspectorError,
-  CandidateBootstrapPlanBuilderError,
-  confirmCandidateBootstrapPlan,
-  inspectCandidateBootstrapPreflight,
-  type BuildCandidateBootstrapPlanInputV1,
-  type CandidateBootstrapPreflightInspectorErrorCode,
-  type CandidateBootstrapPlanBuilderErrorCode,
-  type InspectCandidateBootstrapPreflightInputV1,
-  type PreparedCandidateBootstrapPlanV1,
-} from '@wukong/agent-core';
-
-export {
-  inspectCandidateWorkspaceBackendCapability,
-  type CandidateWorkspaceBackendCapabilityV1,
-  type CandidateWorkspaceBackendProbeDependencies,
-  type CandidateWorkspaceBackendUnavailableReason,
-} from '@wukong/agent-core';
-
 // Diagnostic logging — public surface only.
 // RootLogger / getRootLogger / LoggingConfig stay inside agent-core.
 export {

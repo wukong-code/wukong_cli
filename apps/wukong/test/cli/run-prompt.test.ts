@@ -22,11 +22,6 @@ const mocks = vi.hoisted(() => {
     setApprovalHandler: vi.fn(),
     setQuestionHandler: vi.fn(),
     createGoal: vi.fn(),
-    pauseGoal: vi.fn(async () => ({})),
-    resumeGoal: vi.fn(async () => ({})),
-    runIsolatedLoopCandidateIteration: vi.fn(),
-    prepareIsolatedLoopPromotion: vi.fn(),
-    promoteIsolatedLoopCandidate: vi.fn(),
     getGoal: vi.fn(async (): Promise<{ goal: any }> => ({ goal: null })),
     getStatus: vi.fn(
       async (): Promise<{ readonly permission: string; readonly model?: string }> => ({
@@ -161,13 +156,6 @@ const mocks = vi.hoisted(() => {
 
   return {
     session,
-    inspectSourceSnapshot: vi.fn(async () => ({
-      status: 'ready' as const,
-      proposedSnapshot: {
-        schemaVersion: 1,
-        snapshotDigest: `sha256:${'9'.repeat(64)}`,
-      },
-    })),
     finishLineProposal,
     preflightReady,
     eventHandlers,
@@ -183,12 +171,7 @@ const mocks = vi.hoisted(() => {
       }),
     ),
     harnessGetConfigDiagnostics: vi.fn(async () => ({ warnings: [] as readonly string[] })),
-    harnessGetExperimentalFeatures: vi.fn(
-      async (): Promise<Array<{
-        readonly id: string;
-        readonly enabled: boolean;
-      }>> => [],
-    ),
+    harnessGetExperimentalFeatures: vi.fn(async () => []),
     harnessCreateSession: vi.fn(async () => session),
     harnessResumeSession: vi.fn(async () => session),
     harnessListSessions: vi.fn(async () => [{ id: 'ses_previous', workDir: process.cwd() }]),
@@ -267,15 +250,6 @@ vi.mock('@wukong/wukong-oauth', async () => {
     ...actual,
     createWukongDeviceId: mocks.createWukongDeviceId,
     WUKONG_CODE_PROVIDER_NAME: 'wukong',
-  };
-});
-
-vi.mock('@wukong/verification', async (importOriginal) => {
-  const actual =
-    await importOriginal<typeof import('@wukong/verification')>();
-  return {
-    ...actual,
-    inspectSourceSnapshot: mocks.inspectSourceSnapshot,
   };
 });
 
@@ -366,12 +340,6 @@ function writer(columns?: number) {
   };
 }
 
-function jsonLines(value: string): unknown[] {
-  return value.trim().split('\n').map(
-    (line) => JSON.parse(line) as unknown,
-  );
-}
-
 function fakeProcess() {
   const listeners = new Map<NodeJS.Signals, () => Promise<void> | void>();
   return {
@@ -416,11 +384,6 @@ describe('runPrompt', () => {
       goalId: 'goal-default',
       loopRunId: 'core-run-default',
     });
-    mocks.session.getGoal.mockResolvedValue({ goal: null });
-    mocks.session.runIsolatedLoopCandidateIteration
-      .mockReset();
-    mocks.session.prepareIsolatedLoopPromotion.mockReset();
-    mocks.session.promoteIsolatedLoopCandidate.mockReset();
     mocks.goalSummaryJson.mockImplementation((snapshot: any) => snapshot);
     mocks.formatGoalSummaryText.mockImplementation(
       (snapshot: any) => `Goal [${snapshot?.status ?? 'none'}]`,
@@ -428,14 +391,6 @@ describe('runPrompt', () => {
     mocks.goalExitCode.mockReturnValue(0);
     mocks.beginLoopRun.mockResolvedValue({ runId: 'run123' });
     mocks.runLoopPreflight.mockResolvedValue(mocks.preflightReady);
-    mocks.harnessGetExperimentalFeatures.mockResolvedValue([]);
-    mocks.inspectSourceSnapshot.mockResolvedValue({
-      status: 'ready',
-      proposedSnapshot: {
-        schemaVersion: 1,
-        snapshotDigest: `sha256:${'9'.repeat(64)}`,
-      },
-    });
     mocks.createWukongCodeHostIdentity.mockImplementation((version: string) => ({
       userAgentProduct: 'wukong-code',
       version,
@@ -465,368 +420,6 @@ describe('runPrompt', () => {
     expect(stderr.text()).toBe('To resume this session: wukong -r ses_prompt\n');
     expect(mocks.shutdownTelemetry).toHaveBeenCalled();
     expect(mocks.harnessClose).toHaveBeenCalled();
-  });
-
-  it('emits an exact promotion challenge instead of auto-applying headless', async () => {
-    const snapshot = {
-      schemaVersion: 1,
-      snapshotDigest: `sha256:${'9'.repeat(64)}`,
-    };
-    mocks.harnessGetExperimentalFeatures.mockResolvedValue([{
-      id: 'isolated_loop_worktrees',
-      enabled: true,
-    }]);
-    mocks.parseHeadlessGoalCreate.mockReturnValue({
-      kind: 'loop',
-      objective: 'fix tests',
-      replace: false,
-      stopCondition: 'proof-pass',
-      maxIterations: 3,
-    });
-    mocks.runLoopPreflight.mockResolvedValue({
-      ...mocks.preflightReady,
-      sourceRepositoryRoot: '/repository',
-      candidateBootstrapPlan: {
-        bootstrapPlanDigest: `sha256:${'b'.repeat(64)}`,
-      },
-      sourceSnapshotDryRun: {
-        schemaVersion: 1,
-        status: 'ready',
-        proposedSnapshot: snapshot,
-      },
-    } as never);
-    mocks.session.createGoal.mockResolvedValue({
-      goalId: 'goal-isolated',
-      loopRunId: 'run-isolated',
-    });
-    mocks.session.runIsolatedLoopCandidateIteration.mockResolvedValue({
-      schemaVersion: 1,
-      candidateId: 'candidate-1',
-      candidateGateAttemptId: 'attempt-1',
-      iteration: 1,
-      outcome: 'PASS',
-      reasonCode: 'candidate_gate_passed',
-    });
-    mocks.session.prepareIsolatedLoopPromotion.mockResolvedValue({
-      schemaVersion: 1,
-      candidateId: 'candidate-1',
-      proposalDigest: `sha256:${'6'.repeat(64)}`,
-      changedFileCount: 2,
-      changes: [],
-    });
-    const stdout = writer();
-    const stderr = writer();
-
-    await runPrompt(opts({
-      prompt: 'fix tests',
-      outputFormat: 'stream-json',
-      headlessGoal: {
-        kind: 'loop',
-        objective: 'fix tests',
-        replace: false,
-        stopCondition: 'proof-pass',
-        maxIterations: 3,
-        selectedUntrackedPaths: ['src/new.ts'],
-      },
-    }), '1.2.3-test', { stdout, stderr });
-
-    expect(mocks.session.prompt).not.toHaveBeenCalled();
-    expect(mocks.runLoopPreflight).toHaveBeenCalledWith(
-      expect.objectContaining({
-        inspectIsolatedSource: true,
-        selectedUntrackedPaths: ['src/new.ts'],
-      }),
-    );
-    expect(
-      mocks.session.runIsolatedLoopCandidateIteration,
-    ).toHaveBeenCalledWith(expect.objectContaining({
-      approvedBootstrapPlanDigest:
-        `sha256:${'b'.repeat(64)}`,
-    }));
-    expect(mocks.session.promoteIsolatedLoopCandidate)
-      .not.toHaveBeenCalled();
-    expect(mocks.session.pauseGoal).toHaveBeenCalledOnce();
-    expect(jsonLines(stdout.text())).toEqual([
-      {
-        type: 'loop.candidate_gate',
-        schemaVersion: 1,
-        candidateId: 'candidate-1',
-        attemptId: 'attempt-1',
-        iteration: 1,
-        outcome: 'PASS',
-        reasonCode: 'candidate_gate_passed',
-        candidateOnly: true,
-        terminalPass: false,
-        completionSealCommitted: false,
-        targetWorkspaceChanged: false,
-        requiresTargetFinalGate: true,
-      },
-      {
-        type: 'loop.promotion_required',
-        schemaVersion: 1,
-        candidateId: 'candidate-1',
-        proposalDigest: `sha256:${'6'.repeat(64)}`,
-        changedFileCount: 2,
-        changes: [],
-        sessionId: 'ses_prompt',
-        goalId: 'goal-isolated',
-        targetWorkspace: process.cwd(),
-        candidateOnly: true,
-        terminalPass: false,
-        completionSealCommitted: false,
-        targetWorkspaceChanged: false,
-        requiresTargetFinalGate: true,
-        next:
-          `Resume this session and pass --promote-candidate sha256:${'6'.repeat(64)}`,
-      },
-      {
-        role: 'meta',
-        type: 'session.resume_hint',
-        session_id: 'ses_prompt',
-        command: 'wukong -r ses_prompt',
-        content: 'To resume this session: wukong -r ses_prompt',
-      },
-    ]);
-
-    const textStdout = writer();
-    const textStderr = writer();
-    await runPrompt(opts({
-      prompt: 'fix tests',
-      headlessGoal: {
-        kind: 'loop',
-        objective: 'fix tests',
-        replace: false,
-        stopCondition: 'proof-pass',
-        maxIterations: 3,
-        selectedUntrackedPaths: ['src/new.ts'],
-      },
-    }), '1.2.3-test', {
-      stdout: textStdout,
-      stderr: textStderr,
-    });
-
-    expect(textStderr.text()).toContain([
-      'Candidate Gate: PASS',
-      'Reason: candidate_gate_passed',
-      'Candidate only: yes',
-      'Terminal PASS: no',
-      'Completion seal committed: no',
-      'Target workspace changed: no',
-      'Target Final Gate required: yes',
-    ].join('\n'));
-    expect(textStderr.text()).toContain([
-      'Candidate Gate: PASS',
-      'Candidate only: yes',
-      'Terminal PASS: no',
-      'Completion seal committed: no',
-      'Changed: 2 files',
-      'Target workspace changed: no',
-      'Target Final Gate required: yes',
-    ].join('\n'));
-  });
-
-  it('rejects selected untracked files when isolated execution is disabled', async () => {
-    process.exitCode = undefined;
-    mocks.parseHeadlessGoalCreate.mockReturnValue({
-      kind: 'loop',
-      objective: 'fix tests',
-      replace: false,
-      stopCondition: 'proof-pass',
-      maxIterations: 3,
-      selectedUntrackedPaths: ['src/new.ts'],
-    });
-    const stderr = writer();
-
-    await runPrompt(opts({
-      prompt: 'fix tests',
-      headlessGoal: {
-        kind: 'loop',
-        objective: 'fix tests',
-        replace: false,
-        stopCondition: 'proof-pass',
-        maxIterations: 3,
-        selectedUntrackedPaths: ['src/new.ts'],
-      },
-    }), '1.2.3-test', {
-      stdout: writer(),
-      stderr,
-    });
-
-    expect(stderr.text()).toContain(
-      '--include-untracked requires the Isolated Loop worktrees experiment.',
-    );
-    expect(process.exitCode).toBe(2);
-    expect(mocks.runLoopPreflight).not.toHaveBeenCalled();
-    expect(mocks.session.createGoal).not.toHaveBeenCalled();
-  });
-
-  it('requires the exact challenge when promoting a resumed headless candidate', async () => {
-    const proposalDigest = `sha256:${'6'.repeat(64)}`;
-    mocks.harnessGetExperimentalFeatures.mockResolvedValue([{
-      id: 'isolated_loop_worktrees',
-      enabled: true,
-    }]);
-    mocks.session.getGoal.mockResolvedValue({
-      goal: {
-        goalId: 'goal-isolated',
-        loopRunId: 'run-isolated',
-        stopCondition: 'proof-pass',
-        iteration: 1,
-        status: 'paused',
-      },
-    });
-    mocks.session.promoteIsolatedLoopCandidate.mockResolvedValue({
-      schemaVersion: 1,
-      candidateId: 'candidate-1',
-      outcome: 'PASS',
-      reasonCode: 'target_final_gate_passed',
-      completionSealDigest: `sha256:${'8'.repeat(64)}`,
-    });
-    const stdout = writer();
-    const stderr = writer();
-
-    await runPrompt(opts({
-      session: 'ses_previous',
-      prompt: 'fix tests',
-      outputFormat: 'stream-json',
-      headlessGoal: {
-        kind: 'loop',
-        objective: 'fix tests',
-        replace: false,
-        stopCondition: 'proof-pass',
-        maxIterations: 3,
-        promoteCandidateDigest: proposalDigest,
-      },
-    }), '1.2.3-test', { stdout, stderr });
-
-    expect(mocks.session.resumeGoal).toHaveBeenCalledOnce();
-    expect(mocks.session.promoteIsolatedLoopCandidate)
-      .toHaveBeenCalledWith(expect.objectContaining({
-        proposalDigest,
-      }));
-    expect(jsonLines(stdout.text())).toEqual([
-      {
-        type: 'loop.final_gate',
-        schemaVersion: 1,
-        candidateId: 'candidate-1',
-        outcome: 'PASS',
-        reasonCode: 'target_final_gate_passed',
-        completionSealDigest: `sha256:${'8'.repeat(64)}`,
-        verifiedInTargetWorkspace: true,
-        terminalPass: true,
-        completionSealCommitted: true,
-      },
-      {
-        role: 'meta',
-        type: 'session.resume_hint',
-        session_id: 'ses_prompt',
-        command: 'wukong -r ses_prompt',
-        content: 'To resume this session: wukong -r ses_prompt',
-      },
-    ]);
-
-    const textStderr = writer();
-    await runPrompt(opts({
-      session: 'ses_previous',
-      prompt: 'fix tests',
-      headlessGoal: {
-        kind: 'loop',
-        objective: 'fix tests',
-        replace: false,
-        stopCondition: 'proof-pass',
-        maxIterations: 3,
-        promoteCandidateDigest: proposalDigest,
-      },
-    }), '1.2.3-test', {
-      stdout: writer(),
-      stderr: textStderr,
-    });
-
-    expect(textStderr.text()).toContain([
-      'Target Final Gate: PASS',
-      'Reason: target_final_gate_passed',
-      'Terminal PASS: yes',
-      'Completion seal committed: yes',
-      'Verified in target workspace: yes',
-    ].join('\n'));
-
-    mocks.session.promoteIsolatedLoopCandidate.mockResolvedValue({
-      schemaVersion: 1,
-      candidateId: 'candidate-1',
-      outcome: 'NEEDS_WORK',
-      reasonCode: 'final_gate_failed',
-      completionSealDigest: `sha256:${'7'.repeat(64)}`,
-    });
-    const nonPassStdout = writer();
-    await runPrompt(opts({
-      session: 'ses_previous',
-      prompt: 'fix tests',
-      outputFormat: 'stream-json',
-      headlessGoal: {
-        kind: 'loop',
-        objective: 'fix tests',
-        replace: false,
-        stopCondition: 'proof-pass',
-        maxIterations: 3,
-        promoteCandidateDigest: proposalDigest,
-      },
-    }), '1.2.3-test', {
-      stdout: nonPassStdout,
-      stderr: writer(),
-    });
-
-    expect(jsonLines(nonPassStdout.text())[0]).toEqual({
-      type: 'loop.final_gate',
-      schemaVersion: 1,
-      candidateId: 'candidate-1',
-      outcome: 'NEEDS_WORK',
-      reasonCode: 'final_gate_failed',
-      completionSealDigest: `sha256:${'7'.repeat(64)}`,
-      verifiedInTargetWorkspace: true,
-      terminalPass: false,
-      completionSealCommitted: true,
-    });
-  });
-
-  it('pauses a resumed headless Loop when exact promotion fails before terminal', async () => {
-    const proposalDigest = `sha256:${'6'.repeat(64)}`;
-    mocks.harnessGetExperimentalFeatures.mockResolvedValue([{
-      id: 'isolated_loop_worktrees',
-      enabled: true,
-    }]);
-    mocks.session.getGoal.mockResolvedValue({
-      goal: {
-        goalId: 'goal-isolated',
-        loopRunId: 'run-isolated',
-        stopCondition: 'proof-pass',
-        iteration: 1,
-        status: 'paused',
-      },
-    });
-    mocks.session.promoteIsolatedLoopCandidate.mockRejectedValue(
-      new Error('promotion challenge is stale'),
-    );
-
-    await expect(runPrompt(opts({
-      session: 'ses_previous',
-      prompt: 'fix tests',
-      outputFormat: 'stream-json',
-      headlessGoal: {
-        kind: 'loop',
-        objective: 'fix tests',
-        replace: false,
-        stopCondition: 'proof-pass',
-        maxIterations: 3,
-        promoteCandidateDigest: proposalDigest,
-      },
-    }), '1.2.3-test', {
-      stdout: writer(),
-      stderr: writer(),
-    })).rejects.toThrow('promotion challenge is stale');
-
-    expect(mocks.session.resumeGoal).toHaveBeenCalledOnce();
-    expect(mocks.session.pauseGoal).toHaveBeenCalledOnce();
-    expect(mocks.completeLoopRun).not.toHaveBeenCalled();
   });
 
   it('stops prompt startup when session creation fails', async () => {
@@ -1746,48 +1339,6 @@ describe('runPrompt', () => {
       expect(mocks.session.createGoal).not.toHaveBeenCalled();
       expect(stderr.text()).toContain('Reason   No model is configured.');
       expect(stderr.text()).toContain('Next     Run /provider or /model');
-      expect(process.exitCode).toBe(2);
-    });
-
-    it('creates no Goal or run when the isolated Candidate backend is unavailable', async () => {
-      process.exitCode = undefined;
-      mocks.harnessGetExperimentalFeatures.mockResolvedValueOnce([{
-        id: 'isolated_loop_worktrees',
-        enabled: true,
-      }]);
-      mocks.parseHeadlessGoalCreate.mockReturnValue({
-        kind: 'loop',
-        objective: 'fix tests',
-        replace: false,
-        stopCondition: 'proof-pass',
-      });
-      mocks.runLoopPreflight.mockResolvedValueOnce({
-        ready: false,
-        reasonCode: 'candidate_atomic_backend_unavailable',
-        reason:
-          'The isolated Candidate file backend is unavailable: candidate_atomic_backend_platform_unsupported.',
-        next:
-          'Use macOS or Linux with the packaged native backend, then rerun the isolated Loop preflight.',
-      });
-      const stderr = writer();
-
-      await runPrompt(opts({ prompt: '/loop fix tests' }), '1.2.3-test', {
-        stdout: writer(),
-        stderr,
-      });
-
-      expect(mocks.runLoopPreflight).toHaveBeenCalledWith(
-        expect.objectContaining({
-          objective: 'fix tests',
-          inspectIsolatedSource: true,
-        }),
-      );
-      expect(mocks.session.createGoal).not.toHaveBeenCalled();
-      expect(mocks.beginLoopRun).not.toHaveBeenCalled();
-      expect(mocks.registerTuiLoop).not.toHaveBeenCalled();
-      expect(stderr.text()).toContain(
-        'candidate_atomic_backend_platform_unsupported',
-      );
       expect(process.exitCode).toBe(2);
     });
 

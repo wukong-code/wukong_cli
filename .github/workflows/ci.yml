@@ -10,10 +10,6 @@ on:
 permissions:
   contents: read
 
-concurrency:
-  group: ci-${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -35,14 +31,9 @@ jobs:
 
   test:
     runs-on: ubuntu-latest
-    outputs:
-      installer_changed: ${{ steps.test-scope.outputs.installer_changed }}
 
     steps:
-      - uses: actions/checkout@v6
-        with:
-          fetch-depth: 0
-          persist-credentials: false
+      - uses: actions/checkout@v4
 
       - uses: pnpm/action-setup@v6
 
@@ -52,126 +43,39 @@ jobs:
           cache: pnpm
 
       - run: pnpm install --frozen-lockfile
-      - name: Select affected or full test scope
-        id: test-scope
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PUSH_BASE_SHA: ${{ github.event.before }}
-        run: |
-          full=false
-          if [[ "$EVENT_NAME" == "pull_request" ]]; then
-            base_sha="$PR_BASE_SHA"
-          elif [[ "$EVENT_NAME" == "push" ]]; then
-            base_sha="$PUSH_BASE_SHA"
-          else
-            base_sha=""
-            full=true
-          fi
+      - run: pnpm run test
 
-          if [[ -z "$base_sha" \
-            || "$base_sha" == "0000000000000000000000000000000000000000" ]]; then
-            full=true
-          elif [[ "$full" == "false" ]] \
-            && ! git cat-file -e "${base_sha}^{commit}"; then
-            full=true
-          fi
+  # Coverage gate is scoped to apps/wukong (vitest project `cli`) so the full
+  # monorepo suite stays fast. Thresholds apply via CI=true in vitest.config.ts.
+  # Reproduce locally: `pnpm test:coverage:gate -- --project cli`
+  test-coverage:
+    runs-on: ubuntu-latest
 
-          if [[ "$full" == "false" ]]; then
-            git diff --name-only "$base_sha"...HEAD \
-              > "$RUNNER_TEMP/changed-files.txt"
-            if grep -Eq \
-              '(^|/)(package\.json|tsconfig(\.[^/]*)?\.json)$|^(pnpm-lock\.yaml|pnpm-workspace\.yaml|vitest\.config\.ts|\.nvmrc)$|^scripts/|^\.github/workflows/' \
-              "$RUNNER_TEMP/changed-files.txt"; then
-              full=true
-            fi
-          fi
+    steps:
+      - uses: actions/checkout@v4
 
-          echo "base_sha=$base_sha" >> "$GITHUB_OUTPUT"
-          echo "full=$full" >> "$GITHUB_OUTPUT"
+      - uses: pnpm/action-setup@v6
 
-          wukong_web_changed="$full"
-          vis_server_changed="$full"
-          vis_web_changed="$full"
-          installer_changed="$full"
-          if [[ "$full" == "false" ]]; then
-            if grep -Eq '^apps/wukong-web/' "$RUNNER_TEMP/changed-files.txt"; then
-              wukong_web_changed=true
-            fi
-            if grep -Eq '^apps/vis/server/' "$RUNNER_TEMP/changed-files.txt"; then
-              vis_server_changed=true
-            fi
-            if grep -Eq '^apps/vis/web/' "$RUNNER_TEMP/changed-files.txt"; then
-              vis_web_changed=true
-            fi
-            if grep -Eq '^(install\.sh|tests/install\.bats)$' \
-              "$RUNNER_TEMP/changed-files.txt"; then
-              installer_changed=true
-            fi
-          fi
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
 
-          echo "wukong_web_changed=$wukong_web_changed" >> "$GITHUB_OUTPUT"
-          echo "vis_server_changed=$vis_server_changed" >> "$GITHUB_OUTPUT"
-          echo "vis_web_changed=$vis_web_changed" >> "$GITHUB_OUTPUT"
-          echo "installer_changed=$installer_changed" >> "$GITHUB_OUTPUT"
-
-      - name: Run full suite for test-infrastructure changes
-        if: steps.test-scope.outputs.full == 'true'
-        run: pnpm run test:full:bounded
-
-      - name: Run affected tests
-        if: steps.test-scope.outputs.full == 'false'
-        run: |
-          pnpm exec vitest run \
-            --changed="${{ steps.test-scope.outputs.base_sha }}" \
-            --passWithNoTests \
-            --maxWorkers=2
-
-      - name: Run mandatory safety anchors
-        if: steps.test-scope.outputs.full == 'false'
-        run: |
-          pnpm exec vitest run \
-            packages/verification/test/criteria.test.ts \
-            packages/verification/test/redaction.test.ts \
-            packages/verification/test/review-subject.test.ts \
-            packages/verification/test/source-snapshot.test.ts \
-            packages/verification/test/target-state-fingerprint-builder.test.ts \
-            packages/verification/test/target-promotion.test.ts \
-            packages/verification/test/target-final-gate.test.ts \
-            packages/verification/test/target-gate-completion-seal.test.ts \
-            packages/verification/test/trusted-executable.test.ts \
-            packages/agent-core/test/tools/candidate-workspace-guard.test.ts \
-            packages/agent-core/test/candidate-delta-store.test.ts \
-            packages/agent-core/test/promotion-change-applier.test.ts \
-            packages/agent-core/test/target-promotion-workspace-backend.test.ts \
-            packages/agent-core/test/candidate-workspace-backend-capability.test.ts \
-            packages/agent-core/test/tools/goal-gate.test.ts \
-            apps/wukong/test/cli/reference-verification-skills.test.ts \
-            apps/wukong/test/cli/loop-preflight.test.ts \
-            apps/wukong/test/cli/loop.test.ts \
-            apps/wukong/test/cli/run-shell.test.ts \
-            --maxWorkers=2
-
-      - name: Run affected Wukong Web suite
-        if: steps.test-scope.outputs.wukong_web_changed == 'true'
-        run: pnpm --filter @wukong/wukong-web test
-
-      - name: Run affected Vis Server suite
-        if: steps.test-scope.outputs.vis_server_changed == 'true'
-        run: pnpm --filter @wukong/vis-server test
-
-      - name: Run affected Vis Web suite
-        if: steps.test-scope.outputs.vis_web_changed == 'true'
-        run: pnpm --dir apps/vis/web exec vitest run
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run test:coverage:cli
+      - name: Upload coverage summary
+        if: always()
+        continue-on-error: true
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-summary-cli
+          path: |
+            coverage/coverage-summary.json
+            coverage/index.html
+          if-no-files-found: ignore
+          retention-days: 1
 
   test-install:
-    needs: test
-    if: >-
-      ${{
-        always()
-        && needs.test.outputs.installer_changed == 'true'
-      }}
     runs-on: ubuntu-latest
 
     steps:
@@ -203,6 +107,27 @@ jobs:
       # in-process e2e tests) under more contention, so the default 5s test
       # timeout causes flaky failures. Give it more headroom.
       - run: pnpm run test -- --testTimeout=30000
+
+  verification-criteria-cross-platform:
+    name: Verification criteria (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm exec vitest run packages/verification/test/criteria.test.ts packages/verification/test/review-subject.test.ts apps/wukong/test/cli/reference-verification-skills.test.ts packages/agent-core/test/tools/goal-gate.test.ts --testTimeout=30000
 
   lint:
     runs-on: ubuntu-latest

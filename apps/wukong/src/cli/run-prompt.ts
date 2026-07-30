@@ -1,6 +1,3 @@
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-
 import {
   setCrashPhase,
   setTelemetryContext,
@@ -21,7 +18,6 @@ import {
   type TelemetryClient,
   type WukongConfig,
 } from '@wukong/wukong-sdk';
-import { inspectSourceSnapshot } from '@wukong/verification';
 import { resolve } from 'pathe';
 
 import { CLI_SHUTDOWN_TIMEOUT_MS } from '#/constant/app';
@@ -72,7 +68,6 @@ interface PromptProcess {
 
 const PROMPT_UI_MODE = 'print';
 const PROMPT_MAIN_AGENT_ID = 'main';
-const execFileAsync = promisify(execFile);
 const PROMPT_BLOCK_BULLET = '• ';
 const PROMPT_BLOCK_INDENT = '  ';
 
@@ -135,12 +130,6 @@ export async function runPrompt(
   try {
     await harness.ensureConfigFile();
     const config = await harness.getConfig();
-    const isolatedLoopEnabled =
-      (await harness.getExperimentalFeatures()).some(
-        (feature) =>
-          feature.id === 'isolated_loop_worktrees'
-          && feature.enabled,
-      );
     for (const warning of (await harness.getConfigDiagnostics()).warnings) {
       stderr.write(`Warning: ${warning}\n`);
     }
@@ -201,7 +190,6 @@ export async function runPrompt(
         outputFormat,
         stdout,
         stderr,
-        isolatedLoopEnabled,
       );
     } else {
       await runPromptTurn(session, opts.prompt!, outputFormat, stdout, stderr);
@@ -224,30 +212,8 @@ async function runHeadlessGoal(
   outputFormat: PromptOutputFormat,
   stdout: PromptOutput,
   stderr: PromptOutput,
-  isolatedLoopEnabled: boolean,
 ): Promise<void> {
   const resolvedModel = goal.kind === 'loop' ? configuredModel(model) : requireConfiguredModel(model);
-  if (goal.kind === 'loop'
-    && goal.promoteCandidateDigest !== undefined) {
-    await runHeadlessIsolatedPromotion(
-      session,
-      goal.promoteCandidateDigest,
-      outputFormat,
-      stdout,
-      stderr,
-      isolatedLoopEnabled,
-    );
-    return;
-  }
-  if (goal.kind === 'loop'
-    && (goal.selectedUntrackedPaths?.length ?? 0) > 0
-    && !isolatedLoopEnabled) {
-    stderr.write(
-      '--include-untracked requires the Isolated Loop worktrees experiment.\n',
-    );
-    process.exitCode = 2;
-    return;
-  }
   let loopRun: LocalLoopRun | undefined;
   let loopPreflight: LoopPreflightReady | undefined;
   if (goal.kind === 'loop') {
@@ -260,11 +226,7 @@ async function runHeadlessGoal(
       model: resolvedModel,
       workspace: process.cwd(),
       mode: 'headless',
-      inspectIsolatedSource: isolatedLoopEnabled,
-      selectedUntrackedPaths: goal.selectedUntrackedPaths,
       approveGatePlanDigest: goal.approveGatePlanDigest,
-      approveBootstrapPlanDigest:
-        goal.approveBootstrapPlanDigest,
       acknowledgeWarningSetDigest: goal.acknowledgeWarningSetDigest,
       trustWorkspaceChallenge: goal.trustWorkspaceChallenge,
       verificationCatalogDigest: goal.verificationCatalogDigest,
@@ -382,24 +344,6 @@ async function runHeadlessGoal(
     track('loop_started');
     if (loopRun.repeatedWithin7d === true) track('loop_repeat_started_7d');
   }
-  if (goal.kind === 'loop'
-    && isolatedLoopEnabled
-    && loopPreflight?.sourceSnapshotDryRun?.status === 'ready'
-    && loopPreflight.sourceSnapshotDryRun.proposedSnapshot !== null
-    && loopPreflight.sourceRepositoryRoot !== undefined
-    && loopRun !== undefined) {
-    await runHeadlessIsolatedCandidate(
-      session,
-      createdGoal,
-      loopRun,
-      loopPreflight,
-      goal.maxIterations ?? 10,
-      outputFormat,
-      stdout,
-      stderr,
-    );
-    return;
-  }
   let completedSnapshot: GoalSnapshot | null = null;
   let firstIterationTracked = false;
   const unsubscribeGoalEvents = session.onEvent((event) => {
@@ -470,248 +414,6 @@ async function runHeadlessGoal(
       }
     }
   }
-}
-
-async function runHeadlessIsolatedCandidate(
-  session: Session,
-  goal: GoalSnapshot,
-  loopRun: LocalLoopRun,
-  preflight: LoopPreflightReady,
-  maxIterations: number,
-  outputFormat: PromptOutputFormat,
-  stdout: PromptOutput,
-  stderr: PromptOutput,
-): Promise<void> {
-  const dryRun = preflight.sourceSnapshotDryRun;
-  const sourceRepositoryRoot = preflight.sourceRepositoryRoot;
-  if (dryRun?.status !== 'ready'
-    || dryRun.proposedSnapshot === null
-    || sourceRepositoryRoot === undefined) {
-    throw new Error(
-      'Headless isolated Loop requires an exact ready source snapshot.',
-    );
-  }
-  const payload = {
-    schemaVersion: 1 as const,
-    sourceRepositoryRoot,
-    sourceSnapshotCwd: preflight.workspace,
-    sourceSnapshot: dryRun.proposedSnapshot,
-    approvedBootstrapPlanDigest:
-      preflight.candidateBootstrapPlan?.bootstrapPlanDigest,
-  };
-  for (let attempt = 1; attempt <= maxIterations; attempt += 1) {
-    const result =
-      await session.runIsolatedLoopCandidateIteration(payload);
-    if (attempt === 1) track('loop_first_iteration');
-    writeHeadlessIsolatedEvent(
-      outputFormat,
-      stdout,
-      stderr,
-      {
-        type: 'loop.candidate_gate',
-        schemaVersion: 1,
-        candidateId: result.candidateId,
-        attemptId: result.candidateGateAttemptId,
-        iteration: result.iteration,
-        outcome: result.outcome,
-        reasonCode: result.reasonCode,
-        candidateOnly: true,
-        terminalPass: false,
-        completionSealCommitted: false,
-        targetWorkspaceChanged: false,
-        requiresTargetFinalGate: true,
-      },
-    );
-    if (result.outcome === 'NEEDS_WORK') continue;
-    if (result.outcome === 'ERROR') {
-      await session.pauseGoal().catch(() => undefined);
-      await completeLoopRun(
-        loopRun,
-        'ERROR',
-        result.iteration,
-        'cancelled',
-      );
-      process.exitCode = 5;
-      return;
-    }
-    const proposal =
-      await session.prepareIsolatedLoopPromotion(payload);
-    await session.pauseGoal();
-    writeHeadlessIsolatedEvent(
-      outputFormat,
-      stdout,
-      stderr,
-      {
-        type: 'loop.promotion_required',
-        ...proposal,
-        sessionId: session.id,
-        goalId: goal.goalId,
-        targetWorkspace: preflight.workspace,
-        candidateOnly: true,
-        terminalPass: false,
-        completionSealCommitted: false,
-        targetWorkspaceChanged: false,
-        requiresTargetFinalGate: true,
-        next:
-          `Resume this session and pass --promote-candidate ${proposal.proposalDigest}`,
-      },
-    );
-    process.exitCode = 6;
-    return;
-  }
-  await session.pauseGoal();
-  writeHeadlessIsolatedEvent(
-    outputFormat,
-    stdout,
-    stderr,
-    {
-      type: 'loop.candidate_limit',
-      schemaVersion: 1,
-      goalId: goal.goalId,
-      maxIterations,
-      targetWorkspaceChanged: false,
-    },
-  );
-  process.exitCode = 3;
-}
-
-async function runHeadlessIsolatedPromotion(
-  session: Session,
-  proposalDigest: string,
-  outputFormat: PromptOutputFormat,
-  stdout: PromptOutput,
-  stderr: PromptOutput,
-  isolatedLoopEnabled: boolean,
-): Promise<void> {
-  if (!isolatedLoopEnabled) {
-    stderr.write(
-      'Isolated Loop worktrees are experimental and disabled.\n',
-    );
-    process.exitCode = 2;
-    return;
-  }
-  const active = (await session.getGoal()).goal;
-  if (active === null
-    || active.loopRunId === undefined
-    || active.stopCondition !== 'proof-pass') {
-    stderr.write(
-      '--promote-candidate requires the paused isolated Loop session that produced this challenge.\n',
-    );
-    process.exitCode = 2;
-    return;
-  }
-  const inspected = await inspectSourceSnapshot({
-    cwd: process.cwd(),
-  });
-  if (inspected.status !== 'ready'
-    || inspected.proposedSnapshot === null) {
-    stderr.write(
-      `Promotion blocked: ${inspected.reasonCode ?? 'source_snapshot_untrusted'}.\n`,
-    );
-    process.exitCode = 3;
-    return;
-  }
-  const { stdout: repositoryRoot } = await execFileAsync(
-    'git',
-    ['rev-parse', '--show-toplevel'],
-    {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-    },
-  );
-  await session.resumeGoal();
-  let result: Awaited<
-    ReturnType<Session['promoteIsolatedLoopCandidate']>
-  >;
-  try {
-    result = await session.promoteIsolatedLoopCandidate({
-      schemaVersion: 1,
-      sourceRepositoryRoot: repositoryRoot.trim(),
-      sourceSnapshotCwd: process.cwd(),
-      sourceSnapshot: inspected.proposedSnapshot,
-      proposalDigest,
-    });
-  } catch (error) {
-    await session.pauseGoal().catch(() => undefined);
-    throw error;
-  }
-  await completeLoopRun(
-    { runId: active.loopRunId },
-    result.outcome,
-    active.iteration,
-  );
-  writeHeadlessIsolatedEvent(
-    outputFormat,
-    stdout,
-    stderr,
-    {
-      type: 'loop.final_gate',
-      ...result,
-      verifiedInTargetWorkspace: true,
-      terminalPass: result.outcome === 'PASS',
-      completionSealCommitted: true,
-    },
-  );
-  process.exitCode = result.outcome === 'PASS'
-    ? 0
-    : result.outcome === 'NEEDS_WORK'
-      ? 3
-      : 5;
-}
-
-function writeHeadlessIsolatedEvent(
-  outputFormat: PromptOutputFormat,
-  stdout: PromptOutput,
-  stderr: PromptOutput,
-  event: Readonly<Record<string, unknown>>,
-): void {
-  if (outputFormat === 'stream-json') {
-    stdout.write(`${JSON.stringify(event)}\n`);
-    return;
-  }
-  if (event['type'] === 'loop.candidate_gate') {
-    stderr.write([
-      `Candidate Gate: ${String(event['outcome'])}`,
-      `Reason: ${String(event['reasonCode'])}`,
-      'Candidate only: yes',
-      'Terminal PASS: no',
-      'Completion seal committed: no',
-      'Target workspace changed: no',
-      'Target Final Gate required: yes',
-      '',
-    ].join('\n'));
-    return;
-  }
-  if (event['type'] === 'loop.promotion_required') {
-    stderr.write([
-      'Candidate Gate: PASS',
-      'Candidate only: yes',
-      'Terminal PASS: no',
-      'Completion seal committed: no',
-      `Changed: ${String(event['changedFileCount'])} files`,
-      'Target workspace changed: no',
-      'Target Final Gate required: yes',
-      `Promotion challenge: ${String(event['proposalDigest'])}`,
-      `Next: ${String(event['next'])}`,
-      '',
-    ].join('\n'));
-    return;
-  }
-  if (event['type'] === 'loop.final_gate') {
-    stderr.write([
-      `Target Final Gate: ${String(event['outcome'])}`,
-      `Reason: ${String(event['reasonCode'])}`,
-      `Terminal PASS: ${event['terminalPass'] === true ? 'yes' : 'no'}`,
-      `Completion seal committed: ${event['completionSealCommitted'] === true ? 'yes' : 'no'}`,
-      'Verified in target workspace: yes',
-      '',
-    ].join('\n'));
-    return;
-  }
-  const detail = event['outcome'] ?? event['maxIterations'] ?? '';
-  stderr.write(
-    `${String(event['type'])}: ${typeof detail === 'string' || typeof detail === 'number' ? String(detail) : JSON.stringify(detail)}\n`,
-  );
 }
 
 interface ResolvedPromptSession {

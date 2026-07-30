@@ -25,8 +25,7 @@
  */
 
 import type { Kaos } from '@wukong/kaos';
-import { normalize, relative, resolve } from 'pathe';
-import picomatch from 'picomatch';
+import { normalize, resolve } from 'pathe';
 import { z } from 'zod';
 
 import type { BuiltinTool } from '../../../agent/tool';
@@ -48,11 +47,7 @@ import {
   runRipgrepOnce,
   shouldRetryRipgrepEagain,
 } from '../../support/run-rg';
-import {
-  withWorkspacePathGuard,
-  type WorkspaceConfig,
-} from '../../support/workspace';
-import type { CandidateWorkspaceFileIO } from '../../support/candidate-workspace-file-backend';
+import type { WorkspaceConfig } from '../../support/workspace';
 import GLOB_DESCRIPTION from './glob.md?raw';
 
 export const GlobInputSchema = z.object({
@@ -154,14 +149,7 @@ export class GlobTool implements BuiltinTool<GlobInput> {
       },
       approvalRule: literalRulePattern(this.name, args.pattern),
       matchesRule: (ruleArgs) => matchesGlobRuleSubject(ruleArgs, args.pattern),
-      execute: ({ signal }) => withWorkspacePathGuard(
-        this.workspace,
-        searchRoots[0]!,
-        'search',
-        (io) => io === undefined
-          ? this.execution(args, signal, searchRoots)
-          : this.atomicExecution(args, signal, searchRoots[0]!, io),
-      ),
+      execute: ({ signal }) => this.execution(args, signal, searchRoots),
     };
   }
 
@@ -322,70 +310,6 @@ export class GlobTool implements BuiltinTool<GlobInput> {
     }
     return { output: lines.join('\n') };
   }
-
-  private async atomicExecution(
-    args: GlobInput,
-    signal: AbortSignal,
-    searchRoot: string,
-    fileIO: Pick<CandidateWorkspaceFileIO, 'stat' | 'listFiles'>,
-  ): Promise<ExecutableToolResult> {
-    if (signal.aborted) {
-      return { isError: true, output: 'Glob aborted' };
-    }
-    try {
-      const rootStat = await fileIO.stat(searchRoot);
-      if ((rootStat.stMode & S_IFMT) !== S_IFDIR) {
-        return { isError: true, output: `${searchRoot} is not a directory` };
-      }
-      const matcher = picomatch(args.pattern, {
-        dot: true,
-        nocase: false,
-      });
-      const entries = await fileIO.listFiles(searchRoot, {
-        signal,
-        includeIgnored: args.include_ignored === true,
-      });
-      const matched = entries
-        .filter((entry) => {
-          const path = relative(searchRoot, entry.path).replaceAll('\\', '/');
-          return matcher(path) && !isSensitiveFile(entry.path);
-        })
-        .toSorted((left, right) =>
-          right.stat.stMtime - left.stat.stMtime
-          || compareSearchPaths(left.path, right.path));
-      const truncated = matched.length > MAX_MATCHES;
-      const limited = truncated ? matched.slice(0, MAX_MATCHES) : matched;
-      if (limited.length === 0) return { output: 'No matches found' };
-
-      const pathClass = this.kaos.pathClass();
-      const shouldRelativize = isWithinDirectory(
-        searchRoot,
-        this.workspace.workspaceDir,
-        pathClass,
-      );
-      const lines: string[] = [];
-      if (truncated) {
-        lines.push(`[Truncated at ${String(MAX_MATCHES)} matches — use a more specific pattern]`);
-        lines.push(`Only the first ${String(MAX_MATCHES)} matches are returned.`);
-      }
-      lines.push(...limited.map((entry) =>
-        shouldRelativize
-          ? relativizeIfUnder(entry.path, searchRoot, pathClass)
-          : entry.path));
-      if (!truncated && limited.length === MAX_MATCHES) {
-        lines.push(`Found ${String(limited.length)} matches`);
-      }
-      return { output: lines.join('\n') };
-    } catch (error) {
-      if (isAbortError(error) || signal.aborted) {
-        return { isError: true, output: 'Glob aborted' };
-      }
-      return {
-        isError: true,
-        output: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
 }
 
 function buildRgArgs(rgPath: string, args: GlobInput, singleThreaded = false): string[] {
@@ -429,10 +353,6 @@ function errorCode(error: unknown): string | undefined {
     return typeof code === 'string' ? code : undefined;
   }
   return undefined;
-}
-
-function compareSearchPaths(left: string, right: string): number {
-  return left < right ? -1 : left > right ? 1 : 0;
 }
 
 /**

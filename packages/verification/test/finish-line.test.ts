@@ -1,7 +1,5 @@
-import { execFile } from 'node:child_process';
 import { writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
-import { promisify } from 'node:util';
 
 import { describe, expect, it } from 'vitest';
 
@@ -10,13 +8,10 @@ import {
   canonicalDigest,
   canonicalJson,
   createTrustChallenge,
-  validateFrozenCandidateGatePlan,
   validateFrozenGatePlan,
   verifyTrustChallenge,
 } from '../src/finish-line';
 import { makeTempDir, writeJson } from './helpers';
-
-const execFileAsync = promisify(execFile);
 
 describe('Finish Line and frozen Gate Plan', () => {
   it('freezes discovered command provenance and validates the unchanged definition', async () => {
@@ -54,52 +49,6 @@ describe('Finish Line and frozen Gate Plan', () => {
 
     await writeJson(join(cwd, 'package.json'), { scripts: { test: 'echo skipped' } });
     await expect(validateFrozenGatePlan(cwd, built.proposal)).resolves.toMatchObject({
-      ok: false,
-      reasonCode: 'gate_plan_changed',
-    });
-  });
-
-  it('rebinds an exact frozen Gate Plan to a detached worktree trust root', async () => {
-    const source = await makeTempDir('wukong-candidate-finish-line-source-');
-    const candidateParent = await makeTempDir(
-      'wukong-candidate-finish-line-root-',
-    );
-    const candidate = join(candidateParent, 'candidate');
-    await execFileAsync('git', ['init'], { cwd: source });
-    await writeJson(join(source, 'package.json'), {
-      scripts: { test: 'node -e "process.exit(0)"' },
-    });
-    await execFileAsync('git', ['add', '.'], { cwd: source });
-    await execFileAsync('git', [
-      '-c', 'user.name=Wukong Test',
-      '-c', 'user.email=test@example.test',
-      'commit', '-m', 'base',
-    ], { cwd: source });
-    const built = await buildFinishLine({
-      cwd: source,
-      objective: 'Ship from a detached candidate',
-      includeDiscoveredChecks: true,
-    });
-    expect(built.ok).toBe(true);
-    if (!built.ok) return;
-    await execFileAsync('git', [
-      'worktree', 'add', '--detach', candidate, 'HEAD',
-    ], { cwd: source });
-
-    await expect(validateFrozenCandidateGatePlan(
-      candidate,
-      built.proposal,
-      built.proposal.gatePlan.planDigest,
-    )).resolves.toMatchObject({ ok: true });
-
-    await writeJson(join(candidate, 'package.json'), {
-      scripts: { test: 'node -e "process.exit(1)"' },
-    });
-    await expect(validateFrozenCandidateGatePlan(
-      candidate,
-      built.proposal,
-      built.proposal.gatePlan.planDigest,
-    )).resolves.toMatchObject({
       ok: false,
       reasonCode: 'gate_plan_changed',
     });

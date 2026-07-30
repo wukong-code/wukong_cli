@@ -1,22 +1,11 @@
+import { describe, expect, it } from 'vitest';
 import {
-  mkdtemp,
-  rm,
-} from 'node:fs/promises';
-import { tmpdir } from 'node:os';
-import { join } from 'node:path';
-
-import { afterEach, describe, expect, it } from 'vitest';
-import {
-  acknowledgePromotionConsent,
   acknowledgeReviewSubjectConsent,
   buildFinishLine,
   canonicalDigest,
   createBrokerReviewTrustProposal,
   createFreshReviewerInputDigest,
-  createIsolatedLoopCandidateBinding,
-  createPromotionConsentProposal,
   createReviewSubjectConsentProposal,
-  createTargetStateFingerprint,
   grantBrokerReviewTrust,
   ReviewSubjectBroker,
 } from '@wukong/verification';
@@ -31,24 +20,7 @@ import {
 import type { AgentRecord } from '../../src/agent/records';
 import type { AgentReplayRecord } from '../../src/rpc/resumed';
 import { ErrorCodes } from '../../src/errors';
-import {
-  acceptanceContractDigest,
-  criteriaSelectionDigest,
-} from '../../src/target-final-gate-audit-bridge';
-import {
-  TargetFinalGateAttemptStore,
-} from '../../src/target-final-gate-attempt-store';
-import {
-  TargetPromotionLeaseStore,
-} from '../../src/target-promotion-lease-store';
 import type { TelemetryProperties } from '../../src/telemetry';
-
-const temporaryRoots: string[] = [];
-
-afterEach(async () => {
-  await Promise.all(temporaryRoots.splice(0).map((root) =>
-    rm(root, { recursive: true, force: true })));
-});
 
 interface TelemetryRecord {
   readonly event: string;
@@ -120,12 +92,6 @@ function replayGoalRecord(goals: GoalMode, record: AgentRecord): void {
     case 'loop.run-review-settings.assign':
       goals.restoreLoopRunReviewSettingsAssignment(record);
       break;
-    case 'loop.isolated-candidate.bind':
-      goals.restoreIsolatedLoopCandidateBinding(record);
-      break;
-    case 'loop.isolated-candidate.iteration':
-      goals.restoreIsolatedLoopCandidateIteration(record);
-      break;
     case 'loop.gate-attempt.create':
     case 'loop.gate-check-result.create':
     case 'loop.builtin-risk-scan-result.create':
@@ -183,10 +149,6 @@ async function recordBrokeredGate(
     readonly checkStatus?: 'passed' | 'failed';
     readonly status: 'PASS' | 'NEEDS_WORK';
     readonly reasonCode: string;
-    readonly findingDiagnostics?: {
-      readonly message: string;
-      readonly nextAction: string;
-    };
   },
 ) {
   const runtime = goals.createLoopGateReviewRuntime();
@@ -263,16 +225,7 @@ async function recordBrokeredGate(
       status: 'resolved' as const,
       evidence,
     })),
-    findings: input.findingDiagnostics === undefined
-      ? []
-      : [{
-          id: 'diagnostic-finding',
-          origin: 'independent' as const,
-          severity: 'important' as const,
-          message: input.findingDiagnostics.message,
-          nextAction: input.findingDiagnostics.nextAction,
-          evidence,
-        }],
+    findings: [],
   };
   try {
     return goals.recordGateAttempt({
@@ -366,129 +319,6 @@ describe('GoalMode creation', () => {
 });
 
 describe('GoalMode lifecycle', () => {
-  it('persists one exact isolated candidate binding per Loop run', async () => {
-    const { goals, records } = makeGoalMode();
-    const finishLine = await buildFinishLine({
-      cwd: process.cwd(),
-      objective: 'Persist the isolated candidate',
-      completionCriterion: 'The candidate survives replay',
-      includeDiscoveredChecks: false,
-    });
-    expect(finishLine.ok).toBe(true);
-    if (!finishLine.ok) return;
-    const created = await goals.createGoal({
-      objective: finishLine.proposal.objective,
-      completionCriterion: finishLine.proposal.completionCriterion,
-      stopCondition: 'proof-pass',
-      loopContract: {
-        schemaVersion: 2,
-        objective: finishLine.proposal.objective,
-        completionCriterion: finishLine.proposal.completionCriterion,
-        constraints: finishLine.proposal.constraints,
-        finishLineReview: {
-          ...finishLine.proposal.finishLineReview,
-          acknowledgedWarningIds:
-            finishLine.proposal.finishLineReview.warnings.map(
-              (warning) => warning.id,
-            ),
-        },
-        workspaceIdentity: finishLine.proposal.workspaceIdentity,
-        workspaceTrust: finishLine.proposal.workspaceTrust,
-        gateApproval: finishLine.proposal.gateApproval,
-        gatePlan: finishLine.proposal.gatePlan,
-        reviewPolicy: finishLine.proposal.reviewPolicy,
-        reviewSettings: makeReviewSettings(
-          finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
-        ),
-        source: 'user',
-      },
-    });
-    expect(created.loopContract?.schemaVersion).toBe(2);
-    if (created.loopContract?.schemaVersion !== 2
-      || created.loopRunId === undefined) return;
-    expect(goals.createIsolatedLoopCandidateRuntimeContext())
-      .toMatchObject({
-        schemaVersion: 1,
-        goalId: created.goalId,
-        contractId: created.loopContract.contractId,
-        runId: created.loopRunId,
-        ownerRunId: created.loopRunId,
-        objective: finishLine.proposal.objective,
-        gatePlanDigest: created.loopContract.gatePlan.planDigest,
-        criteriaSelectionDigest: null,
-        gateContract: {
-          gatePlan: created.loopContract.gatePlan,
-        },
-      });
-    const bindingInput = {
-      goalId: created.goalId,
-      contractId: created.loopContract.contractId,
-      runId: created.loopRunId,
-      ownerRunId: '10000000-0000-4000-8000-000000000001',
-      candidateId: '20000000-0000-4000-8000-000000000002',
-      worktreeLeaseId: '30000000-0000-4000-8000-000000000003',
-      sourceSnapshotDigest: canonicalDigest(
-        'wukong/test/source-snapshot/v1',
-        'source',
-      ),
-      bootstrapPlanDigest: canonicalDigest(
-        'wukong/test/bootstrap-plan/v1',
-        'bootstrap',
-      ),
-      gatePlanDigest: created.loopContract.gatePlan.planDigest,
-      criteriaSelectionDigest: null,
-      reservedLeaseDigest: canonicalDigest(
-        'wukong/test/reserved-lease/v1',
-        'lease',
-      ),
-      createdAt: '2026-07-29T08:00:00.000Z',
-    } as const;
-    const binding = createIsolatedLoopCandidateBinding(bindingInput);
-
-    expect(goals.recordIsolatedLoopCandidateBinding(binding))
-      .toEqual(binding);
-    expect(goals.recordIsolatedLoopCandidateBinding(binding))
-      .toEqual(binding);
-    expect(goals.getGoal().goal?.isolatedLoopCandidate).toEqual({
-      candidateId: binding.candidateId,
-      worktreeLeaseId: binding.worktreeLeaseId,
-      bindingDigest: binding.bindingDigest,
-    });
-    expect(records.filter(
-      (record) => record.type === 'loop.isolated-candidate.bind',
-    )).toHaveLength(1);
-    const iterationInput = {
-      bindingDigest: binding.bindingDigest,
-      candidateGateAttemptId:
-        '60000000-0000-4000-8000-000000000006',
-      candidateGateResultDigest: canonicalDigest(
-        'wukong/test/candidate-gate-result/v1',
-        'result',
-      ),
-    };
-    expect(goals.recordIsolatedLoopCandidateIteration(iterationInput)
-      .iteration).toBe(1);
-    expect(goals.recordIsolatedLoopCandidateIteration(iterationInput)
-      .iteration).toBe(1);
-    expect(records.filter(
-      (record) =>
-        record.type === 'loop.isolated-candidate.iteration',
-    )).toHaveLength(1);
-
-    const conflicting = createIsolatedLoopCandidateBinding({
-      ...bindingInput,
-      candidateId: '40000000-0000-4000-8000-000000000004',
-      worktreeLeaseId: '50000000-0000-4000-8000-000000000005',
-    });
-    expect(() => goals.recordIsolatedLoopCandidateBinding(conflicting))
-      .toThrow(/already bound/u);
-
-    const replayed = makeGoalMode().goals;
-    for (const record of records) replayGoalRecord(replayed, record);
-    expect(replayed.getIsolatedLoopCandidateBinding()).toEqual(binding);
-    expect(replayed.getGoal().goal?.iteration).toBe(1);
-  });
-
   it('creates only one continuation run for concurrent resume requests', async () => {
     const { goals, records } = makeGoalMode();
     const finishLine = await buildFinishLine({
@@ -892,16 +722,10 @@ describe('GoalMode records', () => {
     expect(created.loopContract?.schemaVersion).toBe(2);
     expect(created.loopRunId).toBeTruthy();
 
-    const secret = 'sk_live_goalGatePrivacySentinel123456789';
     const attempt = await recordBrokeredGate(goals, {
       workspaceFingerprint: 'workspace-fingerprint',
       status: 'PASS',
       reasonCode: 'passed',
-      findingDiagnostics: {
-        message: `Authorization: Bearer ${secret}`,
-        nextAction:
-          `retry https://alice:${secret}@example.test/v1?token=${secret}`,
-      },
     });
     const terminal = goals.recordLoopTerminal({
       status: 'PASS',
@@ -926,10 +750,6 @@ describe('GoalMode records', () => {
       'loop.gate-attempt.complete',
       'loop.run.terminal',
     ]));
-    const serializedRecords = JSON.stringify(records);
-    expect(serializedRecords).not.toContain(secret);
-    expect(serializedRecords).not.toContain('alice');
-    expect(serializedRecords).toContain('[REDACTED]');
 
     const replayed = makeGoalMode().goals;
     for (const record of records) {
@@ -1005,203 +825,6 @@ describe('GoalMode records', () => {
     expect(() => {
       verdictReplay.restoreLoopAuditRecord(tamperedVerdict);
     }).toThrow('verdict');
-  });
-
-  it('rebinds a complete Goal Gate audit to the exact post-Apply target state', async () => {
-    const { goals, records } = makeGoalMode();
-    const finishLine = await buildFinishLine({
-      cwd: process.cwd(),
-      objective: 'Prove the promoted target',
-      completionCriterion: 'The target Final Gate passes',
-      includeDiscoveredChecks: false,
-    });
-    expect(finishLine.ok).toBe(true);
-    if (!finishLine.ok) return;
-    await goals.createGoal({
-      objective: finishLine.proposal.objective,
-      completionCriterion:
-        finishLine.proposal.completionCriterion,
-      stopCondition: 'proof-pass',
-      loopContract: {
-        schemaVersion: 2,
-        objective: finishLine.proposal.objective,
-        completionCriterion:
-          finishLine.proposal.completionCriterion,
-        constraints: finishLine.proposal.constraints,
-        finishLineReview: {
-          ...finishLine.proposal.finishLineReview,
-          acknowledgedWarningIds:
-            finishLine.proposal.finishLineReview.warnings.map(
-              (warning) => warning.id,
-            ),
-        },
-        workspaceIdentity: finishLine.proposal.workspaceIdentity,
-        workspaceTrust: finishLine.proposal.workspaceTrust,
-        gateApproval: finishLine.proposal.gateApproval,
-        gatePlan: finishLine.proposal.gatePlan,
-        reviewPolicy: finishLine.proposal.reviewPolicy,
-        reviewSettings: makeReviewSettings(
-          finishLine.proposal.workspaceIdentity
-            .workspaceIdentityDigest,
-        ),
-        source: 'user',
-      },
-    });
-    const contractRecord = records.find(
-      (record) => record.type === 'goal.contract.create',
-    );
-    const runRecord = records.find(
-      (record) => record.type === 'loop.run.create',
-    );
-    if (contractRecord?.type !== 'goal.contract.create'
-      || contractRecord.contract.schemaVersion === 1
-      || runRecord?.type !== 'loop.run.create') {
-      throw new Error('Target Final Gate Goal fixture is incomplete.');
-    }
-    const contract = contractRecord.contract;
-    const targetAfterFingerprintDigest =
-      canonicalDigest(
-        'wukong/test/target-final-gate-goal/v1',
-        'target-after',
-      );
-    const completed = await recordBrokeredGate(goals, {
-      workspaceFingerprint: canonicalDigest(
-        'wukong/test/target-final-gate-goal-workspace-snapshot/v1',
-        'target-after',
-      ),
-      status: 'PASS',
-      reasonCode: 'passed',
-    });
-    if (completed === null) {
-      throw new Error('Goal Gate completion is missing.');
-    }
-    const root = await mkdtemp(
-      join(tmpdir(), 'wukong-goal-target-gate-'),
-    );
-    temporaryRoots.push(root);
-    const sourceSnapshotDigest = canonicalDigest(
-      'wukong/test/target-final-gate-goal/v1',
-      'source',
-    );
-    const targetFingerprint = createTargetStateFingerprint({
-      targetWorkspaceIdentity: canonicalDigest(
-        'wukong/test/target-final-gate-goal/v1',
-        'workspace',
-      ),
-      targetGitCommonDirIdentity: canonicalDigest(
-        'wukong/test/target-final-gate-goal/v1',
-        'git',
-      ),
-      headOid: 'a'.repeat(40),
-      branchRef: 'refs/heads/main',
-      branchRefDigest: canonicalDigest(
-        'wukong/test/target-final-gate-goal/v1',
-        'branch',
-      ),
-      indexDigest: canonicalDigest(
-        'wukong/test/target-final-gate-goal/v1',
-        'index',
-      ),
-      trackedWorkingDeltaDigest: null,
-      untrackedProjectionDigest: canonicalDigest(
-        'wukong/test/target-final-gate-goal/v1',
-        'untracked',
-      ),
-      protectedRefsDigest: canonicalDigest(
-        'wukong/test/target-final-gate-goal/v1',
-        'refs',
-      ),
-      sourceSnapshotDigest,
-      promotableContentDigest: canonicalDigest(
-        'wukong/test/target-final-gate-goal/v1',
-        'content',
-      ),
-    });
-    const promotion = createPromotionConsentProposal({
-      promotionId: '019f8d50-0000-7abc-8def-0123456789ab',
-      candidateId: '019f8d50-0001-7abc-8def-0123456789ab',
-      candidateDeltaDigest: canonicalDigest(
-        'wukong/test/target-final-gate-goal/v1',
-        'delta',
-      ),
-      candidateGateResultDigest: canonicalDigest(
-        'wukong/test/target-final-gate-goal/v1',
-        'candidate-gate',
-      ),
-      sourceSnapshotDigest,
-      targetFingerprint,
-      permissionDigest: canonicalDigest(
-        'wukong/test/target-final-gate-goal/v1',
-        'permission',
-      ),
-    });
-    const targetStore = new TargetPromotionLeaseStore({
-      registryRootDirectory: join(root, 'registry'),
-    });
-    const acquired = await targetStore.acquire({
-      consent: acknowledgePromotionConsent(
-        promotion,
-        promotion.proposalDigest,
-        '2026-07-29T16:29:00.000Z',
-      ),
-      targetFingerprint,
-      ownerRunId: runRecord.run.runId,
-      ownerProcessIdentityDigest: canonicalDigest(
-        'wukong/test/target-final-gate-goal/v1',
-        'process',
-      ),
-    });
-    const applying = await targetStore.transition(
-      acquired.binding,
-      'applying',
-    );
-    const finalVerifying = await targetStore.transition(
-      applying.binding,
-      'final_verifying',
-    );
-    const attemptStore = new TargetFinalGateAttemptStore();
-    await targetStore.withExclusiveLease(
-      finalVerifying.binding,
-      'final_verifying',
-      async (view) => {
-        const prepared = await attemptStore.initialize(view, {
-          finalGateAttemptId: completed.attemptId,
-          runId: completed.runId,
-          contractId: completed.contractId,
-          acceptanceContractDigest: acceptanceContractDigest(
-            contract,
-          ),
-          gatePlanDigest: completed.planDigest,
-          criteriaSelectionDigest: criteriaSelectionDigest(
-            contract,
-          ),
-          sourceSnapshotDigest,
-          promotionJournalId:
-            '019f8d50-0002-7abc-8def-0123456789ab',
-          promotionJournalHeadDigest: canonicalDigest(
-            'wukong/test/target-final-gate-goal/v1',
-            'journal',
-          ),
-          targetAfterFingerprintDigest,
-        });
-        const evidence = goals.buildTargetFinalGateEvidence({
-          targetAttempt: prepared,
-          evidenceSnapshotId:
-            '019f8d50-0003-7abc-8def-0123456789ab',
-        });
-        expect(evidence).toMatchObject({
-          finalGateAttemptId: completed.attemptId,
-          runId: completed.runId,
-          contractId: completed.contractId,
-          targetAfterFingerprintDigest,
-          builtinRiskScanStatus: 'clean',
-          criteriaStatus: 'satisfied',
-          freshReviewerStatus: 'PASS',
-        });
-        expect(evidence.evidenceDigest)
-          .toMatch(/^sha256:[a-f0-9]{64}$/u);
-      },
-    );
   });
 
   it('creates one immutable Loop contract and restores convergence records', async () => {
@@ -1467,45 +1090,6 @@ describe('GoalMode records', () => {
     restored.restoreUpdate(update);
 
     expect(restored.getGoal().goal?.loopResult).toEqual(result);
-  });
-
-  it('redacts synthetic secrets before durable Loop records are emitted', async () => {
-    const { goals, records } = makeGoalMode();
-    const secret = 'sk_live_wukongPrivacySentinel123456789';
-    const url =
-      `https://alice:${secret}@example.test/v1?token=${secret}`;
-
-    await goals.createGoal({ objective: 'keep diagnostics private' });
-    const result = goals.recordLoopResult({
-      schemaVersion: 2,
-      status: 'ERROR',
-      reasonCode: secret,
-      summary: `exception from ${url}`,
-      checks: [{
-        command: `OPENAI_API_KEY=${secret} npm test`,
-        status: 'failed',
-        exitCode: 1,
-        durationMs: 10,
-      }],
-      blockers: [{
-        id: secret,
-        kind: 'check',
-        summary: `Authorization: Bearer ${secret}`,
-        evidence: `stderr=${secret}`,
-        nextAction: `retry ${url}`,
-      }],
-    });
-    await goals.markBlocked({
-      reason: `runtime failed with OPENAI_API_KEY=${secret}`,
-    });
-
-    const serialized = JSON.stringify(records);
-    expect(serialized).not.toContain(secret);
-    expect(serialized).not.toContain('alice');
-    expect(serialized).toContain('[REDACTED]');
-    expect(result).toMatchObject({ reasonCode: 'runtime_error' });
-    expect(goals.getGoal().goal?.terminalReason)
-      .toContain('OPENAI_API_KEY=[REDACTED]');
   });
 
   it('projects restored goal status changes into replay records', () => {

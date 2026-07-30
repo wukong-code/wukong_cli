@@ -35,9 +35,6 @@ import type {
   GetConfigOptions,
   GoalSnapshot,
   GoalToolResult,
-  IsolatedLoopCandidateIterationPublicResultV1,
-  IsolatedLoopPromotionProposalPublicResultV1,
-  IsolatedLoopPromotionPublicResultV1,
   WukongConfig,
   WukongConfigPatch,
   ListSessionsOptions,
@@ -55,9 +52,6 @@ import type {
   RenameSessionInput,
   ResumeSessionInput,
   ResumeGoalInput,
-  PrepareIsolatedLoopPromotionPayloadV1,
-  PromoteIsolatedLoopCandidatePayloadV1,
-  RunIsolatedLoopCandidateIterationPayloadV1,
   ResumedSessionSummary,
   SessionSummary,
   SkillSummary,
@@ -571,51 +565,6 @@ export abstract class SDKRpcClientBase {
       maxIterations: input.maxIterations,
       minIntervalMs: input.minIntervalMs,
       loopContract: input.loopContract,
-    });
-  }
-
-  async runIsolatedLoopCandidateIteration(
-    input: SessionIdRpcInput & RunIsolatedLoopCandidateIterationPayloadV1,
-  ): Promise<IsolatedLoopCandidateIterationPublicResultV1> {
-    const rpc = await this.getRpc();
-    return rpc.runIsolatedLoopCandidateIteration({
-      sessionId: input.sessionId,
-      agentId: this.interactiveAgentId,
-      schemaVersion: input.schemaVersion,
-      sourceRepositoryRoot: input.sourceRepositoryRoot,
-      sourceSnapshotCwd: input.sourceSnapshotCwd,
-      sourceSnapshot: input.sourceSnapshot,
-      approvedBootstrapPlanDigest:
-        input.approvedBootstrapPlanDigest,
-    });
-  }
-
-  async prepareIsolatedLoopPromotion(
-    input: SessionIdRpcInput & PrepareIsolatedLoopPromotionPayloadV1,
-  ): Promise<IsolatedLoopPromotionProposalPublicResultV1> {
-    const rpc = await this.getRpc();
-    return rpc.prepareIsolatedLoopPromotion({
-      sessionId: input.sessionId,
-      agentId: this.interactiveAgentId,
-      schemaVersion: input.schemaVersion,
-      sourceRepositoryRoot: input.sourceRepositoryRoot,
-      sourceSnapshotCwd: input.sourceSnapshotCwd,
-      sourceSnapshot: input.sourceSnapshot,
-    });
-  }
-
-  async promoteIsolatedLoopCandidate(
-    input: SessionIdRpcInput & PromoteIsolatedLoopCandidatePayloadV1,
-  ): Promise<IsolatedLoopPromotionPublicResultV1> {
-    const rpc = await this.getRpc();
-    return rpc.promoteIsolatedLoopCandidate({
-      sessionId: input.sessionId,
-      agentId: this.interactiveAgentId,
-      schemaVersion: input.schemaVersion,
-      sourceRepositoryRoot: input.sourceRepositoryRoot,
-      sourceSnapshotCwd: input.sourceSnapshotCwd,
-      sourceSnapshot: input.sourceSnapshot,
-      proposalDigest: input.proposalDigest,
     });
   }
 

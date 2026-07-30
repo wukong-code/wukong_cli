@@ -3,10 +3,6 @@ import { lstat, readFile, realpath, stat } from 'node:fs/promises';
 import { isAbsolute, join, relative, resolve, sep } from 'node:path';
 
 import { runFile } from './process';
-import {
-  containsSensitiveText,
-  redactSensitiveText,
-} from './redaction';
 import { selectVerificationCommands } from './scripts';
 import type { VerificationCommand } from './types';
 
@@ -205,6 +201,12 @@ const MAX_CHECK_LENGTH = 2_000;
 const MAX_CHECKS = 24;
 const MAX_CONTRACT_BYTES = 64 * 1024;
 const CONTROL_CHARACTER = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/u;
+const INLINE_SECRET_PATTERNS = [
+  /(?:api[_-]?key|access[_-]?token|auth[_-]?token|secret|password)\s*[:=]\s*['"]?[A-Za-z0-9_./+=-]{8,}/iu,
+  /\b(?:sk|ghp|github_pat|xox[baprs])[_-][A-Za-z0-9_-]{12,}\b/u,
+  /\bAuthorization\s*:\s*Bearer\s+\S+/iu,
+] as const;
+
 export async function buildFinishLine(
   options: BuildFinishLineOptions,
 ): Promise<BuildFinishLineResult> {
@@ -455,128 +457,6 @@ export async function validateFrozenGatePlan(
   return { ok: true, workspaceIdentity };
 }
 
-/**
- * Revalidates a source-approved Gate Plan inside a detached candidate
- * worktree. The candidate necessarily has a different path/inode identity,
- * so trust is carried by the caller's Worktree Lease binding plus the shared
- * Git common-dir identity and exact frozen Gate Plan digest.
- */
-export async function validateFrozenCandidateGatePlan(
-  cwd: string,
-  proposal: Pick<
-    FinishLineProposal,
-    'workspaceIdentity' | 'workspaceTrust' | 'gatePlan' | 'gateApproval' | 'reviewPolicy'
-  >,
-  expectedGatePlanDigest: string,
-): Promise<GatePlanValidation> {
-  let workspaceIdentity: WorkspaceIdentity;
-  try {
-    workspaceIdentity = await resolveWorkspaceIdentity(cwd);
-  } catch (error) {
-    return {
-      ok: false,
-      reasonCode: 'workspace_trust_mismatch',
-      message: error instanceof Error ? error.message : String(error),
-    };
-  }
-  if (proposal.gatePlan.planDigest !== expectedGatePlanDigest
-    || proposal.gateApproval.gatePlanDigest !== expectedGatePlanDigest) {
-    return {
-      ok: false,
-      reasonCode: 'gate_plan_changed',
-      message: 'The candidate Gate Plan does not match its Worktree Lease.',
-      workspaceIdentity,
-    };
-  }
-  if (proposal.workspaceIdentity.gitCommonDirIdentity === undefined
-    || workspaceIdentity.gitCommonDirIdentity
-      !== proposal.workspaceIdentity.gitCommonDirIdentity
-    || proposal.workspaceTrust?.workspaceIdentityDigest
-      !== proposal.gateApproval.workspaceIdentityDigest) {
-    return {
-      ok: false,
-      reasonCode: 'workspace_trust_mismatch',
-      message: 'The candidate is not attached to the approved source repository trust root.',
-      workspaceIdentity,
-    };
-  }
-  if (proposal.gatePlan.builtinRiskScanPolicyVersion
-    !== BUILTIN_RISK_SCAN_POLICY_VERSION) {
-    return {
-      ok: false,
-      reasonCode: 'gate_plan_changed',
-      message: 'The builtin risk-scan policy changed after the Finish Line was frozen.',
-      workspaceIdentity,
-    };
-  }
-  for (const check of proposal.gatePlan.requiredChecks) {
-    const current = await resolveFrozenDefinition(
-      workspaceIdentity.canonicalRealpath,
-      check,
-    );
-    if (check.resolution === 'expected-unresolved') {
-      if (current !== undefined) {
-        return {
-          ok: false,
-          reasonCode: 'contract_update_required',
-          message: `A previously unresolved check now has a definition: ${check.displayCommand}`,
-          workspaceIdentity,
-        };
-      }
-      continue;
-    }
-    if (current === undefined) {
-      return {
-        ok: false,
-        reasonCode: 'frozen_check_missing',
-        message: `A frozen check source is missing: ${check.sourceLocator ?? check.displayCommand}`,
-        workspaceIdentity,
-      };
-    }
-    if (digestText('wukong/check-definition/v1', current)
-      !== check.definitionDigest) {
-      return {
-        ok: false,
-        reasonCode: 'gate_plan_changed',
-        message: `A frozen check definition changed: ${check.sourceLocator ?? check.displayCommand}`,
-        workspaceIdentity,
-      };
-    }
-  }
-  const currentPolicy = await freezeReviewPolicy(
-    workspaceIdentity.canonicalRealpath,
-  );
-  if (proposal.reviewPolicy.mode === 'blocking-frozen'
-    && (currentPolicy.mode !== 'blocking-frozen'
-      || currentPolicy.definitionDigest
-        !== proposal.reviewPolicy.definitionDigest)) {
-    return {
-      ok: false,
-      reasonCode: 'review_policy_changed',
-      message: 'The frozen blocking review policy changed.',
-      workspaceIdentity,
-    };
-  }
-  const planWithoutDigest = {
-    schemaVersion: proposal.gatePlan.schemaVersion,
-    stopCondition: proposal.gatePlan.stopCondition,
-    requiredChecks: proposal.gatePlan.requiredChecks,
-    excludedChecks: proposal.gatePlan.excludedChecks,
-    builtinRiskScanPolicyVersion:
-      proposal.gatePlan.builtinRiskScanPolicyVersion,
-  };
-  if (canonicalDigest('wukong/gate-plan/v1', planWithoutDigest)
-    !== proposal.gatePlan.planDigest) {
-    return {
-      ok: false,
-      reasonCode: 'gate_plan_changed',
-      message: 'The frozen Gate Plan digest is invalid.',
-      workspaceIdentity,
-    };
-  }
-  return { ok: true, workspaceIdentity };
-}
-
 export async function resolveWorkspaceIdentity(cwd: string): Promise<WorkspaceIdentity> {
   const requested = resolve(cwd);
   const rootLink = await lstat(requested);
@@ -688,11 +568,15 @@ export function canonicalJson(value: unknown): string {
 }
 
 export function redactCommand(command: string): string {
-  return redactSensitiveText(command);
+  let output = command;
+  for (const pattern of INLINE_SECRET_PATTERNS) {
+    output = output.replace(pattern, '[REDACTED]');
+  }
+  return output;
 }
 
 export function containsInlineSecret(command: string): boolean {
-  return containsSensitiveText(command);
+  return INLINE_SECRET_PATTERNS.some((pattern) => pattern.test(command));
 }
 
 function validateFinishLineInput(options: BuildFinishLineOptions): FinishLineFailure | undefined {

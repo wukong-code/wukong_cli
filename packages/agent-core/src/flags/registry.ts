@@ -28,14 +28,6 @@ export const FLAG_DEFINITIONS = [
     default: false,
     surface: 'both',
   },
-  {
-    id: 'isolated_loop_worktrees',
-    title: 'Isolated Loop worktrees',
-    description: 'Prepare exact source snapshots for isolated Loop worktree execution.',
-    env: 'WUKONG_CODE_EXPERIMENTAL_ISOLATED_LOOP_WORKTREES',
-    default: false,
-    surface: 'both',
-  },
 ] as const satisfies readonly FlagDefinitionInput[];
 
 /** Literal union of registered flag ids. */

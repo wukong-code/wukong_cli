@@ -51,14 +51,6 @@ import {
 } from '../telemetry';
 import type { CoreRPCClient } from './client';
 import type {
-  IsolatedLoopCandidateIterationPublicResultV1,
-  IsolatedLoopPromotionProposalPublicResultV1,
-  IsolatedLoopPromotionPublicResultV1,
-  PrepareIsolatedLoopPromotionPayloadV1,
-  PromoteIsolatedLoopCandidatePayloadV1,
-  RunIsolatedLoopCandidateIterationPayloadV1,
-} from '../isolated-loop-runtime-types';
-import type {
   ActivateSkillPayload,
   AddAdditionalDirPayload,
   AddAdditionalDirResult,
@@ -814,33 +806,6 @@ export class WukongCore implements PromisableMethods<CoreAPI> {
     ...payload
   }: SessionAgentPayload<CreateGoalPayload>): Promise<GoalSnapshot> {
     return Promise.resolve(this.sessionApi(sessionId).createGoal(payload));
-  }
-
-  runIsolatedLoopCandidateIteration({
-    sessionId,
-    ...payload
-  }: SessionAgentPayload<RunIsolatedLoopCandidateIterationPayloadV1>):
-    Promise<IsolatedLoopCandidateIterationPublicResultV1> {
-    return this.sessionApi(sessionId)
-      .runIsolatedLoopCandidateIteration(payload);
-  }
-
-  prepareIsolatedLoopPromotion({
-    sessionId,
-    ...payload
-  }: SessionAgentPayload<PrepareIsolatedLoopPromotionPayloadV1>):
-    Promise<IsolatedLoopPromotionProposalPublicResultV1> {
-    return this.sessionApi(sessionId)
-      .prepareIsolatedLoopPromotion(payload);
-  }
-
-  promoteIsolatedLoopCandidate({
-    sessionId,
-    ...payload
-  }: SessionAgentPayload<PromoteIsolatedLoopCandidatePayloadV1>):
-    Promise<IsolatedLoopPromotionPublicResultV1> {
-    return this.sessionApi(sessionId)
-      .promoteIsolatedLoopCandidate(payload);
   }
 
   getGoal({ sessionId, ...payload }: SessionAgentPayload<EmptyPayload>): Promise<GoalToolResult> {

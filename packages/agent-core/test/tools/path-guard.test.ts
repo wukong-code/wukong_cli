@@ -117,32 +117,6 @@ describe('path access policy', () => {
     expect(result).toBe('/workspace/project/README.md');
   });
 
-  it('workspace-only mode cannot be forged without a bound candidate capability', () => {
-    const workspace: WorkspaceConfig = {
-      workspaceDir: '/candidate/worktree',
-      additionalDirs: [],
-      accessMode: 'workspace-only',
-    };
-
-    expect(() => resolvePathAccessPath('src/index.ts', {
-      kaos: POSIX_KAOS,
-      workspace,
-      operation: 'write',
-    })).toThrow(/capability is missing/u);
-    for (const path of [
-      '/source/repository/index.ts',
-      '../../source/repository/index.ts',
-      '~/notes/today.txt',
-    ]) {
-      expect(() => resolvePathAccessPath(path, {
-        kaos: POSIX_KAOS,
-        workspace,
-        operation: 'write',
-        policy: { guardMode: 'disabled', checkSensitive: false },
-      })).toThrow(/outside the isolated candidate workspace/u);
-    }
-  });
-
   it('expands home for file tools unless explicitly disabled', () => {
     const workspace = { workspaceDir: '/workspace', additionalDirs: [] };
 

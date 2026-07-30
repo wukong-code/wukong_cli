@@ -2,7 +2,6 @@ import {
   ErrorCodes,
   isWukongError,
   type GoalSnapshot,
-  type IsolatedLoopPromotionProposalPublicResultV1,
   type LoopContractV2Input,
   type LoopContractV3Input,
   type PermissionMode,
@@ -51,9 +50,6 @@ import {
   VerificationCriteriaSelectorComponent,
   type VerificationCriteriaChoice,
 } from '../components/dialogs/verification-criteria-selector';
-import {
-  SourceSnapshotSelectorComponent,
-} from '../components/dialogs/source-snapshot-selector';
 import { ChoicePickerComponent } from '../components/dialogs/choice-picker';
 import {
   GoalStartPermissionPromptComponent,
@@ -81,7 +77,6 @@ import {
 } from '../goal-queue-store';
 import { formatErrorMessage } from '../utils/event-payload';
 import type { SlashCommandHost } from './dispatch';
-import { isExperimentalFlagEnabled } from './experimental-flags';
 
 const MAX_GOAL_OBJECTIVE_LENGTH = 4000;
 const RESUME_GOAL_INPUT = 'Resume the active goal.';
@@ -955,15 +950,11 @@ async function openFinishLineReview(
   discoveredCheckDecision: DiscoveredCheckDecision = 'tui-default',
   verificationSkills: readonly VerificationCriteriaChoice[] = [],
   verificationCatalogDigest?: string,
-  selectedUntrackedPaths: readonly string[] = [],
 ): Promise<void> {
   const config = await host.harness.getConfig();
   const reviewProvider = resolveLoopReviewProvider(
     config,
     parsed.reviewModel ?? host.state.appState.model,
-  );
-  const inspectIsolatedSource = isExperimentalFlagEnabled(
-    'isolated_loop_worktrees',
   );
   const result = await runLoopPreflight({
     objective: draft.objective,
@@ -975,8 +966,6 @@ async function openFinishLineReview(
     mode: 'tui-proposal',
     verificationSkills,
     verificationCatalogDigest,
-    inspectIsolatedSource,
-    selectedUntrackedPaths,
     reviewProvider,
     getActiveGoal: async () => (await host.requireSession().getGoal()).goal,
   });
@@ -1002,31 +991,6 @@ function showFinishLineReview(
       selectedCriteriaCount: preflight.verificationSelection?.selected.length ?? 0,
       suggestedCriteriaCount: preflight.verificationCatalog.suggestions.length,
       reviewProviderOrigin: formatReviewProviderOrigin(preflight),
-      sourceSnapshot: preflight.sourceSnapshotDryRun === undefined
-        ? undefined
-        : {
-            selectedUntrackedCount:
-              selectedUntrackedPathsFor(preflight).length,
-            discoveredUntrackedCount:
-              preflight.sourceSnapshotDryRun.untrackedCandidateCount,
-          },
-      bootstrapPlan: preflight.candidateBootstrapPlan === undefined
-        || preflight.candidateBootstrapBudget === undefined
-        ? undefined
-        : {
-            planDigest:
-              preflight.candidateBootstrapPlan.bootstrapPlanDigest,
-            stepCount:
-              preflight.candidateBootstrapPlan.steps.length,
-            networkPolicy:
-              preflight.candidateBootstrapPlan.networkPolicy,
-            wallClockLimitMs:
-              preflight.candidateBootstrapBudget.wallClockLimitMs,
-            generatedByteLimit:
-              preflight.candidateBootstrapBudget.generatedByteLimit,
-            outputByteLimit:
-              preflight.candidateBootstrapBudget.processOutputByteLimit,
-          },
       onSelect: (choice) => {
         void handleFinishLineReviewChoice(
           host,
@@ -1080,7 +1044,6 @@ async function handleFinishLineReviewChoice(
             discoveredCheckDecision,
             selectedCriteriaChoices(preflight),
             preflight.verificationCatalog.catalogDigest,
-            selectedUntrackedPathsFor(preflight),
           );
         }),
       );
@@ -1111,7 +1074,6 @@ async function handleFinishLineReviewChoice(
               selected.length === 0
                 ? undefined
                 : preflight.verificationCatalog.catalogDigest,
-              selectedUntrackedPathsFor(preflight),
             );
           },
           onCancel: () => {
@@ -1126,52 +1088,6 @@ async function handleFinishLineReviewChoice(
           },
         }),
       );
-      return;
-    case 'source':
-      {
-        const dryRun = preflight.sourceSnapshotDryRun;
-        if (dryRun === undefined) {
-          showFinishLineReview(
-            host,
-            parsed,
-            draft,
-            rawArgs,
-            preflight,
-            discoveredCheckDecision,
-          );
-          return;
-        }
-        host.mountEditorReplacement(
-          new SourceSnapshotSelectorComponent({
-            candidates: dryRun.untrackedCandidates,
-            selectedPaths: selectedUntrackedPathsFor(preflight),
-            onDone: (selectedPaths) => {
-              void openFinishLineReview(
-                host,
-                parsed,
-                draft,
-                rawArgs,
-                discoveredCheckDecision,
-                selectedCriteriaChoices(preflight),
-                preflight.verificationSelection === undefined
-                  ? undefined
-                  : preflight.verificationCatalog.catalogDigest,
-                selectedPaths,
-              );
-            },
-            onCancel: () => {
-              showFinishLineReview(
-                host,
-                parsed,
-                draft,
-                rawArgs,
-                preflight,
-                discoveredCheckDecision,
-              );
-            },
-          }),
-        );
-      }
       return;
     case 'advanced':
       showAdvancedLoopSettings(
@@ -1299,7 +1215,6 @@ function showFrozenChecks(
             preflight.verificationSelection === undefined
               ? undefined
               : preflight.verificationCatalog.catalogDigest,
-            selectedUntrackedPathsFor(preflight),
           );
           return;
         }
@@ -1412,7 +1327,6 @@ async function startConfirmedLoop(
 ): Promise<void> {
   let run: Awaited<ReturnType<typeof beginLoopRun>> | undefined;
   let finalized: LoopPreflightReady | undefined;
-  let createdGoalId: string | undefined;
   await createGoal(
     host,
     {
@@ -1437,15 +1351,8 @@ async function startConfirmedLoop(
           model: host.state.appState.model,
           workspace: host.state.appState.workDir ?? process.cwd(),
           mode: 'tui-confirmed',
-          inspectIsolatedSource: isExperimentalFlagEnabled(
-            'isolated_loop_worktrees',
-          ),
-          selectedUntrackedPaths:
-            selectedUntrackedPathsFor(initialPreflight),
           acknowledgeWarningSetDigest:
             initialPreflight.proposal.finishLineReview.warningSetDigest,
-          approveBootstrapPlanDigest:
-            initialPreflight.candidateBootstrapPlan?.bootstrapPlanDigest,
           verificationSkills:
             selectedCriteriaChoices(initialPreflight),
           verificationCatalogDigest:
@@ -1465,9 +1372,6 @@ async function startConfirmedLoop(
         });
         if (!result.ready) {
           host.showError(formatLoopPreflightBlocked(result));
-          return false;
-        }
-        if (!(await confirmTuiSourceSnapshot(host, result))) {
           return false;
         }
         const trustGrant = await ensureTuiWorkspaceTrust(host, result.proposal);
@@ -1499,7 +1403,6 @@ async function startConfirmedLoop(
           throw new Error('Loop contract was created without an authoritative run id.');
         }
         run = await beginLoopRun(snapshot.loopRunId);
-        createdGoalId = snapshot.goalId;
         await registerTuiLoop(
           snapshot.goalId,
           run,
@@ -1513,293 +1416,10 @@ async function startConfirmedLoop(
         if (run !== undefined) await completeLoopRun(run, 'ERROR', 0, 'cancelled');
       },
       sendInput: () => {
-        if (finalized?.sourceSnapshotDryRun?.status === 'ready'
-          && finalized.sourceSnapshotDryRun.proposedSnapshot !== null
-          && finalized.sourceRepositoryRoot !== undefined) {
-          void runTuiIsolatedLoop(
-            host,
-            finalized,
-            parsed.maxIterations,
-            createdGoalId,
-          );
-          return;
-        }
         host.sendNormalUserInput(draft.objective);
       },
     },
   );
-}
-
-function selectedUntrackedPathsFor(
-  preflight: LoopPreflightReady,
-): readonly string[] {
-  return preflight.sourceSnapshotDryRun?.proposedSnapshot
-    ?.includedUntracked.map(
-      ({ canonicalRelativePath }) => canonicalRelativePath,
-    ) ?? [];
-}
-
-async function confirmTuiSourceSnapshot(
-  host: SlashCommandHost,
-  preflight: LoopPreflightReady,
-): Promise<boolean> {
-  const dryRun = preflight.sourceSnapshotDryRun;
-  if (dryRun === undefined) return true;
-  const snapshot = dryRun.proposedSnapshot;
-  if (dryRun.status !== 'ready' || snapshot === null) {
-    host.showError(
-      `Isolated Loop source snapshot is blocked: ${dryRun.reasonCode ?? 'source_snapshot_untrusted'}.`,
-    );
-    return false;
-  }
-  const trackedState = snapshot.trackedDeltaDigest === null
-    ? 'clean'
-    : 'contains staged or unstaged changes';
-  const branch = snapshot.branchName ?? '(detached)';
-  const baseCommit = snapshot.baseCommit.slice(0, 12);
-  const policyBlockedCount = dryRun.untrackedCandidates.filter(
-    ({ eligibility }) => eligibility === 'excluded',
-  ).length + snapshot.exclusions.length;
-  return new Promise<boolean>((resolve) => {
-    const cancel = (): void => {
-      host.restoreEditor();
-      host.showStatus(
-        'Isolated Loop not started. No candidate worktree was created.',
-      );
-      resolve(false);
-    };
-    host.mountEditorReplacement(
-      new ChoicePickerComponent({
-        title: 'Confirm isolated source snapshot',
-        hint: 'Read-only dry-run · Enter select · Esc cancel',
-        notice: [
-          `Workspace     ${preflight.workspace}`,
-          `Branch        ${branch}`,
-          `Base commit   ${baseCommit}`,
-          `Tracked       ${trackedState}`,
-          `Untracked     ${String(snapshot.includedUntracked.length)} selected of ${String(dryRun.untrackedCandidateCount)} discovered`,
-          `Policy block  ${String(policyBlockedCount)} discovered paths`,
-          `Snapshot      ${snapshot.snapshotDigest}`,
-          `Dry-run       ${dryRun.dryRunDigest}`,
-          'Unselected files are not copied into the candidate.',
-          'No candidate worktree or source write has happened yet.',
-        ].join('\n'),
-        noticeTone: 'warning',
-        options: [
-          {
-            value: 'continue',
-            label: 'Start isolated Loop',
-            description: 'Bind this exact snapshot and create a detached candidate.',
-          },
-          {
-            value: 'cancel',
-            label: 'Cancel',
-            description: 'Create no Goal, run, candidate, or source write.',
-          },
-        ],
-        onSelect: (value) => {
-          if (value !== 'continue') {
-            cancel();
-            return;
-          }
-          host.restoreEditor();
-          resolve(true);
-        },
-        onCancel: cancel,
-      }),
-    );
-  });
-}
-
-async function runTuiIsolatedLoop(
-  host: SlashCommandHost,
-  preflight: LoopPreflightReady,
-  maxIterations: number,
-  goalId: string | undefined,
-): Promise<void> {
-  const dryRun = preflight.sourceSnapshotDryRun;
-  const sourceRepositoryRoot = preflight.sourceRepositoryRoot;
-  if (dryRun?.status !== 'ready'
-    || dryRun.proposedSnapshot === null
-    || sourceRepositoryRoot === undefined) {
-    host.showError(
-      'Isolated Loop source snapshot is unavailable. No candidate was started.',
-    );
-    return;
-  }
-  const session = host.requireSession();
-  const payload = {
-    schemaVersion: 1 as const,
-    sourceRepositoryRoot,
-    sourceSnapshotCwd: preflight.workspace,
-    sourceSnapshot: dryRun.proposedSnapshot,
-    approvedBootstrapPlanDigest:
-      preflight.candidateBootstrapPlan?.bootstrapPlanDigest,
-  };
-  for (let attempt = 1; attempt <= maxIterations; attempt += 1) {
-    try {
-      host.showStatus(
-        `Isolated candidate ${String(attempt)}/${String(maxIterations)}: Writer → Candidate Gate`,
-      );
-      const result =
-        await session.runIsolatedLoopCandidateIteration(payload);
-      if (result.outcome === 'NEEDS_WORK') {
-        host.showStatus(
-          `Candidate Gate: NEEDS_WORK · ${result.reasonCode} · continuing in the isolated worktree`,
-        );
-        continue;
-      }
-      if (result.outcome === 'ERROR') {
-        await session.pauseGoal().catch(() => undefined);
-        host.showError(
-          `Candidate Gate: ERROR · ${result.reasonCode}. The target workspace was not changed.`,
-        );
-        return;
-      }
-      const proposal = await session.prepareIsolatedLoopPromotion(
-        payload,
-      );
-      await showPromotionConfirmation(
-        host,
-        preflight,
-        proposal,
-        result.iteration,
-        goalId,
-      );
-      return;
-    } catch (error) {
-      await session.pauseGoal().catch(() => undefined);
-      host.showError(
-        `Isolated Loop paused: ${formatErrorMessage(error)}`,
-      );
-      return;
-    }
-  }
-  await session.pauseGoal().catch(() => undefined);
-  host.showStatus(
-    `Candidate Gate did not pass within ${String(maxIterations)} iterations. The target workspace was not changed.`,
-  );
-}
-
-async function showPromotionConfirmation(
-  host: SlashCommandHost,
-  preflight: LoopPreflightReady,
-  proposal: IsolatedLoopPromotionProposalPublicResultV1,
-  iteration: number,
-  goalId: string | undefined,
-): Promise<void> {
-  const dryRun = preflight.sourceSnapshotDryRun;
-  const sourceRepositoryRoot = preflight.sourceRepositoryRoot;
-  if (dryRun?.status !== 'ready'
-    || dryRun.proposedSnapshot === null
-    || sourceRepositoryRoot === undefined) {
-    throw new Error(
-      'The promotion source snapshot is no longer available.',
-    );
-  }
-  const sourceSnapshot = dryRun.proposedSnapshot;
-  const changed = proposal.changes.slice(0, 20).map((change) => {
-    const path = change.operation === 'rename'
-      ? `${change.sourcePath ?? '?'} → ${change.targetPath ?? '?'}`
-      : change.targetPath ?? change.sourcePath ?? '?';
-    return `${change.operation.padEnd(6)} ${path}`;
-  });
-  if (proposal.changes.length > changed.length) {
-    changed.push(
-      `… ${String(proposal.changes.length - changed.length)} more changes`,
-    );
-  }
-  await new Promise<void>((resolve) => {
-    const keepCandidate = (): void => {
-      host.restoreEditor();
-      void host.requireSession().pauseGoal().catch(() => undefined);
-      host.showStatus(
-        [
-          'Candidate retained for review. The target workspace was not changed.',
-          `Resume exact promotion: wukong -r ${host.requireSession().id} loop ${JSON.stringify(preflight.proposal.objective)} --promote-candidate ${proposal.proposalDigest}`,
-        ].join('\n'),
-      );
-      resolve();
-    };
-    host.mountEditorReplacement(
-      new ChoicePickerComponent({
-        title: 'Candidate Gate passed — Promote?',
-        hint: 'Review the exact challenge · Enter select · Esc keep candidate',
-        notice: [
-          'Status       Candidate only — not terminal PASS',
-          `Candidate    ${proposal.candidateId}`,
-          `Changed      ${String(proposal.changedFileCount)} files`,
-          `Target       ${preflight.workspace}`,
-          'Target state Not changed',
-          'Final Gate   Required after Promote',
-          `Fingerprint  ${proposal.targetFingerprintDigest}`,
-          `Challenge    ${proposal.proposalDigest}`,
-          'Shell containment is not provided.',
-          ...changed,
-        ].join('\n'),
-        noticeTone: 'warning',
-        options: [
-          {
-            value: 'promote',
-            label: 'Promote',
-            description: 'Apply this exact candidate, then rerun the frozen Final Gate in the target workspace.',
-          },
-          {
-            value: 'keep',
-            label: 'Keep candidate',
-            description: 'Pause here without changing the target workspace.',
-          },
-        ],
-        onSelect: (value) => {
-          if (value !== 'promote') {
-            keepCandidate();
-            return;
-          }
-          host.restoreEditor();
-          host.showStatus(
-            'Promoting exact candidate, then running Target Final Gate…',
-          );
-          void host.requireSession().promoteIsolatedLoopCandidate({
-            schemaVersion: 1,
-            sourceRepositoryRoot,
-            sourceSnapshotCwd: preflight.workspace,
-            sourceSnapshot,
-            proposalDigest: proposal.proposalDigest,
-          }).then(async (result) => {
-            if (goalId !== undefined) {
-              await completeTuiLoop(
-                goalId,
-                result.outcome,
-                iteration,
-              );
-            }
-            if (result.outcome === 'PASS') {
-              host.track('loop_completed');
-              host.showStatus(
-                [
-                  'Target Final Gate: PASS · terminal PASS committed',
-                  `Applied candidate ${result.candidateId.slice(0, 8)} · completion seal verified · verified in target workspace`,
-                ].join('\n'),
-              );
-            } else {
-              host.showError(
-                `Target Final Gate: ${result.outcome} · ${result.reasonCode}`,
-              );
-            }
-          }).catch(async (error) => {
-            await host.requireSession().pauseGoal().catch(() => undefined);
-            host.showError(
-              [
-                `Promotion stopped: ${formatErrorMessage(error)}`,
-                'The Loop was paused. Resolve the blocker, then resume the exact promotion challenge.',
-              ].join('\n'),
-            );
-          }).finally(resolve);
-        },
-        onCancel: keepCandidate,
-      }),
-    );
-  });
 }
 
 async function ensureTuiBrokerReviewTrust(

@@ -12,41 +12,6 @@ it('creates an independent agent with a scoped experimental flag resolver', () =
   expect(ctx.agent.experimentalFlags.enabled('micro_compaction')).toBe(true);
 });
 
-it('keeps isolated Loop execution behind its default-off flag', async () => {
-  const ctx = testAgent({
-    experimentalFlags: new FlagResolver({}, FLAG_DEFINITIONS),
-  });
-
-  await expect(ctx.agent.runIsolatedLoopCandidateIteration({
-    schemaVersion: 1,
-    sourceRepositoryRoot: '/tmp/repository',
-    sourceSnapshotCwd: '/tmp/repository',
-    sourceSnapshot: {},
-  } as never)).rejects.toMatchObject({
-    code: 'request.invalid',
-    message: 'Isolated Loop worktree execution is experimental and disabled.',
-  });
-  await expect(ctx.agent.prepareIsolatedLoopPromotion({
-    schemaVersion: 1,
-    sourceRepositoryRoot: '/tmp/repository',
-    sourceSnapshotCwd: '/tmp/repository',
-    sourceSnapshot: {},
-  } as never)).rejects.toMatchObject({
-    code: 'request.invalid',
-    message: 'Isolated Loop worktree execution is experimental and disabled.',
-  });
-  await expect(ctx.agent.promoteIsolatedLoopCandidate({
-    schemaVersion: 1,
-    sourceRepositoryRoot: '/tmp/repository',
-    sourceSnapshotCwd: '/tmp/repository',
-    sourceSnapshot: {},
-    proposalDigest: 'sha256:invalid',
-  } as never)).rejects.toMatchObject({
-    code: 'request.invalid',
-    message: 'Isolated Loop worktree execution is experimental and disabled.',
-  });
-});
-
 it('runs a text-only agent turn from prompt to completion', async () => {
   const ctx = testAgent();
   ctx.configure();

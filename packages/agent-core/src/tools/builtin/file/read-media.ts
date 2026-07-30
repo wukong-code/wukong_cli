@@ -32,11 +32,7 @@ import { resolvePathAccessPath } from '../../policies/path-access';
 import { MEDIA_SNIFF_BYTES, detectFileType, sniffImageDimensions } from '../../support/file-type';
 import { toInputJsonSchema } from '../../support/input-schema';
 import { literalRulePattern, matchesPathRuleSubject } from '../../support/rule-match';
-import {
-  withWorkspacePathGuard,
-  type WorkspaceConfig,
-} from '../../support/workspace';
-import type { CandidateWorkspaceFileIO } from '../../support/candidate-workspace-file-backend';
+import type { WorkspaceConfig } from '../../support/workspace';
 import readMediaDescriptionHead from './read-media.md?raw';
 
 // ── Constants ────────────────────────────────────────────────────────
@@ -162,19 +158,13 @@ export class ReadMediaFileTool implements BuiltinTool<ReadMediaFileInput> {
           pathClass: this.kaos.pathClass(),
           homeDir: this.kaos.gethome(),
         }),
-      execute: () => withWorkspacePathGuard(
-        this.workspace,
-        path,
-        'read',
-        (io) => this.execution(args, path, io ?? this.kaos),
-      ),
+      execute: () => this.execution(args, path),
     };
   }
 
   private async execution(
     args: ReadMediaFileInput,
     safePath: string,
-    fileIO: Pick<CandidateWorkspaceFileIO, 'readBytes' | 'stat'>,
   ): Promise<ExecutableToolResult> {
     if (!args.path) {
       return { isError: true, output: 'File path cannot be empty.' };
@@ -183,7 +173,7 @@ export class ReadMediaFileTool implements BuiltinTool<ReadMediaFileInput> {
     try {
       // For media input, the bytes are authoritative; the extension is only
       // a fallback for formats that cannot be sniffed from the header.
-      const header = await fileIO.readBytes(safePath, MEDIA_SNIFF_BYTES);
+      const header = await this.kaos.readBytes(safePath, MEDIA_SNIFF_BYTES);
       const fileType = detectFileType(safePath, header, 'media');
 
       if (fileType.kind === 'text') {
@@ -218,7 +208,7 @@ export class ReadMediaFileTool implements BuiltinTool<ReadMediaFileInput> {
         };
       }
 
-      const stat = await fileIO.stat(safePath);
+      const stat = await this.kaos.stat(safePath);
       if (stat.stSize === 0) {
         return { isError: true, output: `"${args.path}" is empty.` };
       }
@@ -231,7 +221,7 @@ export class ReadMediaFileTool implements BuiltinTool<ReadMediaFileInput> {
         };
       }
 
-      const data = await fileIO.readBytes(safePath);
+      const data = await this.kaos.readBytes(safePath);
       const base64 = data.toString('base64');
       let mediaPart: ContentPart;
       if (fileType.kind === 'image') {

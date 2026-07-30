@@ -1,6 +1,6 @@
 {
   "name": "@wukong.today/code",
-  "version": "0.0.21",
+  "version": "0.0.20",
   "description": "Wukong Code — AI agent for code verification and delivery",
   "license": "UNLICENSED",
   "author": "Wukong Code Team",
@@ -54,7 +54,6 @@
     "produce:native:manifest": "node scripts/native/produce-manifest.mjs",
     "release:native:resolve": "node scripts/native/resolve-release.mjs",
     "test:native:smoke": "node scripts/native/smoke.mjs",
-    "test:native:install": "node scripts/native/install-smoke.mjs",
     "dev": "node scripts/dev.mjs",
     "dev:cli-only": "tsx --tsconfig ./tsconfig.dev.json --import ../../build/register-raw-text-loader.mjs ./src/main.ts",
     "dev:server": "tsx --tsconfig ./tsconfig.dev.json --import ../../build/register-raw-text-loader.mjs ./src/main.ts server run --foreground",

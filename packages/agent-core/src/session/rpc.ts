@@ -37,11 +37,6 @@ import type {
   UpdateSessionMetadataPayload,
 } from '#/rpc';
 import type { PromisableMethods } from '#/utils/types';
-import type {
-  PrepareIsolatedLoopPromotionPayloadV1,
-  PromoteIsolatedLoopCandidatePayloadV1,
-  RunIsolatedLoopCandidateIterationPayloadV1,
-} from '#/isolated-loop-runtime-types';
 
 import type { Session, SessionMeta } from '.';
 import type { ActiveRole, RoleSummary } from '../role';
@@ -236,30 +231,6 @@ export class SessionAPIImpl implements PromisableMethods<SessionAPI> {
 
   async createGoal({ agentId, ...payload }: AgentScopedPayload<CreateGoalPayload>) {
     return (await this.getAgent(agentId)).createGoal(payload);
-  }
-
-  async runIsolatedLoopCandidateIteration({
-    agentId,
-    ...payload
-  }: AgentScopedPayload<RunIsolatedLoopCandidateIterationPayloadV1>) {
-    return (await this.getAgent(agentId))
-      .runIsolatedLoopCandidateIteration(payload);
-  }
-
-  async prepareIsolatedLoopPromotion({
-    agentId,
-    ...payload
-  }: AgentScopedPayload<PrepareIsolatedLoopPromotionPayloadV1>) {
-    return (await this.getAgent(agentId))
-      .prepareIsolatedLoopPromotion(payload);
-  }
-
-  async promoteIsolatedLoopCandidate({
-    agentId,
-    ...payload
-  }: AgentScopedPayload<PromoteIsolatedLoopCandidatePayloadV1>) {
-    return (await this.getAgent(agentId))
-      .promoteIsolatedLoopCandidate(payload);
   }
 
   async getGoal({ agentId, ...payload }: AgentScopedPayload<EmptyPayload>) {

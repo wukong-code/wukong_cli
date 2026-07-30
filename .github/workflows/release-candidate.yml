@@ -1,38 +1,25 @@
-name: 0.0.21 full release candidate
+name: Native release candidate
 
 on:
   workflow_dispatch:
     inputs:
-      source_sha:
-        description: 'Exact lowercase 40-character commit SHA to validate without publishing'
+      source_ref:
+        description: 'Git ref or SHA to validate without publishing'
         required: true
+        default: 'main'
         type: string
 
-permissions:
-  contents: read
-
 concurrency:
-  group: native-release-candidate-${{ inputs.source_sha }}
+  group: native-release-candidate-${{ inputs.source_ref }}
   cancel-in-progress: true
 
 jobs:
-  implementation-gates:
-    name: Validate implementation at exact SHA
-    uses: ./.github/workflows/isolated-loop-implementation-gates.yml
-    with:
-      source_sha: ${{ inputs.source_sha }}
-
   native-artifacts:
-    name: Build and install native release candidate
-    needs: implementation-gates
+    name: Build native release candidate
     uses: ./.github/workflows/_native-build.yml
     with:
       upload-artifact-prefix: wukong-native-rc
       retention-days: 1
       sign-macos: false
-      source-ref: ${{ inputs.source_sha }}
-      require-exact-source-sha: true
-      expected-version: 0.0.21
-      verify-native-install: true
-      upgrade-from-version: 0.0.20
+      source-ref: ${{ inputs.source_ref }}
       publish-release-tag: ''

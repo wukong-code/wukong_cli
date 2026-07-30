@@ -141,12 +141,6 @@ export function createProgram(
         ...(loop.approveGatePlanDigest === undefined
           ? {}
           : { approveGatePlanDigest: loop.approveGatePlanDigest }),
-        ...(loop.approveBootstrapPlanDigest === undefined
-          ? {}
-          : {
-              approveBootstrapPlanDigest:
-                loop.approveBootstrapPlanDigest,
-            }),
         ...(loop.acknowledgeWarningSetDigest === undefined
           ? {}
           : { acknowledgeWarningSetDigest: loop.acknowledgeWarningSetDigest }),
@@ -165,18 +159,6 @@ export function createProgram(
           : {
               acknowledgeReviewSubjectConsentDigest:
                 loop.acknowledgeReviewSubjectConsentDigest,
-            }),
-        ...((loop.includeUntracked?.length ?? 0) === 0
-          ? {}
-          : {
-              selectedUntrackedPaths:
-                loop.includeUntracked,
-            }),
-        ...(loop.promoteCandidateDigest === undefined
-          ? {}
-          : {
-              promoteCandidateDigest:
-                loop.promoteCandidateDigest,
             }),
       },
       skillsDirs: raw['skillsDir'] as string[],
