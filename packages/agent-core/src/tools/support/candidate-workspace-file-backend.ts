@@ -30,10 +30,8 @@ import {
   parseWindowsHandleDirectoryEntries,
 } from '../../windows-handle-relative-layout';
 import {
-  assertExactWindowsPrivateRootSddl,
   assertWindowsPrivateRootSecurityProof,
-  attestWindowsPrivateRootSecurity,
-  type WindowsPrivateRootSecurityObservationV1,
+  attestWindowsPrivateRootHandleSecurity,
 } from '../../windows-private-root-security';
 
 const require = createRequire(import.meta.url);
@@ -258,41 +256,6 @@ interface WindowsFunctions {
     eaLength: number,
   ) => number;
   readonly rtlNtStatusToDosError: (status: number) => number;
-  readonly getSecurityInfo: (
-    handle: unknown,
-    objectType: number,
-    securityInformation: number,
-    ownerSid: unknown[],
-    groupSid: null,
-    dacl: unknown[],
-    sacl: null,
-    securityDescriptor: unknown[],
-  ) => number;
-  readonly securityDescriptorToString: (
-    securityDescriptor: unknown,
-    revision: number,
-    securityInformation: number,
-    output: unknown[],
-    outputCharacters: unknown[],
-  ) => number;
-  readonly openProcessToken: (
-    process: unknown,
-    desiredAccess: number,
-    outputToken: unknown[],
-  ) => number;
-  readonly getCurrentProcess: () => unknown;
-  readonly getTokenInformation: (
-    token: unknown,
-    informationClass: number,
-    output: Buffer | null,
-    outputBytes: number,
-    requiredBytes: unknown[],
-  ) => number;
-  readonly sidToString: (
-    sid: unknown,
-    output: unknown[],
-  ) => number;
-  readonly localFree: (value: unknown) => unknown;
 }
 
 const WINDOWS_FILE_ATTRIBUTE_DIRECTORY = 0x0000_0010;
@@ -327,12 +290,6 @@ const WINDOWS_O_RDONLY = 0;
 const WINDOWS_O_WRONLY = 1;
 const WINDOWS_O_BINARY = 0x8000;
 const WINDOWS_ERROR_NO_MORE_FILES = 18;
-const WINDOWS_SE_FILE_OBJECT = 1;
-const WINDOWS_OWNER_SECURITY_INFORMATION = 0x0000_0001;
-const WINDOWS_DACL_SECURITY_INFORMATION = 0x0000_0004;
-const WINDOWS_SDDL_REVISION_1 = 1;
-const WINDOWS_TOKEN_QUERY = 0x0000_0008;
-const WINDOWS_TOKEN_USER = 1;
 const WINDOWS_DIRECTORY_BUFFER_BYTES = 64 * 1024;
 
 interface SearchWalkState {
@@ -799,7 +756,6 @@ class WindowsHandleNative implements CandidateHandleNative {
     const koffi = require('koffi') as KoffiModule;
     const kernel32 = koffi.load('kernel32.dll');
     const ntdll = koffi.load('ntdll.dll');
-    const advapi32 = koffi.load('advapi32.dll');
     const functions: WindowsFunctions = {
       createFile: kernel32.func(
         'void * __stdcall CreateFileW(str16, uint32_t, uint32_t, void *, uint32_t, uint32_t, void *)',
@@ -831,27 +787,6 @@ class WindowsHandleNative implements CandidateHandleNative {
       rtlNtStatusToDosError: ntdll.func(
         'uint32_t __stdcall RtlNtStatusToDosError(uint32_t)',
       ) as WindowsFunctions['rtlNtStatusToDosError'],
-      getSecurityInfo: advapi32.func(
-        'uint32_t __stdcall GetSecurityInfo(void *, uint32_t, uint32_t, _Out_ void **, void **, _Out_ void **, void **, _Out_ void **)',
-      ) as WindowsFunctions['getSecurityInfo'],
-      securityDescriptorToString: advapi32.func(
-        'int __stdcall ConvertSecurityDescriptorToStringSecurityDescriptorW(void *, uint32_t, uint32_t, _Out_ void **, _Out_ uint32_t *)',
-      ) as WindowsFunctions['securityDescriptorToString'],
-      openProcessToken: advapi32.func(
-        'int __stdcall OpenProcessToken(void *, uint32_t, _Out_ void **)',
-      ) as WindowsFunctions['openProcessToken'],
-      getCurrentProcess: kernel32.func(
-        'void * __stdcall GetCurrentProcess()',
-      ) as WindowsFunctions['getCurrentProcess'],
-      getTokenInformation: advapi32.func(
-        'int __stdcall GetTokenInformation(void *, uint32_t, void *, uint32_t, _Out_ uint32_t *)',
-      ) as WindowsFunctions['getTokenInformation'],
-      sidToString: advapi32.func(
-        'int __stdcall ConvertSidToStringSidW(void *, _Out_ void **)',
-      ) as WindowsFunctions['sidToString'],
-      localFree: kernel32.func(
-        'void * __stdcall LocalFree(void *)',
-      ) as WindowsFunctions['localFree'],
     };
     for (const [name, fn] of Object.entries(functions)) {
       if (typeof fn !== 'function') {
@@ -903,12 +838,9 @@ class WindowsHandleNative implements CandidateHandleNative {
           'The Windows root handle resolved to an unsafe or different directory.',
         );
       }
-      const observation = this.privateRootObservation(
-        handle,
-      );
-      const proof = attestWindowsPrivateRootSecurity(
+      const proof = attestWindowsPrivateRootHandleSecurity(
+        this.koffi.address(handle),
         canonicalRoot,
-        observation,
       );
       assertWindowsPrivateRootSecurityProof(proof, canonicalRoot);
       fd = this.bindNodeDescriptor(
@@ -1354,169 +1286,6 @@ class WindowsHandleNative implements CandidateHandleNative {
       );
     }
     return output.toString('utf16le', 0, characters * 2);
-  }
-
-  private privateRootObservation(
-    handle: unknown,
-  ): WindowsPrivateRootSecurityObservationV1 {
-    const currentUserSid = this.currentUserSid();
-    const ownerSid: unknown[] = [null];
-    const dacl: unknown[] = [null];
-    const descriptor: unknown[] = [null];
-    const result = this.functions.getSecurityInfo(
-      handle,
-      WINDOWS_SE_FILE_OBJECT,
-      WINDOWS_OWNER_SECURITY_INFORMATION
-        | WINDOWS_DACL_SECURITY_INFORMATION,
-      ownerSid,
-      null,
-      dacl,
-      null,
-      descriptor,
-    );
-    if (result !== 0) {
-      throw this.win32Error('GetSecurityInfo', result);
-    }
-    const descriptorValue = descriptor[0];
-    try {
-      const sddl = this.securityDescriptorSddl(
-        descriptorValue,
-      );
-      const ownerSidValue = this.sidString(ownerSid[0]);
-      assertExactWindowsPrivateRootSddl({
-        sddl,
-        currentUserSid,
-        ownerSid: ownerSidValue,
-        daclPresent: dacl[0] !== null
-          && dacl[0] !== undefined,
-      });
-      return Object.freeze({
-        openedHandleRelative: true,
-        finalPathMatches: true,
-        fileType: 'directory',
-        reparsePoint: false,
-        ownerSidMatchesCurrentUser: true,
-        daclPresent: true,
-        daclNull: false,
-        daclProtected: true,
-        allowedPrincipals: [
-          'CURRENT_USER',
-          'LOCAL_SYSTEM',
-        ] as const,
-        inheritableToChildren: true,
-      });
-    } finally {
-      if (descriptorValue !== null
-        && descriptorValue !== undefined) {
-        this.functions.localFree(descriptorValue);
-      }
-    }
-  }
-
-  private currentUserSid(): string {
-    const token: unknown[] = [null];
-    if (this.functions.openProcessToken(
-      this.functions.getCurrentProcess(),
-      WINDOWS_TOKEN_QUERY,
-      token,
-    ) === 0) {
-      throw this.win32Error(
-        'OpenProcessToken',
-        this.functions.getLastError(),
-      );
-    }
-    try {
-      const required: unknown[] = [0];
-      this.functions.getTokenInformation(
-        token[0],
-        WINDOWS_TOKEN_USER,
-        null,
-        0,
-        required,
-      );
-      const requiredBytes = Number(required[0]);
-      if (!Number.isSafeInteger(requiredBytes)
-        || requiredBytes <= 0
-        || requiredBytes > 64 * 1024) {
-        throw new CandidateWorkspaceFileBackendError(
-          'candidate_atomic_root_identity_changed',
-          'The Windows token user record size is invalid.',
-        );
-      }
-      const output = Buffer.alloc(requiredBytes);
-      if (this.functions.getTokenInformation(
-        token[0],
-        WINDOWS_TOKEN_USER,
-        output,
-        output.byteLength,
-        required,
-      ) === 0) {
-        throw this.win32Error(
-          'GetTokenInformation(TokenUser)',
-          this.functions.getLastError(),
-        );
-      }
-      const sid = this.koffi.decode(output, 'void *');
-      return this.sidString(sid);
-    } finally {
-      if (token[0] !== null && token[0] !== undefined) {
-        this.functions.closeHandle(token[0]);
-      }
-    }
-  }
-
-  private sidString(sid: unknown): string {
-    const output: unknown[] = [null];
-    if (this.functions.sidToString(sid, output) === 0) {
-      throw this.win32Error(
-        'ConvertSidToStringSidW',
-        this.functions.getLastError(),
-      );
-    }
-    try {
-      const value = this.koffi.decode(output[0], 'str16');
-      if (typeof value !== 'string' || value === '') {
-        throw new CandidateWorkspaceFileBackendError(
-          'candidate_atomic_root_identity_changed',
-          'The Windows current-user SID is invalid.',
-        );
-      }
-      return value;
-    } finally {
-      this.functions.localFree(output[0]);
-    }
-  }
-
-  private securityDescriptorSddl(
-    descriptor: unknown,
-  ): string {
-    const output: unknown[] = [null];
-    const characters: unknown[] = [0];
-    if (this.functions.securityDescriptorToString(
-      descriptor,
-      WINDOWS_SDDL_REVISION_1,
-      WINDOWS_OWNER_SECURITY_INFORMATION
-        | WINDOWS_DACL_SECURITY_INFORMATION,
-      output,
-      characters,
-    ) === 0) {
-      throw this.win32Error(
-        'ConvertSecurityDescriptorToStringSecurityDescriptorW',
-        this.functions.getLastError(),
-      );
-    }
-    try {
-      const value = this.koffi.decode(output[0], 'str16');
-      if (typeof value !== 'string' || value === '') {
-        throw new CandidateWorkspaceFileBackendError(
-          'candidate_atomic_root_identity_changed',
-          'The Windows private-root SDDL is invalid.',
-        );
-      }
-      return value;
-    } finally {
-      this.functions.localFree(output[0]);
-    }
   }
 
   private ntStatusError(

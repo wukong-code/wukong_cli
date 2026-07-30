@@ -460,6 +460,49 @@ export function attestWindowsPrivateRootPathSecurity(
   }
 }
 
+/**
+ * Validates a private root through an already-open Windows HANDLE without
+ * taking ownership of that handle. This keeps the security proof bound to the
+ * same non-reparse directory capability used by a handle-relative backend.
+ */
+export function attestWindowsPrivateRootHandleSecurity(
+  handleAddress: bigint,
+  rootDirectory: string,
+): WindowsPrivateRootSecurityProofV1 {
+  if (process.platform !== 'win32') {
+    throw new TypeError(
+      'The Windows private root security backend is unavailable.',
+    );
+  }
+  const requestedRoot = resolve(rootDirectory);
+  if (!isAbsolute(rootDirectory)
+    || requestedRoot !== rootDirectory
+    || handleAddress <= 0n) {
+    throw new TypeError(
+      'The Windows private root handle or path is invalid.',
+    );
+  }
+  const canonicalRoot = realpathSync.native(requestedRoot);
+  const { koffi, functions } = loadWindowsPrivateRootNative();
+  if (isInvalidHandle(koffi, handleAddress)) {
+    throw new TypeError(
+      'The Windows private root handle is invalid.',
+    );
+  }
+  assertExactRootHandle(
+    functions,
+    handleAddress,
+    canonicalRoot,
+  );
+  return attestRootHandle(
+    koffi,
+    functions,
+    handleAddress,
+    canonicalRoot,
+    readCurrentUserSid(koffi, functions),
+  );
+}
+
 function resolveWindowsPrivateRootSecurityNative(): void {
   if (process.platform !== 'win32') {
     throw new TypeError(
@@ -990,7 +1033,9 @@ function isInvalidHandle(
 ): boolean {
   if (handle === null || handle === undefined) return true;
   try {
-    const address = koffi.address(handle);
+    const address = typeof handle === 'bigint'
+      ? handle
+      : koffi.address(handle);
     const invalid = process.arch === 'ia32'
       ? 0xffff_ffffn
       : 0xffff_ffff_ffff_ffffn;
