@@ -1,13 +1,6 @@
 import { constants as fsConstants } from 'node:fs';
 import { createRequire } from 'node:module';
 
-import {
-  inspectWindowsPrivateRootSecurityBackendCapability,
-} from './windows-private-root-security';
-import {
-  resolveWindowsCandidateHandleNativeCapability,
-} from './tools/support/candidate-workspace-file-backend';
-
 const require = createRequire(import.meta.url);
 
 export type CandidateWorkspaceBackendPlatform =
@@ -17,15 +10,13 @@ export type CandidateWorkspaceBackendPlatform =
 
 export type CandidateWorkspaceBackendUnavailableReason =
   | 'candidate_atomic_backend_platform_unsupported'
-  | 'candidate_atomic_backend_native_unavailable'
-  | 'candidate_atomic_backend_windows_private_root_unavailable'
-  | 'candidate_atomic_backend_windows_handle_unavailable';
+  | 'candidate_atomic_backend_native_unavailable';
 
 export type CandidateWorkspaceBackendCapabilityV1 =
   | Readonly<{
       available: true;
       platform: CandidateWorkspaceBackendPlatform;
-      backend: 'posix-openat-v1' | 'windows-nt-handle-v1';
+      backend: 'posix-openat-v1';
       reasonCode: null;
     }>
   | Readonly<{
@@ -42,8 +33,6 @@ export interface CandidateWorkspaceBackendProbeDependencies {
    * Koffi runtime and the exact descriptor-relative syscall set.
    */
   readonly resolveNative?: () => void;
-  readonly resolveWindowsPrivateRootSecurity?: () => void;
-  readonly resolveWindowsHandleNative?: () => void;
 }
 
 interface KoffiLibrary {
@@ -72,43 +61,6 @@ export function inspectCandidateWorkspaceBackendCapability(
   dependencies: CandidateWorkspaceBackendProbeDependencies = {},
 ): CandidateWorkspaceBackendCapabilityV1 {
   const platform = dependencies.platform ?? process.platform;
-  if (platform === 'win32') {
-    const privateRoot =
-      inspectWindowsPrivateRootSecurityBackendCapability({
-        platform,
-        resolveNative:
-          dependencies.resolveWindowsPrivateRootSecurity,
-      });
-    if (!privateRoot.available) {
-      return Object.freeze({
-        available: false,
-        platform,
-        backend: null,
-        reasonCode:
-          'candidate_atomic_backend_windows_private_root_unavailable',
-      });
-    }
-    try {
-      (
-        dependencies.resolveWindowsHandleNative
-        ?? resolveWindowsCandidateHandleNative
-      )();
-    } catch {
-      return Object.freeze({
-        available: false,
-        platform,
-        backend: null,
-        reasonCode:
-          'candidate_atomic_backend_windows_handle_unavailable',
-      });
-    }
-    return Object.freeze({
-      available: true,
-      platform,
-      backend: 'windows-nt-handle-v1',
-      reasonCode: null,
-    });
-  }
   if (platform !== 'darwin' && platform !== 'linux') {
     return Object.freeze({
       available: false,
@@ -138,10 +90,6 @@ export function inspectCandidateWorkspaceBackendCapability(
       reasonCode: 'candidate_atomic_backend_native_unavailable',
     });
   }
-}
-
-function resolveWindowsCandidateHandleNative(): void {
-  resolveWindowsCandidateHandleNativeCapability();
 }
 
 function resolvePosixNative(
