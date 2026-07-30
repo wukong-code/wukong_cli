@@ -1,78 +1,117 @@
 # Wukong Code
 
-[文档](docs/README.md) · [路线图](ROADMAP.md) · [English](README.md)
-
-## 什么是 Wukong Code
+[文档](docs/README.md) · [English](README.md) · [下载](https://wukong.today/download)
 
 > **给 Wukong 一个目标，它会循环工作直到改动准备好。**
 
-Wukong Code 是以一个主流程为核心的终端 AI coding agent：**Goal → Write → Check → Review → Fix**。给 `/loop` 一个目标，它会持续修改，直到独立 reviewer 不再返回 blocking finding，或达到迭代上限。
+Wukong Code 是围绕一个主流程构建的终端 AI coding agent：
+**Goal → Write → Check → Review → Fix**。
 
-`0.0.21` 是一个聚焦的 Loop evidence integrity 修复版：当同一种内置风险出现在不同文件、行或 evidence 位置时，`/loop` 会为每个不同 occurrence 生成稳定 identity，不再把后续 finding 当成重复证据丢弃；字段完全相同的重复输入仍会正常去重。本版不增加命令或配置。完整范围见 [0.0.21 功能列表](docs/design/0.0.21-loop-evidence-integrity.md)和[发布说明](docs/releases/0.0.21.md)。
+给 `/loop` 一个目标，Wukong 会持续修改代码、运行仓库真实检查、从新的只读
+上下文审查结果，并针对同一个目标修复 blocking findings。
 
-`0.0.20` 让 Loop 可以复用已有本地 Skill 的严格 qualitative criteria，但不会执行 Skill command。TUI 会发现 personal、project、monorepo package、显式受信的 extra 和只读 builtin reference source；suggested 保持未选，只有用户确认 exact source、full provenance digest 与 flat order 后才进入合同。所有新 V2/V3 reviewer 都只能读取 bounded、去密的本机 broker，并逐 run 确认实际 BYOK provider endpoint。Headless 可用 `wukong loop "<目标>" --dry-run --output-format stream-json` 查看同一 catalog、selection CAS、输入边界、provider 目的地和成本，且不会创建 run 或打开 provider connection。完整范围见 [0.0.20 设计](docs/design/0.0.20-reusable-verification-skills.md)和[发布说明](docs/releases/0.0.20.md)。
+## 当前版本：v0.0.21
 
-`0.0.13` 增加结构化多 findings、`.wukong/review-policy.md` 项目规则、本地 finding feedback 与诊断统计，以及可选的独立 reviewer model。当前产品继续 Free + BYOK，没有付费计划或 entitlement。
+`0.0.21` 提升了 Loop evidence 的完整性：
 
-`0.0.14` 增加跨 Agent Resume、明确的 Resume → Loop 衔接、更清晰的 TUI Gate 结论和更多真实项目检查发现。本版本继续免费/BYOK，完整范围见 [0.0.14 设计](docs/design/0.0.14-resume-loop-polish.md)。
+- 同一种内置风险出现在不同文件、行或 evidence 位置时，会保留每一个不同
+  occurrence；
+- 每个 occurrence 都根据完整 finding 生成稳定 identity；
+- 字段完全相同的重复输入仍可确定性去重；
+- deterministic Gate failure 继续优先于 reviewer 输出。
 
-`0.0.15` 把这条 Loop 做成可恢复闭环：持久化 run record、completion outbox、重启后的 active Loop 恢复、额度预留前 preflight、精简首次入口，以及 Dashboard 真实生命周期状态。本版本继续免费/BYOK，现已作为六平台公开版本发布；完整范围见 [0.0.15 设计](docs/design/0.0.15-loop-reliability.md)。
+完整说明见 [v0.0.21 发布说明](docs/releases/0.0.21.md)。
 
-`0.0.16` 为每个 Loop 冻结用户目标和显式完成标准，在复审中保留上轮 blocker，识别重复无进展循环，相同 blocker 持续时启动一次只读 strategist，并在显式 reviewer model 不可用时安全回退。本版也重构 Permission Mode：Auto 成为不提问但受 workspace/risk/capability 约束的自主模式，YOLO 明确为危险 approval bypass，且不能为 reviewer/strategist 等只读分身扩权。版本同时包含有界 Resume 建议、Role 任务契约、紧凑任务状态和本地 session 内容搜索，不增加支付或 managed model credits。完整范围见 [0.0.16 设计](docs/design/0.0.16-loop-convergence.md)。
+## Wukong 能做什么
 
-`0.0.18` 把默认 TUI 命令面收口到 Loop 主流程，同时通过 `/help advanced` 保留高级工具和兼容实现；新增 Kimi Code/Grok 只读 Resume、显式确认的纯文本 `/feedback`，以及由 CLI 发起、在网站通过 Google/GitHub 确认的 Device Login。当前 Wukong 模型目录可以为空，登录仍成功且不会覆盖用户的 BYOK 默认模型。完整范围见 [0.0.18 设计](docs/design/0.0.18-loop-first-simplification.md)。
+- **循环直到可交付**：在 write、check、review、fix 过程中固定同一个 Goal
+  和 Finish Line。
+- **运行真实检查**：使用仓库现有的测试、类型检查、lint、build 和项目
+  review policy。
+- **审查完整证据**：向独立 reviewer 提供有界、去密的 evidence，不丢失
+  不同 finding。
+- **复用验证标准**：从受信任的本地 Skills 中发现 qualitative criteria，
+  由用户显式选择并确定顺序。
+- **恢复未完成工作**：把 Wukong、Codex、Claude Code、Cursor、Kimi Code
+  或 Grok 的本地会话作为只读上下文继续。
+- **返回清晰结论**：每个 Loop 都以 `PASS`、`NEEDS_WORK` 或 `ERROR` 结束；
+  未完成时显示 blocker 和下一步。
+- **使用自己的模型服务**：通过 `wukong provider` 配置 API Key 和模型。
 
-隔离 worktree / Safe Promote 实验已退出发布路线，不属于 `0.0.21` 或任何已承诺的后续版本。依赖该架构的旧 `0.1.0`、`0.2.0` 规格等待重新规划；`0.1.0` 当前只保留稳定现有 Free、local-first、BYOK Loop 的方向，`0.2.0` 没有已批准技术范围、付费计划、价格或 Checkout。详见[路线图](ROADMAP.md)。
+## 安装
 
-旧文档曾用 `0.1.0` 名称探索只为 PR Gate 收费；该方案现已归档，不再占用这个版本号。
-
-`0.0.12` 建立了 Loop-first runtime。`verify`、`scan`、`proof` 仍保留为高级诊断命令，但只是 Loop 的内部层，不再各自形成产品或额度。完整 contract 见 [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md) 和 [0.0.13 Review Learning Loop](docs/design/review-learning-loop.md)。
-
-Loop 只返回一个持久化结果：`PASS`（退出码 `0`）、`NEEDS_WORK`（退出码 `1`）或 `ERROR`（退出码 `2`）。所有用户都可以在本地直接运行 BYOK Loop，不要求登录，不设置 Guest 试用或月度次数，也不请求 Wukong quota 服务。默认单次最多 10 轮，可用 `--max-iterations` 调整；reviewer step/time 上限和 `/loop stop` 继续作为失控保护。匿名产品指标仍遵守 `WUKONG_TELEMETRY=0`，且不参与 Loop 准入。旧 `verify-pass`、`scan-clean`、`judge-pass` Goal records 和 flags 仍可读取，并迁移到统一 proof gate；详见 [兼容矩阵](docs/design/0.0.12-compatibility.md)。
-
-Role Profiles 基础能力已经实现并处于实验阶段。在 `~/.wukong/config.toml` 启用 `experimental.role_profiles` 后，可用 `wukong roles list/show/init` 管理角色，并在 TUI 中通过 `/transform list|status|off` 或 `/transform <role>` 查看、切换和恢复。
-
-TUI 内的 `/resume` 用于恢复 Wukong 会话；需要继续其他 Agent 的本地会话时，使用 `/resume codex`、`/resume claude`、`/resume cursor`、`/resume kimi` 或 `/resume grok`。外部历史只作为只读上下文导入 Wukong，不重放旧工具调用，并在继续前重新检查当前 workspace。
-
-安装器和 CLI 的匿名产品指标只记录安装、首次运行、Device Login 结果和 Loop 生命周期，不包含源码、prompt、transcript、仓库名或文件路径。设置 `WUKONG_TELEMETRY=0` 即可关闭，且不会影响本地 Loop。
-
-## 当前命令面
+公开原生安装包由
+[`mutnpc/wukong-code`](https://github.com/mutnpc/wukong-code) 分发。
 
 ```sh
-wukong                         # 启动交互式 TUI
-wukong -p "summarize this repo" # 执行一次非交互 prompt
-wukong provider                # 配置 BYOK 模型 provider 与 API Key
-wukong acp                     # 以 Agent Client Protocol server 运行
-wukong server                  # 启动本地 REST/WebSocket server
-wukong web                     # 打开本地 web UI
-wukong loop "完成当前改动"      # 迭代直到独立交付 gate 通过
-wukong loop "完成当前改动" --dry-run
-wukong loop "修复登录" --done-when "登录测试通过" --constraint "不修改公开 API"
-wukong loop "修复测试" --model fast --review-model slow
-wukong loop "修复测试" --review-model reviewer
-wukong loop "修复测试" --max-iterations 5 --every 1m
-wukong review init             # 创建 .wukong/review-policy.md
-wukong review feedback <finding-id> accept
-wukong review stats            # 查看本地 feedback 数量
-wukong guard                   # 查看或运行 best-effort 命令风险 guard
-wukong judge                   # 只审不写的合并判定
-wukong login                   # 连接可选 Wukong 账号，不配置模型
-wukong doctor                  # 校验配置文件
-wukong export [sessionId]      # 导出 session ZIP
-wukong vis [sessionId]         # 打开 session visualizer
-wukong migrate                 # 迁移 legacy wukong-cli 数据
-wukong upgrade                 # 升级 Wukong Code
+curl -fsSL https://wukong.today/install.sh | sh
+wukong --version
 ```
 
-高级诊断命令仍可直接用于 CI 和调试：`wukong verify`、`wukong scan`、`wukong proof`。Loop 会自动运行这些内部层，因此它们不再出现在主帮助入口。
+升级现有原生安装：
 
-历史候选但尚未实现、也不是当前承诺的命令：`wukong account`、`wukong pr gate`、`wukong ship`、`wukong schedule`。
+```sh
+wukong upgrade
+```
+
+## 快速开始
+
+```sh
+wukong provider
+wukong
+```
+
+在 TUI 中：
+
+```text
+/loop 为注册表单增加输入校验
+```
+
+或直接运行：
+
+```sh
+wukong loop "为注册表单增加输入校验"
+wukong loop "为注册表单增加输入校验" --dry-run
+```
+
+恢复其他 coding agent 的本地工作：
+
+```text
+/resume codex
+/resume claude
+/resume cursor
+/resume kimi
+/resume grok
+```
+
+## 主要命令
+
+| 命令 | 说明 |
+|---|---|
+| `wukong` | 启动交互式 TUI |
+| `wukong -p <prompt>` | 执行一次非交互 prompt |
+| `wukong provider` | 配置模型 provider 与模型 |
+| `wukong loop <goal>` | 围绕一个目标运行 write → check → review → fix |
+| `wukong review init` | 创建 `.wukong/review-policy.md` |
+| `wukong guard` | 查看命令风险 guard |
+| `wukong login` | 连接可选 Wukong 账号 |
+| `wukong doctor` | 校验本地配置 |
+| `wukong upgrade` | 升级原生安装 |
 
 完整参数以 `wukong --help` 为准。
 
-## 从源码运行
+## 本地数据与隐私
 
-这是内部实现仓库（`mutnpc/wukong_cli`）。公开下载与安装请访问 [wukong.today](https://wukong.today)。开发时使用 workspace 脚本：
+Loop contract、run state、evidence、findings 和导入的 session context 都保留在
+本机。`/feedback` 只发送提交前明确展示的文本字段。模型请求发送到用户配置的
+provider。
+
+## 本地开发
+
+环境要求：
+
+- Node.js `>=24.15.0`
+- pnpm `10.33.0`
 
 ```sh
 git clone https://github.com/mutnpc/wukong_cli.git
@@ -81,53 +120,26 @@ pnpm install
 pnpm dev:cli
 ```
 
-只运行 CLI entrypoint：
+常用检查：
 
 ```sh
-pnpm -C apps/wukong run dev:cli-only --help
+pnpm typecheck
+pnpm test
+pnpm lint
+pnpm build
 ```
 
-当前发布包名为 `@wukong.today/code`；不要继续使用旧的 `@wukong.today/wukong-cli` 名称。
-
-## 本地开发
-
-monorepo 环境要求：
-
-- Node.js `>=24.15.0`
-- pnpm `10.33.0`
-
-常用命令：
-
-```sh
-pnpm dev:cli    # 以开发模式运行 CLI
-pnpm typecheck  # TypeScript 检查
-pnpm test       # 运行测试
-pnpm lint       # oxlint
-pnpm build      # 构建所有包
-```
-
-完整内部贡献流程见 [CONTRIBUTING.md](CONTRIBUTING.md)。
-更新检查、后台自动安装、TUI 公告和当前上线状态见 [CLI 更新与公告契约](docs/operations/updates-and-announcements.md)。
-
-## 历史产品候选
-
-以下文档记录旧产品假设，不覆盖当前 Free + BYOK 边界：
-
-- [产品路线图](ROADMAP.md)
-- [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
-- [技术实现方案](docs/tech/commercial-refactor-implementation.md)
-
-`0.0.13` 发布第一版 Review Learning Loop：结构化 findings、项目 review policy、本地 feedback、reviewer 诊断统计和 reviewer-model override。真实仓库 E2E、发布文案、Web 预览公告，以及区分注册用户与 activated Loop users 的生产统计已经同步。
+仓库约定见 [CONTRIBUTING.md](CONTRIBUTING.md)。
 
 ## 致谢
 
-Wukong Code 在以下优秀项目的基础上构建，并从中借鉴了设计与工程经验：
+Wukong Code 在以下项目的基础上构建并借鉴工程经验：
 
-- **[Kimi Code](https://github.com/MoonshotAI/kimi-code)** — Moonshot AI 的终端 AI coding agent。Wukong Code 的 CLI/TUI、agent runtime、provider/ACP/server 栈与会话模型基于 Kimi Code base 构建。感谢 Kimi Code 团队提供的基础与 MIT 许可的参考实现。
-- **[Pi](https://github.com/earendil-works/pi)** — Mario Zechner 的 AI agent 工具集。Wukong Code 的交互式 TUI 基于 [`@earendil-works/pi-tui`](https://github.com/earendil-works/pi/tree/main/packages/tui)（差分渲染、编辑器、组件、终端 I/O）。感谢 Pi 项目提供 MIT 许可的终端 UI 基础。
-- **[Claude Code](https://github.com/anthropics/claude-code)** — Anthropic 的终端 AI coding agent。Wukong Code 在 TUI chrome 布局（输入/状态区）、loop engineering 模式以及互操作能力（如 `/import-from-cc-codex` 导入 instructions、Skills 与 MCP 配置）上参考了 Claude Code。
+- [Kimi Code](https://github.com/MoonshotAI/kimi-code)
+- [Pi](https://github.com/earendil-works/pi)
+- [Claude Code](https://github.com/anthropics/claude-code)
 
-Wukong Code 是独立产品，专注 **AI Coding Loop 控制与确定性验证**；与 Moonshot AI、Anthropic 及 Pi 项目作者无隶属关系，仅承认上述依赖与参考。
+Wukong Code 是专注 AI coding Loop 控制与确定性验证的独立产品。
 
 ## 许可证
 
