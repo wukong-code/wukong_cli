@@ -45,6 +45,19 @@ behind Loop. The package remains free, local-first, and BYOK. It does not
 provide hosted inference, payment, quota, cloud session/evidence sync, PR Gate,
 Skill authoring, or a complete shell sandbox.
 
+## Provider Catalog Availability
+
+Provider discovery first reads the models.dev-compatible catalog configured by
+`WUKONG_CODE_CATALOG_URL` (default:
+`https://modelpricehub.com/api.json`). If that source is unavailable, Wukong
+tries `https://models.dev/api.json`, then uses the release-embedded snapshot.
+The snapshot keeps common providers available offline, including OpenAI,
+Anthropic, Google, DeepSeek, OpenRouter, GLM, and Kimi.
+
+Passing `--url` to `wukong provider catalog list` or
+`wukong provider catalog add` disables fallback so custom catalogs fail
+explicitly.
+
 ## Development
 
 From the monorepo root:

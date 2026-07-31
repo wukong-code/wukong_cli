@@ -10,10 +10,11 @@ import {
   catalogProviderModels,
   CatalogFetchError,
   DEFAULT_CATALOG_URL,
-  fetchCatalog,
   inferWireType,
   type Catalog,
 } from '@wukong/wukong-sdk';
+
+import { fetchProviderCatalog, resolveCatalogUrl } from '#/built-in-catalog';
 
 import { ChoicePickerComponent } from '../components/dialogs/choice-picker';
 import {
@@ -155,11 +156,22 @@ async function handleCatalogProviderAdd(host: SlashCommandHost): Promise<void> {
   };
   host.cancelInFlight = cancel;
 
-  const spinner = host.showLoginProgressSpinner(`Fetching catalog from ${DEFAULT_CATALOG_URL}`);
+  const catalogUrl = resolveCatalogUrl();
+  const spinner = host.showLoginProgressSpinner(`Fetching catalog from ${catalogUrl}`);
   let catalog: Catalog | undefined;
   try {
-    catalog = await fetchCatalog(DEFAULT_CATALOG_URL, controller.signal);
-    spinner.stop({ ok: true, label: 'Catalog loaded.' });
+    const result = await fetchProviderCatalog({
+      url: catalogUrl,
+      signal: controller.signal,
+    });
+    catalog = result.catalog;
+    let label = 'Catalog loaded.';
+    if (result.source === 'built-in') {
+      label = 'Catalog sources unavailable; using built-in snapshot.';
+    } else if (result.url !== catalogUrl) {
+      label = `Catalog mirror unavailable; loaded from ${DEFAULT_CATALOG_URL}.`;
+    }
+    spinner.stop({ ok: true, label });
   } catch (error) {
     if (controller.signal.aborted) {
       spinner.stop({ ok: false, label: 'Aborted.' });

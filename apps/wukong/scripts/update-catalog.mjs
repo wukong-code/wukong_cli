@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 /**
- * Fetches models.dev/api.json, strips fields not needed by wukong, and
- * writes the result as raw JSON for release builds to inline.
+ * Fetches a models.dev-compatible api.json, keeps the common providers needed
+ * for offline setup, strips fields not needed by wukong, and writes the result
+ * as raw JSON for release builds to inline.
  *
  * This script intentionally does not write into src/. The source tree keeps a
  * placeholder so the generated catalog is not committed.
@@ -13,6 +14,18 @@ import { dirname, resolve } from "node:path";
 const scriptDir = import.meta.dirname;
 const outFile = resolveOutputFile(process.argv.slice(2));
 const modelsUrl = process.env.MODELS_DEV_URL || "https://models.dev/api.json";
+
+export const BUILT_IN_PROVIDER_IDS = new Set([
+  "anthropic",
+  "deepseek",
+  "google",
+  "kimi-for-coding",
+  "moonshotai-cn",
+  "openai",
+  "openrouter",
+  "zai",
+  "zai-coding-plan",
+]);
 
 const KEEP_PROVIDER = new Set(["id", "name", "api", "env", "npm", "type", "models"]);
 const KEEP_MODEL = new Set([
@@ -38,7 +51,7 @@ function resolveOutputFile(args) {
   return resolve(scriptDir, "../dist/built-in-catalog.json");
 }
 
-function stripModel(model) {
+export function stripModel(model) {
   if (typeof model !== "object" || model === null) return undefined;
   const result = {};
   for (const key of Object.keys(model)) {
@@ -47,7 +60,7 @@ function stripModel(model) {
   return result;
 }
 
-function stripProvider(provider) {
+export function stripProvider(provider) {
   if (typeof provider !== "object" || provider === null) return undefined;
   const result = {};
   for (const key of Object.keys(provider)) {
@@ -67,19 +80,25 @@ function stripProvider(provider) {
   return result;
 }
 
+export function buildBuiltInCatalog(raw, providerIds = BUILT_IN_PROVIDER_IDS) {
+  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
+    throw new Error("invalid payload shape");
+  }
+
+  const stripped = {};
+  for (const [id, provider] of Object.entries(raw)) {
+    if (!providerIds.has(id)) continue;
+    const value = stripProvider(provider);
+    if (value !== undefined && Object.keys(value).length > 0) stripped[id] = value;
+  }
+  return stripped;
+}
+
 async function fetchCatalog(url) {
   const res = await fetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const raw = await res.json();
-  if (typeof raw !== "object" || raw === null || Array.isArray(raw)) {
-    throw new Error("invalid payload shape");
-  }
-  const stripped = {};
-  for (const [k, v] of Object.entries(raw)) {
-    const p = stripProvider(v);
-    if (p !== undefined && Object.keys(p).length > 0) stripped[k] = p;
-  }
-  return JSON.stringify(stripped);
+  return JSON.stringify(buildBuiltInCatalog(raw));
 }
 
 async function main() {
@@ -90,7 +109,9 @@ async function main() {
   console.log(`Wrote ${outFile} (${(json.length / 1024).toFixed(0)} KB JSON)`);
 }
 
-main().catch((error) => {
-  console.error(error.message);
-  process.exit(1);
-});
+if (import.meta.main) {
+  main().catch((error) => {
+    console.error(error.message);
+    process.exit(1);
+  });
+}

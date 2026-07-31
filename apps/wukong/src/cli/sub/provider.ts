@@ -26,15 +26,18 @@ import {
   CatalogFetchError,
   createWukongHarness,
   DEFAULT_CATALOG_URL,
-  fetchCatalog,
   inferWireType,
-  type Catalog,
   type CatalogProviderEntry,
   type WukongConfig,
   type WukongHarness,
 } from '@wukong/wukong-sdk';
 import type { Command } from 'commander';
 
+import {
+  fetchProviderCatalog,
+  resolveCatalogUrl,
+  type CatalogResult,
+} from '#/built-in-catalog';
 import { createWukongCodeHostIdentity } from '#/cli/version';
 
 interface WritableLike {
@@ -213,8 +216,8 @@ export async function handleCatalogList(
   providerId: string | undefined,
   opts: CatalogListOptions,
 ): Promise<void> {
-  const url = opts.url ?? DEFAULT_CATALOG_URL;
-  const catalog = await loadCatalogOrExit(deps, url);
+  const url = opts.url ?? resolveCatalogUrl(deps.env);
+  const { catalog } = await loadCatalogOrExit(deps, url, opts.url === undefined);
 
   if (providerId !== undefined) {
     const entry = catalog[providerId];
@@ -301,8 +304,12 @@ export async function handleCatalogAdd(
     deps.exit(1);
   }
 
-  const url = opts.url ?? DEFAULT_CATALOG_URL;
-  const catalog = await loadCatalogOrExit(deps, url);
+  const url = opts.url ?? resolveCatalogUrl(deps.env);
+  const { catalog, source, url: sourceUrl } = await loadCatalogOrExit(
+    deps,
+    url,
+    opts.url === undefined,
+  );
 
   const entry = catalog[providerId];
   if (entry === undefined) {
@@ -388,17 +395,35 @@ export async function handleCatalogAdd(
   });
 
   const displayName = entry.name ?? providerId;
+  const sourceLabel =
+    source === 'built-in'
+      ? 'the built-in catalog snapshot'
+      : (sourceUrl ?? url);
   deps.stdout.write(
-    `Imported ${displayName} (${providerId}) with ${String(models.length)} model${models.length === 1 ? '' : 's'} from ${url}.\n`,
+    `Imported ${displayName} (${providerId}) with ${String(models.length)} model${models.length === 1 ? '' : 's'} from ${sourceLabel}.\n`,
   );
   if (opts.defaultModel !== undefined) {
     deps.stdout.write(`Default model set to ${providerId}/${opts.defaultModel}.\n`);
   }
 }
 
-async function loadCatalogOrExit(deps: ProviderDeps, url: string): Promise<Catalog> {
+async function loadCatalogOrExit(
+  deps: ProviderDeps,
+  url: string,
+  useFallbacks: boolean,
+): Promise<CatalogResult> {
   try {
-    return await fetchCatalog(url);
+    const result = await fetchProviderCatalog({ url, useFallbacks });
+    if (result.source === 'built-in') {
+      deps.stderr.write(
+        'Configured and upstream catalogs are unavailable; using the built-in snapshot.\n',
+      );
+    } else if (result.url !== url) {
+      deps.stderr.write(
+        `Catalog at ${url} is unavailable; using ${DEFAULT_CATALOG_URL}.\n`,
+      );
+    }
+    return result;
   } catch (error) {
     const suffix = error instanceof CatalogFetchError ? ` (HTTP ${String(error.status)})` : '';
     deps.stderr.write(`Failed to fetch catalog from ${url}${suffix}: ${errorMessage(error)}\n`);
@@ -407,6 +432,7 @@ async function loadCatalogOrExit(deps: ProviderDeps, url: string): Promise<Catal
 }
 
 export function registerProviderCommand(parent: Command, deps?: Partial<ProviderDeps>): void {
+  const defaultCatalogUrl = resolveCatalogUrl(deps?.env);
   const provider = parent
     .command('provider')
     .description('Manage LLM providers non-interactively.');
@@ -452,13 +478,13 @@ export function registerProviderCommand(parent: Command, deps?: Partial<Provider
 
   const catalog = provider
     .command('catalog')
-    .description('Discover and import providers from the public models.dev catalog.');
+    .description('Discover and import providers from a models.dev-compatible catalog.');
 
   catalog
     .command('list [providerId]')
     .description('List providers in the catalog, or models when a providerId is given.')
     .option('--filter <substring>', 'Case-insensitive id/name substring filter.')
-    .option('--url <url>', `Override catalog URL. Defaults to ${DEFAULT_CATALOG_URL}.`)
+    .option('--url <url>', `Override catalog URL. Defaults to ${defaultCatalogUrl}.`)
     .option('--json', 'Emit the matching catalog slice as JSON.', false)
     .action(
       async (
@@ -481,7 +507,7 @@ export function registerProviderCommand(parent: Command, deps?: Partial<Provider
     .description('Import a known provider from the catalog by id.')
     .option('--api-key <key>', 'API key for the provider. Falls back to WUKONG_REGISTRY_API_KEY.')
     .option('--default-model <modelId>', 'Mark the imported model as default_model after import.')
-    .option('--url <url>', `Override catalog URL. Defaults to ${DEFAULT_CATALOG_URL}.`)
+    .option('--url <url>', `Override catalog URL. Defaults to ${defaultCatalogUrl}.`)
     .action(
       async (
         providerId: string,

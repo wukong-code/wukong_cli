@@ -128,7 +128,7 @@ describe('handleProviderRemove', () => {
 describe('registerProviderCommand', () => {
   it('registers provider and catalog subcommands', () => {
     const program = new Command();
-    registerProviderCommand(program);
+    registerProviderCommand(program, { env: {} });
 
     const provider = program.commands.find((cmd) => cmd.name() === 'provider')!;
     expect(provider).toBeDefined();
@@ -143,5 +143,9 @@ describe('registerProviderCommand', () => {
     const catalogSubs = catalog.commands.map((cmd) => cmd.name());
     expect(catalogSubs).toContain('list');
     expect(catalogSubs).toContain('add');
+
+    const list = catalog.commands.find((cmd) => cmd.name() === 'list')!;
+    const urlOption = list.options.find((option) => option.long === '--url')!;
+    expect(urlOption.description).toContain('https://modelpricehub.com/api.json');
   });
 });

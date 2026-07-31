@@ -1,7 +1,7 @@
 # Wukong Code 用户指南
 
 > 适用范围: 当前 `wukong_cli` 新 Kimi-code base
-> 更新时间: 2026-07-22
+> 更新时间: 2026-07-31
 > 定位: 给 Wukong 一个目标，通过 Goal → Write → Check → Review → Fix 循环直到没有 blocking finding。
 > 原则: 本文只写当前开发分支可执行的能力。Loop、冻结验收合同、prior blocker 复审、无进展 strategist、Permission Mode v2、结构化 review findings、项目 review policy、本地 feedback、独立 reviewer model 和高级诊断命令已实现；当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
 
@@ -68,6 +68,29 @@ pnpm -C apps/wukong run dev:cli-only -- provider --help
 ```
 
 TUI 中使用 `/provider` 配置模型服务商和 API Key。`/login` 只连接可选 Wukong 账号，不会提供或配置模型。
+
+Provider 目录默认按以下顺序读取：
+
+1. `https://modelpricehub.com/api.json`
+2. `https://models.dev/api.json`
+3. 随发行包内置的常用 provider 快照
+
+网络目录都不可用时，`/provider` 和未指定 `--url` 的
+`wukong provider catalog` 命令仍可使用内置快照。快照包含 OpenAI、
+Anthropic、Google、DeepSeek、OpenRouter，以及 GLM（`zai`、
+`zai-coding-plan`）和 Kimi（`moonshotai-cn`、`kimi-for-coding`）。
+
+可通过环境变量替换首选目录：
+
+```bash
+WUKONG_CODE_CATALOG_URL=https://catalog.example.com/api.json wukong provider catalog list
+```
+
+显式传入 `--url` 时只访问指定地址，不会静默回退，便于验证私有目录：
+
+```bash
+wukong provider catalog list --url https://catalog.example.com/api.json
+```
 
 ### 5. 校验配置
 
