@@ -44,19 +44,44 @@ export function createProgram(
   program
     .addOption(
       new Option(
-        '-S, --session [id]',
+        '-r, --resume [id]',
         'Resume a session. With ID: resume that session. Without ID: interactively pick.',
       ).argParser((val: string | boolean) => (val === true ? '' : (val as string))),
     )
     .addOption(
-      new Option('-r, --resume [id]')
+      new Option('-S, --session [id]')
         .hideHelp()
         .argParser((val: string | boolean) => (val === true ? '' : (val as string))),
     )
-    .option('-c, --continue', 'Continue the previous session for the working directory.', false)
-    .addOption(new Option('-C').hideHelp().default(false))
-    .option('-y, --yolo', 'Skip ordinary approvals (dangerous; profile limits still apply).', false)
-    .option('--auto', 'Run autonomously with workspace and high-risk guardrails.', false)
+    .option('-c, --continue', 'Resume the most recent session for the current working directory.')
+    .addOption(new Option('-C').hideHelp())
+    .option(
+      '--auto',
+      'Auto-approve ordinary actions; block at workspace and high-risk boundaries.',
+    )
+    .option(
+      '-y, --yolo',
+      'Skip ordinary approvals. Dangerous; profile and safety limits still apply. Headless runs require --yes.',
+    )
+    .option(
+      '--plan',
+      'Start in planning mode to analyze and propose before implementation.',
+    )
+    .addOption(
+      new Option(
+        '-p, --prompt <prompt>',
+        'Run one headless turn in guarded Auto mode; may modify the workspace.',
+      ),
+    )
+    .addOption(
+      new Option(
+        '--output-format <format>',
+        'Output format for headless prompt or Loop mode. Defaults to text.',
+      ).choices(['text', 'stream-json']),
+    )
+    .addOption(
+      new Option('--yes', 'Confirm --yolo for a headless prompt or Loop run.'),
+    )
     .addOption(
       new Option(
         '-m, --model <model>',
@@ -65,35 +90,19 @@ export function createProgram(
     )
     .addOption(
       new Option(
-        '-p, --prompt <prompt>',
-        'Run one prompt non-interactively and print the response.',
-      ),
-    )
-    .addOption(
-      new Option(
-        '--output-format <format>',
-        'Output format for prompt mode. Defaults to text.',
-      ).choices(['text', 'stream-json']),
-    )
-    .addOption(
-      new Option(
         '--skills-dir <dir>',
-        'Load skills from this directory instead of auto-discovered user and project directories. Can be repeated.',
+        'Use this skill directory instead of auto-discovered user and project skill directories. Can be repeated.',
       )
-        .argParser((value: string, previous: string[] | undefined) => [...(previous ?? []), value])
-        .default([]),
+        .argParser((value: string, previous: string[] | undefined) => [...(previous ?? []), value]),
     )
     .addOption(
       new Option(
         '--add-dir <dir>',
-        'Add an additional workspace directory for this session. Can be repeated.',
+        'Grant this session access to an additional workspace directory. Can be repeated.',
       )
-        .argParser((value: string, previous: string[] | undefined) => [...(previous ?? []), value])
-        .default([]),
+        .argParser((value: string, previous: string[] | undefined) => [...(previous ?? []), value]),
     )
-    .addOption(new Option('--yes').hideHelp().default(false))
-    .addOption(new Option('--auto-approve').hideHelp().default(false))
-    .option('--plan', 'Start in plan mode.', false);
+    .addOption(new Option('--auto-approve').hideHelp());
 
   registerExportCommand(program);
   registerProviderCommand(program);
@@ -161,8 +170,8 @@ export function createProgram(
                 loop.acknowledgeReviewSubjectConsentDigest,
             }),
       },
-      skillsDirs: raw['skillsDir'] as string[],
-      addDirs: raw['addDir'] as string[],
+      skillsDirs: (raw['skillsDir'] as string[] | undefined) ?? [],
+      addDirs: (raw['addDir'] as string[] | undefined) ?? [],
     });
   });
   registerGuardCommand(program);
@@ -216,12 +225,12 @@ export function createProgram(
       yolo: yoloValue,
       yes: yesValue,
       auto: autoValue,
-      plan: raw['plan'] as boolean,
+      plan: raw['plan'] === true,
       model: raw['model'] as string | undefined,
       outputFormat: raw['outputFormat'] as CLIOptions['outputFormat'],
       prompt: promptValue,
-      skillsDirs: raw['skillsDir'] as string[],
-      addDirs: raw['addDir'] as string[],
+      skillsDirs: (raw['skillsDir'] as string[] | undefined) ?? [],
+      addDirs: (raw['addDir'] as string[] | undefined) ?? [],
     };
 
     onMain(opts);

@@ -1,5 +1,5 @@
 import { runJudge, type JudgeOptions, type JudgeResult } from '@wukong/verification';
-import type { Command } from 'commander';
+import { Option, type Command } from 'commander';
 
 interface WritableLike {
   write(chunk: string): boolean;
@@ -7,7 +7,6 @@ interface WritableLike {
 
 export interface JudgeCliOptions {
   readonly cwd?: string;
-  readonly assumeBroken?: boolean;
   readonly strict?: boolean;
   readonly json?: boolean;
 }
@@ -23,7 +22,6 @@ export async function handleJudge(deps: JudgeDeps, options: JudgeCliOptions): Pr
   try {
     const result = await deps.runJudge({
       cwd: options.cwd ?? deps.cwd(),
-      assumeBroken: options.assumeBroken,
       strict: options.strict,
     });
 
@@ -38,22 +36,22 @@ export async function handleJudge(deps: JudgeDeps, options: JudgeCliOptions): Pr
 export function registerJudgeCommand(parent: Command, deps?: Partial<JudgeDeps>): void {
   parent
     .command('judge')
-    .description('Evaluate whether the current workspace is safe to merge (deterministic, no model calls by default).')
-    .option('--assume-broken', 'Default to a skeptical posture. This is the default in P0.5.')
+    .description(
+      "Check whether the current workspace passes Wukong's local merge gate (deterministic; no model calls).",
+    )
+    .addOption(new Option('--assume-broken').hideHelp())
     .option('--strict', 'Block on any risk, including medium and low.')
     .option('--json', 'Print the structured judge result as JSON.')
     .action(async (raw: RawJudgeOptions) => {
       const code = await handleJudge(resolveDeps(deps), {
         json: raw.json === true,
         strict: raw.strict === true,
-        assumeBroken: raw.assumeBroken === true,
       });
       if (code !== 0) process.exitCode = code;
     });
 }
 
 interface RawJudgeOptions {
-  readonly assumeBroken?: boolean;
   readonly strict?: boolean;
   readonly json?: boolean;
 }

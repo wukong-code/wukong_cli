@@ -435,7 +435,7 @@ export function registerProviderCommand(parent: Command, deps?: Partial<Provider
   const defaultCatalogUrl = resolveCatalogUrl(deps?.env);
   const provider = parent
     .command('provider')
-    .description('Manage LLM providers non-interactively.');
+    .description('Configure LLM providers and browse or import provider catalogs.');
 
   // Last-resort boundary: handlers report expected failures themselves, but
   // anything that escapes (e.g. a config write rejected because config.toml

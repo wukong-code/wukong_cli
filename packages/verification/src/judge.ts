@@ -9,7 +9,6 @@ export type JudgeVerdict = 'pass' | 'block';
 export interface JudgeOptions {
   readonly cwd?: string;
   readonly commands?: readonly string[];
-  readonly assumeBroken?: boolean;
   readonly strict?: boolean;
 }
 
@@ -25,7 +24,6 @@ export async function runJudge(options: JudgeOptions = {}): Promise<JudgeResult>
   const proof = await runProof({ cwd, commands: options.commands, writeReport: false });
 
   const { verdict, reason } = deterministicVerdict(proof, {
-    assumeBroken: options.assumeBroken ?? true,
     strict: options.strict === true,
   });
 
@@ -38,7 +36,6 @@ export async function runJudge(options: JudgeOptions = {}): Promise<JudgeResult>
 }
 
 interface VerdictInput {
-  readonly assumeBroken: boolean;
   readonly strict: boolean;
 }
 

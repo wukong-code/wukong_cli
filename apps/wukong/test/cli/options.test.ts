@@ -140,20 +140,24 @@ describe('CLI options parsing', () => {
   });
 
   describe('--session / --resume / --continue', () => {
-    it('-S sets session', () => {
-      expect(parse(['-S', 'sess-123']).session).toBe('sess-123');
+    it('-r sets the session to resume', () => {
+      expect(parse(['-r', 'sess-123']).session).toBe('sess-123');
     });
 
-    it('-r is an alias for --session', () => {
-      expect(parse(['-r', 'sess-456']).session).toBe('sess-456');
+    it('--resume sets the session to resume', () => {
+      expect(parse(['--resume', 'sess-456']).session).toBe('sess-456');
     });
 
-    it('--resume is an alias for --session', () => {
-      expect(parse(['--resume', 'sess-789']).session).toBe('sess-789');
+    it('-S remains a legacy alias for --resume', () => {
+      expect(parse(['-S', 'sess-789']).session).toBe('sess-789');
     });
 
-    it('bare -S (no id) yields empty string — triggers the picker', () => {
-      expect(parse(['-S']).session).toBe('');
+    it('--session remains a legacy alias for --resume', () => {
+      expect(parse(['--session', 'sess-legacy']).session).toBe('sess-legacy');
+    });
+
+    it('bare -r (no id) yields empty string — triggers the picker', () => {
+      expect(parse(['-r']).session).toBe('');
     });
 
     it('-C sets continue', () => {
@@ -164,10 +168,12 @@ describe('CLI options parsing', () => {
       expect(parse(['-c']).continue).toBe(true);
     });
 
-    it('--continue and --session combined raises a conflict', () => {
-      const opts = parse(['--continue', '--session', 'abc123']);
+    it('--continue and --resume combined raises a conflict', () => {
+      const opts = parse(['--continue', '--resume', 'abc123']);
       expect(() => validateOptions(opts)).toThrow(OptionConflictError);
-      expect(() => validateOptions(opts)).toThrow('Cannot combine --continue, --session.');
+      expect(() => validateOptions(opts)).toThrow(
+        'Cannot combine --continue with --resume.',
+      );
     });
   });
 
@@ -269,11 +275,11 @@ describe('CLI options parsing', () => {
       expect(validateOptions(opts).uiMode).toBe('print');
     });
 
-    it('rejects prompt mode with bare --session picker', () => {
-      const opts = parse(['-p', 'resume here', '--session']);
+    it('rejects prompt mode with bare --resume picker', () => {
+      const opts = parse(['-p', 'resume here', '--resume']);
       expect(() => validateOptions(opts)).toThrow(OptionConflictError);
       expect(() => validateOptions(opts)).toThrow(
-        'Cannot use --session without an id in prompt mode.',
+        'Cannot use --resume without an id in prompt mode.',
       );
     });
 

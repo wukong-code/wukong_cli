@@ -61,6 +61,7 @@ export async function runShell(
   const harness = createWukongHarness({
     homeDir: telemetryBootstrap.homeDir,
     identity: createWukongCodeHostIdentity(version),
+    skillDirs: opts.skillsDirs,
     telemetry: telemetryClient,
     onOAuthRefresh: (outcome) => {
       if (outcome.success) {

@@ -80,10 +80,10 @@ export function validateOptions(opts: CLIOptions): ValidatedOptions {
     throw new OptionConflictError('Cannot combine --prompt with --plan.');
   }
   if (promptMode && opts.session === '') {
-    throw new OptionConflictError('Cannot use --session without an id in prompt mode.');
+    throw new OptionConflictError('Cannot use --resume without an id in prompt mode.');
   }
   if (opts.continue && opts.session !== undefined) {
-    throw new OptionConflictError('Cannot combine --continue, --session.');
+    throw new OptionConflictError('Cannot combine --continue with --resume.');
   }
   if (opts.yolo && opts.auto) {
     throw new OptionConflictError('Cannot combine --yolo with --auto.');

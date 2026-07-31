@@ -20,6 +20,48 @@ describe('createProgram', () => {
     expect(program.version()).toBe('1.2.3');
   });
 
+  it('shows canonical session, permission, and headless options', () => {
+    const program = createProgram('1.2.3', () => {}, () => {});
+    const help = program.helpInformation();
+
+    expect(help).toContain('-r, --resume [id]');
+    expect(help).not.toContain('-S, --session [id]');
+    expect(help).toContain('Auto-approve ordinary actions');
+    expect(help).toContain('Run one headless turn in guarded Auto mode');
+    expect(help).toContain('--yes');
+    expect(help).toContain('Grant this session access');
+    expect(help).not.toContain('roles [command]');
+  });
+
+  it('keeps legacy session flags available without advertising them', () => {
+    let captured: CLIOptions | undefined;
+    const program = createProgram(
+      '0.0.0',
+      (opts) => {
+        captured = opts;
+      },
+      () => {},
+    );
+    swallowOutput(program);
+
+    program.parse(['node', 'wukong', '--session', 'legacy-session']);
+
+    expect(captured?.session).toBe('legacy-session');
+  });
+
+  it('describes judge as a deterministic local gate and hides its legacy no-op flag', () => {
+    const program = createProgram('1.2.3', () => {}, () => {});
+    const judge = program.commands.find((command) => command.name() === 'judge');
+
+    expect(judge).toBeDefined();
+    const help = judge!.helpInformation();
+    expect(help).toContain("passes Wukong's local merge gate");
+    expect(help).toMatch(/no model\s+calls/u);
+    expect(help).not.toContain('--assume-broken');
+    expect(help).not.toContain('P0.5');
+    expect(judge!.options.find((option) => option.long === '--assume-broken')?.hidden).toBe(true);
+  });
+
   it('errors when an unknown command is supplied', () => {
     const program = createProgram('0.0.0', () => {}, () => {});
     swallowOutput(program);

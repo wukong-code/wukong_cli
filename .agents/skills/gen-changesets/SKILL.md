@@ -7,7 +7,7 @@ description: Use when generating changesets in the wukong repository, including 
 
 `wukong` uses changesets to manage versions and changelogs. The current user-facing published package is:
 
-- `@wukong/wukong`: the CLI
+- `@wukong.today/code`: the CLI
 
 All other `@wukong/*` packages are treated as internal packages, including `@wukong/wukong-sdk`, `agent-core`, `kosong`, `kaos`, `wukong-oauth`, `wukong-telemetry`, and `migration-legacy`.
 
@@ -15,9 +15,9 @@ All other `@wukong/*` packages are treated as internal packages, including `@wuk
 
 1. **Inspect the actual changes first.** Use `git status` / `git diff --name-only` to identify which packages were actually changed.
 2. **List packages that changesets can release.** If a changed package is ignored in `.changeset/config.json`, do not put that ignored package in frontmatter together with a non-ignored package; changesets rejects mixed ignored/non-ignored frontmatter.
-3. **Map ignored internal changes to the affected released package.** If an ignored internal package changes CLI output or behavior, list `@wukong/wukong` and describe the actual user-visible or release-artifact change in the changelog text.
-4. **Internal package source changes that enter the CLI bundle must manually list the CLI.** `@wukong/wukong` inline-bundles `@wukong/*` source, but those internal packages are devDependencies from the CLI's perspective, so changesets will not automatically propagate bumps. If a change enters the CLI output, list `@wukong/wukong`.
-   - **Web app (`@wukong/wukong-web`) changes always enter the CLI bundle.** `@wukong/wukong-web` is ignored by changesets (see `.changeset/config.json`) and cannot be mixed with `@wukong/wukong` in one changeset frontmatter. Describe the web change in the changelog text, but list `@wukong/wukong` so the CLI release carries the bundled `dist-web` output.
+3. **Map ignored internal changes to the affected released package.** If an ignored internal package changes CLI output or behavior, list `@wukong.today/code` and describe the actual user-visible or release-artifact change in the changelog text.
+4. **Internal package source changes that enter the CLI bundle must manually list the CLI.** `@wukong.today/code` inline-bundles `@wukong/*` source, but those internal packages are devDependencies from the CLI's perspective, so changesets will not automatically propagate bumps. If a change enters the CLI output, list `@wukong.today/code`.
+   - **Web app (`@wukong/wukong-web`) changes always enter the CLI bundle.** `@wukong/wukong-web` is ignored by changesets (see `.changeset/config.json`) and cannot be mixed with `@wukong.today/code` in one changeset frontmatter. Describe the web change in the changelog text, but list `@wukong.today/code` so the CLI release carries the bundled `dist-web` output.
 5. **Docs-only and tests-only changes usually do not need a changeset.** README, internal docs, and `test/` changes that do not enter package output do not trigger a CLI bump.
 6. `@wukong/vis` / `vis-server` / `vis-web` are ignored by changesets and should not be handled.
 
@@ -25,7 +25,7 @@ All other `@wukong/*` packages are treated as internal packages, including `@wuk
 
 1. List the changed packages and check whether each one is ignored by `.changeset/config.json`.
 2. Choose a bump level for each package.
-3. If an ignored internal package change enters the CLI bundle, put `@wukong/wukong` in frontmatter instead of mixing the ignored package into the same changeset.
+3. If an ignored internal package change enters the CLI bundle, put `@wukong.today/code` in frontmatter instead of mixing the ignored package into the same changeset.
 4. Create a short kebab-case file under `.changeset/`.
 5. Split unrelated changes into separate changesets; keep one logical change in one file.
 
@@ -85,7 +85,7 @@ An internal package fixes a bug visible to CLI users:
 
 ```markdown
 ---
-"@wukong/wukong": patch
+"@wukong.today/code": patch
 ---
 
 Fix occasional loss of tool call results in long conversations.
@@ -95,7 +95,7 @@ A new user-facing slash command (note the short usage hint):
 
 ```markdown
 ---
-"@wukong/wukong": minor
+"@wukong.today/code": minor
 ---
 
 Add the /foo slash command to list active sessions. Run /foo to see them.
@@ -105,7 +105,7 @@ A new CLI subcommand:
 
 ```markdown
 ---
-"@wukong/wukong": minor
+"@wukong.today/code": minor
 ---
 
 Add the wukong web subcommand to open the web UI. Run wukong web to launch it.
@@ -115,7 +115,7 @@ A new flag on an existing command:
 
 ```markdown
 ---
-"@wukong/wukong": patch
+"@wukong.today/code": patch
 ---
 
 Add a --bar flag to skip confirmation prompts. Pass --bar to skip.
@@ -125,7 +125,7 @@ An internal package has an internal-only change, but it enters the CLI bundle:
 
 ```markdown
 ---
-"@wukong/wukong": patch
+"@wukong.today/code": patch
 ---
 
 Unify tool execution metadata handling.
@@ -143,7 +143,7 @@ Clarify session status typing for internal SDK callers.
 
 ## Web app changes
 
-`@wukong/wukong-web` is ignored by changesets and must **never** appear in a changeset frontmatter. Because the web app is bundled into the CLI release artifact, any web change that ships must list `@wukong/wukong` instead and describe the actual web-facing change in the text.
+`@wukong/wukong-web` is ignored by changesets and must **never** appear in a changeset frontmatter. Because the web app is bundled into the CLI release artifact, any web change that ships must list `@wukong.today/code` instead and describe the actual web-facing change in the text.
 
 - If a PR contains both web UI changes and server API changes, split them into separate changesets so each entry has a focused description.
 - Do not enumerate every micro-tweak; keep it to one sentence that captures what the web user gets.
@@ -152,7 +152,7 @@ Web-only fix:
 
 ```markdown
 ---
-"@wukong/wukong": patch
+"@wukong.today/code": patch
 ---
 
 Fix the web chat not scrolling to the bottom after sending a message.
@@ -162,7 +162,7 @@ Web UI plus server APIs in the same PR (split into two changesets):
 
 ```markdown
 ---
-"@wukong/wukong": minor
+"@wukong.today/code": minor
 ---
 
 Add the server-hosted web UI, including chat layout and session list behaviors.
@@ -170,7 +170,7 @@ Add the server-hosted web UI, including chat layout and session list behaviors.
 
 ```markdown
 ---
-"@wukong/wukong": minor
+"@wukong.today/code": minor
 ---
 
 Add the server REST and WebSocket APIs that power the web UI.
@@ -181,7 +181,7 @@ Add the server REST and WebSocket APIs that power the web UI.
 - You are about to write `major` without asking the user.
 - A new user-facing feature entry has no usage hint, or the hint runs to multiple lines and explains design rationale.
 - You guessed wording for a change you do not understand instead of asking the user whether you may dig into the repo.
-- Internal package source enters the CLI bundle, but `@wukong/wukong` is missing.
+- Internal package source enters the CLI bundle, but `@wukong.today/code` is missing.
 - A changeset frontmatter mixes ignored internal packages with non-ignored packages.
 - `packages/node-sdk` was not changed, but `@wukong/wukong-sdk` was listed for "internal package sync".
 - The changelog entry is in Chinese.

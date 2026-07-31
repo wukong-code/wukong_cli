@@ -180,7 +180,7 @@ describe('runShell', () => {
       model: undefined,
       outputFormat: undefined,
       prompt: undefined,
-      skillsDirs: [],
+      skillsDirs: ['/skills/one', '/skills/two'],
       addDirs: ['../shared', '/tmp/extra'],
     };
 
@@ -192,6 +192,7 @@ describe('runShell', () => {
           userAgentProduct: 'wukong-code',
           version: '1.2.3-test',
         }),
+        skillDirs: ['/skills/one', '/skills/two'],
         sessionStartedProperties: { yolo: true, auto: false, plan: true, afk: false },
       }),
     );

@@ -27,24 +27,24 @@ export function registerRolesCommand(parent: Command, overrides?: Partial<RolesD
   const roles = parent
     .command('roles')
     .description('List, inspect, or create agent role profiles.')
-    .usage('[options] [command]');
+    .usage('[options] [command]')
+    .allowExcessArguments(true);
 
   const printRoles = async (): Promise<void> => {
     const items = await listRoles({ cwd: deps.cwd(), wukongHomeDir: deps.homeDir() });
     deps.stdout.write(formatRoleList(items));
   };
 
-  roles
-    .argument('[command]')
-    .action(async (command: string | undefined) => {
-      if (command !== undefined) {
-        roles.error(
-          `unknown command '${command}'. Valid commands: list, show, init. See 'wukong roles --help'.`,
-        );
-        return;
-      }
-      await printRoles();
-    });
+  roles.action(async () => {
+    const [command] = roles.args;
+    if (command !== undefined) {
+      roles.error(
+        `unknown command '${command}'. Valid commands: list, show, init. See 'wukong roles --help'.`,
+      );
+      return;
+    }
+    await printRoles();
+  });
 
   roles
     .command('list')
