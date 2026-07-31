@@ -1,5 +1,13 @@
 # @wukong.today/code
 
+## 0.0.22
+
+### Patch Changes
+
+- [`89e09c5`](https://github.com/mutnpc/wukong_cli/commit/89e09c58da274cf899c263faf99dea3594e3d3b7) Thanks [@xxg1413](https://github.com/xxg1413)! - Honor `--skills-dir` in interactive sessions and clarify headless permission, resume, and merge-gate help.
+
+- [`9614b18`](https://github.com/mutnpc/wukong_cli/commit/9614b18e6472e1d22c5e759d031f159fe719d545) Thanks [@xxg1413](https://github.com/xxg1413)! - Keep provider setup available when remote catalogs fail with fallback catalogs for common providers, including GLM and Kimi.
+
 ## 0.0.21
 
 ### Patch Changes
