@@ -60,5 +60,5 @@ export const WUKONG_CODE_ANNOUNCEMENTS_URL = `${WUKONG_CODE_CDN_BASE}/cli/announ
 export const WUKONG_CODE_TIPS_BANNER_URL = WUKONG_CODE_ANNOUNCEMENTS_URL;
 export const WUKONG_CODE_PLUGIN_MARKETPLACE_URL = `${WUKONG_CODE_CDN_BASE}/plugins/marketplace.json`;
 export const WUKONG_CODE_PLUGIN_MARKETPLACE_URL_ENV = 'WUKONG_CODE_PLUGIN_MARKETPLACE_URL';
-export const WUKONG_CODE_CATALOG_URL = 'https://modelpricehub.com/api.json';
+export const WUKONG_CODE_CATALOG_URL = 'https://modelpricelab.com/api.json';
 export const WUKONG_CODE_CATALOG_URL_ENV = 'WUKONG_CODE_CATALOG_URL';

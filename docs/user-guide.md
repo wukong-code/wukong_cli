@@ -71,7 +71,7 @@ TUI 中使用 `/provider` 配置模型服务商和 API Key。`/login` 只连接�
 
 Provider 目录默认按以下顺序读取：
 
-1. `https://modelpricehub.com/api.json`
+1. `https://modelpricelab.com/api.json`
 2. `https://models.dev/api.json`
 3. 随发行包内置的常用 provider 快照
 

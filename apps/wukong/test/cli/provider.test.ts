@@ -146,6 +146,6 @@ describe('registerProviderCommand', () => {
 
     const list = catalog.commands.find((cmd) => cmd.name() === 'list')!;
     const urlOption = list.options.find((option) => option.long === '--url')!;
-    expect(urlOption.description).toContain('https://modelpricehub.com/api.json');
+    expect(urlOption.description).toContain('https://modelpricelab.com/api.json');
   });
 });

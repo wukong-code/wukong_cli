@@ -49,7 +49,7 @@ Skill authoring, or a complete shell sandbox.
 
 Provider discovery first reads the models.dev-compatible catalog configured by
 `WUKONG_CODE_CATALOG_URL` (default:
-`https://modelpricehub.com/api.json`). If that source is unavailable, Wukong
+`https://modelpricelab.com/api.json`). If that source is unavailable, Wukong
 tries `https://models.dev/api.json`, then uses the release-embedded snapshot.
 The snapshot keeps common providers available offline, including OpenAI,
 Anthropic, Google, DeepSeek, OpenRouter, GLM, and Kimi.
