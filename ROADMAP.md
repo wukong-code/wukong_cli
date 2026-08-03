@@ -1,9 +1,16 @@
 # Wukong Code Roadmap
 
-> 最后更新: 2026-07-30
+> 最后更新: 2026-08-03
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 
-0.0.21 收敛为六平台一致的 Loop 风险证据修复版，产品继续 Free + BYOK。隔离 worktree / Safe Promote 实验已经取消，不属于 0.0.21 或任何已承诺的后续版本。0.1.0 与 0.2.0 的旧规格等待重新规划；当前没有付费计划、Checkout 或 entitlement。
+0.0.22 已完成 provider catalog resilience 与 CLI session/permission clarity
+维护发布。下一计划版本直接进入
+0.1.0 Trusted Local Loop：稳定现有 Finish Line、Gate、恢复、安装升级和
+跨平台行为，补齐 consolidated Preflight、no-check、dirty workspace、
+STOPPED_BY_USER、provider outcome/cost 与首次成功漏斗，并冻结 coverage
+completeness、DirectShellBindingV1 与 stage-verify-publish-exact release
+provenance；不新增执行架构。产品继续 Free + BYOK；隔离 worktree / Safe
+Promote 实验已经取消，当前没有付费计划、Checkout 或 entitlement。
 
 当前版本真相源：
 
@@ -12,12 +19,13 @@
 - [0.0.20 Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md)
 - [0.0.21 Loop Evidence Integrity](docs/design/0.0.21-loop-evidence-integrity.md)
 - [0.0.21 Release Notes](docs/releases/0.0.21.md)
+- [0.0.22 Release Notes](docs/releases/0.0.22.md)
+- [0.1.0 Trusted Local Loop（设计完成，未实施）](docs/design/0.1.0-trusted-local-loop.md)
 - [TODO.md](TODO.md)：本仓库执行层任务清单，按本 ROADMAP 的版本拆解
 - `wukong_web/TODO.md`：官网与托管产品 TODO，位于 sibling web 仓库中
 
-等待重新规划的后续版本草案：
+更后版本候选：
 
-- [0.1.0 Trusted Local Loop](docs/design/0.1.0-trusted-local-loop.md)
 - [0.2.0 Pro Reliable Autonomy](docs/design/0.2.0-pro-reliable-autonomy.md)
   - [Bounded Parallel Loop 组件](docs/design/0.2.0-bounded-parallel-loop.md)
   - [Local Loop Supervisor 组件](docs/design/0.2.0-local-loop-supervisor.md)
@@ -138,21 +146,23 @@ Wukong 当前只提供完整的本地 BYOK Loop。0.1.0 的目标是把它做成
 | `0.0.19` | Explicit Finish Line | Loop 启动前确认 Goal、可选 Done when、Must not 和必跑 checks；无损冻结 Acceptance Contract 与 check provenance；区分 Gate attempt/run terminal；NEEDS_WORK 通过幂等 continuation 继续；保持免费/BYOK |
 | `0.0.20` | Reusable Verification Criteria | 所有新 reviewer attempt 迁移到 bounded broker + exact BYOK provider consent；可选发现用户本机已有 Verification Skills 的 strict criteria sidecar，支持显式 standalone/有序多选且不执行 Skill command；保持免费/BYOK |
 | `0.0.21` | Loop Evidence Integrity（已于 2026-07-30 发布） | 修复相同 risk kind 在不同文件、行或 evidence 位置时的 evidence identity 冲突；broker 保留全部不同 occurrence，完全相同的重复输入继续去重；不新增命令、配置或平台专用能力；保持免费/BYOK |
+| `0.0.22` | Provider Catalog Resilience（已于 2026-07-31 发布） | provider catalog 在维护源、models.dev 与 embedded snapshot 间 fallback；澄清 resume、session、permission、YOLO、Plan、headless 与 judge 帮助；保持兼容、免费/BYOK，不改变 0.1.0 功能范围 |
 
-### 候选后续版本（未批准实施）
+### 下一版本与后续候选
 
-下列版本必须在 0.0.21 发布验收和真实用户验证后重新评审。旧设计中依赖
-isolated worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能
-继续作为实现依据或对外承诺：
+0.1.0 功能设计已经重新完成，但尚未实施或发布。旧设计中依赖 isolated
+worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继续
+作为实现依据或对外承诺：
 
-| 候选版本 | 目标 | 进入实施前的决策门槛 |
+| 版本 | 状态与目标 | 发布门槛 |
 |---|---|---|
-| `0.1.0` | Trusted Local Loop：稳定现有 Finish Line、criteria/evidence、durable lifecycle、安装升级、恢复、跨平台和 public truth；RC 不增加新的执行架构 | 0.0.21 发布与安装验收完成；重新评审 0.1.0 规格；25 名 opt-in 外部测试者、15 名首次 Goal + Gate PASS、7 名在 14 天内完成第二个不同 Goal PASS、3 个授权案例；P0/P1 为 0，RC 稳定 14 天 |
+| `0.1.0` | **设计完成，未实施。** Trusted Local Loop：稳定 Finish Line、criteria/evidence、durable lifecycle、三态 Gate verdict 与 STOPPED_BY_USER、合并 Preflight、no-check、dirty workspace、provider outcome/cost、安装升级、五来源 Resume、跨平台和 public truth；冻结 coverage root binding、DirectShellBindingV1 和 ReleaseProvenanceV1；RC 不增加新的执行架构 | 25 名 opt-in 全分母，20 名无实时指导完成 install/upgrade + provider smoke + Preflight，15 名首次真实 PASS 且都获得完整 14 天观察窗口，其中 7 名在首次 PASS 后第 1–14 天主动完成第二个不同 Goal PASS；P0/release-blocking P1、false PASS、原状态丢失、越界写入、静默重复 provider request 与隐私冲突为 0；RC 稳定 14 天；授权案例单列为宣传门槛；公开资产通过 stage-verify-publish-exact 与 provenance 验证 |
 | `0.2.0` | Pro Reliable Autonomy：保留为待重新评审的可靠自治与商业验证候选；不能继承已经取消的 Promote、lease、fencing 或 Final Gate 设计 | 0.1.0 发布并稳定观察至少 30 天；先验证重复多任务监督需求，再单独批准技术方案、Pilot 权益和收费门槛 |
 
-当前顺序是：完成 0.0.21 六平台发布验收 → 基于现有 Loop 的真实使用证据
-重新规划 0.1.0 → 0.1.0 稳定后再决定是否需要 0.2.0。旧的 2026 年
-9–11 月排期随隔离 Promote 方案取消，不再有效。
+当前顺序是：0.0.22 → 0.1.0-rc.1 → 真实项目与 opt-in cohort → 0.1.0。
+0.0.22 是已发布的维护版本，不扩张 0.1.0 范围；若再出现生产 P0，只能另行
+决定紧急补丁。0.1.0 稳定后再决定是否需要 0.2.0。旧的 2026 年 9–11 月排期
+随隔离 Promote 方案取消，不再有效。
 
 `0.0.18` 继续收口现有产品层：命令只做默认可见性分层，不删除底层能力；Kimi Code/Grok Resume 只读本地会话；Feedback API 只接收用户确认的文本；`/login` 由 CLI 发起 device flow，用户在 Wukong 网站用 Google/GitHub 确认，CLI 获取 token 后读取 `200` 模型目录。当前没有 Wukong 模型，目录应诚实返回空数组，登录仍成功且不改变 BYOK 默认模型。最新托管模型与推理 endpoint 留给后续独立决策，在真实 backend、隐私和 E2E 就绪前不能发布 placeholder。0.1.0 不预建 invite-only 付费、Checkout 或 entitlement。
 
@@ -161,13 +171,18 @@ isolated worktree、Safe Promote 或 target Final Gate 的内容已经失效，�
 `0.0.20` 已发布。它把有/无 Skill 的所有新 reviewer attempt 统一迁移到去密、bounded、attempt-scoped evidence broker；workspace read trust 与发送给 exact BYOK provider 的 run-scoped consent 分离，raw/secret-bearing Gate evidence 不出站。其上复用 Agent Skills 文件布局，只读取用户本机已存在、用户确认、digest-pinned 的 strict qualitative-criteria sidecar，并提供四个可选的只读 reference recipes；真实 test/lint/typecheck/build 继续由 0.0.19 frozen project checks 执行。首版只支持 standalone 与有序扁平多选；deterministic suggestions 与 model advisory hints 分离。任何 Skill verdict 都不能覆盖 deterministic failure。命令型 recipe、sandbox、authoring、embedded/chained 后置。自动化、六平台资产与公开安装门槛已经通过；真实仓库配对和固定五用户验证继续作为发布后产品证据收集，详见 [0.0.20 Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md)。
 
 `0.0.21` 只修复 Loop evidence integrity；不改变 Loop 的写入、执行或发布
-模型。`0.1.0` 将基于现有 Finish Line、criteria/evidence、durable
-lifecycle 和 Gate 做稳定化，具体规格需重新评审。`0.2.0` 仍只是更后的
-可靠自治候选，不能复用已取消的 Promote 架构。当前均不新增默认
-`/agents`、`/parallel`、`/worktree` 或 `/supervisor` 命令；完整 process
-sandbox、dynamic workflow graph、云端 Routine、Remote Control、Hosted
-Terminal、Team、managed credits 和 telemetry 都不在范围。0.0.21 的真实
-边界见[功能列表](docs/design/0.0.21-loop-evidence-integrity.md)。
+模型。`0.0.22` 只增加 provider catalog resilience 与 CLI clarity，作为
+0.1.0 的当前直接升级基线，不改变 Trusted Local Loop 范围。`0.1.0` 已重新
+设计为现有单 Loop 的稳定合同版，详细 P0/P1、兼容、
+隐私、GateCoverageRecordV1、DirectShellBindingV1、
+ReleaseProvenanceV1 和四类发布门槛见
+[0.1.0 Trusted Local Loop](docs/design/0.1.0-trusted-local-loop.md)。
+`0.2.0` 仍只是更后的可靠自治候选，不能复用已取消的 Promote 架构。当前均
+不新增默认 `/agents`、`/parallel`、`/worktree` 或 `/supervisor` 命令；
+完整 process sandbox、dynamic workflow graph、云端 Routine、Remote
+Control、Hosted Terminal、Team 和 managed credits 都不在范围；0.1.0 不新增
+telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
+不作为 release cohort 证据。
 
 ## Milestone 0: Public Install And Local Proof
 
@@ -556,7 +571,8 @@ Terminal、Team、managed credits 和 telemetry 都不在范围。0.0.21 的真�
 - 0.0.19 先完成 Explicit Finish Line、frozen Gate checks、approval CAS、durable attempt/terminal 与 continuation。
 - 0.0.20 先把有/无 Skill 的所有新 reviewer attempt 统一到 broker trust + run-scoped BYOK provider consent，再可选接入已有 Verification Skill 的 strict qualitative criteria；不执行 Skill command，也不新增顶层命令。
 - 0.0.21 只做 repeated-risk evidence identity 修复与六平台一致发布；不增加新的执行架构。
-- 0.1.0 规格需重新评审；方向只保留 Trusted Local Loop 稳定化，RC 期间不加大功能，并继续要求 opt-in cohort、跨平台、P0/P1 清零和 14 天稳定门槛。
+- 0.0.22 只做 provider catalog resilience 与 CLI clarity 维护发布；不增加新的执行架构。
+- 0.1.0 规格已重新设计：只稳定现有 Trusted Local Loop 的 V1/V2/V3 兼容、durable lifecycle、Gate/evidence、三态 verdict + STOPPED_BY_USER、合并 Preflight、no-check、dirty workspace、provider outcome/cost、五来源 Resume、跨平台和安装升级，并冻结 Gate coverage root binding、DirectShellBindingV1 与 stage-verify-publish-exact release provenance；RC 期间不加大功能，并要求全分母 opt-in cohort、P0/release-blocking P1 清零和 14 天稳定门槛。
 - 0.2.0 是未批准且待重新评审的 Reliable Autonomy 候选；不能继承已取消的 Promote/lease/fencing 设计，在 0.1.0 真实验证前不开工、不公开 Checkout。
 - 公告与更新通道分离：公告 JSON 由 Web 静态文件维护，失败不阻塞 CLI。
 - `/report` 和 Hosted Report/上传路径保持删除；本地 Gate 结果只在已有显式保存能力下留档。
