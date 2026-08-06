@@ -15,21 +15,28 @@ import {
   type WukongHarness,
   type Session,
   type SessionStatus,
+  type SessionUsage,
   type TelemetryClient,
   type WukongConfig,
 } from '@wukong/wukong-sdk';
+import { inspectGit, type GitInspection } from '@wukong/verification';
 import { resolve } from 'pathe';
 
 import { CLI_SHUTDOWN_TIMEOUT_MS } from '#/constant/app';
+import { durableLoopResultFromGoal } from '#/utils/loop-result';
 
 import type { CLIOptions, PromptOutputFormat } from './options';
 import {
   formatGoalSummaryText,
+  formatLoopResultText,
   formatLoopSummaryText,
   goalExitCode,
+  GOAL_EXIT_CODES,
   goalSummaryJson,
   loopExitCode,
+  loopRuntimeErrorSummary,
   loopSummaryJson,
+  LOOP_EXIT_CODES,
   parseHeadlessGoalCreate,
   type HeadlessGoalCreate,
 } from './goal-prompt';
@@ -39,6 +46,7 @@ import {
   beginLoopRun,
   completeLoopRun,
   registerTuiLoop,
+  stopLoopRun,
   type LocalLoopRun,
 } from './lib/loop-lifecycle';
 import {
@@ -110,6 +118,8 @@ export async function runPrompt(
     workDir,
   });
   let restorePromptSessionPermission = async (): Promise<void> => {};
+  let handlePromptTermination: ((signal: NodeJS.Signals) => Promise<void>) | undefined;
+  let requestedTerminationSignal: NodeJS.Signals | undefined;
   let removeTerminationCleanup: (() => void) | undefined;
   let cleanupPromise: Promise<void> | undefined;
   const cleanupPromptRun = async (): Promise<void> => {
@@ -125,7 +135,14 @@ export async function runPrompt(
     })();
     await cleanupPromise;
   };
-  removeTerminationCleanup = installPromptTerminationCleanup(promptProcess, cleanupPromptRun);
+  removeTerminationCleanup = installPromptTerminationCleanup(
+    promptProcess,
+    cleanupPromptRun,
+    async (signal) => {
+      requestedTerminationSignal ??= signal;
+      await handlePromptTermination?.(signal);
+    },
+  );
 
   try {
     await harness.ensureConfigFile();
@@ -153,7 +170,7 @@ export async function runPrompt(
         return;
       }
     }
-    const { session, restorePermission, telemetryModel, goalModel } =
+    const { session, restorePermission, telemetryModel, goalModel, goalPermission } =
       await resolvePromptSession(
         harness,
         opts,
@@ -165,6 +182,7 @@ export async function runPrompt(
         },
       );
     restorePromptSessionPermission = restorePermission;
+    if (requestedTerminationSignal !== undefined) return;
 
     initializeCliTelemetry({
       harness,
@@ -177,24 +195,153 @@ export async function runPrompt(
     setCrashPhase('runtime');
 
     const outputFormat = opts.outputFormat ?? 'text';
+    let resumeHintWritten = false;
+    let runSummaryWritten = false;
+    let terminationSignal: NodeJS.Signals | undefined;
+    let terminationProviderOutcomeUnknown: StoppedProviderOutcomeUnknown | undefined;
+    let activeRunSettled: Promise<void> = Promise.resolve();
+    let terminationSummaryPromise: Promise<void> | undefined;
+    handlePromptTermination = async (signal) => {
+      requestedTerminationSignal ??= signal;
+      terminationSignal ??= signal;
+      terminationSummaryPromise ??= (async () => {
+        await Promise.resolve(session.cancel()).catch(() => {});
+        // `session.cancel()` only requests cancellation. Wait until the active
+        // TurnFlow has emitted its terminal turn/goal events before deciding
+        // whether the provider outcome is unknown or the run is resumable.
+        await activeRunSettled;
+        if (runSummaryWritten) return;
+        const [stoppedGoal, workspace] = await Promise.all([
+          session.getGoal().then((result) => result.goal).catch(() => null),
+          inspectGit(workDir).catch(() => undefined),
+        ]);
+        writeStoppedRunSummary({
+          signal: terminationSignal ?? signal,
+          sessionId: session.id,
+          outputFormat,
+          stdout,
+          stderr,
+          durationMs: Date.now() - startedAt,
+          providerOutcomeUnknown:
+            stoppedGoal?.providerOutcomeUnknown ?? terminationProviderOutcomeUnknown,
+          workspace,
+        });
+        runSummaryWritten = true;
+        resumeHintWritten = true;
+      })();
+      await terminationSummaryPromise;
+    };
     // Headless goal mode: `wukong -p "/goal <objective>"`. The goal driver keeps
     // the turn-run alive across continuation turns, so the normal prompt-turn
     // waiter blocks until the goal is terminal; we then emit a summary and set a
     // distinct exit code.
     if (goalCreate !== undefined) {
-      await runHeadlessGoal(
+      const goalRun = runHeadlessGoal(
         session,
         goalCreate,
         goalModel,
+        goalPermission,
         config,
         outputFormat,
         stdout,
         stderr,
+        () => terminationSignal !== undefined,
       );
+      activeRunSettled = goalRun.then(() => {}, () => {});
+      await goalRun;
+      if (terminationSignal !== undefined) {
+        await terminationSummaryPromise;
+        return;
+      }
+      if (terminationSignal === undefined) {
+        runSummaryWritten = true;
+        resumeHintWritten = true;
+      }
     } else {
-      await runPromptTurn(session, opts.prompt!, outputFormat, stdout, stderr);
+      const status = await session.getStatus();
+      const workspaceBefore = await inspectGit(workDir);
+      writePromptPreflight({
+        prompt: opts.prompt!,
+        model: status.model ?? telemetryModel,
+        permission: status.permission,
+        workspace: workDir,
+        outputFormat,
+        stdout,
+        stderr,
+      });
+      const turnStartedAt = Date.now();
+      const turnRun = runPromptTurn(session, opts.prompt!, outputFormat, stdout, stderr);
+      activeRunSettled = turnRun.then(
+        (facts) => {
+          terminationProviderOutcomeUnknown ??= facts.providerOutcomeUnknown;
+        },
+        (error: unknown) => {
+          terminationProviderOutcomeUnknown ??=
+            promptTurnFactsFromError(error).providerOutcomeUnknown;
+        },
+      );
+      try {
+        const facts = await turnRun;
+        if (terminationSignal !== undefined) {
+          await terminationSummaryPromise;
+          return;
+        }
+        const [usage, workspaceAfter] = await Promise.all([
+          session.getUsage().catch(() => ({})),
+          inspectGit(workDir),
+        ]);
+        if (terminationSignal !== undefined) {
+          await terminationSummaryPromise;
+          return;
+        }
+        writePromptRunSummary({
+          outcome: 'COMPLETED',
+          exitCode: 0,
+          exitMeaning: 'The model turn completed; this does not imply the work was verified.',
+          sessionId: session.id,
+          outputFormat,
+          stdout,
+          stderr,
+          durationMs: Date.now() - turnStartedAt,
+          usage,
+          workspaceBefore,
+          workspaceAfter,
+          facts,
+        });
+      } catch (error) {
+        if (terminationSignal !== undefined) {
+          await terminationSummaryPromise;
+          return;
+        }
+        const [usage, workspaceAfter] = await Promise.all([
+          session.getUsage().catch(() => ({})),
+          inspectGit(workDir),
+        ]);
+        writePromptRunSummary({
+          outcome: 'ERROR',
+          exitCode: 1,
+          exitMeaning: error instanceof Error ? error.message : String(error),
+          sessionId: session.id,
+          outputFormat,
+          stdout,
+          stderr,
+          durationMs: Date.now() - turnStartedAt,
+          usage,
+          workspaceBefore,
+          workspaceAfter,
+          facts: promptTurnFactsFromError(error),
+        });
+        process.exitCode = 1;
+        runSummaryWritten = true;
+        resumeHintWritten = true;
+        return;
+      }
+      runSummaryWritten = true;
+      resumeHintWritten = true;
     }
-    writeResumeHint(session.id, outputFormat, stdout, stderr);
+    if (!resumeHintWritten && terminationSignal === undefined) {
+      writeResumeHint(session.id, outputFormat, stdout, stderr);
+    }
 
     withTelemetryContext({ sessionId: session.id }).track('exit', {
       duration_ms: Date.now() - startedAt,
@@ -208,10 +355,12 @@ async function runHeadlessGoal(
   session: Session,
   goal: HeadlessGoalCreate,
   model: string | undefined,
+  permission: SessionStatus['permission'],
   config: WukongConfig,
   outputFormat: PromptOutputFormat,
   stdout: PromptOutput,
   stderr: PromptOutput,
+  isTerminating: () => boolean,
 ): Promise<void> {
   const resolvedModel = goal.kind === 'loop' ? configuredModel(model) : requireConfiguredModel(model);
   let loopRun: LocalLoopRun | undefined;
@@ -249,6 +398,11 @@ async function runHeadlessGoal(
     stderr.write(`${formatLoopPreflightReady(
       preflight,
       goal.maxIterations ?? 10,
+      {
+        writerModel: preflight.model,
+        reviewerModel: goal.reviewModel ?? preflight.model,
+        permission,
+      },
     )}\n`);
   }
   const maxIterations = goal.kind === 'loop' ? goal.maxIterations ?? 10 : goal.maxIterations;
@@ -332,7 +486,7 @@ async function runHeadlessGoal(
         : {}),
     });
   } catch (error) {
-    if (loopRun !== undefined) await completeLoopRun(loopRun, 'ERROR', 0, 'cancelled');
+    if (loopRun !== undefined) await stopLoopRun(loopRun, 0);
     throw error;
   }
   if (goal.kind === 'loop') {
@@ -374,14 +528,37 @@ async function runHeadlessGoal(
     await runPromptTurn(session, goal.objective, outputFormat, stdout, stderr, createdGoal.goalId);
   } catch (error) {
     promptFailed = true;
+    if (isTerminating()) {
+      if (loopRun !== undefined) {
+        const stoppedSnapshot = completedSnapshot
+          ?? (await session.getGoal().catch(() => ({ goal: null }))).goal;
+        await stopLoopRun(loopRun, stoppedSnapshot?.iteration ?? 0);
+      }
+      return;
+    }
     if (loopRun !== undefined) {
-      const failedSnapshot = (await session.getGoal().catch(() => ({ goal: null }))).goal;
-      await completeLoopRun(loopRun, 'ERROR', failedSnapshot?.iteration ?? 0);
+      const failedSnapshot = completedSnapshot
+        ?? (await session.getGoal().catch(() => ({ goal: null }))).goal;
+      const result = durableLoopResultFromGoal(failedSnapshot) !== undefined
+        || failedSnapshot?.providerOutcomeUnknown !== undefined
+        ? loopSummaryJson(failedSnapshot)
+        : loopRuntimeErrorSummary(
+            failedSnapshot,
+            error instanceof Error ? error.message : String(error),
+          );
+      await completeLoopRun(loopRun, result.status, result.iterations);
       track('loop_terminal', {
-        outcome: 'ERROR',
-        iterations: failedSnapshot?.iteration ?? 0,
-        reason_code: 'runtime_error',
+        outcome: result.status,
+        iterations: result.iterations,
+        reason_code: result.reasonCode,
       });
+      if (outputFormat === 'stream-json') {
+        stdout.write(`${JSON.stringify(result)}\n`);
+      } else {
+        stderr.write(`${formatLoopResultText(result)}\n`);
+      }
+      process.exitCode = LOOP_EXIT_CODES[result.status];
+      return;
     }
     throw error;
   } finally {
@@ -409,8 +586,9 @@ async function runHeadlessGoal(
           });
         }
         process.exitCode = loopExitCode(snapshot);
-      } else if (snapshot !== null && snapshot.status !== 'complete') {
-        process.exitCode = goalExitCode(snapshot.status);
+      } else {
+        const exitCode = goalExitCode(snapshot?.status);
+        if (exitCode !== GOAL_EXIT_CODES.complete) process.exitCode = exitCode;
       }
     }
   }
@@ -422,6 +600,7 @@ interface ResolvedPromptSession {
   readonly restorePermission: () => Promise<void>;
   readonly telemetryModel?: string;
   readonly goalModel?: string;
+  readonly goalPermission: SessionStatus['permission'];
 }
 
 async function resolvePromptSession(
@@ -470,6 +649,7 @@ async function resolvePromptSession(
       restorePermission,
       telemetryModel: configuredModel(opts.model, status.model, defaultModel),
       goalModel: configuredModel(opts.model, status.model),
+      goalPermission: opts.yolo ? 'yolo' : 'auto',
     };
   }
 
@@ -498,6 +678,7 @@ async function resolvePromptSession(
         restorePermission,
         telemetryModel: configuredModel(opts.model, status.model, defaultModel),
         goalModel: configuredModel(opts.model, status.model),
+        goalPermission: opts.yolo ? 'yolo' : 'auto',
       };
     }
     stderr.write(`No sessions to continue under "${workDir}"; starting a fresh session.\n`);
@@ -507,16 +688,25 @@ async function resolvePromptSession(
   const session = await harness.createSession({
     workDir,
     model,
-    permission: opts.yolo ? 'yolo' : 'auto',
+    // Persist the safe baseline. Headless elevation is process-scoped below so
+    // a crash or later `-r` can never inherit Auto/YOLO.
+    permission: 'manual',
     additionalDirs: opts.addDirs?.length ? opts.addDirs : undefined,
   });
   installHeadlessHandlers(session);
+  const restorePermission = await forcePromptPermission(
+    session,
+    'manual',
+    opts.yolo ? 'yolo' : 'auto',
+    setRestorePermission,
+  );
   return {
     session,
     resumed: false,
-    restorePermission: async () => {},
+    restorePermission,
     telemetryModel: model,
     goalModel: model,
+    goalPermission: opts.yolo ? 'yolo' : 'auto',
   };
 }
 
@@ -530,12 +720,12 @@ async function forcePromptPermission(
   const restorePermission = async () => {
     await overridePermission?.catch(() => {});
     if (previousPermission !== desiredPermission) {
-      await session.setPermission(previousPermission);
+      await session.setPermission(previousPermission, { transient: true });
     }
   };
   setRestorePermission(restorePermission);
   if (previousPermission !== desiredPermission) {
-    overridePermission = session.setPermission(desiredPermission);
+    overridePermission = session.setPermission(desiredPermission, { transient: true });
     await overridePermission;
   }
   return restorePermission;
@@ -563,12 +753,14 @@ function installHeadlessHandlers(session: Session): void {
 function installPromptTerminationCleanup(
   promptProcess: PromptProcess,
   cleanup: () => Promise<void>,
+  beforeCleanup?: (signal: NodeJS.Signals) => Promise<void>,
 ): () => void {
   let terminating = false;
   const exitAfterCleanup = async (signal: NodeJS.Signals): Promise<void> => {
     if (terminating) return;
     terminating = true;
     try {
+      await beforeCleanup?.(signal);
       await cleanup();
     } finally {
       promptProcess.exit(signalExitCode(signal));
@@ -593,6 +785,63 @@ function signalExitCode(signal: NodeJS.Signals): number {
   return 143;
 }
 
+interface PromptTurnFacts {
+  readonly steps: number;
+  readonly toolNames: readonly string[];
+  readonly commands: readonly string[];
+  readonly providerOutcomeUnknown?: PromptProviderOutcomeUnknown;
+}
+
+interface PromptProviderOutcomeUnknown {
+  readonly requestId: string;
+  readonly idempotencyKey: string;
+  readonly state: 'started' | 'outcome_unknown';
+  readonly outputObserved: boolean;
+}
+
+type StoppedProviderOutcomeUnknown = Pick<
+  PromptProviderOutcomeUnknown,
+  'requestId' | 'idempotencyKey'
+>;
+
+class PromptTurnFailure extends Error {
+  readonly facts: PromptTurnFacts;
+
+  constructor(error: Error, facts: PromptTurnFacts) {
+    super(error.message, { cause: error });
+    this.name = 'PromptTurnFailure';
+    this.facts = facts;
+  }
+}
+
+function promptTurnFactsFromError(error: unknown): PromptTurnFacts {
+  return error instanceof PromptTurnFailure
+    ? error.facts
+    : { steps: 0, toolNames: [], commands: [] };
+}
+
+function providerOutcomeUnknownFromDetails(
+  details: Record<string, unknown> | undefined,
+): PromptProviderOutcomeUnknown | undefined {
+  const value = details?.['providerOutcomeUnknown'];
+  if (typeof value !== 'object' || value === null) return undefined;
+  const requestId = Reflect.get(value, 'requestId');
+  const idempotencyKey = Reflect.get(value, 'idempotencyKey');
+  const state = Reflect.get(value, 'state');
+  const outputObserved = Reflect.get(value, 'outputObserved');
+  if (
+    typeof requestId !== 'string'
+    || typeof idempotencyKey !== 'string'
+    || (state !== 'started' && state !== 'outcome_unknown')
+  ) return undefined;
+  return {
+    requestId,
+    idempotencyKey,
+    state,
+    outputObserved: outputObserved === true,
+  };
+}
+
 function runPromptTurn(
   session: Session,
   prompt: string,
@@ -600,10 +849,17 @@ function runPromptTurn(
   stdout: PromptOutput,
   stderr: PromptOutput,
   goalId?: string,
-): Promise<void> {
+): Promise<PromptTurnFacts> {
   let activeTurnId: number | undefined;
   const openTurnIds = new Set<number>();
   let goalTerminalObserved = false;
+  let pendingGoalError: Error | undefined;
+  let steps = 0;
+  let providerOutcomeUnknown: PromptProviderOutcomeUnknown | undefined;
+  let lastGoalIteration = 0;
+  const toolNames = new Set<string>();
+  const commands = new Set<string>();
+  const turnStartedAt = Date.now();
   const outputWriter =
     outputFormat === 'stream-json'
       ? new PromptJsonWriter(stdout)
@@ -611,17 +867,27 @@ function runPromptTurn(
   let settled = false;
   let unsubscribe: (() => void) | undefined;
 
-  return new Promise<void>((resolve, reject) => {
+  return new Promise<PromptTurnFacts>((resolve, reject) => {
     const finish = (error?: Error): void => {
       if (settled) return;
       settled = true;
       unsubscribe?.();
       outputWriter.finish();
       if (error !== undefined) {
-        reject(error);
+        reject(new PromptTurnFailure(error, {
+          steps,
+          toolNames: [...toolNames],
+          commands: [...commands],
+          ...(providerOutcomeUnknown === undefined ? {} : { providerOutcomeUnknown }),
+        }));
         return;
       }
-      resolve();
+      resolve({
+        steps,
+        toolNames: [...toolNames],
+        commands: [...commands],
+        ...(providerOutcomeUnknown === undefined ? {} : { providerOutcomeUnknown }),
+      });
     };
 
     unsubscribe = session.onEvent((event) => {
@@ -629,16 +895,28 @@ function runPromptTurn(
         if (event.agentId !== PROMPT_MAIN_AGENT_ID) {
           return;
         }
-        finish(new Error(`${event.code}: ${event.message}`));
+        providerOutcomeUnknown ??= providerOutcomeUnknownFromDetails(event.details);
+        const error = new Error(`${event.code}: ${event.message}`);
+        pendingGoalError ??= error;
+        if (goalId !== undefined && goalTerminalObserved && openTurnIds.size === 0) {
+          finish(pendingGoalError);
+        }
         return;
       }
       if (event.type === 'goal.updated' && goalId !== undefined && event.agentId === PROMPT_MAIN_AGENT_ID) {
+        const iteration = event.snapshot?.iteration ?? 0;
+        if (iteration > lastGoalIteration) {
+          lastGoalIteration = iteration;
+          outputWriter.writeProgress(
+            `${formatElapsed(Date.now() - turnStartedAt)} Writer iteration ${String(iteration)}`,
+          );
+        }
         if (
           (event.snapshot !== null && event.snapshot.goalId === goalId && event.snapshot.status !== 'active')
           || (event.snapshot === null && event.change?.kind === 'completion')
         ) {
           goalTerminalObserved = true;
-          if (openTurnIds.size === 0) finish();
+          if (openTurnIds.size === 0) finish(pendingGoalError);
         }
         return;
       }
@@ -661,6 +939,8 @@ function runPromptTurn(
       }
       switch (event.type) {
         case 'turn.step.started':
+          steps += 1;
+          return;
         case 'turn.step.interrupted':
           outputWriter.flushAssistant();
           return;
@@ -677,6 +957,14 @@ function runPromptTurn(
           outputWriter.writeThinkingDelta(event.delta);
           return;
         case 'tool.call.started':
+          toolNames.add(event.name);
+          {
+            const command = commandFromToolArgs(event.args);
+            if (command !== undefined) commands.add(command);
+            outputWriter.writeProgress(
+              `${formatElapsed(Date.now() - turnStartedAt)} Running ${event.name}${command === undefined ? '' : `: ${command}`}`,
+            );
+          }
           outputWriter.writeToolCall(event.toolCallId, event.name, event.args);
           return;
         case 'tool.call.delta':
@@ -686,19 +974,30 @@ function runPromptTurn(
           outputWriter.writeToolResult(event.toolCallId, event.output);
           return;
         case 'tool.progress':
-          if (event.update.text !== undefined && event.update.text.length > 0) {
-            stderr.write(
-              event.update.text.endsWith('\n') ? event.update.text : `${event.update.text}\n`,
-            );
-          }
+          // Provider/tool progress can contain large raw logs. The stable
+          // phase/tool line emitted at tool.call.started is the headless UI;
+          // detailed output remains in the durable session transcript.
           return;
         case 'turn.ended':
           openTurnIds.delete(event.turnId);
+          providerOutcomeUnknown ??= providerOutcomeUnknownFromDetails(event.error?.details);
           if (event.reason === 'completed') {
+            if (pendingGoalError !== undefined) {
+              if (goalId === undefined || goalTerminalObserved) finish(pendingGoalError);
+              return;
+            }
             if (goalId === undefined || goalTerminalObserved) finish();
             return;
           }
-          finish(new Error(formatTurnEndedFailure(event)));
+          {
+            const error = new Error(formatTurnEndedFailure(event));
+            if (goalId !== undefined) {
+              pendingGoalError ??= error;
+              if (goalTerminalObserved) finish(pendingGoalError);
+              return;
+            }
+            finish(error);
+          }
           return;
         case 'agent.status.updated':
         case 'background.task.started':
@@ -752,6 +1051,7 @@ interface PromptTurnWriter {
     argumentsPart: string | undefined,
   ): void;
   writeToolResult(toolCallId: string, output: unknown): void;
+  writeProgress(message: string): void;
   flushAssistant(): void;
   discardAssistant(): void;
   finish(): void;
@@ -787,6 +1087,13 @@ class PromptTranscriptWriter implements PromptTurnWriter {
   writeToolCallDelta(): void {}
 
   writeToolResult(): void {}
+
+  writeProgress(message: string): void {
+    this.thinkingWriter.finish();
+    this.assistantWriter.finish();
+    this.thinkingWriter.write(`[run] ${message}`);
+    this.thinkingWriter.finish();
+  }
 
   flushAssistant(): void {}
 
@@ -824,6 +1131,12 @@ interface PromptJsonResumeMetaMessage {
   type: 'session.resume_hint';
   session_id: string;
   command: string;
+  content: string;
+}
+
+interface PromptJsonProgressMetaMessage {
+  role: 'meta';
+  type: 'run.progress';
   content: string;
 }
 
@@ -909,6 +1222,11 @@ class PromptJsonWriter implements PromptTurnWriter {
     });
   }
 
+  writeProgress(message: string): void {
+    this.flushAssistant();
+    this.writeJsonLine({ role: 'meta', type: 'run.progress', content: message });
+  }
+
   flushAssistant(): void {
     if (this.assistantText.length === 0 && this.toolCalls.length === 0) return;
     const message: PromptJsonAssistantMessage = {
@@ -944,7 +1262,9 @@ class PromptJsonWriter implements PromptTurnWriter {
     return toolCall;
   }
 
-  private writeJsonLine(message: PromptJsonAssistantMessage | PromptJsonToolMessage): void {
+  private writeJsonLine(
+    message: PromptJsonAssistantMessage | PromptJsonToolMessage | PromptJsonProgressMetaMessage,
+  ): void {
     this.stdout.write(`${JSON.stringify(message)}\n`);
   }
 }
@@ -1048,4 +1368,249 @@ function formatTurnEndedFailure(event: Extract<Event, { type: 'turn.ended' }>): 
     return 'Provider safety policy blocked the response.';
   }
   return `Prompt turn ended with reason: ${event.reason}`;
+}
+
+interface PromptPreflightReportInput {
+  readonly prompt: string;
+  readonly model?: string;
+  readonly permission: SessionStatus['permission'];
+  readonly workspace: string;
+  readonly outputFormat: PromptOutputFormat;
+  readonly stdout: PromptOutput;
+  readonly stderr: PromptOutput;
+}
+
+function writePromptPreflight(input: PromptPreflightReportInput): void {
+  const goal = oneLine(input.prompt, 160);
+  const permissionPolicy = input.permission === 'auto'
+    ? 'Routine actions are automatic; approval and high-risk boundaries stop the run.'
+    : input.permission === 'yolo'
+      ? 'Explicit YOLO mode is active for this process only.'
+      : 'Manual approval is required for guarded actions.';
+  const report = {
+    role: 'meta' as const,
+    type: 'run.preflight' as const,
+    schema_version: 1,
+    goal,
+    finish_line: 'Single model turn; completion is not verification.',
+    model: input.model ?? null,
+    permission: input.permission,
+    permission_policy: permissionPolicy,
+    workspace: input.workspace,
+    cancellation: 'Ctrl-C',
+  };
+  if (input.outputFormat === 'stream-json') {
+    input.stdout.write(`${JSON.stringify(report)}\n`);
+    return;
+  }
+  input.stderr.write([
+    'Run preflight',
+    `  Goal       ${goal}`,
+    '  Finish     Single model turn; completion is not verification.',
+    `  Model      ${input.model ?? 'not configured'}`,
+    `  Permission ${input.permission} — ${permissionPolicy}`,
+    `  Workspace  ${input.workspace}`,
+    '  Cancel     Ctrl-C',
+    '',
+  ].join('\n'));
+}
+
+interface PromptRunSummaryInput {
+  readonly outcome: 'COMPLETED' | 'ERROR';
+  readonly exitCode: number;
+  readonly exitMeaning: string;
+  readonly sessionId: string;
+  readonly outputFormat: PromptOutputFormat;
+  readonly stdout: PromptOutput;
+  readonly stderr: PromptOutput;
+  readonly durationMs: number;
+  readonly usage: SessionUsage;
+  readonly workspaceBefore: GitInspection;
+  readonly workspaceAfter: GitInspection;
+  readonly facts: PromptTurnFacts;
+}
+
+function writePromptRunSummary(input: PromptRunSummaryInput): void {
+  const tokenCount = totalTokens(input.usage);
+  const verificationTools = input.facts.toolNames.filter((name) => (
+    /(?:verify|proof|scan|test)/i.test(name)
+  ));
+  const checks = verificationTools.length === 0
+    ? 'not run or not recorded'
+    : `invoked via ${verificationTools.join(', ')}; no terminal PASS was bound`;
+  const changedFiles = input.workspaceAfter.changedFiles;
+  const attributable = input.workspaceBefore.changedFiles.length === 0
+    ? changedFiles
+    : undefined;
+  const resumeCommand = `wukong -r ${input.sessionId}`;
+  const unknown = input.facts.providerOutcomeUnknown;
+  const nextActions = unknown === undefined
+    ? [
+        changedFiles.length > 0 ? 'Review `git diff`.' : 'No workspace changes are currently recorded.',
+        checks.startsWith('not run') ? 'Run the relevant checks before keeping the result.' : 'Review the recorded check output.',
+        'Explicitly keep or revert changes after review.',
+        `Export evidence with \`wukong export ${input.sessionId}\`.`,
+      ]
+    : [
+        `Check provider logs or billing for request ${unknown.requestId} using idempotency key ${unknown.idempotencyKey}.`,
+        'Do not resume or retry blindly; start a new request only after confirming it is safe.',
+        'Review and explicitly keep or revert workspace changes.',
+      ];
+  const report = {
+    role: 'meta' as const,
+    type: 'run.summary' as const,
+    schema_version: 1,
+    outcome: input.outcome,
+    exit_code: input.exitCode,
+    exit_meaning: input.exitMeaning,
+    duration_ms: input.durationMs,
+    usage_tokens: tokenCount,
+    cost: null,
+    workspace: {
+      dirty_before: input.workspaceBefore.changedFiles.length > 0,
+      changed_files: changedFiles,
+      introduced_by_run: attributable ?? null,
+      attribution: attributable === undefined
+        ? 'unknown_preexisting_changes'
+        : 'workspace_was_clean_before_run',
+    },
+    activity: {
+      steps: input.facts.steps,
+      tools: input.facts.toolNames,
+      commands: input.facts.commands,
+    },
+    checks,
+    evidence: 'No durable Goal/Loop PASS evidence is attached to a normal prompt turn.',
+    session_id: input.sessionId,
+    resume_command: unknown === undefined ? resumeCommand : null,
+    provider_outcome_unknown: unknown ?? null,
+    next_actions: nextActions,
+  };
+  if (input.outputFormat === 'stream-json') {
+    input.stdout.write(`${JSON.stringify(report)}\n`);
+    return;
+  }
+  const changedSummary = changedFiles.length === 0
+    ? 'clean'
+    : `${String(changedFiles.length)} changed file(s)`;
+  const attribution = attributable === undefined
+    ? 'run attribution unknown because the workspace was already dirty'
+    : `${String(attributable.length)} introduced while this run was active`;
+  input.stderr.write([
+    '',
+    `Outcome    ${input.outcome}`,
+    `Exit       ${String(input.exitCode)} — ${input.exitMeaning}`,
+    `Activity   ${String(input.facts.steps)} step(s) · ${String(input.facts.toolNames.length)} tool(s) · ${String(input.facts.commands.length)} command(s)`,
+    `Time       ${formatElapsed(input.durationMs)} · Tokens ${tokenCount === null ? 'unknown' : String(tokenCount)} · Cost unavailable`,
+    `Workspace  ${changedSummary}; ${attribution}`,
+    `Checks     ${checks}`,
+    'Evidence   no durable Goal/Loop PASS evidence',
+    ...(unknown === undefined ? [] : [
+      `Provider   UNKNOWN · request ${unknown.requestId}`,
+      `Idempotency ${unknown.idempotencyKey}`,
+      'Cost       request may already have been accepted or billed',
+    ]),
+    `Session    ${input.sessionId}`,
+    ...(unknown === undefined ? [`Resume     ${resumeCommand}`] : []),
+    `Export     wukong export ${input.sessionId}`,
+    `Next       ${unknown === undefined
+      ? `${changedFiles.length > 0 ? 'Review `git diff`; ' : ''}${checks.startsWith('not run') ? 'run checks; ' : ''}explicitly keep or revert changes.`
+      : 'Reconcile provider logs/billing; do not resume or retry blindly; then explicitly decide whether a new request is safe.'}`,
+    '',
+  ].join('\n'));
+}
+
+interface StoppedRunSummaryInput {
+  readonly signal: NodeJS.Signals;
+  readonly sessionId: string;
+  readonly outputFormat: PromptOutputFormat;
+  readonly stdout: PromptOutput;
+  readonly stderr: PromptOutput;
+  readonly durationMs: number;
+  readonly providerOutcomeUnknown?: StoppedProviderOutcomeUnknown;
+  readonly workspace?: GitInspection;
+}
+
+function writeStoppedRunSummary(input: StoppedRunSummaryInput): void {
+  const exitCode = signalExitCode(input.signal);
+  const resumeCommand = `wukong -r ${input.sessionId}`;
+  const unknown = input.providerOutcomeUnknown;
+  const changedFiles = input.workspace?.changedFiles ?? [];
+  const nextActions = unknown === undefined
+    ? [
+        'Review the workspace diff.',
+        `Resume with \`${resumeCommand}\`.`,
+        'Keep or revert changes explicitly.',
+      ]
+    : [
+        `Check provider logs or billing for request ${unknown.requestId} using idempotency key ${unknown.idempotencyKey}.`,
+        'Do not resume blindly; cancel and explicitly start a new attempt only after confirming it is safe.',
+        'Review and explicitly keep or revert workspace changes.',
+      ];
+  const report = {
+    role: 'meta' as const,
+    type: 'run.summary' as const,
+    schema_version: 1,
+    outcome: 'STOPPED_BY_USER' as const,
+    signal: input.signal,
+    exit_code: exitCode,
+    duration_ms: input.durationMs,
+    session_id: input.sessionId,
+    resume_command: unknown === undefined ? resumeCommand : null,
+    provider_outcome_unknown: unknown ?? null,
+    workspace: {
+      changed_files: changedFiles,
+      attribution: 'unknown_at_interruption',
+    },
+    evidence: 'The interrupted run is not verified.',
+    next_actions: nextActions,
+  };
+  if (input.outputFormat === 'stream-json') {
+    input.stdout.write(`${JSON.stringify(report)}\n`);
+    return;
+  }
+  input.stderr.write([
+    '',
+    'Outcome    STOPPED_BY_USER',
+    `Exit       ${String(exitCode)} — ${input.signal}`,
+    `Time       ${formatElapsed(input.durationMs)} · Cost unavailable`,
+    'Evidence   interrupted; not verified',
+    `Workspace  ${changedFiles.length === 0 ? 'no changes recorded' : `${String(changedFiles.length)} changed file(s); attribution unknown`}`,
+    ...(unknown === undefined ? [] : [
+      `Provider   UNKNOWN · request ${unknown.requestId}`,
+      `Idempotency ${unknown.idempotencyKey}`,
+    ]),
+    `Session    ${input.sessionId}`,
+    ...(unknown === undefined ? [`Resume     ${resumeCommand}`] : []),
+    `Next       ${unknown === undefined
+      ? 'Review the diff, then resume or explicitly keep/revert changes.'
+      : 'Reconcile provider logs/billing; do not resume blindly; then explicitly cancel/start a new attempt if safe.'}`,
+    '',
+  ].join('\n'));
+}
+
+function commandFromToolArgs(args: unknown): string | undefined {
+  if (typeof args !== 'object' || args === null || !('command' in args)) return undefined;
+  const command = args.command;
+  return typeof command === 'string' && command.trim().length > 0
+    ? oneLine(command, 160)
+    : undefined;
+}
+
+function totalTokens(usage: SessionUsage): number | null {
+  const total = usage.total;
+  if (total === undefined) return null;
+  return total.inputOther + total.output + total.inputCacheRead + total.inputCacheCreation;
+}
+
+function oneLine(value: string, maxLength: number): string {
+  const normalized = value.replaceAll(/\s+/g, ' ').trim();
+  return normalized.length <= maxLength
+    ? normalized
+    : `${normalized.slice(0, Math.max(0, maxLength - 1))}…`;
+}
+
+function formatElapsed(durationMs: number): string {
+  if (durationMs < 1000) return `${String(durationMs)}ms`;
+  return `${(durationMs / 1000).toFixed(1)}s`;
 }

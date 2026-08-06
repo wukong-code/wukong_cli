@@ -2,11 +2,11 @@
 
 > 状态：本地 discovery、来源 picker 和只读继续已实现
 > 版本：当前主干能力，不绑定支付版本
-> 最后更新：2026-07-18
+> 最后更新：2026-08-06
 
 ## 结论
 
-Wukong 扩展现有 `/resume`，但保留最简单的默认语义：裸 `/resume` 恢复 Wukong 会话；只有显式指定来源时，才在同一套 picker UI 中查看并继续 Codex、Claude Code 或 Cursor 的本地会话。
+Wukong 扩展现有 `/resume`，但保留最简单的默认语义：裸 `/resume` 恢复 Wukong 会话；只有显式指定来源时，才在同一套 picker UI 中查看并继续 Codex、Claude Code、Cursor、Kimi Code 或 Grok 的本地会话。
 
 主入口保持一个：
 
@@ -20,6 +20,8 @@ Wukong 扩展现有 `/resume`，但保留最简单的默认语义：裸 `/resume
 /resume codex
 /resume claude
 /resume cursor
+/resume kimi
+/resume grok
 ```
 
 `/resume-codex`、`/resume-claude`、`/resume-cursor` 可以作为兼容别名，但不进入主要命令列表。用户不应该先判断会话来自哪个工具，再选择不同入口。
@@ -43,7 +45,7 @@ Grok Build `0.2.100` 已在统一 session picker 中加入最近 Claude Code、C
 Wukong 当前具备：
 
 - TUI `/resume` 是主命令，`/sessions` 仅作为兼容别名，打开现有 session picker。
-- CLI 支持 `wukong --session [id]`，并兼容隐藏参数 `--resume [id]`。
+- CLI 以 `wukong -r, --resume [id]` 为主参数，并兼容隐藏的 `-S, --session [id]`。
 - `wukong --continue` 可以继续当前工作目录最近的 Wukong session。
 - agent-core 已有 session store、事件 replay、按工作目录索引和 legacy session migration。
 - `/resume` 保持原语义，只显示 Wukong session。
@@ -137,14 +139,14 @@ Imported from Codex · original session abc123 · local only
 
 ```ts
 interface ExternalSessionAdapter {
-  source: 'codex' | 'claude' | 'cursor';
+  source: 'codex' | 'claude' | 'cursor' | 'kimi' | 'grok';
   isAvailable(): Promise<boolean>;
   list(query: ExternalSessionQuery): Promise<ExternalSessionSummary[]>;
   read(ref: ExternalSessionRef): Promise<NormalizedExternalSession>;
 }
 ```
 
-当前代码先实现 summary discovery，并由三个内置 resume Skill 承担选中后的 transcript 投影。完整 importer adapter、fingerprint 和增量导入仍属于后续增强，不是当前命令可用性的前置条件。
+当前代码先实现五个来源的 summary discovery，并由内置 resume Skill 承担选中后的 transcript 投影。上面的完整 importer adapter、fingerprint 和增量导入是未来接口草案，尚未实现，不是当前命令可用性的前置条件。
 
 已知本地来源：
 
@@ -153,12 +155,14 @@ interface ExternalSessionAdapter {
 | Codex | `~/.codex/sessions/**/rollout-*.jsonl` | JSONL；需要过滤系统/运行时事件，只投影可继续的 conversation |
 | Claude Code | `~/.claude/projects/*/*.jsonl`、`sessions-index.json` | JSONL + 可选索引；项目目录编码需要稳定解码 |
 | Cursor | `~/.cursor/projects/*/agent-transcripts/` 等 | 格式和版本差异较大，必须 feature-detect，不能依赖单一路径 |
+| Kimi Code | `~/.kimi-code/session_index.jsonl`、`user-history/*.jsonl` | 索引 + request history；只读取与工作目录匹配的记录 |
+| Grok | `~/.grok/sessions/*/*/summary.json`、`chat_history.jsonl` | 只接受受支持的 chat format version |
 
 统一投影至少包含：
 
 ```ts
 interface NormalizedExternalSession {
-  source: 'codex' | 'claude' | 'cursor';
+  source: 'codex' | 'claude' | 'cursor' | 'kimi' | 'grok';
   externalSessionId: string;
   title?: string;
   workDir?: string;

@@ -31,6 +31,8 @@ interface FetchCatalogOptions {
   readonly fetchImpl?: typeof fetch;
   readonly builtInCatalogJson?: string;
   readonly useFallbacks?: boolean;
+  /** Skip remote requests and require the release-embedded snapshot. */
+  readonly offline?: boolean;
 }
 
 export function resolveCatalogUrl(env: NodeJS.ProcessEnv = process.env): string {
@@ -52,6 +54,18 @@ export async function fetchProviderCatalog(
 ): Promise<CatalogResult> {
   const primaryUrl = options.url ?? resolveCatalogUrl();
   const useFallbacks = options.useFallbacks ?? true;
+  const offline = options.offline ?? process.env['WUKONG_CODE_CATALOG_OFFLINE'] === '1';
+
+  if (offline) {
+    const catalog = useFallbacks
+      ? loadBuiltInCatalog(options.builtInCatalogJson ?? BUILT_IN_CATALOG_JSON)
+      : undefined;
+    if (catalog === undefined) {
+      throw new Error('Offline provider catalog requested, but this build has no built-in snapshot.');
+    }
+    return { catalog, source: 'built-in' };
+  }
+
   const urls =
     useFallbacks && primaryUrl !== DEFAULT_CATALOG_URL
       ? [primaryUrl, DEFAULT_CATALOG_URL]

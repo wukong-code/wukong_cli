@@ -289,6 +289,10 @@ function normalizeObjectField(
   if (key === 'protocol_version' && value === AGENT_WIRE_PROTOCOL_VERSION) {
     return '<protocol-version>';
   }
+  if (key === 'idempotencyKey' && typeof value === 'string' && value.startsWith('wukong-')) {
+    const requestUuid = value.slice('wukong-'.length);
+    return `wukong-${String(normalizeValue(requestUuid, uuidLabels))}`;
+  }
   if (key === 'cwd' && typeof value === 'string') return '<cwd>';
   return normalizeValue(value, uuidLabels);
 }

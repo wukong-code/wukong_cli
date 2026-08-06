@@ -1,5 +1,5 @@
-#!/usr/bin/env bash
-set -euo pipefail
+#!/bin/sh
+set -eu
 
 REPO_OWNER="mutnpc"
 REPO_NAME="wukong-code"
@@ -47,41 +47,87 @@ else
 fi
 
 ARTIFACT="wukong-${TARGET}.zip"
-RELEASE_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/latest/download/${ARTIFACT}"
 
-echo "Installing Wukong CLI for ${TARGET}..."
+# Prefer an explicitly pinned release. The default path uses GitHub's stable
+# latest-download redirect so installs do not depend on the rate-limited API.
+if [ -n "${WUKONG_VERSION:-}" ]; then
+  VERSION="$WUKONG_VERSION"
+  RELEASE_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download/${VERSION}/${ARTIFACT}"
+else
+  VERSION="latest"
+  RELEASE_URL="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/latest/download/${ARTIFACT}"
+fi
+
+CHECKSUM_URL="${RELEASE_URL}.sha256"
+
+echo "Installing Wukong Code ${VERSION} for ${TARGET}..."
 echo "Download URL: ${RELEASE_URL}"
 
 TMP_DIR="$(mktemp -d)"
-trap 'rm -rf "$TMP_DIR"' EXIT
+STAGED_BINARY=""
+cleanup() {
+  rm -rf "$TMP_DIR"
+  if [ -n "$STAGED_BINARY" ]; then
+    rm -f "$STAGED_BINARY"
+  fi
+}
+trap cleanup EXIT
 
 curl -fsSL "$RELEASE_URL" -o "${TMP_DIR}/${ARTIFACT}"
-curl -fsSL "${RELEASE_URL}.sha256" -o "${TMP_DIR}/${ARTIFACT}.sha256"
+curl -fsSL "$CHECKSUM_URL" -o "${TMP_DIR}/${ARTIFACT}.sha256"
 
-cd "$TMP_DIR"
-if command -v sha256sum >/dev/null 2>&1; then
-  sha256sum -c "${ARTIFACT}.sha256" \
-    || { echo "Checksum verification failed"; exit 1; }
-elif command -v shasum >/dev/null 2>&1; then
-  shasum -a 256 -c "${ARTIFACT}.sha256" \
-    || { echo "Checksum verification failed"; exit 1; }
-else
-  echo "Checksum verification failed: install sha256sum or shasum"
+EXPECTED_SHA256="$(sed -n 's/^\([0-9a-fA-F]\{64\}\).*/\1/p' "${TMP_DIR}/${ARTIFACT}.sha256")"
+if [ -z "$EXPECTED_SHA256" ]; then
+  echo "Release checksum is missing or invalid."
   exit 1
 fi
 
+if command -v sha256sum >/dev/null 2>&1; then
+  ACTUAL_SHA256="$(sha256sum "${TMP_DIR}/${ARTIFACT}" | awk '{print $1}')"
+elif command -v shasum >/dev/null 2>&1; then
+  ACTUAL_SHA256="$(shasum -a 256 "${TMP_DIR}/${ARTIFACT}" | awk '{print $1}')"
+else
+  echo "Cannot verify release: sha256sum or shasum is required."
+  exit 1
+fi
+
+if [ "$ACTUAL_SHA256" != "$EXPECTED_SHA256" ]; then
+  echo "Release checksum verification failed."
+  exit 1
+fi
+
+echo "Verified SHA-256: ${ACTUAL_SHA256}"
+
+EXTRACT_DIR="${TMP_DIR}/extracted"
+mkdir -p "$EXTRACT_DIR"
+unzip -q "${TMP_DIR}/${ARTIFACT}" -d "$EXTRACT_DIR"
+if [ ! -f "${EXTRACT_DIR}/${BINARY_NAME}" ]; then
+  echo "Release archive does not contain ${BINARY_NAME}."
+  exit 1
+fi
+
+# Copy beside the current binary and then rename it into place. The final
+# rename is atomic on macOS/Linux, so an interrupted upgrade keeps the old
+# executable intact.
 mkdir -p "$INSTALL_DIR"
-unzip -o "$ARTIFACT" -d "$INSTALL_DIR"
-chmod +x "${INSTALL_DIR}/${BINARY_NAME}"
+STAGED_BINARY="${INSTALL_DIR}/.${BINARY_NAME}.update.$$"
+cp "${EXTRACT_DIR}/${BINARY_NAME}" "$STAGED_BINARY"
+chmod +x "$STAGED_BINARY"
+mv -f "$STAGED_BINARY" "${INSTALL_DIR}/${BINARY_NAME}"
+STAGED_BINARY=""
 
 echo ""
-echo "Wukong CLI installed to: ${INSTALL_DIR}/${BINARY_NAME}"
+echo "Wukong Code installed to: ${INSTALL_DIR}/${BINARY_NAME}"
 
-if [[ ":$PATH:" != *":${INSTALL_DIR}:"* ]]; then
-  echo ""
-  echo "Add the following to your shell profile to add wukong to your PATH:"
-  echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
-fi
+# POSIX-compatible PATH check
+case ":${PATH}:" in
+  *":${INSTALL_DIR}:"*) ;;
+  *)
+    echo ""
+    echo "Add the following to your shell profile to add wukong to your PATH:"
+    echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
+    ;;
+esac
 
 echo ""
 echo "Run 'wukong --version' to verify the installation."

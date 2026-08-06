@@ -7,108 +7,190 @@ on:
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Existing semver tag to build and publish, for example v0.0.17'
+        description: 'Existing semver tag to build and publish, for example v0.0.22'
         required: true
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+  id-token: write
+  attestations: write
 
 jobs:
-  prepare-public-release:
-    name: Prepare public release
+  validate-source:
+    name: Validate release source and version
     runs-on: ubuntu-latest
-
+    outputs:
+      release_tag: ${{ steps.contract.outputs.release_tag }}
+      version: ${{ steps.contract.outputs.version }}
+      source_sha: ${{ steps.contract.outputs.source_sha }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - name: Checkout exact release tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
+          fetch-depth: 0
 
-      - name: Generate release notes
-        id: notes
+      - name: Validate tag, package, and release notes
+        id: contract
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-        run: |
-          VERSION="${RELEASE_TAG#v}"
-          RELEASE_DOC="docs/releases/${VERSION}.md"
-          if [ -f "$RELEASE_DOC" ]; then
-            cp "$RELEASE_DOC" release-notes.md
-            cat release-notes.md
-            exit 0
-          fi
-
-          # Find the previous semver tag
-          PREVIOUS_TAG=$(git tag --sort=-v:refname | grep -E '^v[0-9]+\.[0-9]+\.[0-9]+$' | awk -v cur="$RELEASE_TAG" '$0 != cur {print; exit}')
-
-          {
-            echo "## What's Changed"
-            echo ""
-            if [ -n "$PREVIOUS_TAG" ]; then
-              git log --pretty=format:'- %s' "$PREVIOUS_TAG..$RELEASE_TAG" -- | sed 's/ (#[0-9]*)//g'
-            else
-              git log --pretty=format:'- %s' "$RELEASE_TAG" -- | head -50
-            fi
-          } > release-notes.md
-
-          echo "Previous tag: ${PREVIOUS_TAG:-none}"
-          cat release-notes.md
-
-      - name: Ensure public release exists
-        env:
-          GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-        run: |
-          if ! gh release view "$RELEASE_TAG" --repo mutnpc/wukong-code >/dev/null 2>&1; then
-            gh release create "$RELEASE_TAG" \
-              --repo mutnpc/wukong-code \
-              --title "Wukong Code ${RELEASE_TAG}" \
-              --notes-file release-notes.md
-          else
-            gh release edit "$RELEASE_TAG" \
-              --repo mutnpc/wukong-code \
-              --notes-file release-notes.md
-          fi
-
-  native-artifacts:
-    name: Build and publish native binaries
-    needs:
-      - prepare-public-release
-    uses: ./.github/workflows/_native-build.yml
-    with:
-      upload-artifact-prefix: wukong-native
-      retention-days: 1
-      sign-macos: false
-      source-ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
-      publish-release-tag: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-      public-release-repo: mutnpc/wukong-code
-    secrets:
-      WUKONG_PUBLIC_RELEASE_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
-
-  verify-public-release:
-    name: Verify public release assets
-    needs:
-      - native-artifacts
-    runs-on: ubuntu-latest
-    steps:
-      - name: Verify six ZIP and six SHA files
-        env:
-          GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
-          RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
+          PUBLIC_RELEASE_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
         shell: bash
         run: |
-          ASSETS="$(gh release view "$RELEASE_TAG" --repo mutnpc/wukong-code --json assets --jq '.assets[].name')"
-          TARGETS=(linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64)
-
-          for TARGET in "${TARGETS[@]}"; do
-            grep -Fxq "wukong-${TARGET}.zip" <<<"$ASSETS"
-            grep -Fxq "wukong-${TARGET}.zip.sha256" <<<"$ASSETS"
-          done
-
-          ASSET_COUNT="$(sed '/^$/d' <<<"$ASSETS" | wc -l | tr -d ' ')"
-          if [ "$ASSET_COUNT" -ne 12 ]; then
-            echo "error: expected 12 release assets, found $ASSET_COUNT"
-            printf '%s\n' "$ASSETS"
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+            echo "::error::Release tag must be v-prefixed semver: $RELEASE_TAG"
             exit 1
           fi
+          if [[ -z "$PUBLIC_RELEASE_TOKEN" ]]; then
+            echo '::error::WUKONG_PUBLIC_RELEASE_TOKEN is required to stage and publish the distribution release.'
+            exit 1
+          fi
+          VERSION="${RELEASE_TAG#v}"
+          PACKAGE_VERSION="$(node -p "require('./apps/wukong/package.json').version")"
+          ROOT_VERSION="$(node -p "require('./package.json').version")"
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          TAG_SHA="$(git rev-list -n 1 "$RELEASE_TAG")"
+
+          test "$SOURCE_SHA" = "$TAG_SHA"
+          test "$PACKAGE_VERSION" = "$VERSION"
+          test "$ROOT_VERSION" = "$VERSION"
+          test -s "docs/releases/${VERSION}.md"
+
+          echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
+  native-artifacts:
+    name: Build staged native binaries
+    needs: validate-source
+    uses: ./.github/workflows/_native-build.yml
+    with:
+      upload-artifact-prefix: wukong-native-release
+      retention-days: 3
+      release-artifact: true
+      sign-macos: true
+      source-ref: ${{ needs.validate-source.outputs.release_tag }}
+    secrets:
+      APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_NOTARIZATION_KEY_P8: ${{ secrets.APPLE_NOTARIZATION_KEY_P8 }}
+      APPLE_NOTARIZATION_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_KEY_ID }}
+      APPLE_NOTARIZATION_ISSUER_ID: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
+
+  finalize-release:
+    name: Verify staging, create draft, then publish
+    needs:
+      - validate-source
+      - native-artifacts
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+      RELEASE_REPO: mutnpc/wukong-code
+      RELEASE_TAG: ${{ needs.validate-source.outputs.release_tag }}
+      VERSION: ${{ needs.validate-source.outputs.version }}
+      SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.validate-source.outputs.release_tag }}
+          path: source
+
+      - name: Checkout public distribution truth
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: mutnpc/wukong-code
+          ref: main
+          path: distribution
+          token: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+
+      - name: Checkout website installer mirror
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: mutnpc/wukong_web
+          ref: main
+          path: website
+          token: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+
+      - name: Download all six staged builds
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: wukong-native-release-*
+          path: source/staging
+          merge-multiple: true
+
+      - name: Block publishing when public truth is not aligned
+        shell: bash
+        run: |
+          set -euo pipefail
+          node distribution/scripts/validate-release-truth.mjs "$VERSION"
+          cmp source/install.sh distribution/install.sh
+          cmp distribution/install.sh website/public/install.sh
+
+      - name: Verify exact staged assets and generate provenance
+        working-directory: source
+        run: |
+          node apps/wukong/scripts/native/verify-release-staging.mjs \
+            staging "$RELEASE_TAG" "$SOURCE_SHA" release-assets
+
+      - name: Attest staged release ZIP files
+        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
+        with:
+          subject-path: source/release-assets/*.zip
+
+      - name: Generate release notes
+        working-directory: source
+        shell: bash
+        run: cp "docs/releases/${VERSION}.md" release-notes.md
+
+      - name: Create or verify private draft release
+        shell: bash
+        run: |
+          set -euo pipefail
+          if gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" >/dev/null 2>&1; then
+            IS_DRAFT="$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isDraft --jq .isDraft)"
+            if [[ "$IS_DRAFT" != "true" ]]; then
+              echo "::error::Refusing to overwrite an existing public release: $RELEASE_TAG"
+              exit 1
+            fi
+            gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" \
+              --title "Wukong Code ${RELEASE_TAG}" \
+              --notes-file source/release-notes.md
+          else
+            gh release create "$RELEASE_TAG" --repo "$RELEASE_REPO" \
+              --draft \
+              --title "Wukong Code ${RELEASE_TAG}" \
+              --notes-file source/release-notes.md
+          fi
+
+          ASSET_COUNT="$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json assets --jq '.assets | length')"
+          if [[ "$ASSET_COUNT" = "0" ]]; then
+            gh release upload "$RELEASE_TAG" source/release-assets/* --repo "$RELEASE_REPO"
+          elif [[ "$ASSET_COUNT" != "13" ]]; then
+            echo "::error::Existing draft has a partial asset set ($ASSET_COUNT/13); clean it manually before retrying."
+            exit 1
+          fi
+
+      - name: Download and byte-verify every draft asset
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir remote-draft
+          gh release download "$RELEASE_TAG" --repo "$RELEASE_REPO" --dir remote-draft
+          test "$(find remote-draft -maxdepth 1 -type f | wc -l | tr -d ' ')" = "13"
+          for FILE in source/release-assets/*; do
+            cmp "$FILE" "remote-draft/$(basename "$FILE")"
+          done
+
+      - name: Publish verified draft
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" --draft=false --latest
+          test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isDraft --jq .isDraft)" = "false"

@@ -17,6 +17,7 @@ const originalEnv = { ...process.env };
 
 beforeEach(() => {
   delete process.env['WUKONG_CODE_HOME'];
+  delete process.env['WUKONG_HOME'];
 });
 
 afterEach(() => {
@@ -36,6 +37,17 @@ describe('getDataDir', () => {
   it('returns WUKONG_CODE_HOME even if it is a relative path', () => {
     process.env['WUKONG_CODE_HOME'] = 'relative/path';
     expect(getDataDir()).toBe('relative/path');
+  });
+
+  it('uses deprecated WUKONG_HOME when WUKONG_CODE_HOME is absent', () => {
+    process.env['WUKONG_HOME'] = '/tmp/wukong-legacy-data';
+    expect(getDataDir()).toBe('/tmp/wukong-legacy-data');
+  });
+
+  it('throws instead of falling back to the real home when isolation vars conflict', () => {
+    process.env['WUKONG_CODE_HOME'] = '/tmp/wukong-primary-data';
+    process.env['WUKONG_HOME'] = '/tmp/wukong-legacy-data';
+    expect(() => getDataDir()).toThrow('point to different directories');
   });
 });
 

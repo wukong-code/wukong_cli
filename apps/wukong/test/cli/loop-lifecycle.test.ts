@@ -16,6 +16,7 @@ import {
   beginLoopRun,
   completeLoopRun,
   registerTuiLoop,
+  stopLoopRun,
 } from '#/cli/lib/loop-lifecycle';
 import { readLoopRunForTests } from '#/cli/lib/loop-run-store';
 
@@ -99,7 +100,7 @@ describe('local Loop lifecycle', () => {
 
   it('records user cancellation separately from the Loop outcome', async () => {
     const run = await beginLoopRun();
-    await completeLoopRun(run, 'ERROR', 1, 'cancelled');
+    await stopLoopRun(run, 1);
 
     await expect(readLoopRunForTests(run.runId)).resolves.toMatchObject({
       state: 'terminal',

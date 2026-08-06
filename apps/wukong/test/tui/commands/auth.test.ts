@@ -1,4 +1,9 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { mkdtemp, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { FileTokenStorage } from '@wukong/wukong-oauth';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import { handleLoginCommand, handleLogoutCommand } from '#/tui/commands/auth';
 import type { SlashCommandHost } from '#/tui/commands/dispatch';
@@ -9,6 +14,7 @@ interface HostOverrides {
   appState?: Record<string, unknown>;
   config?: Record<string, unknown>;
   auth?: Record<string, unknown>;
+  homeDir?: string;
 }
 
 function makeHost(overrides: HostOverrides = {}): SlashCommandHost {
@@ -41,6 +47,7 @@ function makeHost(overrides: HostOverrides = {}): SlashCommandHost {
     },
     session: undefined,
     harness: {
+      homeDir: overrides.homeDir ?? '/tmp/wukong-tui-auth-test',
       auth,
       getConfig: vi.fn(async () => config),
       removeProvider: vi.fn(async () => ({})),
@@ -65,6 +72,10 @@ function makeHost(overrides: HostOverrides = {}): SlashCommandHost {
 
 beforeEach(() => {
   vi.clearAllMocks();
+});
+
+afterEach(() => {
+  vi.unstubAllGlobals();
 });
 
 describe('handleLoginCommand', () => {
@@ -138,7 +149,9 @@ describe('handleLogoutCommand', () => {
 
     expect(host.harness.auth.logout).not.toHaveBeenCalled();
     expect(host.harness.removeProvider).not.toHaveBeenCalled();
-    expect(host.showStatus).toHaveBeenCalledWith('Wukong account is not connected.');
+    expect(host.showStatus).toHaveBeenCalledWith(
+      'Wukong account is not connected. Local credentials are already clear.',
+    );
   });
 
   it('disconnects the Wukong account while preserving an active BYOK model', async () => {
@@ -184,5 +197,43 @@ describe('handleLogoutCommand', () => {
 
     expect(host.authFlow.refreshConfigAfterLogout).toHaveBeenCalled();
     expect(host.authFlow.clearActiveSessionAfterLogout).toHaveBeenCalled();
+  });
+
+  it('clears local credentials and warns when remote revocation is not confirmed', async () => {
+    const homeDir = await mkdtemp(join(tmpdir(), 'wukong-tui-logout-'));
+    const storage = new FileTokenStorage(join(homeDir, 'credentials'));
+    await storage.save('wukong', {
+      accessToken: 'access-token',
+      refreshToken: 'refresh-token',
+      expiresAt: 4_102_444_800,
+      expiresIn: 3_600,
+      scope: 'openid',
+      tokenType: 'Bearer',
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 503 })));
+    const host = makeHost({
+      homeDir,
+      config: {
+        providers: {
+          [DEFAULT_OAUTH_PROVIDER_NAME]: {
+            type: 'wukong',
+            oauth: { storage: 'file', key: 'oauth.wukong' },
+          },
+        },
+        models: {},
+      },
+    });
+
+    try {
+      await handleLogoutCommand(host);
+
+      await expect(storage.load('wukong')).resolves.toBeUndefined();
+      expect(host.harness.auth.logout).toHaveBeenCalledWith(DEFAULT_OAUTH_PROVIDER_NAME);
+      expect(host.showStatus).toHaveBeenCalledWith(
+        expect.stringMatching(/remote revocation was not confirmed.*server session may still be active/u),
+      );
+    } finally {
+      await rm(homeDir, { recursive: true, force: true });
+    }
   });
 });

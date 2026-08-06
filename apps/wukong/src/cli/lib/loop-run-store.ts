@@ -158,15 +158,14 @@ export async function bindTrackedLoopGoal(
 
 export async function stageLoopTerminal(
   runId: string,
-  status: LoopRunLifecycle,
-  outcome: LoopStatus,
-  iterations: number,
+  terminalInput:
+    | { readonly status: 'completed'; readonly outcome: LoopStatus; readonly iterations: number }
+    | { readonly status: 'cancelled'; readonly iterations: number },
 ): Promise<LoopRunRecord> {
   const existing = await readLoopRun(runId);
   const terminal = {
-    status,
-    ...(status === 'completed' ? { outcome } : {}),
-    iterations: Math.max(0, Math.trunc(iterations)),
+    ...terminalInput,
+    iterations: Math.max(0, Math.trunc(terminalInput.iterations)),
     finishedAt: new Date().toISOString(),
   } as const;
   const record: LoopRunRecord = {

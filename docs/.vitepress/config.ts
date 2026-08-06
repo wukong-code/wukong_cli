@@ -57,8 +57,8 @@ const config = withMermaid(defineConfig({
         items: [
           { text: '0.0.19 Explicit Finish Line (Released)', link: '/design/0.0.19-explicit-finish-line' },
           { text: '0.0.20 Reusable Verification Criteria (Released)', link: '/design/0.0.20-reusable-verification-skills' },
-          { text: '0.0.21 Loop Evidence Integrity (RC)', link: '/design/0.0.21-loop-evidence-integrity' },
-          { text: '0.1.0 Trusted Local Loop (Needs Replan)', link: '/design/0.1.0-trusted-local-loop' },
+          { text: '0.0.21 Loop Evidence Integrity (Released)', link: '/design/0.0.21-loop-evidence-integrity' },
+          { text: '0.1.0 Trusted Local Loop (In Development)', link: '/design/0.1.0-trusted-local-loop' },
           { text: '0.2.0 Reliable Autonomy (Needs Replan)', link: '/design/0.2.0-pro-reliable-autonomy' },
         ],
       },

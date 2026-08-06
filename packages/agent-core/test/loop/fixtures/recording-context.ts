@@ -46,6 +46,8 @@ export class RecordingContext {
 
   readonly appendTranscriptRecord = async (record: LoopRecordedEvent): Promise<void> => {
     switch (record.type) {
+      case 'provider.request':
+        return;
       case 'step.begin': {
         this.calls.push({ kind: 'appendStepBegin', input: record });
         return;

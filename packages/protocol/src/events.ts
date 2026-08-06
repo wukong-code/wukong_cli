@@ -169,6 +169,32 @@ export interface LoopResultFinding {
   readonly criterionId?: string;
 }
 
+export interface LoopResultChangedFile {
+  readonly path: string;
+  readonly status: string;
+}
+
+export interface LoopResultEvidence {
+  /** Whether deterministic verification evidence was produced for this result. */
+  readonly verification: 'fresh' | 'not_run';
+  /** Whether an independent reviewer produced a fresh verdict for this result. */
+  readonly reviewer: 'fresh' | 'not_run';
+  readonly generatedAt?: string;
+  readonly snapshotId?: string;
+}
+
+export interface ProviderOutcomeUnknown {
+  readonly requestId: string;
+  readonly idempotencyKey: string;
+  readonly turnId: string;
+  readonly step: number;
+  readonly attempt: number;
+  readonly state: 'started' | 'outcome_unknown';
+  readonly outputObserved: boolean;
+  readonly errorName?: string;
+  readonly errorMessage?: string;
+}
+
 export interface LoopAcceptanceCriterion {
   readonly id: string;
   readonly text: string;
@@ -475,6 +501,8 @@ export interface LoopResult {
   readonly checks: readonly LoopResultCheck[];
   readonly blockers: readonly LoopResultBlocker[];
   readonly findings?: readonly LoopResultFinding[];
+  readonly changedFiles?: readonly LoopResultChangedFile[];
+  readonly evidence?: LoopResultEvidence;
   readonly role?: string;
 }
 
@@ -529,7 +557,10 @@ export interface GoalSnapshot {
   readonly legacyContractId?: string;
   readonly loopRunId?: string;
   readonly loopChainIterations?: number;
+  /** Durable Gate attempts; distinct from writer iterations. */
+  readonly gateAttempts?: number;
   readonly loopTerminal?: LoopRunTerminal;
+  readonly providerOutcomeUnknown?: ProviderOutcomeUnknown;
   readonly convergence?: LoopConvergenceSummary;
 }
 
@@ -1212,6 +1243,30 @@ export const loopResultFindingSchema = z.object({
   criterionId: z.string().optional(),
 }) satisfies z.ZodType<LoopResultFinding>;
 
+export const loopResultChangedFileSchema = z.object({
+  path: z.string(),
+  status: z.string(),
+}) satisfies z.ZodType<LoopResultChangedFile>;
+
+export const loopResultEvidenceSchema = z.object({
+  verification: z.enum(['fresh', 'not_run']),
+  reviewer: z.enum(['fresh', 'not_run']),
+  generatedAt: z.string().optional(),
+  snapshotId: z.string().optional(),
+}) satisfies z.ZodType<LoopResultEvidence>;
+
+export const providerOutcomeUnknownSchema = z.object({
+  requestId: z.string(),
+  idempotencyKey: z.string(),
+  turnId: z.string(),
+  step: z.number().int().positive(),
+  attempt: z.number().int().positive(),
+  state: z.enum(['started', 'outcome_unknown']),
+  outputObserved: z.boolean(),
+  errorName: z.string().optional(),
+  errorMessage: z.string().optional(),
+}) satisfies z.ZodType<ProviderOutcomeUnknown>;
+
 export const loopAcceptanceCriterionSchema = z.object({
   id: z.string(),
   text: z.string(),
@@ -1541,6 +1596,8 @@ export const loopResultSchema = z.object({
   checks: z.array(loopResultCheckSchema),
   blockers: z.array(loopResultBlockerSchema),
   findings: z.array(loopResultFindingSchema).optional(),
+  changedFiles: z.array(loopResultChangedFileSchema).optional(),
+  evidence: loopResultEvidenceSchema.optional(),
   role: z.string().optional(),
 }) satisfies z.ZodType<LoopResult>;
 
@@ -1577,6 +1634,7 @@ export const goalSnapshotSchema = z.object({
   legacyContractId: z.string().optional(),
   loopRunId: z.string().optional(),
   loopChainIterations: z.number().int().nonnegative().optional(),
+  gateAttempts: z.number().int().nonnegative().optional(),
   loopTerminal: z.object({
     schemaVersion: z.literal(1),
     runId: z.string(),
@@ -1594,6 +1652,7 @@ export const goalSnapshotSchema = z.object({
     terminalDigest: z.string(),
     createdAt: z.number(),
   }).optional(),
+  providerOutcomeUnknown: providerOutcomeUnknownSchema.optional(),
   convergence: loopConvergenceSummarySchema.optional(),
 }) satisfies z.ZodType<GoalSnapshot>;
 

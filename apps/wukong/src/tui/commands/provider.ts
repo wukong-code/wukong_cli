@@ -175,10 +175,21 @@ async function handleCatalogProviderAdd(host: SlashCommandHost): Promise<void> {
   } catch (error) {
     if (controller.signal.aborted) {
       spinner.stop({ ok: false, label: 'Aborted.' });
+      reopenProviderManager(host);
     } else {
       const hint = error instanceof CatalogFetchError ? ` (HTTP ${error.status})` : '';
       spinner.stop({ ok: false, label: 'Failed to load catalog.' });
-      host.showError(`Failed to fetch catalog${hint}: ${formatErrorMessage(error)}`);
+      const message = `Failed to fetch catalog${hint}: ${formatErrorMessage(error)}`;
+      host.showError(message);
+      const recovery = await promptCatalogRecovery(host, message);
+      if (recovery === 'retry') {
+        await handleCatalogProviderAdd(host);
+      } else if (recovery === 'custom') {
+        const handled = await handleCustomRegistryAddViaDialog(host);
+        if (!handled) reopenProviderManager(host);
+      } else {
+        reopenProviderManager(host);
+      }
     }
   } finally {
     if (host.cancelInFlight === cancel) host.cancelInFlight = undefined;
@@ -258,6 +269,50 @@ async function handleCatalogProviderAdd(host: SlashCommandHost): Promise<void> {
     },
   });
   host.mountEditorReplacement(selector);
+}
+
+function promptCatalogRecovery(
+  host: SlashCommandHost,
+  errorMessage: string,
+): Promise<'retry' | 'custom' | 'back'> {
+  return new Promise((resolve) => {
+    host.mountEditorReplacement(
+      new ChoicePickerComponent({
+        title: 'Provider catalog unavailable',
+        notice: [
+          errorMessage,
+          'Known-provider setup needs the bundled snapshot or a reachable catalog.',
+          'Your existing providers and credentials were not changed.',
+        ].join('\n'),
+        noticeTone: 'warning',
+        options: [
+          {
+            value: 'retry',
+            label: 'Retry catalog',
+            description: 'Try the configured source, canonical fallback, and bundled snapshot again.',
+          },
+          {
+            value: 'custom',
+            label: 'Import custom registry',
+            description: 'Use a models.dev-compatible api.json URL and API key instead.',
+          },
+          {
+            value: 'back',
+            label: 'Back to providers',
+            description: 'Keep the current configuration unchanged.',
+          },
+        ],
+        onSelect: (value) => {
+          host.restoreEditor();
+          resolve(value === 'retry' || value === 'custom' ? value : 'back');
+        },
+        onCancel: () => {
+          host.restoreEditor();
+          resolve('back');
+        },
+      }),
+    );
+  });
 }
 
 async function setDefaultModel(

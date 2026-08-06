@@ -4,7 +4,7 @@ on:
   workflow_call:
     inputs:
       upload-artifact-prefix:
-        description: 'Prefix for uploaded artifact name'
+        description: 'Prefix for staged Actions artifacts'
         required: false
         type: string
         default: 'wukong-native'
@@ -13,8 +13,13 @@ on:
         required: false
         type: number
         default: 3
+      release-artifact:
+        description: 'Embed the provider catalog and use the release build profile'
+        required: false
+        type: boolean
+        default: true
       sign-macos:
-        description: 'Whether to sign + notarize macOS builds (requires Apple secrets)'
+        description: 'Require Developer ID signing and notarization for both macOS builds'
         required: false
         type: boolean
         default: false
@@ -23,16 +28,6 @@ on:
         required: false
         type: string
         default: ''
-      publish-release-tag:
-        description: 'When set, upload ZIP/SHA files directly to this public release tag'
-        required: false
-        type: string
-        default: ''
-      public-release-repo:
-        description: 'Repository that owns the public binary release'
-        required: false
-        type: string
-        default: 'mutnpc/wukong-code'
     secrets:
       APPLE_CERTIFICATE_P12:
         required: false
@@ -44,15 +39,49 @@ on:
         required: false
       APPLE_NOTARIZATION_ISSUER_ID:
         required: false
-      WUKONG_PUBLIC_RELEASE_TOKEN:
-        required: false
 
 permissions:
   contents: read
 
 jobs:
+  validate-release-contract:
+    name: Validate native release inputs
+    runs-on: ubuntu-latest
+    env:
+      SIGN_MACOS: ${{ inputs.sign-macos }}
+      RELEASE_ARTIFACT: ${{ inputs.release-artifact }}
+      APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
+      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
+      APPLE_NOTARIZATION_KEY_P8: ${{ secrets.APPLE_NOTARIZATION_KEY_P8 }}
+      APPLE_NOTARIZATION_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_KEY_ID }}
+      APPLE_NOTARIZATION_ISSUER_ID: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
+    steps:
+      - name: Fail closed when signing inputs are incomplete
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ "$SIGN_MACOS" != "true" ]]; then
+            exit 0
+          fi
+          if [[ "$RELEASE_ARTIFACT" != "true" ]]; then
+            echo '::error::macOS signing is only valid for release artifacts.'
+            exit 1
+          fi
+          for NAME in \
+            APPLE_CERTIFICATE_P12 \
+            APPLE_CERTIFICATE_PASSWORD \
+            APPLE_NOTARIZATION_KEY_P8 \
+            APPLE_NOTARIZATION_KEY_ID \
+            APPLE_NOTARIZATION_ISSUER_ID; do
+            if [[ -z "${!NAME}" ]]; then
+              echo "::error::${NAME} is required for a public macOS release."
+              exit 1
+            fi
+          done
+
   native-bundle:
     name: Native bundle (${{ matrix.target }})
+    needs: validate-release-contract
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -75,16 +104,16 @@ jobs:
       WUKONG_CODE_BUILD_TARGET: ${{ matrix.target }}
 
     steps:
-      - name: Checkout
-        uses: actions/checkout@v6
+      - name: Checkout exact source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ inputs.source-ref != '' && inputs.source-ref || github.ref }}
 
       - name: Setup pnpm
-        uses: pnpm/action-setup@v6
+        uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
 
       - name: Setup Node.js
-        uses: actions/setup-node@v6
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
         with:
           node-version-file: .nvmrc
           cache: 'pnpm'
@@ -92,42 +121,43 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Setup macOS keychain (release only)
+      - name: Setup macOS keychain
         if: runner.os == 'macOS' && inputs.sign-macos
         uses: ./.github/actions/macos-keychain-setup
         with:
           certificate-p12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           certificate-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
 
-      - name: Generate built-in catalog (release artifacts)
-        if: inputs.sign-macos
+      - name: Generate built-in provider catalog
+        if: inputs.release-artifact
         shell: bash
         run: |
+          set -euo pipefail
           CATALOG_FILE="$RUNNER_TEMP/wukong-built-in-catalog.json"
           node apps/wukong/scripts/update-catalog.mjs --out "$CATALOG_FILE"
+          test -s "$CATALOG_FILE"
           echo "WUKONG_CODE_BUILT_IN_CATALOG_FILE=$CATALOG_FILE" >> "$GITHUB_ENV"
 
       - name: Build Wukong web assets
-        # The SEA blob step embeds apps/wukong/dist-web; build the web app
-        # and stage its assets before producing the native executable.
-        # Also generate the vis-web single-file asset so the native bundle
-        # can embed it instead of leaving a dynamic import in the SEA bundle.
+        shell: bash
         run: |
+          set -euo pipefail
           node apps/wukong/scripts/build-vis-asset.mjs
           pnpm --filter @wukong/wukong-web run build
           node apps/wukong/scripts/copy-web-assets.mjs
 
-      - name: Build native executable (release profile, macOS signed)
-        if: runner.os == 'macOS' && inputs.sign-macos
+      - name: Build native executable (release profile)
+        if: inputs.release-artifact
         shell: bash
         run: pnpm --filter @wukong.today/code run build:native:release
 
       - name: Build native executable (local profile)
-        if: '!(runner.os == ''macOS'' && inputs.sign-macos)'
+        if: inputs.release-artifact == false
         shell: bash
         run: pnpm --filter @wukong.today/code run build:native:sea
 
       - name: Notarize macOS binary
+        id: macos_notarize
         if: runner.os == 'macOS' && inputs.sign-macos
         uses: ./.github/actions/macos-notarize
         with:
@@ -140,40 +170,39 @@ jobs:
         if: always() && runner.os == 'macOS' && inputs.sign-macos
         uses: ./.github/actions/macos-keychain-cleanup
 
-      - name: Smoke test native executable
+      - name: Package native artifact
+        shell: bash
+        run: pnpm --filter @wukong.today/code run package:native
+
+      - name: Record exact build identity
+        shell: bash
+        env:
+          RELEASE_PROFILE: ${{ inputs.release-artifact && 'release' || 'local' }}
+          MACOS_SIGNED: ${{ steps.macos_notarize.outputs.signed-and-notarized || 'false' }}
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          node apps/wukong/scripts/native/write-release-metadata.mjs \
+            "${{ matrix.target }}" "$SOURCE_SHA" "$RELEASE_PROFILE" "$MACOS_SIGNED"
+
+      - name: Smoke test final ZIP without catalog network access
         if: |
           !(
             (endsWith(matrix.target, '-x64') && runner.arch != 'X64') ||
             (endsWith(matrix.target, '-arm64') && runner.arch != 'ARM64')
           )
         shell: bash
+        env:
+          WUKONG_CODE_NATIVE_SMOKE_ARCHIVE: ${{ github.workspace }}/apps/wukong/dist-native/artifacts/wukong-${{ matrix.target }}.zip
         run: pnpm --filter @wukong.today/code run test:native:smoke
 
-      - name: Package native artifact
-        shell: bash
-        run: pnpm --filter @wukong.today/code run package:native
-
-      - name: Upload native artifact
-        if: inputs.publish-release-tag == ''
-        uses: actions/upload-artifact@v7
+      - name: Upload staged native artifact
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
           name: ${{ inputs.upload-artifact-prefix }}-${{ matrix.target }}
           retention-days: ${{ inputs.retention-days }}
           path: |
             apps/wukong/dist-native/artifacts/wukong-${{ matrix.target }}.zip
             apps/wukong/dist-native/artifacts/wukong-${{ matrix.target }}.zip.sha256
-          if-no-files-found: ignore
-
-      - name: Upload native artifact directly to public release
-        if: inputs.publish-release-tag != ''
-        shell: bash
-        env:
-          GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
-          RELEASE_REPO: ${{ inputs.public-release-repo }}
-          RELEASE_TAG: ${{ inputs.publish-release-tag }}
-        run: |
-          gh release upload "$RELEASE_TAG" \
-            "apps/wukong/dist-native/artifacts/wukong-${{ matrix.target }}.zip" \
-            "apps/wukong/dist-native/artifacts/wukong-${{ matrix.target }}.zip.sha256" \
-            --clobber \
-            --repo "$RELEASE_REPO"
+            apps/wukong/dist-native/artifacts/wukong-${{ matrix.target }}.build.json
+          if-no-files-found: error

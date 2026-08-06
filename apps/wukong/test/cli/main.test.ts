@@ -133,6 +133,8 @@ class ExitCalled extends Error {
   }
 }
 
+const DEFAULT_TTY_ENVIRONMENT = { isTTY: true } as const;
+
 function defaultOpts(): CLIOptions {
   return {
     session: undefined,
@@ -147,12 +149,15 @@ function defaultOpts(): CLIOptions {
   };
 }
 
-async function runHandleMainCommand(opts: CLIOptions): Promise<number | null> {
+async function runHandleMainCommand(
+  opts: CLIOptions,
+  environment: { readonly isTTY?: boolean } = DEFAULT_TTY_ENVIRONMENT,
+): Promise<number | null> {
   const exitSpy = vi.spyOn(process, 'exit').mockImplementation((code?: string | number | null) => {
     throw new ExitCalled(Number(code ?? 0));
   });
   try {
-    await handleMainCommand(opts, '0.0.1-alpha.2');
+    await handleMainCommand(opts, '0.0.1-alpha.2', environment);
     return null;
   } catch (error) {
     if (error instanceof ExitCalled) {
@@ -248,6 +253,23 @@ describe('main entry command handling', () => {
       track: expect.any(Function),
     });
     expect(runShell).toHaveBeenCalledWith(opts, '0.0.1-alpha.2');
+  });
+
+  it('fails before migration or TUI startup when interactive resume has no TTY', async () => {
+    const opts = { ...defaultOpts(), session: '' };
+    mocks.validateOptions.mockReturnValue({ options: opts, uiMode: 'shell' });
+    const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+
+    try {
+      const exitCode = await runHandleMainCommand(opts, { isTTY: false });
+
+      expect(exitCode).toBe(1);
+      expect(stderr).toHaveBeenCalledWith(expect.stringContaining('session picker cannot run'));
+      expect(runUpdatePreflight).not.toHaveBeenCalled();
+      expect(runShell).not.toHaveBeenCalled();
+    } finally {
+      stderr.mockRestore();
+    }
   });
 
   it('installs crash handlers before parsing CLI arguments', () => {

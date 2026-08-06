@@ -103,6 +103,13 @@ describe('ChromeStateAggregator', () => {
     expect(phase?.elapsedMs).toBe(42_000);
   });
 
+  it('does not claim CHECK before a verification tool is actually active', () => {
+    const agg = new ChromeStateAggregator({ cwd: '/repo' });
+    agg.setGoal(goal({ stopCondition: 'proof-pass', iteration: 1 }));
+
+    expect(agg.getState().loopPhase?.phase).toBe('waiting');
+  });
+
   it('records verify/proof/scan events through the injected recorder', () => {
     const recorded: StatEvent[] = [];
     const agg = new ChromeStateAggregator({
@@ -167,6 +174,29 @@ describe('ChromeStateAggregator', () => {
 
     expect(agg.getState().loopPhase?.blockedReason).toBe('Workspace changed during checks.');
     expect(agg.getState().loopPhase?.nextAction).toBe('Stop other workspace writers, then rerun the Loop.');
+  });
+
+  it('shows the durable Loop outcome instead of a generic blocked label', () => {
+    const agg = new ChromeStateAggregator({ cwd: '/repo' });
+    agg.setGoal(goal({
+      status: 'blocked',
+      terminalReason: 'loop:NEEDS_WORK:no_progress:The writer made no progress.',
+      loopResult: {
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'no_progress',
+        summary: 'The writer made no progress.',
+        iterations: 2,
+        checks: [],
+        blockers: [],
+      },
+    }));
+
+    expect(agg.getState().loopPhase).toMatchObject({
+      phase: 'blocked',
+      outcome: 'NEEDS_WORK',
+      blockedReason: 'The writer made no progress.',
+    });
   });
 
   it('makes paused goals visually distinct from waiting work', () => {

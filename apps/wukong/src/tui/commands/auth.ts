@@ -1,6 +1,11 @@
 import { log } from '@wukong/wukong-sdk';
 
-import { DEFAULT_OAUTH_PROVIDER_NAME, PRODUCT_NAME } from '../constant/wukong-tui';
+import {
+  formatManagedWukongLogoutMessage,
+  logoutManagedWukongAccount,
+} from '#/cli/lib/oauth-logout';
+
+import { DEFAULT_OAUTH_PROVIDER_NAME } from '../constant/wukong-tui';
 import { formatErrorMessage } from '../utils/event-payload';
 import type { LoginProgressSpinnerHandle } from '../types';
 import type { SlashCommandHost } from './dispatch';
@@ -73,22 +78,21 @@ async function handleWukongCodeOAuthLogin(host: SlashCommandHost): Promise<void>
 }
 
 export async function handleLogoutCommand(host: SlashCommandHost): Promise<void> {
-  const oauthStatus = await host.harness.auth.status(DEFAULT_OAUTH_PROVIDER_NAME);
-  const hasOAuthToken = oauthStatus.providers.some(
-    (p) => p.providerName === DEFAULT_OAUTH_PROVIDER_NAME && p.hasToken,
-  );
   const config = await host.harness.getConfig();
-  const hasManagedRemnant =
-    hasOAuthToken || config.providers[DEFAULT_OAUTH_PROVIDER_NAME] !== undefined;
-  if (!hasManagedRemnant) {
-    host.showStatus('Wukong account is not connected.');
+  let result: Awaited<ReturnType<typeof logoutManagedWukongAccount>>;
+  try {
+    result = await logoutManagedWukongAccount(host.harness, { config });
+  } catch (error) {
+    host.showError(`Logout failed: ${formatErrorMessage(error)}`);
+    return;
+  }
+  if (!result.hadLocalAccount) {
+    host.showStatus(formatManagedWukongLogoutMessage(result));
     return;
   }
 
   const currentModel = host.state.appState.model.trim();
   const currentProvider = host.state.appState.availableModels[currentModel]?.provider;
-
-  await host.harness.auth.logout(DEFAULT_OAUTH_PROVIDER_NAME);
 
   if (currentProvider === DEFAULT_OAUTH_PROVIDER_NAME) {
     await host.authFlow.refreshConfigAfterLogout();
@@ -101,6 +105,9 @@ export async function handleLogoutCommand(host: SlashCommandHost): Promise<void>
     });
   }
 
-  host.track('logout', { provider: DEFAULT_OAUTH_PROVIDER_NAME });
-  host.showStatus(`Logged out from ${PRODUCT_NAME}.`);
+  host.track('logout', {
+    provider: DEFAULT_OAUTH_PROVIDER_NAME,
+    remote_revocation: result.remote.kind,
+  });
+  host.showStatus(formatManagedWukongLogoutMessage(result));
 }

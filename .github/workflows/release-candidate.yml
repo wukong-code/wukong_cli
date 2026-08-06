@@ -20,6 +20,6 @@ jobs:
     with:
       upload-artifact-prefix: wukong-native-rc
       retention-days: 1
+      release-artifact: true
       sign-macos: false
       source-ref: ${{ inputs.source_ref }}
-      publish-release-tag: ''

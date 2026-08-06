@@ -21,6 +21,7 @@ const mocks = vi.hoisted(() => {
     setPermission: vi.fn(),
     setApprovalHandler: vi.fn(),
     setQuestionHandler: vi.fn(),
+    cancel: vi.fn(),
     createGoal: vi.fn(),
     getGoal: vi.fn(async (): Promise<{ goal: any }> => ({ goal: null })),
     getStatus: vi.fn(
@@ -28,6 +29,14 @@ const mocks = vi.hoisted(() => {
         permission: 'manual',
       }),
     ),
+    getUsage: vi.fn(async () => ({
+      total: {
+        inputOther: 10,
+        output: 5,
+        inputCacheRead: 0,
+        inputCacheCreation: 0,
+      },
+    })),
     onEvent: vi.fn((handler: (event: any) => void) => {
       eventHandlers.add(handler);
       return () => eventHandlers.delete(handler);
@@ -206,11 +215,26 @@ const mocks = vi.hoisted(() => {
     goalExitCode: vi.fn(() => 0),
     beginLoopRun: vi.fn(async () => ({ runId: 'run123' })),
     completeLoopRun: vi.fn(async () => ({ repeatedCompletedWithin7d: false })),
+    stopLoopRun: vi.fn(async () => {}),
     registerTuiLoop: vi.fn(async () => {}),
     runLoopPreflight: vi.fn<() => Promise<LoopPreflightResult>>(
       async () => preflightReady,
     ),
+    inspectGit: vi.fn(async () => ({
+      cwd: process.cwd(),
+      isRepo: true,
+      root: process.cwd(),
+      statusText: '',
+      diffText: '',
+      diffStat: '',
+      changedFiles: [],
+    })),
   };
+});
+
+vi.mock('@wukong/verification', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('@wukong/verification')>();
+  return { ...actual, inspectGit: mocks.inspectGit };
 });
 
 vi.mock('@wukong/wukong-sdk', async (importOriginal) => {
@@ -298,6 +322,7 @@ vi.mock('#/cli/lib/loop-lifecycle', () => ({
   beginLoopRun: mocks.beginLoopRun,
   completeLoopRun: mocks.completeLoopRun,
   registerTuiLoop: mocks.registerTuiLoop,
+  stopLoopRun: mocks.stopLoopRun,
 }));
 
 vi.mock('#/cli/lib/loop-preflight', () => ({
@@ -397,7 +422,7 @@ describe('runPrompt', () => {
     }));
   });
 
-  it('creates a fresh auto-permission session and streams assistant output to stdout', async () => {
+  it('keeps a safe durable permission and elevates only for the headless process', async () => {
     const stdout = writer();
     const stderr = writer();
 
@@ -409,15 +434,18 @@ describe('runPrompt', () => {
     expect(mocks.harnessCreateSession).toHaveBeenCalledWith({
       workDir: process.cwd(),
       model: 'k2',
-      permission: 'auto',
+      permission: 'manual',
       additionalDirs: undefined,
     });
-    expect(mocks.session.setPermission).not.toHaveBeenCalled();
+    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(1, 'auto', { transient: true });
+    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(2, 'manual', { transient: true });
     expect(mocks.session.setApprovalHandler).toHaveBeenCalledWith(expect.any(Function));
     expect(mocks.session.setQuestionHandler).toHaveBeenCalledWith(expect.any(Function));
     expect(mocks.session.prompt).toHaveBeenCalledWith('say hello');
     expect(stdout.text()).toBe('• hello world\n\n');
-    expect(stderr.text()).toBe('To resume this session: wukong -r ses_prompt\n');
+    expect(stderr.text()).toContain('Run preflight');
+    expect(stderr.text()).toContain('Outcome    COMPLETED');
+    expect(stderr.text()).toContain('Resume     wukong -r ses_prompt');
     expect(mocks.shutdownTelemetry).toHaveBeenCalled();
     expect(mocks.harnessClose).toHaveBeenCalled();
   });
@@ -447,7 +475,7 @@ describe('runPrompt', () => {
     expect(mocks.harnessCreateSession).toHaveBeenCalledWith({
       workDir: process.cwd(),
       model: 'wukong/k2.5',
-      permission: 'auto',
+      permission: 'manual',
       additionalDirs: undefined,
     });
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith(
@@ -464,7 +492,7 @@ describe('runPrompt', () => {
     expect(mocks.harnessCreateSession).toHaveBeenCalledWith({
       workDir: process.cwd(),
       model: 'k2',
-      permission: 'auto',
+      permission: 'manual',
       additionalDirs: ['../shared', '/tmp/extra'],
     });
   });
@@ -529,12 +557,11 @@ describe('runPrompt', () => {
 
     await runPrompt(opts(), '1.2.3-test', { stdout, stderr });
 
-    expect(stderr.text()).toBe(
-      '• The user wants an exact reply.\n  No tools are needed.\n\nTo resume this session: wukong -r ses_prompt\n',
-    );
+    expect(stderr.text()).toContain('• The user wants an exact reply.\n  No tools are needed.\n\n');
+    expect(stderr.text()).toContain('Outcome    COMPLETED');
     expect(stdout.text()).toBe('• prompt-mode-ok\n\n');
-    expect(stderr.write).toHaveBeenNthCalledWith(1, '• The user wants an exact reply.');
-    expect(stderr.write).toHaveBeenNthCalledWith(2, '\n  No tools are needed.');
+    expect(stderr.write).toHaveBeenCalledWith('• The user wants an exact reply.');
+    expect(stderr.write).toHaveBeenCalledWith('\n  No tools are needed.');
     expect(stdout.write).toHaveBeenNthCalledWith(1, '• prompt-mode-ok');
   });
 
@@ -562,7 +589,8 @@ describe('runPrompt', () => {
     await runPrompt(opts(), '1.2.3-test', { stdout, stderr });
 
     expect(stdout.text()).toBe('• UserPromptSubmit hook\n\n  {}\n\n• answer\n\n');
-    expect(stderr.text()).toBe('To resume this session: wukong -r ses_prompt\n');
+    expect(stderr.text()).toContain('Outcome    COMPLETED');
+    expect(stderr.text()).toContain('Resume     wukong -r ses_prompt');
   });
 
   it('wraps transcript blocks with hanging indentation when terminal width is known', async () => {
@@ -581,7 +609,8 @@ describe('runPrompt', () => {
 
     await runPrompt(opts(), '1.2.3-test', { stdout, stderr });
 
-    expect(stderr.text()).toBe('• thinking\n  -wrap\n\nTo resume this session: wukong -r ses_prompt\n');
+    expect(stderr.text()).toContain('• thinking\n  -wrap\n\n');
+    expect(stderr.text()).toContain('Outcome    COMPLETED');
     expect(stdout.text()).toBe('• answer-w\n  rap\n\n');
   });
 
@@ -619,7 +648,7 @@ describe('runPrompt', () => {
     await runPrompt(opts(), '1.2.3-test', { stdout, stderr });
 
     expect(stdout.text()).toBe('• main answer\n\n');
-    expect(stderr.text()).toBe('To resume this session: wukong -r ses_prompt\n');
+    expect(stderr.text()).toContain('Outcome    COMPLETED');
   });
 
   it('ignores child-agent error events while the main turn continues', async () => {
@@ -648,7 +677,7 @@ describe('runPrompt', () => {
     await runPrompt(opts(), '1.2.3-test', { stdout, stderr });
 
     expect(stdout.text()).toBe('• main recovered\n\n');
-    expect(stderr.text()).toBe('To resume this session: wukong -r ses_prompt\n');
+    expect(stderr.text()).toContain('Outcome    COMPLETED');
   });
 
   it('resumes a concrete session and forces auto permission before prompting', async () => {
@@ -659,8 +688,8 @@ describe('runPrompt', () => {
 
     expect(mocks.harnessResumeSession).toHaveBeenCalledWith({ id: 'ses_existing' });
     expect(mocks.session.getStatus).toHaveBeenCalled();
-    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(1, 'auto');
-    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(2, 'manual');
+    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(1, 'auto', { transient: true });
+    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(2, 'manual', { transient: true });
   });
 
   it('passes the CLI additional directories when resuming a concrete session', async () => {
@@ -721,13 +750,17 @@ describe('runPrompt', () => {
 
     await runPrompt(opts({ outputFormat: 'stream-json' }), '1.2.3-test', { stdout, stderr });
 
-    expect(stdout.text()).toBe(
-      [
-        '{"role":"assistant","content":"hello world"}',
-        '{"role":"meta","type":"session.resume_hint","session_id":"ses_prompt","command":"wukong -r ses_prompt","content":"To resume this session: wukong -r ses_prompt"}',
-        '',
-      ].join('\n'),
-    );
+    const lines = stdout.text().trim().split('\n').map((line) => JSON.parse(line));
+    expect(lines).toHaveLength(3);
+    expect(lines[0]).toMatchObject({ role: 'meta', type: 'run.preflight', goal: 'say hello' });
+    expect(lines[1]).toEqual({ role: 'assistant', content: 'hello world' });
+    expect(lines[2]).toMatchObject({
+      role: 'meta',
+      type: 'run.summary',
+      outcome: 'COMPLETED',
+      session_id: 'ses_prompt',
+      resume_command: 'wukong -r ses_prompt',
+    });
     expect(stderr.text()).toBe('');
   });
 
@@ -764,15 +797,23 @@ describe('runPrompt', () => {
 
     await runPrompt(opts({ outputFormat: 'stream-json' }), '1.2.3-test', { stdout, stderr });
 
-    expect(stdout.text()).toBe(
-      [
-        '{"role":"assistant","content":"checking","tool_calls":[{"type":"function","id":"tc_1","function":{"name":"Shell","arguments":"{\\"command\\":\\"ls\\"}"}}]}',
-        '{"role":"tool","tool_call_id":"tc_1","content":"file1.py\\nfile2.py"}',
-        '{"role":"assistant","content":"done"}',
-        '{"role":"meta","type":"session.resume_hint","session_id":"ses_prompt","command":"wukong -r ses_prompt","content":"To resume this session: wukong -r ses_prompt"}',
-        '',
-      ].join('\n'),
-    );
+    const lines = stdout.text().trim().split('\n').map((line) => JSON.parse(line));
+    expect(lines[0]).toMatchObject({ role: 'meta', type: 'run.preflight' });
+    expect(lines).toContainEqual(expect.objectContaining({
+      role: 'meta',
+      type: 'run.progress',
+      content: expect.stringContaining('Running Shell: ls'),
+    }));
+    expect(lines).toContainEqual({
+      role: 'tool',
+      tool_call_id: 'tc_1',
+      content: 'file1.py\nfile2.py',
+    });
+    expect(lines.at(-1)).toMatchObject({
+      role: 'meta',
+      type: 'run.summary',
+      activity: { tools: ['Shell'], commands: ['ls'] },
+    });
   });
 
   it('resumes a concrete session without a configured default model', async () => {
@@ -789,8 +830,8 @@ describe('runPrompt', () => {
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'saved-model' }),
     );
-    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(1, 'auto');
-    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(2, 'manual');
+    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(1, 'auto', { transient: true });
+    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(2, 'manual', { transient: true });
   });
 
   it('continues the previous workdir session when --continue is used', async () => {
@@ -801,8 +842,8 @@ describe('runPrompt', () => {
 
     expect(mocks.harnessListSessions).toHaveBeenCalledWith({ workDir: process.cwd() });
     expect(mocks.harnessResumeSession).toHaveBeenCalledWith({ id: 'ses_previous' });
-    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(1, 'auto');
-    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(2, 'manual');
+    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(1, 'auto', { transient: true });
+    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(2, 'manual', { transient: true });
   });
 
   it('passes the CLI additional directories when continuing the previous session', async () => {
@@ -852,21 +893,20 @@ describe('runPrompt', () => {
       }
     });
 
-    await expect(
-      runPrompt(opts({ session: 'ses_existing' }), '1.2.3-test', {
-        stdout: { write: vi.fn(() => true) },
-        stderr: { write: vi.fn(() => true) },
-      }),
-    ).rejects.toThrow('provider.error: model failed');
+    await runPrompt(opts({ session: 'ses_existing' }), '1.2.3-test', {
+      stdout: { write: vi.fn(() => true) },
+      stderr: { write: vi.fn(() => true) },
+    });
 
-    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(1, 'auto');
-    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(2, 'manual');
+    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(1, 'auto', { transient: true });
+    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(2, 'manual', { transient: true });
     expect(mocks.session.setPermission.mock.invocationCallOrder[1]).toBeLessThan(
       mocks.harnessClose.mock.invocationCallOrder[0]!,
     );
+    process.exitCode = undefined;
   });
 
-  it('restores resumed session permission before exiting on SIGINT', async () => {
+  it('waits for an in-flight provider request to settle before writing one non-resumable SIGINT summary', async () => {
     let releasePrompt!: () => void;
     mocks.session.prompt.mockImplementationOnce(async () => {
       for (const handler of mocks.eventHandlers) {
@@ -879,34 +919,75 @@ describe('runPrompt', () => {
       });
     });
     const processMock = fakeProcess();
-    const run = runPrompt(opts({ session: 'ses_existing' }), '1.2.3-test', {
-      stdout: { write: vi.fn(() => true) },
-      stderr: { write: vi.fn(() => true) },
+    const stdout = writer();
+    const run = runPrompt(opts({ session: 'ses_existing', outputFormat: 'stream-json' }), '1.2.3-test', {
+      stdout,
+      stderr: writer(),
       process: processMock,
     } as Parameters<typeof runPrompt>[2] & { process: ReturnType<typeof fakeProcess> });
 
     await waitForAssertion(() => {
-      expect(mocks.session.setPermission).toHaveBeenCalledWith('auto');
+      expect(mocks.session.setPermission).toHaveBeenCalledWith('auto', { transient: true });
       expect(processMock.listener('SIGINT')).toBeDefined();
+      expect(mocks.session.prompt).toHaveBeenCalled();
     });
 
-    await processMock.listener('SIGINT')?.();
+    const signalCleanup = processMock.listener('SIGINT')?.();
+    await Promise.resolve();
 
-    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(2, 'manual');
+    expect(processMock.exit).not.toHaveBeenCalled();
+    expect(stdout.text()).not.toContain('"outcome":"STOPPED_BY_USER"');
+
+    for (const handler of mocks.eventHandlers) {
+      handler(mocks.mainEvent({
+        type: 'error',
+        code: 'provider.connection',
+        message: 'socket closed after request start',
+        details: {
+          providerOutcomeUnknown: {
+            requestId: 'req-unknown',
+            idempotencyKey: 'idem-unknown',
+            state: 'outcome_unknown',
+            outputObserved: false,
+          },
+        },
+      }));
+      handler(mocks.mainEvent({
+        type: 'turn.ended',
+        turnId: 6,
+        reason: 'cancelled',
+      }));
+    }
+    releasePrompt();
+    await signalCleanup;
+    await run;
+
+    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(2, 'manual', { transient: true });
     expect(mocks.session.setPermission.mock.invocationCallOrder[1]).toBeLessThan(
       processMock.exit.mock.invocationCallOrder[0]!,
     );
     expect(mocks.shutdownTelemetry).toHaveBeenCalled();
     expect(mocks.harnessClose).toHaveBeenCalled();
     expect(processMock.exit).toHaveBeenCalledWith(130);
-
-    for (const handler of mocks.eventHandlers) {
-      handler(mocks.mainEvent({ type: 'turn.ended', turnId: 6, reason: 'completed' }));
-    }
-    releasePrompt();
-    await run;
-
     expect(mocks.harnessClose).toHaveBeenCalledTimes(1);
+    const reports = stdout.text().trim().split('\n').map((line) => JSON.parse(line))
+      .filter((record) => record.type === 'run.summary');
+    expect(reports).toEqual([
+      expect.objectContaining({
+        outcome: 'STOPPED_BY_USER',
+        exit_code: 130,
+        resume_command: null,
+        provider_outcome_unknown: {
+          requestId: 'req-unknown',
+          idempotencyKey: 'idem-unknown',
+          state: 'outcome_unknown',
+          outputObserved: false,
+        },
+      }),
+    ]);
+    expect(reports[0]?.next_actions).toContain(
+      'Do not resume blindly; cancel and explicitly start a new attempt only after confirming it is safe.',
+    );
   });
 
   it.each([
@@ -933,18 +1014,23 @@ describe('runPrompt', () => {
 
     await waitForAssertion(() => {
       expect(processMock.listener(signal)).toBeDefined();
+      expect(mocks.session.prompt).toHaveBeenCalled();
     });
 
-    await processMock.listener(signal)?.();
+    const signalCleanup = processMock.listener(signal)?.();
+    await Promise.resolve();
+
+    expect(processMock.exit).not.toHaveBeenCalled();
+    for (const handler of mocks.eventHandlers) {
+      handler(mocks.mainEvent({ type: 'turn.ended', turnId: 7, reason: 'cancelled' }));
+    }
+    releasePrompt();
+    await signalCleanup;
 
     expect(mocks.shutdownTelemetry).toHaveBeenCalled();
     expect(mocks.harnessClose).toHaveBeenCalled();
     expect(processMock.exit).toHaveBeenCalledWith(exitCode);
 
-    for (const handler of mocks.eventHandlers) {
-      handler(mocks.mainEvent({ type: 'turn.ended', turnId: 7, reason: 'completed' }));
-    }
-    releasePrompt();
     await run;
 
     expect(mocks.harnessClose).toHaveBeenCalledTimes(1);
@@ -952,20 +1038,9 @@ describe('runPrompt', () => {
 
   it('waits for the pending auto permission write before signal restore', async () => {
     let releaseAutoPermission!: () => void;
-    let releasePrompt!: () => void;
     mocks.session.setPermission.mockImplementationOnce(async () => {
       await new Promise<void>((resolve) => {
         releaseAutoPermission = resolve;
-      });
-    });
-    mocks.session.prompt.mockImplementationOnce(async () => {
-      for (const handler of mocks.eventHandlers) {
-        handler(
-          mocks.mainEvent({ type: 'turn.started', turnId: 7, origin: { kind: 'user' } }),
-        );
-      }
-      await new Promise<void>((resolve) => {
-        releasePrompt = resolve;
       });
     });
     const processMock = fakeProcess();
@@ -977,7 +1052,7 @@ describe('runPrompt', () => {
 
     await waitForAssertion(() => {
       expect(processMock.listener('SIGINT')).toBeDefined();
-      expect(mocks.session.setPermission).toHaveBeenCalledWith('auto');
+      expect(mocks.session.setPermission).toHaveBeenCalledWith('auto', { transient: true });
     });
     expect(processMock.once.mock.invocationCallOrder[0]).toBeLessThan(
       mocks.session.setPermission.mock.invocationCallOrder[0]!,
@@ -991,17 +1066,11 @@ describe('runPrompt', () => {
     releaseAutoPermission();
     await signalCleanup;
 
-    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(2, 'manual');
+    expect(mocks.session.setPermission).toHaveBeenNthCalledWith(2, 'manual', { transient: true });
     expect(processMock.exit).toHaveBeenCalledWith(130);
 
-    await waitForAssertion(() => {
-      expect(mocks.session.prompt).toHaveBeenCalledWith('say hello');
-    });
-    for (const handler of mocks.eventHandlers) {
-      handler(mocks.mainEvent({ type: 'turn.ended', turnId: 7, reason: 'completed' }));
-    }
-    releasePrompt();
     await run;
+    expect(mocks.session.prompt).not.toHaveBeenCalled();
   });
 
   it('uses auto permission so headless mode can bypass plan approval and questions', async () => {
@@ -1011,8 +1080,9 @@ describe('runPrompt', () => {
     });
 
     expect(mocks.harnessCreateSession).toHaveBeenCalledWith(
-      expect.objectContaining({ permission: 'auto' }),
+      expect.objectContaining({ permission: 'manual' }),
     );
+    expect(mocks.session.setPermission).toHaveBeenCalledWith('auto', { transient: true });
   });
 
   it('throws when no default model is configured', async () => {
@@ -1030,12 +1100,21 @@ describe('runPrompt', () => {
     expect(mocks.harnessClose).toHaveBeenCalled();
   });
 
-  it('rejects when the turn fails and still closes resources', async () => {
+  it('reports a failed turn and still closes resources', async () => {
+    process.exitCode = undefined;
     mocks.session.prompt.mockImplementationOnce(async () => {
       for (const handler of mocks.eventHandlers) {
         handler(
           mocks.mainEvent({ type: 'turn.started', turnId: 2, origin: { kind: 'user' } }),
         );
+        handler(mocks.mainEvent({ type: 'turn.step.started', turnId: 2, step: 1 }));
+        handler(mocks.mainEvent({
+          type: 'tool.call.started',
+          turnId: 2,
+          toolCallId: 'tc_failed',
+          name: 'Shell',
+          args: { command: 'pnpm test' },
+        }));
         handler(
           mocks.mainEvent({
             type: 'turn.ended',
@@ -1046,19 +1125,70 @@ describe('runPrompt', () => {
         );
       }
     });
+    const stdout = writer();
+    const stderr = writer();
 
-    await expect(
-      runPrompt(opts(), '1.2.3-test', {
-        stdout: { write: vi.fn(() => true) },
-        stderr: { write: vi.fn(() => true) },
-      }),
-    ).rejects.toThrow('provider.error: model failed');
+    await runPrompt(opts(), '1.2.3-test', {
+      stdout,
+      stderr,
+    });
 
+    expect(stderr.text()).toContain('Outcome    ERROR');
+    expect(stderr.text()).toContain('Exit       1 — provider.error: model failed');
+    expect(stderr.text()).toContain('Activity   1 step(s) · 1 tool(s) · 1 command(s)');
+    expect(process.exitCode).toBe(1);
     expect(mocks.shutdownTelemetry).toHaveBeenCalled();
     expect(mocks.harnessClose).toHaveBeenCalled();
+    process.exitCode = undefined;
   });
 
-  it('rejects with a friendly message when the provider filters the response', async () => {
+  it('reports a failed prompt as JSONL with the actual exit code and activity', async () => {
+    process.exitCode = undefined;
+    mocks.session.prompt.mockImplementationOnce(async () => {
+      for (const handler of mocks.eventHandlers) {
+        handler(mocks.mainEvent({ type: 'turn.started', turnId: 3, origin: { kind: 'user' } }));
+        handler(mocks.mainEvent({ type: 'turn.step.started', turnId: 3, step: 1 }));
+        handler(mocks.mainEvent({
+          type: 'tool.call.started',
+          turnId: 3,
+          toolCallId: 'tc_failed_json',
+          name: 'Shell',
+          args: { command: 'pnpm test' },
+        }));
+        handler(mocks.mainEvent({
+          type: 'turn.ended',
+          turnId: 3,
+          reason: 'failed',
+          error: { code: 'provider.error', message: 'model failed' },
+        }));
+      }
+    });
+    const stdout = writer();
+    const stderr = writer();
+
+    await runPrompt(opts({ outputFormat: 'stream-json' }), '1.2.3-test', {
+      stdout,
+      stderr,
+    });
+
+    const lines = stdout.text().trim().split('\n').map((line) => JSON.parse(line));
+    expect(lines).toContainEqual(expect.objectContaining({
+      role: 'meta',
+      type: 'run.summary',
+      outcome: 'ERROR',
+      exit_code: 1,
+      activity: {
+        steps: 1,
+        tools: ['Shell'],
+        commands: ['pnpm test'],
+      },
+    }));
+    expect(stderr.text()).toBe('');
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
+  });
+
+  it('reports a friendly message when the provider filters the response', async () => {
     mocks.session.prompt.mockImplementationOnce(async () => {
       for (const handler of mocks.eventHandlers) {
         handler(mocks.mainEvent({ type: 'turn.started', turnId: 2, origin: { kind: 'user' } }));
@@ -1072,13 +1202,13 @@ describe('runPrompt', () => {
       }
     });
 
-    await expect(
-      runPrompt(opts(), '1.2.3-test', {
-        stdout: { write: vi.fn(() => true) },
-        stderr: { write: vi.fn(() => true) },
-      }),
-    ).rejects.toThrow('Provider safety policy blocked the response.');
+    const stderr = writer();
+    await runPrompt(opts(), '1.2.3-test', {
+      stdout: { write: vi.fn(() => true) },
+      stderr,
+    });
 
+    expect(stderr.text()).toContain('Provider safety policy blocked the response.');
     expect(mocks.shutdownTelemetry).toHaveBeenCalled();
     expect(mocks.harnessClose).toHaveBeenCalled();
   });
@@ -1111,7 +1241,8 @@ describe('runPrompt', () => {
       await runPrompt(opts({ prompt: 'say hello' }), '1.2.3-test', { stdout, stderr });
 
       expect(stdout.text()).toBe('• hello world\n\n');
-      expect(stderr.text()).toBe('To resume this session: wukong -r ses_prompt\n');
+      expect(stderr.text()).toContain('Outcome    COMPLETED');
+      expect(stderr.text()).toContain('Resume     wukong -r ses_prompt');
       expect(mocks.shutdownTelemetry).toHaveBeenCalled();
       expect(mocks.harnessClose).toHaveBeenCalled();
     });
@@ -1163,12 +1294,43 @@ describe('runPrompt', () => {
         [
           '{"role":"assistant","content":"ok"}',
           '{"type":"goal.summary","goalId":"goal-123","status":"complete"}',
-          '{"role":"meta","type":"session.resume_hint","session_id":"ses_prompt","command":"wukong -r ses_prompt","content":"To resume this session: wukong -r ses_prompt"}',
           '',
         ].join('\n'),
       );
       expect(stderr.text()).toBe('');
       expect(process.exitCode).toBeUndefined();
+    });
+
+    it('fails closed when a headless /goal run has no durable goal snapshot', async () => {
+      process.exitCode = undefined;
+      mocks.parseHeadlessGoalCreate.mockReturnValue({
+        kind: 'goal',
+        objective: 'write tests',
+        replace: false,
+      });
+      mocks.session.createGoal.mockResolvedValueOnce({ goalId: 'goal-missing' });
+      mocks.session.getGoal.mockResolvedValueOnce({ goal: null });
+      mocks.goalExitCode.mockReturnValueOnce(2);
+      mocks.session.prompt.mockImplementationOnce(async () => {
+        for (const handler of mocks.eventHandlers) {
+          handler(mocks.mainEvent({ type: 'turn.started', turnId: 10, origin: { kind: 'user' } }));
+          handler(mocks.mainEvent({
+            type: 'goal.updated',
+            change: { kind: 'completion' },
+            snapshot: null,
+          }));
+          handler(mocks.mainEvent({ type: 'turn.ended', turnId: 10, reason: 'completed' }));
+        }
+      });
+
+      await runPrompt(opts({ prompt: '/goal write tests' }), '1.2.3-test', {
+        stdout: writer(),
+        stderr: writer(),
+      });
+
+      expect(mocks.goalExitCode).toHaveBeenCalledWith(undefined);
+      expect(process.exitCode).toBe(2);
+      process.exitCode = undefined;
     });
 
     it('waits for a later Goal turn instead of finishing after the first turn', async () => {
@@ -1272,6 +1434,7 @@ describe('runPrompt', () => {
     });
 
     it('records runtime failures as Loop ERROR instead of completed NEEDS_WORK', async () => {
+      process.exitCode = undefined;
       mocks.parseHeadlessGoalCreate.mockReturnValue({
         kind: 'loop',
         objective: 'fix tests',
@@ -1295,19 +1458,41 @@ describe('runPrompt', () => {
             reason: 'failed',
             error: { message: 'provider unavailable' },
           }));
+          handler(mocks.mainEvent({
+            type: 'goal.updated',
+            change: { kind: 'lifecycle', status: 'paused' },
+            snapshot: { goalId: 'goal-runtime-error', status: 'paused', iteration: 1 },
+          }));
         }
       });
 
-      await expect(runPrompt(opts({ prompt: '/loop fix tests' }), '1.2.3-test', {
-        stdout: writer(),
-        stderr: writer(),
-      })).rejects.toThrow('provider unavailable');
+      const stdout = writer();
+      const stderr = writer();
+
+      await runPrompt(opts({ prompt: '/loop fix tests', outputFormat: 'stream-json' }), '1.2.3-test', {
+        stdout,
+        stderr,
+      });
 
       expect(mocks.completeLoopRun).toHaveBeenCalledWith(
         expect.objectContaining({ runId: 'run123' }),
         'ERROR',
         1,
       );
+      const lines = stdout.text().trim().split('\n').map((line) => JSON.parse(line));
+      expect(lines).toContainEqual(expect.objectContaining({
+        type: 'loop.result',
+        status: 'ERROR',
+        reasonCode: 'runtime_error',
+        writerIterations: 1,
+        checks: [],
+        evidence: { verification: 'not_run', reviewer: 'not_run' },
+      }));
+      expect(lines).not.toContainEqual(expect.objectContaining({
+        type: 'session.resume_hint',
+      }));
+      expect(process.exitCode).toBe(2);
+      process.exitCode = undefined;
     });
 
     it('routes a missing Loop model through preflight before local lifecycle creation', async () => {
@@ -1420,18 +1605,23 @@ describe('runPrompt', () => {
 
       await waitForAssertion(() => {
         expect(processMock.listener('SIGINT')).toBeDefined();
+        expect(mocks.session.prompt).toHaveBeenCalled();
       });
 
-      await processMock.listener('SIGINT')?.();
+      const signalCleanup = processMock.listener('SIGINT')?.();
+      await Promise.resolve();
+
+      expect(processMock.exit).not.toHaveBeenCalled();
+      for (const handler of mocks.eventHandlers) {
+        handler(mocks.mainEvent({ type: 'turn.ended', turnId: 11, reason: 'cancelled' }));
+      }
+      releasePrompt();
+      await signalCleanup;
 
       expect(mocks.shutdownTelemetry).toHaveBeenCalled();
       expect(mocks.harnessClose).toHaveBeenCalled();
       expect(processMock.exit).toHaveBeenCalledWith(130);
 
-      for (const handler of mocks.eventHandlers) {
-        handler(mocks.mainEvent({ type: 'turn.ended', turnId: 11, reason: 'completed' }));
-      }
-      releasePrompt();
       await run;
 
       expect(mocks.harnessClose).toHaveBeenCalledTimes(1);

@@ -92,6 +92,7 @@ export interface SetSessionThinkingRpcInput extends SessionIdRpcInput {
 
 export interface SetSessionPermissionRpcInput extends SessionIdRpcInput {
   readonly mode: PermissionMode;
+  readonly transient?: boolean;
 }
 
 export interface SetSessionPlanModeRpcInput extends SessionIdRpcInput {
@@ -351,6 +352,7 @@ export abstract class SDKRpcClientBase {
       sessionId: input.sessionId,
       agentId: this.interactiveAgentId,
       mode: input.mode,
+      transient: input.transient,
     });
   }
 

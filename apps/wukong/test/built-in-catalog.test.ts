@@ -88,6 +88,26 @@ describe('fetchProviderCatalog', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
+  it('can prove the embedded snapshot without making a network request', async () => {
+    const fetchImpl = vi.fn();
+
+    const result = await fetchProviderCatalog({
+      offline: true,
+      fetchImpl,
+      builtInCatalogJson,
+    });
+
+    expect(result.source).toBe('built-in');
+    expect(result.catalog).toHaveProperty('example');
+    expect(fetchImpl).not.toHaveBeenCalled();
+  });
+
+  it('fails closed in offline mode when the build has no embedded snapshot', async () => {
+    await expect(
+      fetchProviderCatalog({ offline: true, builtInCatalogJson: '' }),
+    ).rejects.toThrow('this build has no built-in snapshot');
+  });
+
   it('preserves the live error when no built-in snapshot is available', async () => {
     const error = new TypeError('fetch failed');
     const fetchImpl = vi.fn(async () => {

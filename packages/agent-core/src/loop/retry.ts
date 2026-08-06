@@ -1,5 +1,6 @@
 import { sleep } from '@antfu/utils';
 import * as retry from 'retry';
+import { randomUUID } from 'node:crypto';
 
 import type { Logger } from '#/logging/types';
 
@@ -26,25 +27,69 @@ export interface ChatWithRetryInput {
 }
 
 export async function chatWithRetry(input: ChatWithRetryInput): Promise<LLMChatResponse> {
-  const maxAttempts = input.maxAttempts ?? DEFAULT_MAX_RETRY_ATTEMPTS;
-
-  if (input.llm.isRetryableError === undefined || maxAttempts <= 1) {
-    const effectiveMaxAttempts = Math.max(maxAttempts, 1);
-    try {
-      return await input.llm.chat(paramsForAttempt(input, 1, effectiveMaxAttempts));
-    } catch (error) {
-      logRequestFailure(input, error, 1, effectiveMaxAttempts);
-      throw error;
-    }
-  }
-
+  const maxAttempts = Math.max(input.maxAttempts ?? DEFAULT_MAX_RETRY_ATTEMPTS, 1);
   const delays = retryBackoffDelays(maxAttempts);
+  const idempotencyKey = input.params.idempotencyKey ?? `wukong-${input.stepUuid}`;
 
   for (let attempt = 1; ; attempt += 1) {
+    input.params.signal.throwIfAborted();
+    const requestId = randomUUID();
+    let outputObserved = false;
+    await input.dispatchEvent({
+      type: 'provider.request',
+      requestId,
+      idempotencyKey,
+      turnId: input.turnId,
+      step: input.currentStep,
+      stepUuid: input.stepUuid,
+      attempt,
+      maxAttempts,
+      state: 'started',
+    });
     try {
-      return await input.llm.chat(paramsForAttempt(input, attempt, maxAttempts));
+      const response = await input.llm.chat(paramsForAttempt(
+        input,
+        attempt,
+        maxAttempts,
+        idempotencyKey,
+        () => { outputObserved = true; },
+      ));
+      await input.dispatchEvent({
+        type: 'provider.request',
+        requestId,
+        idempotencyKey,
+        turnId: input.turnId,
+        step: input.currentStep,
+        stepUuid: input.stepUuid,
+        attempt,
+        maxAttempts,
+        state: 'succeeded',
+        outputObserved,
+      });
+      return response;
     } catch (error) {
-      if (attempt >= maxAttempts || !input.llm.isRetryableError(error)) {
+      const fields = retryErrorFields(error);
+      const retryable = input.llm.isRetryableError?.(error) === true;
+      const outcomeUnknown = outputObserved || fields.statusCode === undefined;
+      await input.dispatchEvent({
+        type: 'provider.request',
+        requestId,
+        idempotencyKey,
+        turnId: input.turnId,
+        step: input.currentStep,
+        stepUuid: input.stepUuid,
+        attempt,
+        maxAttempts,
+        state: outcomeUnknown ? 'outcome_unknown' : 'failed',
+        outputObserved,
+        ...fields,
+      });
+      if (
+        attempt >= maxAttempts
+        || input.llm.isRetryableError === undefined
+        || !retryable
+        || outcomeUnknown
+      ) {
         logRequestFailure(input, error, attempt, maxAttempts);
         throw error;
       }
@@ -86,14 +131,44 @@ function paramsForAttempt(
   input: ChatWithRetryInput,
   attempt: number,
   maxAttempts: number,
+  idempotencyKey: string,
+  markOutputObserved: () => void,
 ): LLMChatParams {
   const turnStep = `${input.turnId}.${String(input.currentStep)}`;
   return {
     ...input.params,
+    idempotencyKey,
+    onTextDelta: wrapObserved(input.params.onTextDelta, markOutputObserved),
+    onThinkDelta: wrapObserved(input.params.onThinkDelta, markOutputObserved),
+    onToolCallDelta: wrapObserved(input.params.onToolCallDelta, markOutputObserved),
+    onTextPart: wrapObservedAsync(input.params.onTextPart, markOutputObserved),
+    onThinkPart: wrapObservedAsync(input.params.onThinkPart, markOutputObserved),
     requestLogFields:
       attempt === 1
         ? { turnStep }
         : { turnStep, attempt: `${String(attempt)}/${String(maxAttempts)}` },
+  };
+}
+
+function wrapObserved<T>(
+  callback: ((value: T) => void) | undefined,
+  mark: () => void,
+): ((value: T) => void) | undefined {
+  if (callback === undefined) return undefined;
+  return (value) => {
+    mark();
+    callback(value);
+  };
+}
+
+function wrapObservedAsync<T>(
+  callback: ((value: T) => Promise<void> | void) | undefined,
+  mark: () => void,
+): ((value: T) => Promise<void>) | undefined {
+  if (callback === undefined) return undefined;
+  return async (value) => {
+    mark();
+    await callback(value);
   };
 }
 

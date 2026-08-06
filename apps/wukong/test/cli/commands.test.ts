@@ -20,6 +20,16 @@ describe('createProgram', () => {
     expect(program.version()).toBe('1.2.3');
   });
 
+  it('exposes login and logout as top-level account commands', () => {
+    const program = createProgram('1.2.3', () => {}, () => {});
+    const commandNames = program.commands.map((command) => command.name());
+    const help = program.helpInformation();
+
+    expect(commandNames).toContain('login');
+    expect(commandNames).toContain('logout');
+    expect(help).toMatch(/^\s+logout\s+Revoke the Wukong account session/mu);
+  });
+
   it('shows canonical session, permission, and headless options', () => {
     const program = createProgram('1.2.3', () => {}, () => {});
     const help = program.helpInformation();

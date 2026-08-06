@@ -9,6 +9,7 @@ import { registerExportCommand } from './sub/export';
 import { registerGuardCommand } from './sub/guard';
 import { registerJudgeCommand } from './sub/judge';
 import { registerLoginCommand } from './sub/login';
+import { registerLogoutCommand } from './sub/logout';
 import { parseVerificationSkills, registerLoopCommand } from './sub/loop';
 import { registerProofCommand } from './sub/proof';
 import { registerProviderCommand } from './sub/provider';
@@ -176,6 +177,7 @@ export function createProgram(
   });
   registerGuardCommand(program);
   registerLoginCommand(program);
+  registerLogoutCommand(program);
   registerReviewCommand(program);
   registerRolesCommand(program);
   registerDoctorCommand(program);

@@ -18,7 +18,7 @@
 - 交互式启动会先读取本地更新缓存，再在后台刷新远端 manifest。
 - `npm`、`pnpm`、`yarn`、`bun` 全局安装支持后台自动安装；默认 `auto_install = true`。
 - Homebrew 和 native binary 不会在启动 preflight 中执行后台安装；native macOS/Linux 用户会被引导运行 `wukong upgrade`。
-- 主动运行 `wukong upgrade` 时，受支持的包管理器、Homebrew 和 native macOS/Linux 会直接完成升级；native 安装器锁定目标版本、校验 Release SHA-256，并以原子替换更新当前二进制。native Windows 和无法识别的安装来源回退到下载页。
+- 主动运行 `wukong upgrade` 时，受支持的包管理器和 native macOS/Linux 会直接完成升级；native 安装器锁定目标版本、校验 Release SHA-256，并以原子替换更新当前二进制。代码能识别 Homebrew 安装来源，但目前没有公开可安装的 formula，因此不能把 Homebrew 当作现有用户的公开升级路径。native Windows 和无法识别的安装来源回退到下载页。
 - 后台安装成功后，下次交互式启动显示成功通知和 changelog 链接。
 - 在 TUI 输入 `/settings`，选择 `Upgrade` 可以开关后台自动安装；也可以编辑 `~/.wukong/tui.toml`：
 

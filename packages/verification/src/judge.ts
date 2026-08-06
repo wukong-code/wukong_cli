@@ -45,6 +45,13 @@ function deterministicVerdict(
 ): { readonly verdict: JudgeVerdict; readonly reason: string } {
   const allRisks = [...proof.verification.risks, ...proof.scan.risks];
 
+  if (proof.verification.commandResults.length === 0) {
+    return {
+      verdict: 'block',
+      reason: 'No verification commands were discovered or supplied.',
+    };
+  }
+
   if (proof.verification.status === 'failed') {
     const failedCommands = proof.verification.commandResults.some((command) => command.status !== 'passed');
     if (failedCommands) {

@@ -43,6 +43,25 @@ export interface LoopStepRetryingEvent {
   readonly statusCode?: number;
 }
 
+export interface LoopProviderRequestEvent {
+  readonly type: 'provider.request';
+  readonly requestId: string;
+  readonly idempotencyKey: string;
+  readonly turnId: string;
+  readonly step: number;
+  readonly stepUuid: string;
+  readonly goalId?: string;
+  readonly loopRunId?: string;
+  readonly sourceAgentId?: string;
+  readonly attempt: number;
+  readonly maxAttempts: number;
+  readonly state: 'started' | 'succeeded' | 'failed' | 'outcome_unknown';
+  readonly outputObserved?: boolean;
+  readonly errorName?: string;
+  readonly errorMessage?: string;
+  readonly statusCode?: number;
+}
+
 export interface LoopContentPartEvent {
   readonly type: 'content.part';
   readonly uuid: string;
@@ -106,6 +125,7 @@ export interface LoopToolProgressEvent {
 export type LoopRecordedEvent =
   | LoopStepBeginEvent
   | LoopStepEndEvent
+  | LoopProviderRequestEvent
   | LoopContentPartEvent
   | LoopToolCallEvent
   | LoopToolResultEvent;
@@ -149,6 +169,7 @@ function isRecordedEvent(event: LoopEvent): event is LoopRecordedEvent {
   return (
     event.type === 'step.begin' ||
     event.type === 'step.end' ||
+    event.type === 'provider.request' ||
     event.type === 'content.part' ||
     event.type === 'tool.call' ||
     event.type === 'tool.result'

@@ -1,6 +1,13 @@
 import { describe, it, expect, vi } from 'vitest';
 
-import { formatDuration, formatLoopPlan, parseEvery, parseMaxIterations, validateLoopOptions } from '#/cli/sub/loop';
+import {
+    formatDuration,
+    formatHeadlessStartFlags,
+    formatLoopPlan,
+    parseEvery,
+    parseMaxIterations,
+    validateLoopOptions,
+} from '#/cli/sub/loop';
 import { createProgram } from '#/cli/commands';
 import type { CLIOptions } from '#/cli/options';
 
@@ -14,10 +21,15 @@ vi.mock('@wukong/wukong-sdk', async (importOriginal) => {
                 defaultModel: 'fast',
                 models: {
                     fast: { provider: 'openai', model: 'writer' },
-                    slow: { provider: 'openai', model: 'reviewer' },
+                    slow: { provider: 'review', model: 'reviewer' },
                 },
                 providers: {
                     openai: { type: 'openai', apiKey: 'test' },
+                    review: {
+                        type: 'openai',
+                        apiKey: 'test-review',
+                        baseUrl: 'https://review.example/v1',
+                    },
                 },
             })),
             close: vi.fn(async () => {}),
@@ -108,6 +120,36 @@ describe('loop pure helpers', () => {
         });
         expect(output).toContain('Writer model: fast');
         expect(output).toContain('Reviewer model: slow');
+    });
+
+    it('prints the actual short-lived broker challenge and complete required flags', () => {
+        const output = formatHeadlessStartFlags({
+            proposal: {
+                gatePlan: { requiredChecks: [{ source: 'project-inferred' }] },
+                gateApproval: {
+                    approvalSetDigest: 'sha256:approval',
+                    hasExecutableChecks: true,
+                },
+                finishLineReview: {
+                    warnings: [{ id: 'missing-done-when' }],
+                    warningSetDigest: 'sha256:warnings',
+                },
+            },
+            trustChallenge: 'project.challenge',
+            brokerTrustChallenge: 'short-lived.broker-challenge',
+            brokerTrustProposal: { trustProposalDigest: 'sha256:not-the-challenge' },
+            reviewSubjectConsentProposal: { consentProposalDigest: 'sha256:consent' },
+            verificationSelection: undefined,
+            verificationCatalog: { catalogDigest: 'sha256:catalog', entries: [] },
+        } as never);
+
+        expect(output).toContain('--accept-discovered-checks');
+        expect(output).toContain('--approve-gate-plan sha256:approval');
+        expect(output).toContain('--ack-finish-line-warnings sha256:warnings');
+        expect(output).toContain('--trust-workspace project.challenge');
+        expect(output).toContain('--trust-review-subject short-lived.broker-challenge');
+        expect(output).not.toContain('sha256:not-the-challenge');
+        expect(output).toContain('--ack-review-subject sha256:consent');
     });
 });
 

@@ -6,16 +6,15 @@
  */
 
 import { createHash } from 'node:crypto';
-import { homedir } from 'node:os';
 import { join } from 'node:path';
+
+import { resolveWukongHome } from '@wukong/wukong-sdk';
 
 import {
   WUKONG_CODE_BANNER_DIR_NAME,
   WUKONG_CODE_BANNER_STATE_FILE_NAME,
   WUKONG_CODE_BIN_DIR_NAME,
   WUKONG_CODE_CACHE_DIR_NAME,
-  WUKONG_CODE_DATA_DIR_NAME,
-  WUKONG_CODE_HOME_ENV,
   WUKONG_CODE_INPUT_HISTORY_DIR_NAME,
   WUKONG_CODE_LOG_DIR_NAME,
   WUKONG_CODE_STATS_DIR_NAME,
@@ -32,14 +31,11 @@ import {
 /**
  * Return the root data directory for Wukong.
  *
- * Priority: `WUKONG_CODE_HOME` env var > `~/.wukong`.
+ * Priority: `WUKONG_CODE_HOME` > deprecated `WUKONG_HOME` > `~/.wukong`.
+ * Conflicting primary and legacy values fail closed in the shared resolver.
  */
 export function getDataDir(): string {
-  const envDir = process.env[WUKONG_CODE_HOME_ENV];
-  if (envDir) {
-    return envDir;
-  }
-  return join(homedir(), WUKONG_CODE_DATA_DIR_NAME);
+  return resolveWukongHome();
 }
 
 /**

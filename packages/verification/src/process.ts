@@ -38,7 +38,7 @@ function runSpawn(
     let stderr = '';
     let timedOut = false;
     let settled = false;
-    let killTimer: NodeJS.Timeout | undefined;
+    let terminationStarted = false;
     const child = spawn(file, args, {
       cwd: options.cwd,
       shell: options.shell,
@@ -50,30 +50,45 @@ function runSpawn(
 
     function killSubtree(signal: NodeJS.Signals) {
       try {
-        if (process.platform === 'win32' || child.pid === undefined) {
-          child.kill(signal);
+        if (child.pid === undefined) return;
+        if (process.platform === 'win32') {
+          const killer = spawn('taskkill', ['/T', '/F', '/PID', String(child.pid)], {
+            stdio: 'ignore',
+            windowsHide: true,
+          });
+          killer.once('error', () => {});
         } else {
           process.kill(-child.pid, signal);
         }
       } catch {
-        // Process may have already exited.
+        try {
+          child.kill(signal);
+        } catch {
+          // Process may have already exited.
+        }
       }
     }
 
-    function clearTimers() {
+    function beginTermination() {
+      if (terminationStarted) return;
+      terminationStarted = true;
+      killSubtree('SIGTERM');
+      const killTimer = setTimeout(() => {
+        killSubtree('SIGKILL');
+      }, 1500);
+      killTimer.unref?.();
+    }
+
+    function clearLifecycleTimers() {
       if (timer !== undefined) clearTimeout(timer);
-      if (killTimer !== undefined) clearTimeout(killTimer);
       options.signal?.removeEventListener('abort', onAbort);
     }
 
     function onAbort() {
       if (settled) return;
       settled = true;
-      clearTimers();
-      killSubtree('SIGTERM');
-      killTimer = setTimeout(() => {
-        killSubtree('SIGKILL');
-      }, 1500);
+      clearLifecycleTimers();
+      beginTermination();
       reject(options.signal === undefined ? new DOMException('This operation was aborted', 'AbortError') : abortReason(options.signal));
     }
 
@@ -82,10 +97,7 @@ function runSpawn(
       : setTimeout(() => {
           timedOut = true;
           // SIGTERM the whole subtree first, then hard-kill if it refuses.
-          killSubtree('SIGTERM');
-          killTimer = setTimeout(() => {
-            killSubtree('SIGKILL');
-          }, 1500);
+          beginTermination();
         }, options.timeoutMs);
     options.signal?.addEventListener('abort', onAbort, { once: true });
 
@@ -97,11 +109,11 @@ function runSpawn(
     });
     child.on('error', (error) => {
       if (settled) {
-        clearTimers();
+        clearLifecycleTimers();
         return;
       }
       settled = true;
-      clearTimers();
+      clearLifecycleTimers();
       // eslint-disable-next-line eslint-plugin-promise/no-multiple-resolved -- guarded by settled flag above
       resolve({
         exitCode: 1,
@@ -112,11 +124,11 @@ function runSpawn(
     });
     child.on('close', (code) => {
       if (settled) {
-        clearTimers();
+        clearLifecycleTimers();
         return;
       }
       settled = true;
-      clearTimers();
+      clearLifecycleTimers();
       // eslint-disable-next-line eslint-plugin-promise/no-multiple-resolved -- guarded by settled flag above
       resolve({ exitCode: code, timedOut, stdout, stderr });
     });

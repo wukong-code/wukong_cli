@@ -346,6 +346,7 @@ function transformPlainObject(data: Record<string, unknown>): Record<string, unk
 function transformProviderData(data: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
+    if (isShadowedLegacyConnectionKey(data, key)) continue;
     const targetKey = snakeToCamel(key);
     if (targetKey === 'oauth') {
       out[targetKey] = isPlainObject(value) ? transformPlainObject(value) : value;
@@ -419,6 +420,7 @@ function transformPermissionRule(value: unknown, decision?: 'allow' | 'deny' | '
 function transformServiceData(data: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
   for (const [key, value] of Object.entries(data)) {
+    if (isShadowedLegacyConnectionKey(data, key)) continue;
     const targetKey = snakeToCamel(key);
     if (targetKey === 'oauth') {
       out[targetKey] = isPlainObject(value) ? transformPlainObject(value) : value;
@@ -536,6 +538,12 @@ function setSection<T>(
 
 function providerToToml(provider: ProviderConfig, rawProvider: unknown): Record<string, unknown> {
   const out = cloneRecord(rawProvider);
+  // Older releases wrote camelCase connection fields. Keep accepting them on
+  // read, but never retain a second copy of a credential or endpoint when the
+  // provider is rewritten. Nested values such as source.apiKey are separate
+  // schemas and intentionally remain untouched.
+  delete out['apiKey'];
+  delete out['baseUrl'];
   for (const [key, value] of Object.entries(provider)) {
     if (key === 'oauth' && value !== undefined) {
       out[camelToSnake(key)] = oauthToToml(value as OAuthRef);
@@ -687,6 +695,15 @@ function oauthToToml(oauth: OAuthRef): Record<string, unknown> {
 
 function isPlainObject(value: unknown): value is Record<string, unknown> {
   return typeof value === 'object' && value !== null && !Array.isArray(value);
+}
+
+function isShadowedLegacyConnectionKey(
+  data: Record<string, unknown>,
+  key: string,
+): boolean {
+  if (key === 'apiKey') return Object.hasOwn(data, 'api_key');
+  if (key === 'baseUrl') return Object.hasOwn(data, 'base_url');
+  return false;
 }
 
 function cloneRecord(value: unknown): Record<string, unknown> {

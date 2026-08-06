@@ -105,6 +105,103 @@ describe('buildGoalReportLines', () => {
     expect(out).not.toContain('loop:NEEDS_WORK');
   });
 
+  it('shows the durable Loop blockers, fixes, continuation, and Next from the shared presentation', () => {
+    const out = lines(goal({
+      status: 'blocked',
+      stopCondition: 'proof-pass',
+      iteration: 4,
+      maxIterations: 4,
+      gateAttempts: 2,
+      loopRunId: 'run-current',
+      terminalReason: 'loop:NEEDS_WORK:max_iterations:Iteration ceiling reached.',
+      loopTerminal: {
+        schemaVersion: 1,
+        runId: 'run-current',
+        contractId: 'contract-1',
+        status: 'NEEDS_WORK',
+        reasonCode: 'max_iterations',
+        continuationPolicy: {
+          mode: 'same-contract',
+          automaticRetry: false,
+          requiresPreflightRevalidation: true,
+        },
+        blockerKeys: ['one', 'two', 'three', 'four'],
+        terminalDigest: 'terminal-digest',
+        createdAt: 1,
+      },
+      loopResult: {
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'max_iterations',
+        summary: 'Iteration ceiling reached.',
+        iterations: 4,
+        checks: [],
+        blockers: [
+          { id: 'one', kind: 'check', summary: 'First blocker.', nextAction: 'Fix first.' },
+          { id: 'two', kind: 'review', summary: 'Second blocker.', nextAction: 'Fix second.' },
+          { id: 'three', kind: 'workspace', summary: 'Third blocker.', nextAction: 'Fix third.' },
+          { id: 'four', kind: 'risk', summary: 'Fourth blocker.', nextAction: 'Fix fourth.' },
+        ],
+      },
+    }));
+
+    expect(out).toContain('Outcome    NEEDS_WORK');
+    expect(out).toContain('Reason     Iteration ceiling reached.');
+    expect(out).toContain('Blockers   4');
+    expect(out).toContain('Blocker 1  First blocker.');
+    expect(out).toContain('Fix        Fix first.');
+    expect(out).toContain('Blocker 2  Second blocker.');
+    expect(out).toContain('Blocker 3  Third blocker.');
+    expect(out).not.toContain('Fourth blocker.');
+    expect(out).toContain('More       1 additional blocker(s)');
+    expect(out).toContain('Continue   same-contract');
+    expect(out).toContain('Next       Address every blocker');
+    expect(out).toContain('/loop resume');
+  });
+
+  it('does not present a previous-run Loop result as the current terminal result', () => {
+    const out = lines(goal({
+      status: 'blocked',
+      stopCondition: 'proof-pass',
+      loopRunId: 'run-current',
+      loopTerminal: {
+        schemaVersion: 1,
+        runId: 'run-current',
+        contractId: 'contract-1',
+        status: 'ERROR',
+        reasonCode: 'runtime_error',
+        continuationPolicy: {
+          mode: 'blocked',
+          automaticRetry: false,
+          requiresPreflightRevalidation: true,
+        },
+        blockerKeys: [],
+        terminalDigest: 'terminal-digest',
+        createdAt: 1,
+      },
+      loopResult: {
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'max_iterations',
+        summary: 'Stale previous-run result.',
+        iterations: 3,
+        checks: [],
+        blockers: [{
+          id: 'stale',
+          kind: 'check',
+          summary: 'Stale blocker.',
+          nextAction: 'Do not show this as current.',
+        }],
+      },
+    }));
+
+    expect(out).toContain('Last gate  NEEDS_WORK');
+    expect(out).not.toContain('Blockers');
+    expect(out).not.toContain('Stale blocker.');
+    expect(out).not.toContain('Continue');
+    expect(out).not.toMatch(/^Next/m);
+  });
+
   it('truncates a very long objective with an ellipsis', () => {
     const long = 'word '.repeat(200).trim();
     const out = lines(goal({ objective: long }));

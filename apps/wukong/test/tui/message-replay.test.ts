@@ -18,6 +18,7 @@ import type { SessionEventHandler } from '#/tui/controllers/session-event-handle
 import type { StreamingUIController } from '#/tui/controllers/streaming-ui';
 import { AgentGroupComponent } from '#/tui/components/messages/agent-group';
 import { ReadGroupComponent } from '#/tui/components/messages/read-group';
+import { buildLoopResultCard } from '#/tui/utils/goal-completion';
 
 vi.mock('#/utils/open-url', () => ({ openUrl: vi.fn() }));
 
@@ -414,6 +415,116 @@ describe('WukongTUI resume message replay', () => {
     expect(transcript).toContain('Goal blocked');
     expect(transcript).toContain('Goal complete — done');
     expect(transcript).toContain('Worked 1 turn over 7m15s, using 4.3k tokens.');
+  });
+
+  it('replays a durable blocked Loop with the exact live terminal card', async () => {
+    const snapshot = goalSnapshot({
+      status: 'blocked',
+      stopCondition: 'proof-pass',
+      iteration: 4,
+      gateAttempts: 2,
+      loopRunId: 'run-current',
+      terminalReason: 'loop:NEEDS_WORK:max_iterations:Iteration ceiling reached.',
+      loopTerminal: {
+        schemaVersion: 1,
+        runId: 'run-current',
+        contractId: 'contract-1',
+        status: 'NEEDS_WORK',
+        reasonCode: 'max_iterations',
+        continuationPolicy: {
+          mode: 'same-contract',
+          automaticRetry: false,
+          requiresPreflightRevalidation: true,
+        },
+        blockerKeys: ['one', 'two'],
+        terminalDigest: 'terminal-digest',
+        createdAt: 1,
+      },
+      loopResult: {
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'max_iterations',
+        summary: 'Iteration ceiling reached.',
+        iterations: 4,
+        checks: [],
+        blockers: [
+          { id: 'one', kind: 'check', summary: 'First blocker.', nextAction: 'Fix first.' },
+          { id: 'two', kind: 'review', summary: 'Second blocker.', nextAction: 'Fix second.' },
+        ],
+      },
+    });
+    const driver = await replayIntoDriver([
+      goalReplay(
+        snapshot,
+        { kind: 'lifecycle', status: 'blocked', actor: 'model', reason: 'Iteration ceiling reached.' },
+      ),
+    ]);
+
+    const expected = buildLoopResultCard(snapshot.loopResult!, snapshot);
+    const terminalEntries = driver.state.transcriptEntries.filter((entry) =>
+      entry.content.includes('Outcome     NEEDS_WORK'),
+    );
+    expect(terminalEntries).toHaveLength(1);
+    expect(terminalEntries[0]).toMatchObject({
+      kind: 'status',
+      renderMode: 'plain',
+      content: expected,
+    });
+    expect(expected).toContain('Blocker 1   First blocker.');
+    expect(expected).toContain('Blocker 2   Second blocker.');
+    expect(expected).toContain('Continue    same-contract');
+    expect(expected).toContain('Next        Address every blocker, then run `/loop resume`');
+  });
+
+  it('does not replay a stale previous-run result as the current blocked terminal', async () => {
+    const driver = await replayIntoDriver([
+      goalReplay(
+        goalSnapshot({
+          status: 'blocked',
+          stopCondition: 'proof-pass',
+          loopRunId: 'run-current',
+          loopTerminal: {
+            schemaVersion: 1,
+            runId: 'run-current',
+            contractId: 'contract-1',
+            status: 'ERROR',
+            reasonCode: 'runtime_error',
+            continuationPolicy: {
+              mode: 'blocked',
+              automaticRetry: false,
+              requiresPreflightRevalidation: true,
+            },
+            blockerKeys: [],
+            terminalDigest: 'terminal-digest',
+            createdAt: 1,
+          },
+          loopResult: {
+            schemaVersion: 2,
+            status: 'NEEDS_WORK',
+            reasonCode: 'max_iterations',
+            summary: 'Stale previous-run result.',
+            iterations: 3,
+            checks: [],
+            blockers: [{
+              id: 'stale',
+              kind: 'check',
+              summary: 'Stale blocker.',
+              nextAction: 'Do not show this as current.',
+            }],
+          },
+        }),
+        { kind: 'lifecycle', status: 'blocked', actor: 'runtime' },
+      ),
+    ]);
+
+    expect(
+      driver.state.transcriptEntries
+        .filter((entry) => entry.kind === 'goal')
+        .map((entry) => entry.content),
+    ).toEqual(['Goal blocked']);
+    const content = driver.state.transcriptEntries.map((entry) => entry.content).join('\n');
+    expect(content).not.toContain('Stale previous-run result.');
+    expect(content).not.toContain('Stale blocker.');
   });
 
   it('filters resume-normalization goal pause markers in TUI replay', async () => {

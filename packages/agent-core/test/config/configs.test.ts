@@ -229,6 +229,72 @@ source = { kind = "apiJson", url = "https://registry.example/api.json", apiKey =
     });
   });
 
+  it('reads legacy connection keys but rewrites only canonical provider fields', async () => {
+    const dir = makeTempDir();
+    const configPath = join(dir, 'legacy-provider-keys.toml');
+    const toml = `
+[providers.mixed]
+type = "openai"
+api_key = "canonical-fixture-secret"
+apiKey = "legacy-shadowed-secret"
+base_url = "https://canonical.invalid/v1"
+baseUrl = "https://legacy-shadowed.invalid/v1"
+source = { kind = "apiJson", url = "https://registry.invalid/api.json", apiKey = "registry-fixture-secret" }
+
+[providers.legacy_only]
+type = "anthropic"
+apiKey = "legacy-only-fixture-secret"
+baseUrl = "https://legacy-only.invalid/v1"
+
+[services.wukong_search]
+api_key = "canonical-service-secret"
+apiKey = "legacy-shadowed-service-secret"
+base_url = "https://canonical-service.invalid/v1"
+baseUrl = "https://legacy-shadowed-service.invalid/v1"
+`;
+
+    const config = parseConfigString(toml, configPath);
+    expect(config.providers['mixed']).toMatchObject({
+      apiKey: 'canonical-fixture-secret',
+      baseUrl: 'https://canonical.invalid/v1',
+    });
+    expect(config.providers['legacy_only']).toMatchObject({
+      apiKey: 'legacy-only-fixture-secret',
+      baseUrl: 'https://legacy-only.invalid/v1',
+    });
+    expect(config.services?.wukongSearch).toMatchObject({
+      apiKey: 'canonical-service-secret',
+      baseUrl: 'https://canonical-service.invalid/v1',
+    });
+
+    await writeConfigFile(configPath, config);
+    const text = await readFile(configPath, 'utf-8');
+    const roundTripped = readConfigFile(configPath);
+    const rawProviders = roundTripped.raw?.['providers'] as Record<string, unknown>;
+    const rawMixed = rawProviders['mixed'] as Record<string, unknown>;
+    const rawLegacyOnly = rawProviders['legacy_only'] as Record<string, unknown>;
+    const rawServices = roundTripped.raw?.['services'] as Record<string, unknown>;
+    const rawSearch = rawServices['wukong_search'] as Record<string, unknown>;
+
+    expect(rawMixed).not.toHaveProperty('apiKey');
+    expect(rawMixed).not.toHaveProperty('baseUrl');
+    expect(rawLegacyOnly).not.toHaveProperty('apiKey');
+    expect(rawLegacyOnly).not.toHaveProperty('baseUrl');
+    expect(rawSearch).not.toHaveProperty('apiKey');
+    expect(rawSearch).not.toHaveProperty('baseUrl');
+    expect(text).not.toContain('legacy-shadowed-secret');
+    expect(text).not.toContain('legacy-shadowed-service-secret');
+    expect(text).not.toContain('https://legacy-shadowed.invalid/v1');
+    expect(text).not.toContain('https://legacy-shadowed-service.invalid/v1');
+    expect(text).toContain('api_key = "legacy-only-fixture-secret"');
+    expect(text).toContain('base_url = "https://legacy-only.invalid/v1"');
+    expect(text).toContain('apiKey = "registry-fixture-secret"');
+
+    expect(roundTripped.providers['mixed']?.apiKey).toBe('canonical-fixture-secret');
+    expect(roundTripped.providers['legacy_only']?.apiKey).toBe('legacy-only-fixture-secret');
+    expect(roundTripped.services?.wukongSearch?.apiKey).toBe('canonical-service-secret');
+  });
+
   it('round-trips OAuth refs with scoped OAuth hosts', async () => {
     const dir = makeTempDir();
     const configPath = join(dir, 'oauth-ref.toml');
@@ -593,7 +659,9 @@ micro_compaction = false
 describe('config path env override', () => {
   it('uses WUKONG_CODE_HOME when no explicit homeDir is supplied', () => {
     const saved = process.env['WUKONG_CODE_HOME'];
+    const savedLegacy = process.env['WUKONG_HOME'];
     try {
+      delete process.env['WUKONG_HOME'];
       process.env['WUKONG_CODE_HOME'] = '/tmp/wukong-from-env';
 
       expect(resolveWukongHome()).toBe('/tmp/wukong-from-env');
@@ -603,6 +671,42 @@ describe('config path env override', () => {
     } finally {
       if (saved === undefined) delete process.env['WUKONG_CODE_HOME'];
       else process.env['WUKONG_CODE_HOME'] = saved;
+      if (savedLegacy === undefined) delete process.env['WUKONG_HOME'];
+      else process.env['WUKONG_HOME'] = savedLegacy;
+    }
+  });
+
+  it('supports WUKONG_HOME as a deprecated isolation alias', () => {
+    const saved = process.env['WUKONG_CODE_HOME'];
+    const savedLegacy = process.env['WUKONG_HOME'];
+    try {
+      delete process.env['WUKONG_CODE_HOME'];
+      process.env['WUKONG_HOME'] = '/tmp/wukong-from-legacy-env';
+
+      expect(resolveWukongHome()).toBe('/tmp/wukong-from-legacy-env');
+      expect(resolveConfigPath({})).toBe('/tmp/wukong-from-legacy-env/config.toml');
+    } finally {
+      if (saved === undefined) delete process.env['WUKONG_CODE_HOME'];
+      else process.env['WUKONG_CODE_HOME'] = saved;
+      if (savedLegacy === undefined) delete process.env['WUKONG_HOME'];
+      else process.env['WUKONG_HOME'] = savedLegacy;
+    }
+  });
+
+  it('fails closed when WUKONG_CODE_HOME and WUKONG_HOME conflict', () => {
+    const saved = process.env['WUKONG_CODE_HOME'];
+    const savedLegacy = process.env['WUKONG_HOME'];
+    try {
+      process.env['WUKONG_CODE_HOME'] = '/tmp/wukong-primary';
+      process.env['WUKONG_HOME'] = '/tmp/wukong-legacy';
+
+      expectWukongErrorCode(() => resolveWukongHome(), ErrorCodes.CONFIG_INVALID);
+      expect(resolveWukongHome('/tmp/wukong-explicit')).toBe('/tmp/wukong-explicit');
+    } finally {
+      if (saved === undefined) delete process.env['WUKONG_CODE_HOME'];
+      else process.env['WUKONG_CODE_HOME'] = saved;
+      if (savedLegacy === undefined) delete process.env['WUKONG_HOME'];
+      else process.env['WUKONG_HOME'] = savedLegacy;
     }
   });
 });

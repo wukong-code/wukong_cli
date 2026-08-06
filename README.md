@@ -11,17 +11,24 @@ Give `/loop` a goal. Wukong works on the change, runs the repository's real
 checks, reviews the result from a fresh read-only context, and fixes blocking
 findings against the same goal.
 
-## Current release: v0.0.21
+## Current release: v0.0.22
 
-Version `0.0.21` improves Loop evidence integrity:
+`v0.0.22` is the published binary. This source checkout may also contain
+unreleased `0.1.0` stabilization work. The user-flow notes below describe the
+development checkout; they do not mean that `0.1.0-rc.1` has been published.
 
-- distinct occurrences of the same built-in risk are preserved across files,
-  lines, and evidence locations;
-- each occurrence has a stable identity derived from its complete finding;
-- exact duplicate input remains deterministic and can still be deduplicated;
-- deterministic Gate failures keep priority over reviewer output.
+Version `0.0.22` keeps provider setup usable when the primary remote catalog is down and
+clarifies the CLI's session and permission controls:
 
-See the [v0.0.21 release notes](docs/releases/0.0.21.md).
+- provider discovery falls back from the maintained catalog to models.dev when
+  the primary service is unavailable;
+- the source includes a final offline snapshot path, but the published 0.0.22
+  native archives omitted that snapshot because of a release-profile defect;
+- `-r, --resume` is the canonical CLI session-resume option;
+- help distinguishes guarded Auto, YOLO, Plan, headless `--yes`, and added
+  workspace access.
+
+See the [v0.0.22 release notes](docs/releases/0.0.22.md).
 
 ## What Wukong does
 
@@ -35,8 +42,9 @@ See the [v0.0.21 release notes](docs/releases/0.0.21.md).
   criteria discovered from trusted local Skills.
 - **Resume unfinished work** — continue local Wukong, Codex, Claude Code,
   Cursor, Kimi Code, or Grok sessions as read-only imported context.
-- **Return clear outcomes** — every Loop ends as `PASS`, `NEEDS_WORK`, or
-  `ERROR`, with a blocker and next action when work remains.
+- **Return clear outcomes** — a completed Gate ends as `PASS`, `NEEDS_WORK`,
+  or `ERROR`; `/loop stop` and a headless process interruption without a Gate
+  verdict are reported separately as `STOPPED_BY_USER`.
 - **Use your model provider** — configure the API key and model you want with
   `wukong provider`.
 
@@ -69,12 +77,60 @@ Inside the TUI:
 /loop add input validation to the signup form
 ```
 
-Or run a Loop directly:
+For headless use, preview first and add the exact check, Gate, workspace, and
+review authorization flags printed by the dry-run. Missing decisions fail
+closed instead of silently starting:
 
 ```sh
-wukong loop "add input validation to the signup form"
 wukong loop "add input validation to the signup form" --dry-run
+# Review “Headless start flags”, then rerun the same command with those flags.
 ```
+
+### From input to disposition
+
+Before a Loop starts, one TUI Preflight summary shows the exact Goal, Done when,
+Must not rules, selected project checks and review criteria, Writer/Reviewer,
+sanitized Provider origin, pre-existing Git changes, permission mode, outbound
+input limits, approval order, result handling, and iteration limit. It also
+states that no separate provider-call or token cap is currently enforced.
+Headless dry-run prints the same runtime facts and the exact flags needed to
+start. Security decisions remain separate approvals for local read, provider
+transmission, permission, and project-check execution. When there are risks,
+the default is to edit, inspect, or cancel; dangerous Continue is last.
+Starting with no executable checks does not create a shortcut to `PASS`.
+
+During execution, watch the current writer iteration, elapsed time, active tool
+or activity, and any real provider, permission, or check blocker. TUI
+`WRITE`/`CHECK`/`REVIEW` labels are activity hints; headless output currently
+reports writer iterations and running tools, and an internal reviewer is not
+always exposed as a distinct `REVIEW` phase. Model prose saying “done” is not a
+verified result.
+
+At the end, act on the deterministic terminal summary:
+
+- `PASS`: checks and the read-only reviewer passed. Inspect `git status --short`,
+  `git diff`, and `/loop status` or the review feedback for non-blocking
+  findings, then commit, push, or deliver through your own workflow.
+- `NEEDS_WORK`: read the primary blocker and Next action, then continue the Loop
+  or revise its Finish Line.
+- `ERROR`: provider, check, or local state did not produce a trustworthy result.
+  Repair the run conditions before retrying; this is neither code failure nor
+  `PASS`. If `provider_outcome_unknown` is present, first reconcile the request
+  ID/idempotency key with provider logs or billing and do not resume or retry
+  blindly.
+- `PAUSED`: TUI Ctrl-C or `/loop pause` parks the same Loop without a Gate
+  verdict. Workspace changes remain and `/loop resume` can continue it.
+- `STOPPED_BY_USER`: `/loop stop` or a headless process interruption stopped
+  the run without a Gate verdict. Inspect retained changes. `/loop stop`
+  discards the contract; a headless summary offers resume only when the
+  provider outcome is known.
+
+Cancelling at preflight creates no run. Auto permission denial inside a Loop is
+`NEEDS_WORK/permission_required`, not `STOPPED_BY_USER`. For automation, only a
+final durable `loop.result` outcome is a Gate verdict; a successful dry-run or
+another command exiting `0` is not `PASS`.
+
+Wukong never commits, pushes, or publishes merely because a Loop returns `PASS`.
 
 Resume local work from another coding agent:
 
@@ -91,16 +147,27 @@ Resume local work from another coding agent:
 | Command | Description |
 |---|---|
 | `wukong` | Launch the interactive TUI |
-| `wukong -p <prompt>` | Run one non-interactive prompt |
+| `wukong -p <prompt>` | Run one non-interactive prompt; `COMPLETED` is not Loop `PASS` |
 | `wukong provider` | Configure model providers and models |
 | `wukong loop <goal>` | Run write → check → review → fix against one goal |
 | `wukong review init` | Create `.wukong/review-policy.md` |
 | `wukong guard` | Inspect the command risk guard |
 | `wukong login` | Connect an optional Wukong account |
+| `wukong logout` | Revoke the account session and remove local credentials |
 | `wukong doctor` | Validate local configuration |
 | `wukong upgrade` | Upgrade a native installation |
 
 Run `wukong --help` for the complete command and option list.
+
+`wukong logout` first attempts to revoke the stored refresh token at the
+account's configured OAuth host, then always proceeds with local token and
+managed-config cleanup. A confirmed response reports that the remote session
+was revoked. If the network, rate limit, or server leaves revocation unknown,
+the command still clears local credentials and warns that the server session
+may remain active, with `https://wukong.today/contact` as the next step for
+immediate invalidation. Repeating logout with no token is safe and idempotent.
+If local cleanup itself cannot finish, the command reports an error instead of
+claiming a successful logout.
 
 ## Local data and privacy
 

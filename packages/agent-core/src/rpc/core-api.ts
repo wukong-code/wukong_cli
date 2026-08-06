@@ -208,6 +208,8 @@ export interface SetThinkingPayload {
 }
 export interface SetPermissionPayload {
   readonly mode: PermissionMode;
+  /** Process-local override; never append it to the durable session wire. */
+  readonly transient?: boolean;
 }
 export interface SetModelPayload {
   readonly model: string;

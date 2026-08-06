@@ -30,7 +30,7 @@ export const WORKING_TIPS: readonly ToolbarTip[] = [
   { text: '/resume to browse and continue earlier sessions', solo: true },
   { text: '/loop <goal> to write, check, review, and fix until ready', priority: 3, solo: true },
   { text: '/loop status to inspect the active Loop', solo: true },
-  { text: '/web: use the Web UI for a better experience', solo: true },
+  { text: 'after PASS, review git status and git diff — Wukong does not commit automatically', solo: true },
   { text: '@: mention files', priority: 2 },
   { text: '! to run a shell command', priority: 2 },
 ];
@@ -40,7 +40,7 @@ export const ALL_TIPS: readonly ToolbarTip[] = [
   { text: 'shift+enter: newline' },
   { text: 'ctrl+c: cancel' },
   { text: '/theme to switch the terminal UI theme' },
-  { text: '/auto when you want Wukong to handle approvals and keep going unattended' },
+  { text: '/auto works unattended within policy and stops at explicit approval boundaries' },
   { text: '/yolo to skip most approvals for trusted batch work, only use it in repos you trust' },
   { text: '/help: show commands' },
   { text: '/compact compresses context when it gets long', priority: 2 },

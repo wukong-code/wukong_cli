@@ -268,11 +268,13 @@ describe('Agent turn flow', () => {
       [wire] context.append_message      { "message": { "role": "user", "content": [ { "type": "text", "text": "Trigger generate failure" } ], "toolCalls": [], "origin": { "kind": "user" } }, "time": "<time>" }
       [wire] context.append_loop_event   { "event": { "type": "step.begin", "uuid": "<uuid-1>", "turnId": "0", "step": 1 }, "time": "<time>" }
       [emit] turn.step.started           { "turnId": 0, "step": 1, "stepId": "<uuid-1>" }
+      [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "started" }, "time": "<time>" }
+      [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "outcome_unknown", "outputObserved": false, "errorName": "Error", "errorMessage": "Unexpected generate call #1" }, "time": "<time>" }
       [emit] turn.step.interrupted       { "turnId": 0, "step": 1, "reason": "error", "message": "Unexpected generate call #1" }
-      [emit] turn.ended                  { "turnId": 0, "reason": "failed", "error": { "code": "internal", "message": "Unexpected generate call #1", "name": "Error", "retryable": false, "details": { "turnId": 0 } } }
+      [emit] turn.ended                  { "turnId": 0, "reason": "failed", "error": { "code": "internal", "message": "Unexpected generate call #1", "name": "Error", "retryable": false, "details": { "turnId": 0, "providerOutcomeUnknown": { "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "state": "outcome_unknown", "outputObserved": false } } } }
     `);
     expect(ctx.newEvents()).toMatchInlineSnapshot(
-      `[emit] error   { "code": "internal", "message": "Unexpected generate call #1", "name": "Error", "retryable": false, "details": { "turnId": 0 } }`,
+      `[emit] error   { "code": "internal", "message": "Unexpected generate call #1", "name": "Error", "retryable": false, "details": { "turnId": 0, "providerOutcomeUnknown": { "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "state": "outcome_unknown", "outputObserved": false } } }`,
     );
     await ctx.expectResumeMatches();
   });
@@ -950,6 +952,7 @@ describe('Agent turn flow', () => {
   it('resolves the latest request-scoped OAuth auth before each generation', async () => {
     const tokenCalls: Array<boolean | undefined> = [];
     const authKeys: string[] = [];
+    const idempotencyKeys: string[] = [];
     const tokens = ['first-turn-token', 'second-turn-token'];
     const oauthOptions = oauthAgentOptions(async (options) => {
       tokenCalls.push(options?.force);
@@ -967,6 +970,7 @@ describe('Agent turn flow', () => {
     ) => {
       const apiKey = options?.auth?.apiKey ?? '<missing>';
       authKeys.push(apiKey);
+      idempotencyKeys.push(options?.auth?.headers?.['Idempotency-Key'] ?? '<missing>');
       const text = `Generated with ${apiKey}`;
       await callbacks?.onMessagePart?.({ type: 'text', text });
       return textResult(text);
@@ -984,6 +988,8 @@ describe('Agent turn flow', () => {
     const secondEvents = await ctx.untilTurnEnd();
 
     expect(authKeys).toEqual(['first-turn-token', 'second-turn-token']);
+    expect(idempotencyKeys).toHaveLength(2);
+    expect(idempotencyKeys.every((key) => key.startsWith('wukong-'))).toBe(true);
     expect(tokenCalls).toEqual([undefined, undefined]);
     expect(firstEvents).toContainEqual(
       expect.objectContaining({
@@ -1528,7 +1534,7 @@ describe('Agent turn flow', () => {
       options?.onRequestStart?.();
       authKeys.push(options?.auth?.apiKey ?? '<missing>');
       if (authKeys.length === 1) {
-        throw new APIConnectionError('socket hang up');
+        throw new APIStatusError(503, 'service unavailable');
       }
       await callbacks?.onMessagePart?.({ type: 'text', text: 'Recovered after retry' });
       options?.onStreamEnd?.();
@@ -1549,7 +1555,7 @@ describe('Agent turn flow', () => {
         args: expect.objectContaining({
           failedAttempt: 1,
           nextAttempt: 2,
-          errorName: 'APIConnectionError',
+          errorName: 'APIStatusError',
         }),
       }),
     );
@@ -1632,9 +1638,11 @@ describe('Agent turn flow', () => {
       [wire] context.append_message      { "message": { "role": "user", "content": [ { "type": "text", "text": "Run a command" } ], "toolCalls": [], "origin": { "kind": "user" } }, "time": "<time>" }
       [wire] context.append_loop_event   { "event": { "type": "step.begin", "uuid": "<uuid-1>", "turnId": "0", "step": 1 }, "time": "<time>" }
       [emit] turn.step.started           { "turnId": 0, "step": 1, "stepId": "<uuid-1>" }
+      [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "started" }, "time": "<time>" }
       [emit] assistant.delta             { "turnId": 0, "delta": "I will run Bash." }
       [emit] tool.call.delta             { "turnId": 0, "toolCallId": "call_bash", "name": "Bash", "argumentsPart": "{\\"command\\":\\"printf should-not-run\\",\\"timeout\\":60}" }
-      [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-2>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "text", "text": "I will run Bash." } }, "time": "<time>" }
+      [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-3>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "text", "text": "I will run Bash." } }, "time": "<time>" }
+      [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "succeeded", "outputObserved": true }, "time": "<time>" }
       [emit] requestApproval             { "turnId": 0, "toolCallId": "call_bash", "toolName": "Bash", "action": "Running: printf should-not-run", "display": { "kind": "command", "command": "printf should-not-run", "cwd": "<cwd>", "language": "bash" } }
     `);
     expect(ctx.lastLlmInput()).toMatchInlineSnapshot(`
@@ -1671,6 +1679,51 @@ describe('Agent turn flow', () => {
     await ctx.expectResumeMatches();
   });
 
+  it('pauses an interrupted Loop with an unknown provider outcome without inventing a Gate ERROR', async () => {
+    let markProviderStarted!: () => void;
+    const providerStarted = new Promise<void>((resolve) => {
+      markProviderStarted = resolve;
+    });
+    const generate: GenerateFn = async (...args) => {
+      markProviderStarted();
+      return abortableGenerate(...args);
+    };
+    const ctx = testAgent({ generate });
+    ctx.configure();
+    await ctx.agent.goal.createGoal({
+      objective: 'Stop safely while the provider request is in flight',
+      stopCondition: 'proof-pass',
+      maxIterations: 3,
+    });
+
+    await ctx.rpc.prompt({ input: [{ type: 'text', text: 'Begin the Loop' }] });
+    await providerStarted;
+    await ctx.rpc.cancel({ turnId: 0 });
+    await ctx.untilTurnEnd();
+
+    expect(ctx.agent.context.unresolvedProviderRequests).toEqual([
+      expect.objectContaining({
+        state: 'outcome_unknown',
+        outputObserved: false,
+      }),
+    ]);
+    const goal = ctx.agent.goal.getGoal().goal;
+    expect(goal).toMatchObject({
+      status: 'paused',
+      iteration: 1,
+      providerOutcomeUnknown: {
+        state: 'outcome_unknown',
+        outputObserved: false,
+      },
+    });
+    expect(goal?.loopResult).toBeUndefined();
+    expect(goal?.loopTerminal).toBeUndefined();
+    expect(goal?.terminalReason).toContain('Reconcile the provider result');
+    await expect(ctx.agent.goal.resumeGoal()).rejects.toMatchObject({
+      code: ErrorCodes.GOAL_NOT_RESUMABLE,
+    });
+  });
+
   it('buffers steer input and includes it in the same turn after approval', async () => {
     const bashCall: ToolCall = {
       type: 'function',
@@ -1693,9 +1746,11 @@ describe('Agent turn flow', () => {
       [wire] context.append_message      { "message": { "role": "user", "content": [ { "type": "text", "text": "Run Bash, then listen" } ], "toolCalls": [], "origin": { "kind": "user" } }, "time": "<time>" }
       [wire] context.append_loop_event   { "event": { "type": "step.begin", "uuid": "<uuid-1>", "turnId": "0", "step": 1 }, "time": "<time>" }
       [emit] turn.step.started           { "turnId": 0, "step": 1, "stepId": "<uuid-1>" }
+      [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "started" }, "time": "<time>" }
       [emit] assistant.delta             { "turnId": 0, "delta": "I will ask first." }
       [emit] tool.call.delta             { "turnId": 0, "toolCallId": "call_bash", "name": "Bash", "argumentsPart": "{\\"command\\":\\"printf approved\\",\\"timeout\\":60}" }
-      [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-2>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "text", "text": "I will ask first." } }, "time": "<time>" }
+      [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-3>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "text", "text": "I will ask first." } }, "time": "<time>" }
+      [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "succeeded", "outputObserved": true }, "time": "<time>" }
       [emit] requestApproval             { "turnId": 0, "toolCallId": "call_bash", "toolName": "Bash", "action": "Running: printf approved", "display": { "kind": "command", "command": "printf approved", "cwd": "<cwd>", "language": "bash" } }
     `);
     expect(ctx.lastLlmInput()).toMatchInlineSnapshot(`
@@ -1728,12 +1783,14 @@ describe('Agent turn flow', () => {
       [wire] usage.record                        { "model": "mock-model", "usage": { "inputOther": 7, "output": 22, "inputCacheRead": 0, "inputCacheCreation": 0 }, "usageScope": "turn", "time": "<time>" }
       [emit] agent.status.updated                { "model": "mock-model", "contextTokens": 29, "maxContextTokens": 1000000, "contextUsage": 0.000029, "planMode": false, "swarmMode": false, "permission": "manual", "usage": { "byModel": { "mock-model": { "inputOther": 7, "output": 22, "inputCacheRead": 0, "inputCacheCreation": 0 } }, "total": { "inputOther": 7, "output": 22, "inputCacheRead": 0, "inputCacheCreation": 0 }, "currentTurn": { "inputOther": 7, "output": 22, "inputCacheRead": 0, "inputCacheCreation": 0 } } }
       [wire] context.append_message              { "message": { "role": "user", "content": [ { "type": "text", "text": "Also mention the steer." } ], "toolCalls": [], "origin": { "kind": "user" } }, "time": "<time>" }
-      [wire] context.append_loop_event           { "event": { "type": "step.begin", "uuid": "<uuid-3>", "turnId": "0", "step": 2 }, "time": "<time>" }
-      [emit] turn.step.started                   { "turnId": 0, "step": 2, "stepId": "<uuid-3>" }
+      [wire] context.append_loop_event           { "event": { "type": "step.begin", "uuid": "<uuid-4>", "turnId": "0", "step": 2 }, "time": "<time>" }
+      [emit] turn.step.started                   { "turnId": 0, "step": 2, "stepId": "<uuid-4>" }
+      [wire] context.append_loop_event           { "event": { "type": "provider.request", "requestId": "<uuid-5>", "idempotencyKey": "wukong-<uuid-4>", "turnId": "0", "step": 2, "stepUuid": "<uuid-4>", "attempt": 1, "maxAttempts": 3, "state": "started" }, "time": "<time>" }
       [emit] assistant.delta                     { "turnId": 0, "delta": "Approved, and I saw the steer." }
-      [wire] context.append_loop_event           { "event": { "type": "content.part", "uuid": "<uuid-4>", "turnId": "0", "step": 2, "stepUuid": "<uuid-3>", "part": { "type": "text", "text": "Approved, and I saw the steer." } }, "time": "<time>" }
-      [wire] context.append_loop_event           { "event": { "type": "step.end", "uuid": "<uuid-3>", "turnId": "0", "step": 2, "usage": { "inputOther": 39, "output": 11, "inputCacheRead": 0, "inputCacheCreation": 0 }, "finishReason": "end_turn" }, "time": "<time>" }
-      [emit] turn.step.completed                 { "turnId": 0, "step": 2, "stepId": "<uuid-3>", "usage": { "inputOther": 39, "output": 11, "inputCacheRead": 0, "inputCacheCreation": 0 }, "finishReason": "end_turn" }
+      [wire] context.append_loop_event           { "event": { "type": "content.part", "uuid": "<uuid-6>", "turnId": "0", "step": 2, "stepUuid": "<uuid-4>", "part": { "type": "text", "text": "Approved, and I saw the steer." } }, "time": "<time>" }
+      [wire] context.append_loop_event           { "event": { "type": "provider.request", "requestId": "<uuid-5>", "idempotencyKey": "wukong-<uuid-4>", "turnId": "0", "step": 2, "stepUuid": "<uuid-4>", "attempt": 1, "maxAttempts": 3, "state": "succeeded", "outputObserved": true }, "time": "<time>" }
+      [wire] context.append_loop_event           { "event": { "type": "step.end", "uuid": "<uuid-4>", "turnId": "0", "step": 2, "usage": { "inputOther": 39, "output": 11, "inputCacheRead": 0, "inputCacheCreation": 0 }, "finishReason": "end_turn" }, "time": "<time>" }
+      [emit] turn.step.completed                 { "turnId": 0, "step": 2, "stepId": "<uuid-4>", "usage": { "inputOther": 39, "output": 11, "inputCacheRead": 0, "inputCacheCreation": 0 }, "finishReason": "end_turn" }
       [wire] usage.record                        { "model": "mock-model", "usage": { "inputOther": 39, "output": 11, "inputCacheRead": 0, "inputCacheCreation": 0 }, "usageScope": "turn", "time": "<time>" }
       [emit] agent.status.updated                { "model": "mock-model", "contextTokens": 50, "maxContextTokens": 1000000, "contextUsage": 0.00005, "planMode": false, "swarmMode": false, "permission": "manual", "usage": { "byModel": { "mock-model": { "inputOther": 46, "output": 33, "inputCacheRead": 0, "inputCacheCreation": 0 } }, "total": { "inputOther": 46, "output": 33, "inputCacheRead": 0, "inputCacheCreation": 0 }, "currentTurn": { "inputOther": 46, "output": 33, "inputCacheRead": 0, "inputCacheCreation": 0 } } }
       [emit] turn.ended                          { "turnId": 0, "reason": "completed" }
@@ -1762,9 +1819,11 @@ describe('Agent turn flow', () => {
       [wire] context.append_message      { "message": { "role": "user", "content": [ { "type": "text", "text": "Start the active turn" } ], "toolCalls": [], "origin": { "kind": "user" } }, "time": "<time>" }
       [wire] context.append_loop_event   { "event": { "type": "step.begin", "uuid": "<uuid-1>", "turnId": "0", "step": 1 }, "time": "<time>" }
       [emit] turn.step.started           { "turnId": 0, "step": 1, "stepId": "<uuid-1>" }
+      [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "started" }, "time": "<time>" }
       [emit] assistant.delta             { "turnId": 0, "delta": "I will wait for approval." }
       [emit] tool.call.delta             { "turnId": 0, "toolCallId": "call_bash", "name": "Bash", "argumentsPart": "{\\"command\\":\\"printf should-not-run\\",\\"timeout\\":60}" }
-      [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-2>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "text", "text": "I will wait for approval." } }, "time": "<time>" }
+      [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-3>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "text", "text": "I will wait for approval." } }, "time": "<time>" }
+      [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "succeeded", "outputObserved": true }, "time": "<time>" }
       [emit] requestApproval             { "turnId": 0, "toolCallId": "call_bash", "toolName": "Bash", "action": "Running: printf should-not-run", "display": { "kind": "command", "command": "printf should-not-run", "cwd": "<cwd>", "language": "bash" } }
     `);
     expect(ctx.lastLlmInput()).toMatchInlineSnapshot(`

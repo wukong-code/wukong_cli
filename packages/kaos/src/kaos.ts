@@ -85,6 +85,17 @@ export interface Kaos {
     data: string,
     options?: { mode?: 'w' | 'a'; encoding?: BufferEncoding },
   ): Promise<number>;
+  /**
+   * Atomically replace a text file through a durable sibling temp file.
+   * Implementations may also write the same validated payload to `backupPath`
+   * before replacing the primary target, allowing callers to recover from
+   * external corruption without ever accepting a partial write.
+   */
+  writeTextAtomic?(
+    path: string,
+    data: string,
+    options?: { encoding?: BufferEncoding; backupPath?: string },
+  ): Promise<number>;
   /** Create a directory at `path`. */
   mkdir(path: string, options?: { parents?: boolean; existOk?: boolean }): Promise<void>;
 

@@ -2,7 +2,11 @@ import { createToolMessage, type ContentPart, type Message } from '@wukong/koson
 
 import type { Agent } from '..';
 import { ErrorCodes, WukongError } from '../../errors';
-import type { ExecutableToolResult, LoopRecordedEvent } from '../../loop';
+import type {
+  ExecutableToolResult,
+  LoopProviderRequestEvent,
+  LoopRecordedEvent,
+} from '../../loop';
 import { estimateTokensForMessages } from '../../utils/tokens';
 import { escapeXml } from '../../utils/xml-escape';
 import type { CompactionResult } from '../compaction';
@@ -35,6 +39,7 @@ export class ContextMemory {
   private openSteps: Map<string, ContextMessage> = new Map();
   private pendingToolResultIds = new Set<string>();
   private deferredMessages: ContextMessage[] = [];
+  private providerRequests = new Map<string, LoopProviderRequestEvent>();
   private _lastAssistantAt: number | null = null;
 
   constructor(protected readonly agent: Agent) {}
@@ -274,6 +279,19 @@ export class ContextMemory {
     this.closePendingToolResults();
   }
 
+  unresolvedProviderRequestsFor(
+    goalId: string,
+    loopRunId: string | undefined,
+  ): readonly LoopProviderRequestEvent[] {
+    return [...this.providerRequests.values()].filter((request) => (
+      request.goalId === goalId && request.loopRunId === loopRunId
+    ));
+  }
+
+  get unresolvedProviderRequests(): readonly LoopProviderRequestEvent[] {
+    return [...this.providerRequests.values()];
+  }
+
   // Synthesize interrupted tool results for any still-open tool calls, closing
   // the exchange in place. Called at every replayed step boundary (see the
   // `step.begin` case) so a tool call left unresolved mid-history is closed
@@ -303,6 +321,14 @@ export class ContextMemory {
       event,
     });
     switch (event.type) {
+      case 'provider.request':
+        // Durable transport audit only; it does not become model context.
+        if (event.state === 'started' || event.state === 'outcome_unknown') {
+          this.providerRequests.set(event.requestId, event);
+        } else {
+          this.providerRequests.delete(event.requestId);
+        }
+        return;
       case 'step.begin': {
         // A new assistant step means any tool calls still pending from an
         // earlier step were interrupted (the invariant guarantees this never

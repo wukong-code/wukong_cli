@@ -48,10 +48,22 @@ import {
 export type DiscoveredCheckDecision = 'accept' | 'only-explicit' | 'tui-default';
 export type LoopPreflightMode = 'tui-proposal' | 'tui-confirmed' | 'headless';
 
+const PREFLIGHT_CHANGED_FILE_CAPTURE_LIMIT = 20;
+const PREFLIGHT_SUMMARY_ITEM_LIMIT = 5;
+const PREFLIGHT_SUMMARY_VALUE_LIMIT = 240;
+
 export interface LoopPreflightReady {
   readonly ready: true;
   readonly model: string;
   readonly workspace: string;
+  readonly workspaceGit?: {
+    readonly isRepo: boolean;
+    readonly changedFileCount: number;
+    readonly changedFiles: readonly {
+      readonly path: string;
+      readonly status: string;
+    }[];
+  };
   readonly checks: readonly string[];
   readonly proposal: FinishLineProposal;
   readonly trustChallenge: string;
@@ -102,6 +114,12 @@ export interface LoopPreflightBlocked {
 }
 
 export type LoopPreflightResult = LoopPreflightReady | LoopPreflightBlocked;
+
+export interface LoopRuntimeFacts {
+  readonly writerModel?: string;
+  readonly reviewerModel?: string;
+  readonly permission?: 'manual' | 'auto' | 'yolo';
+}
 
 export interface LoopPreflightOptions {
   readonly objective: string;
@@ -389,8 +407,8 @@ export async function runLoopPreflight(
   if (provider === undefined) {
     return blocked(
       'model_not_configured',
-      'The actual reviewer provider endpoint could not be resolved.',
-      'Configure the selected model provider with an exact base_url, then retry.',
+      `The reviewer model "${model ?? 'selected model'}" is not connected to a configured provider.`,
+      'Open /provider to add or repair the provider, or use `wukong provider list` in scripts, then retry.',
       proposal,
       trustChallenge,
       undefined,
@@ -574,6 +592,13 @@ export async function runLoopPreflight(
     ready: true,
     model: model ?? 'not configured',
     workspace: proposal.workspaceIdentity.canonicalRealpath,
+    workspaceGit: {
+      isRepo: git.isRepo,
+      changedFileCount: git.changedFiles.length,
+      changedFiles: git.changedFiles
+        .slice(0, PREFLIGHT_CHANGED_FILE_CAPTURE_LIMIT)
+        .map((file) => ({ path: file.path, status: file.status })),
+    },
     checks: proposal.gatePlan.requiredChecks.map((check) => check.displayCommand),
     proposal: trustedProposal,
     trustChallenge,
@@ -602,37 +627,82 @@ export function formatLoopPreflightBlocked(result: LoopPreflightBlocked): string
 export function formatLoopPreflightReady(
   result: LoopPreflightReady,
   maxIterations: number,
+  runtime: LoopRuntimeFacts = {},
+  options: { readonly includeHeading?: boolean } = {},
 ): string {
   const contract = result.proposal;
+  const provider = result.reviewSubjectConsentProposal.provider;
+  const origin = provider.endpointOrigin;
+  const checks = contract.gatePlan.requiredChecks;
+  const permission = runtime.permission ?? 'manual';
+  const constraints = contract.constraints.slice(0, PREFLIGHT_SUMMARY_ITEM_LIMIT);
+  const visibleChecks = checks.slice(0, PREFLIGHT_SUMMARY_ITEM_LIMIT);
+  const warnings = contract.finishLineReview.warnings.slice(0, PREFLIGHT_SUMMARY_ITEM_LIMIT);
+  const limits = result.reviewSubjectConsentProposal.limits;
   return [
-    'Finish line',
-    '',
-    `Goal         ${contract.objective}`,
-    `Done when    ${contract.completionCriterion ?? 'Not specified separately'}`,
-    `Must not     ${String(contract.constraints.length)} constraint${contract.constraints.length === 1 ? '' : 's'}`,
-    `Verification ${String(contract.gatePlan.requiredChecks.length)} required project check${contract.gatePlan.requiredChecks.length === 1 ? '' : 's'}`,
+    ...(options.includeHeading === false ? [] : ['Loop preflight', '']),
+    `Goal         ${boundedSummaryValue(contract.objective)}`,
+    `Done when    ${boundedSummaryValue(contract.completionCriterion ?? 'Not specified separately — the Goal is the only success condition')}`,
+    ...(contract.constraints.length === 0
+      ? ['Must not     No explicit boundaries specified']
+      : [
+          `Must not     ${String(contract.constraints.length)} explicit boundar${contract.constraints.length === 1 ? 'y' : 'ies'}`,
+          ...constraints.map((constraint, index) =>
+            `Must not ${String(index + 1).padEnd(3)} ${boundedSummaryValue(constraint.text)}`,
+          ),
+          ...(contract.constraints.length > constraints.length
+            ? [`Must not     +${String(contract.constraints.length - constraints.length)} more · use Edit finish line to review all`]
+            : []),
+        ]),
+    `Verification ${String(checks.length)} required project check${checks.length === 1 ? '' : 's'}${checks.length === 0 ? ' · none approved; PASS requires recorded verification evidence' : ''}`,
+    ...visibleChecks.map((check, index) =>
+      `Check ${String(index + 1).padEnd(7)} ${boundedSummaryValue(check.displayCommand)}`,
+    ),
+    ...(checks.length > visibleChecks.length
+      ? [`Checks       +${String(checks.length - visibleChecks.length)} more · use Review checks to inspect all`]
+      : []),
+    ...warnings.map((warning) => `Needs review ${boundedSummaryValue(warning.message)}`),
+    ...(contract.finishLineReview.warnings.length > warnings.length
+      ? [`Needs review +${String(contract.finishLineReview.warnings.length - warnings.length)} more warning${contract.finishLineReview.warnings.length - warnings.length === 1 ? '' : 's'} · use Edit finish line`]
+      : []),
     `Skill criteria ${String(result.verificationSelection?.selected.length ?? 0)} selected · ${String(result.verificationCatalog.suggestions.length)} suggested`,
-    `Reviewer     brokered fresh context → ${result.reviewSubjectConsentProposal.provider.endpointOrigin.scheme}://${result.reviewSubjectConsentProposal.provider.endpointOrigin.host}:${String(result.reviewSubjectConsentProposal.provider.endpointOrigin.port)}`,
-    'Input        bounded changed/scope files and redacted Gate evidence; secrets excluded',
-    `Run          up to ${String(maxIterations)} iterations`,
+    `Writer       ${runtime.writerModel ?? result.model}`,
+    `Reviewer     ${runtime.reviewerModel ?? result.model}`,
+    `Provider     ${provider.providerId} → ${origin.scheme}://${origin.host}:${String(origin.port)}`,
+    `Permission   ${permission} · current OS account · no OS sandbox`,
+    ...formatWorkspaceGitState(result),
+    `Iterations   up to ${String(maxIterations)} writer iterations`,
+    'Provider calls no separate cap configured',
+    'Token budget no separate cap configured',
+    'Outbound     changed tracked files, selected untracked/scope-matched files, and redacted Gate evidence',
+    'Excluded     credential/session/trust/log, generated-output, binary, and oversized paths; recognized secret patterns filtered',
+    `Payload      up to ${String(limits.maxFiles)} files · ${formatByteLimit(limits.maxTotalBytes)} source · ${formatByteLimit(limits.maxGateEvidenceTotalBytes)} Gate evidence`,
+    'Retention    the configured provider\'s data and retention policy applies',
+    'Approvals    local review read → provider transmission → permission → project-check execution',
+    'Result       PASS / NEEDS_WORK / ERROR; /loop stop records STOPPED_BY_USER',
+    'After        workspace changes stay on disk; review git status and diff before keeping or reverting them',
   ].join('\n');
 }
 
 export function formatLoopDryRun(
   result: LoopPreflightReady,
-  runSettings?: {
+  runSettings?: LoopRuntimeFacts & {
     readonly maxIterations?: number;
-    readonly writerModel?: string;
-    readonly reviewerModel?: string;
     readonly minIntervalMs?: number;
   },
 ): string {
   const proposal = result.proposal;
+  const effectiveRuntime = {
+    ...runSettings,
+    writerModel: runSettings?.writerModel ?? result.model,
+    reviewerModel: runSettings?.reviewerModel ?? result.model,
+    permission: runSettings?.permission ?? 'auto' as const,
+  };
   return `${JSON.stringify({
     kind: 'loop.finish_line.dry_run',
     schemaVersion: 1,
     proposedContract: proposal,
-    runSettings,
+    runSettings: effectiveRuntime,
     selectedChecks: proposal.gatePlan.requiredChecks.map((check) => ({
       id: check.id,
       command: check.displayCommand,
@@ -652,6 +722,7 @@ export function formatLoopDryRun(
     verificationCatalog: result.verificationCatalog,
     verificationSelection: result.verificationSelection ?? null,
     selectedRecipes: result.selectedRecipes,
+    workspaceGit: result.workspaceGit ?? null,
     reviewSubjectPolicyVersion: REVIEW_SUBJECT_POLICY_VERSION,
     brokerTrustProposal: result.brokerTrustProposal,
     brokerTrustChallenge: result.brokerTrustChallenge,
@@ -663,7 +734,57 @@ export function formatLoopDryRun(
     trustChallenge: result.trustChallenge,
     approvalSetDigest: proposal.gateApproval.approvalSetDigest,
     warningSetDigest: proposal.finishLineReview.warningSetDigest,
+    headlessStart: {
+      checkDecisionRequired: proposal.gatePlan.requiredChecks.some(
+        (check) => check.source !== 'explicit',
+      ),
+      approveGatePlanDigest: proposal.gateApproval.approvalSetDigest,
+      acknowledgeWarningSetDigest: proposal.finishLineReview.warnings.length === 0
+        ? null
+        : proposal.finishLineReview.warningSetDigest,
+      trustWorkspaceChallenge: proposal.gateApproval.hasExecutableChecks
+        ? result.trustChallenge
+        : null,
+      trustReviewSubjectChallenge: result.brokerTrustChallenge,
+      acknowledgeReviewSubjectConsentDigest:
+        result.reviewSubjectConsentProposal.consentProposalDigest,
+      verificationCatalogDigest: result.verificationSelection === undefined
+        ? null
+        : result.verificationCatalog.catalogDigest,
+      brokerChallengeExpiresWithinMs: 600_000,
+    },
   }, null, 2)}\n`;
+}
+
+function formatWorkspaceGitState(result: LoopPreflightReady): string[] {
+  const git = result.workspaceGit;
+  if (git === undefined) return [`Workspace    ${result.workspace} · Git state unavailable`];
+  if (!git.isRepo) return [`Workspace    ${result.workspace} · not a Git repository`];
+  if (git.changedFileCount === 0) return [`Workspace    ${result.workspace} · clean`];
+  const changedFiles = git.changedFiles.slice(0, PREFLIGHT_SUMMARY_ITEM_LIMIT);
+  return [
+    `Workspace    ${result.workspace} · ${String(git.changedFileCount)} pre-existing changed file${git.changedFileCount === 1 ? '' : 's'}`,
+    ...changedFiles.map((file, index) =>
+      `Dirty ${String(index + 1).padEnd(7)} ${file.status} ${boundedSummaryValue(file.path)}`,
+    ),
+    ...(git.changedFileCount > changedFiles.length
+      ? [`Dirty        +${String(git.changedFileCount - changedFiles.length)} more · use Review workspace changes`]
+      : []),
+  ];
+}
+
+function boundedSummaryValue(value: string): string {
+  const normalized = value.replaceAll(/\s+/gu, ' ').trim();
+  if (normalized.length <= PREFLIGHT_SUMMARY_VALUE_LIMIT) return normalized;
+  return `${normalized.slice(0, PREFLIGHT_SUMMARY_VALUE_LIMIT - 1)}…`;
+}
+
+function formatByteLimit(value: number): string {
+  if (value >= 1024 * 1024 && value % (1024 * 1024) === 0) {
+    return `${String(value / (1024 * 1024))} MiB`;
+  }
+  if (value >= 1024 && value % 1024 === 0) return `${String(value / 1024)} KiB`;
+  return `${String(value)} B`;
 }
 
 function blocked(

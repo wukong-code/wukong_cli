@@ -47,6 +47,7 @@ export type {
   LoopStepBeginEvent,
   LoopStepEndEvent,
   LoopStepRetryingEvent,
+  LoopProviderRequestEvent,
   LoopLiveOnlyEvent,
   LoopEvent,
   LoopInterruptReason,

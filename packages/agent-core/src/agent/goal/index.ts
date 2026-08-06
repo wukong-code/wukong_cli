@@ -163,6 +163,30 @@ export interface LoopResultFinding {
   readonly criterionId?: string;
 }
 
+export interface LoopResultChangedFile {
+  readonly path: string;
+  readonly status: string;
+}
+
+export interface LoopResultEvidence {
+  readonly verification: 'fresh' | 'not_run';
+  readonly reviewer: 'fresh' | 'not_run';
+  readonly generatedAt?: string;
+  readonly snapshotId?: string;
+}
+
+export interface ProviderOutcomeUnknown {
+  readonly requestId: string;
+  readonly idempotencyKey: string;
+  readonly turnId: string;
+  readonly step: number;
+  readonly attempt: number;
+  readonly state: 'started' | 'outcome_unknown';
+  readonly outputObserved: boolean;
+  readonly errorName?: string;
+  readonly errorMessage?: string;
+}
+
 export interface LoopAcceptanceCriterion {
   readonly id: string;
   readonly text: string;
@@ -738,6 +762,8 @@ export interface LoopResult {
   readonly checks: readonly LoopResultCheck[];
   readonly blockers: readonly LoopResultBlocker[];
   readonly findings?: readonly LoopResultFinding[];
+  readonly changedFiles?: readonly LoopResultChangedFile[];
+  readonly evidence?: LoopResultEvidence;
   readonly role?: string;
 }
 
@@ -826,7 +852,10 @@ export interface GoalSnapshot {
   readonly legacyContractId?: string;
   readonly loopRunId?: string;
   readonly loopChainIterations?: number;
+  /** Durable Gate attempts for the current run; distinct from writer iterations. */
+  readonly gateAttempts?: number;
   readonly loopTerminal?: LoopRunTerminalV1;
+  readonly providerOutcomeUnknown?: ProviderOutcomeUnknown;
   readonly convergence?: LoopConvergenceSummary;
 }
 
@@ -1990,6 +2019,22 @@ export class GoalMode {
     ) return null;
     const existing = state.loopRunTerminals.get(run.runId);
     if (existing !== undefined) return existing;
+    if (
+      input.attempt !== undefined
+      && input.attempt !== null
+      && (
+        input.attempt.runId !== run.runId
+        || input.attempt.contractId !== contract.contractId
+        || input.attempt.status !== input.status
+        || state.gateAttemptCompletions.get(input.attempt.attemptId)?.resultDigest
+          !== input.attempt.resultDigest
+      )
+    ) {
+      throw new WukongError(
+        ErrorCodes.REQUEST_INVALID,
+        'Loop terminal attempt is not bound to the current run and contract.',
+      );
+    }
     const policy = continuationPolicyFor(input.status, input.reasonCode);
     const base = {
       schemaVersion: 1 as const,
@@ -2035,6 +2080,7 @@ export class GoalMode {
         throw new Error('Loop record replay failed: run settings digest mismatch');
       }
     }
+    if (state.currentLoopRun?.runId !== record.run.runId) state.loopResult = undefined;
     state.currentLoopRun = record.run;
   }
 
@@ -2083,18 +2129,46 @@ export class GoalMode {
   restoreLoopRunTerminal(record: AgentRecordOf<'loop.run.terminal'>): void {
     const state = this.state;
     if (state === undefined) return;
+    const contract = state.loopContract;
+    const run = state.currentLoopRun;
     const { terminalDigest, ...base } = record.terminal;
     if (canonicalDigest('wukong/loop-terminal/v1', base) !== terminalDigest) {
       throw new Error('Loop record replay failed: terminal digest mismatch');
     }
     if (
+      contract === undefined
+      || contract.schemaVersion === 1
+      || run === undefined
+      || record.terminal.runId !== run.runId
+      || record.terminal.contractId !== contract.contractId
+    ) {
+      throw new Error('Loop record replay failed: terminal binding mismatch');
+    }
+    const attempt = record.terminal.terminalAttemptId === undefined
+      ? undefined
+      : state.gateAttemptCompletions.get(record.terminal.terminalAttemptId);
+    if (
+      record.terminal.terminalAttemptId !== undefined
+      && attempt === undefined
+    ) {
+      throw new Error('Loop record replay failed: terminal attempt is missing');
+    }
+    if (
       record.terminal.status === 'PASS'
-      && (
-        record.terminal.terminalAttemptId === undefined
-        || state.gateAttemptCompletions.get(record.terminal.terminalAttemptId)?.status !== 'PASS'
-      )
+      && attempt === undefined
     ) {
       throw new Error('Loop record replay failed: PASS terminal lacks a complete PASS attempt');
+    }
+    if (
+      attempt !== undefined
+      && (
+        attempt.runId !== record.terminal.runId
+        || attempt.contractId !== record.terminal.contractId
+        || attempt.status !== record.terminal.status
+        || attempt.resultDigest !== record.terminal.attemptResultDigest
+      )
+    ) {
+      throw new Error('Loop record replay failed: terminal attempt binding mismatch');
     }
     state.loopRunTerminals.set(record.terminal.runId, record.terminal);
   }
@@ -2398,6 +2472,13 @@ export class GoalMode {
     }
     const contract = state.loopContract;
     const currentRun = state.currentLoopRun;
+    const providerOutcomeUnknown = this.providerOutcomeUnknown(state);
+    if (state.stopCondition !== undefined && providerOutcomeUnknown !== undefined) {
+      throw new WukongError(
+        ErrorCodes.GOAL_NOT_RESUMABLE,
+        `Provider request outcome is unknown (request ${providerOutcomeUnknown.requestId}, idempotency key ${providerOutcomeUnknown.idempotencyKey}). Blind resume is disabled; reconcile the provider result first or cancel and explicitly start a new Loop.`,
+      );
+    }
     const terminal = currentRun === undefined
       ? undefined
       : state.loopRunTerminals.get(currentRun.runId);
@@ -2468,6 +2549,7 @@ export class GoalMode {
         ...continuationBase,
         continuationDigest: canonicalDigest('wukong/loop-continuation/v1', continuationBase),
       };
+      state.loopResult = undefined;
       state.currentLoopRun = nextRun;
       state.iteration = 0;
       this.agent.records.logRecord({ type: 'loop.continuation.create', continuation });
@@ -2538,13 +2620,13 @@ export class GoalMode {
     const state = this.state;
     if (state === undefined || state.status !== 'active') return null;
     if (
-      state.loopContract?.schemaVersion === 2
+      (state.loopContract?.schemaVersion === 2 || state.loopContract?.schemaVersion === 3)
       && state.currentLoopRun !== undefined
       && !state.loopRunTerminals.has(state.currentLoopRun.runId)
     ) {
       this.recordLoopTerminal({
         status: 'NEEDS_WORK',
-        reasonCode: blockedReasonCode(input.reason),
+        reasonCode: blockedReasonCode(input.reason, actor),
       });
     }
     this.applyStatus(state, 'blocked');
@@ -2570,7 +2652,7 @@ export class GoalMode {
     const state = this.state;
     if (state === undefined || state.status !== 'active') return null;
     if (
-      state.loopContract?.schemaVersion === 2
+      (state.loopContract?.schemaVersion === 2 || state.loopContract?.schemaVersion === 3)
       && (
         state.currentLoopRun === undefined
         || state.loopRunTerminals.get(state.currentLoopRun.runId)?.status !== 'PASS'
@@ -2578,7 +2660,7 @@ export class GoalMode {
     ) {
       throw new WukongError(
         ErrorCodes.REQUEST_INVALID,
-        'A V2 Loop cannot complete without a durable PASS terminal.',
+        'A durable Loop cannot complete without a PASS terminal.',
       );
     }
     this.applyStatus(state, 'complete');
@@ -2769,6 +2851,45 @@ export class GoalMode {
     };
   }
 
+  private providerOutcomeUnknown(state: GoalState): ProviderOutcomeUnknown | undefined {
+    const context = (this.agent as unknown as {
+      context?: {
+        unresolvedProviderRequestsFor?: (
+          goalId: string,
+          loopRunId: string | undefined,
+        ) => ReadonlyArray<{
+          readonly requestId: string;
+          readonly idempotencyKey: string;
+          readonly turnId: string;
+          readonly step: number;
+          readonly attempt: number;
+          readonly state: 'started' | 'outcome_unknown';
+          readonly outputObserved?: boolean;
+          readonly errorName?: string;
+          readonly errorMessage?: string;
+        }>;
+      };
+    }).context;
+    const lookup = context?.unresolvedProviderRequestsFor;
+    const request = lookup?.call(
+      context,
+      state.goalId,
+      state.currentLoopRun?.runId,
+    ).at(-1);
+    if (request === undefined) return undefined;
+    return {
+      requestId: request.requestId,
+      idempotencyKey: request.idempotencyKey,
+      turnId: request.turnId,
+      step: request.step,
+      attempt: request.attempt,
+      state: request.state,
+      outputObserved: request.outputObserved === true,
+      ...(request.errorName === undefined ? {} : { errorName: request.errorName }),
+      ...(request.errorMessage === undefined ? {} : { errorMessage: request.errorMessage }),
+    };
+  }
+
   private toSnapshot(state: GoalState): GoalSnapshot {
     return {
       goalId: state.goalId,
@@ -2790,9 +2911,15 @@ export class GoalMode {
       legacyContractId: state.legacyContractId,
       loopRunId: state.currentLoopRun?.runId,
       loopChainIterations: state.loopChainIterations,
+      gateAttempts: state.currentLoopRun === undefined
+        ? 0
+        : [...state.gateAttemptCompletions.values()].filter(
+            (attempt) => attempt.runId === state.currentLoopRun?.runId,
+          ).length,
       loopTerminal: state.currentLoopRun === undefined
         ? undefined
         : state.loopRunTerminals.get(state.currentLoopRun.runId),
+      providerOutcomeUnknown: this.providerOutcomeUnknown(state),
       convergence: state.reviewHistory.length === 0 && state.strategyHistory.length === 0
         ? undefined
         : {
@@ -3521,6 +3648,8 @@ function continuationPolicyFor(
     || reasonCode === 'budget_exhausted'
     || reasonCode === 'model_blocked'
     || reasonCode === 'no_progress'
+    || reasonCode === 'permission_required'
+    || reasonCode === 'permission_denied'
   ) {
     return {
       mode: 'same-contract',
@@ -3557,8 +3686,11 @@ function continuationPolicyFor(
   };
 }
 
-function blockedReasonCode(reason: string | undefined): string {
+function blockedReasonCode(reason: string | undefined, actor: GoalActor): string {
   const normalized = reason?.toLowerCase() ?? '';
+  const encodedReasonCode = reason?.match(/^loop:(?:PASS|NEEDS_WORK|ERROR):([^:]+):/u)?.[1];
+  if (encodedReasonCode !== undefined) return encodedReasonCode;
+  if (actor === 'model') return 'model_blocked';
   if (normalized.includes('budget')) return 'budget_exhausted';
   if (normalized.includes('permission') || normalized.includes('denied')) {
     return 'permission_denied';

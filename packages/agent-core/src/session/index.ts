@@ -127,6 +127,22 @@ export interface SessionMeta {
   custom: Record<string, any>;
 }
 
+function parseSessionMetadata(text: string): SessionMeta {
+  const parsed = JSON.parse(text) as unknown;
+  if (
+    typeof parsed !== 'object'
+    || parsed === null
+    || Array.isArray(parsed)
+    || !('agents' in parsed)
+    || typeof parsed.agents !== 'object'
+    || parsed.agents === null
+    || Array.isArray(parsed.agents)
+  ) {
+    throw new TypeError('Session state must be an object with an agents map.');
+  }
+  return parsed as SessionMeta;
+}
+
 const BACKGROUND_KEEP_ALIVE_ON_EXIT_ENV = 'WUKONG_CODE_BACKGROUND_KEEP_ALIVE_ON_EXIT';
 const ACTIVE_TURN_CLOSE_TIMEOUT_MS = 8_000;
 
@@ -697,20 +713,57 @@ export class Session {
     return join(this.options.homedir, 'state.json');
   }
 
+  protected get metadataBackupPath() {
+    return join(this.options.homedir, 'state.json.bak');
+  }
+
   writeMetadata() {
     const text = JSON.stringify(this.metadata, null, 2);
     const write = async () => {
       await this.persistenceKaos.mkdir(this.options.homedir, { parents: true, existOk: true });
-      await this.persistenceKaos.writeText(this.metadataPath, text);
+      await this.writeMetadataText(text);
     };
     this.writeMetadataPromise = this.writeMetadataPromise.then(write, write);
     return this.writeMetadataPromise;
   }
 
   async readMetadata() {
-    const text = await this.persistenceKaos.readText(this.metadataPath);
-    this.metadata = JSON.parse(text);
-    return this.metadata;
+    try {
+      this.metadata = parseSessionMetadata(
+        await this.persistenceKaos.readText(this.metadataPath),
+      );
+      return this.metadata;
+    } catch (primaryError) {
+      try {
+        this.metadata = parseSessionMetadata(
+          await this.persistenceKaos.readText(this.metadataBackupPath),
+        );
+        await this.writeMetadataText(JSON.stringify(this.metadata, null, 2));
+        this.log.warn('recovered session metadata from backup', {
+          primary_error: primaryError instanceof Error ? primaryError.name : 'unknown',
+        });
+        return this.metadata;
+      } catch (backupError) {
+        throw new WukongError(
+          ErrorCodes.SESSION_STATE_INVALID,
+          'Session state.json and its recovery backup are unreadable.',
+          { cause: backupError },
+        );
+      }
+    }
+  }
+
+  private async writeMetadataText(text: string): Promise<void> {
+    if (this.persistenceKaos.writeTextAtomic !== undefined) {
+      await this.persistenceKaos.writeTextAtomic(this.metadataPath, text, {
+        backupPath: this.metadataBackupPath,
+      });
+      return;
+    }
+    // Compatibility fallback for custom Kaos implementations. Persist the
+    // recovery copy first so a failed primary write still leaves a valid state.
+    await this.persistenceKaos.writeText(this.metadataBackupPath, text);
+    await this.persistenceKaos.writeText(this.metadataPath, text);
   }
 
   async flushMetadata() {

@@ -28,6 +28,7 @@ export async function handleProof(deps: ProofDeps, options: ProofCliOptions): Pr
   try {
     const result = await deps.runProof({
       cwd: options.cwd ?? deps.cwd(),
+      commands: options.commands,
       strict: options.strict,
       writeReport: options.report !== false,
       reportPath: typeof options.report === 'string' ? options.report : undefined,
@@ -102,12 +103,16 @@ function resolveDeps(deps: Partial<ProofDeps> | undefined): ProofDeps {
 }
 
 function formatProof(result: ProofResult): string {
+  const passedChecks = result.verification.commandResults.filter(
+    (command) => command.status === 'passed',
+  ).length;
   return [
     'Wukong merge proof',
     '',
     `Status: ${result.status}`,
     `Verification: ${result.verification.status}`,
     `Scan: ${result.scan.status}`,
+    `Checks: ${String(passedChecks)}/${String(result.verification.commandResults.length)} passed`,
     `Changed files: ${String(result.verification.changedFiles.length)}`,
     '',
     'Recommendation:',

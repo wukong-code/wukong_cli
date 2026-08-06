@@ -221,7 +221,10 @@ export class Session {
     await this.rpc.setThinking({ sessionId: this.id, level: normalized });
   }
 
-  async setPermission(mode: PermissionMode): Promise<void> {
+  async setPermission(
+    mode: PermissionMode,
+    options: { readonly transient?: boolean } = {},
+  ): Promise<void> {
     this.ensureOpen();
     if (!isPermissionMode(mode)) {
       throw new WukongError(
@@ -229,7 +232,11 @@ export class Session {
         'Session permission mode must be yolo, manual, or auto',
       );
     }
-    await this.rpc.setPermission({ sessionId: this.id, mode });
+    await this.rpc.setPermission({
+      sessionId: this.id,
+      mode,
+      transient: options.transient,
+    });
   }
 
   async setPlanMode(enabled: boolean): Promise<void> {

@@ -37,6 +37,7 @@ import {
 import { MigrationScreenComponent, type MigrationScreenResult } from '#/migration/index';
 import { copyTextToClipboard } from '#/utils/clipboard/clipboard-text';
 import { appendInputHistory, loadInputHistory } from '#/utils/history/input-history';
+import { durableLoopResultFromGoal } from '#/utils/loop-result';
 import { openUrl } from '#/utils/open-url';
 import { getInputHistoryFile } from '#/utils/paths';
 import { detectFdPath, ensureFdPath } from '#/utils/process/fd-detect';
@@ -57,7 +58,10 @@ import {
   type SkillListSession,
 } from './commands';
 import * as slashCommands from './commands/dispatch';
-import { reviewSettingsForResume } from './commands/goal';
+import {
+  ensureLoopWorkspaceTrustForResume,
+  reviewSettingsForResume,
+} from './commands/goal';
 import { BannerComponent } from './components/chrome/banner';
 import { DeviceCodeBoxComponent } from './components/chrome/device-code-box';
 import { GutterContainer } from './components/chrome/gutter-container';
@@ -202,6 +206,13 @@ export interface WukongTUIStartupInput {
 
 function sameStringArrays(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index]);
+}
+
+function loopToolPhase(toolNames: readonly string[]): LoopPhaseState['phase'] {
+  if (toolNames.some((name) => /judge|review/i.test(name))) return 'judging';
+  if (toolNames.some((name) => /proof/i.test(name))) return 'proofing';
+  if (toolNames.some((name) => /verify|scan|updategoal/i.test(name))) return 'verifying';
+  return 'writing';
 }
 
 type MutableCreateSessionOptions = {
@@ -686,13 +697,14 @@ export class WukongTUI {
 
     if (record.sessionId === currentSessionId) {
       const goal = (await this.session.getGoal().catch(() => ({ goal: null }))).goal;
+      const durableResult = durableLoopResultFromGoal(goal);
       if (
         goal !== null
         && goal.goalId === record.goalId
-        && goal.loopResult !== undefined
+        && durableResult !== undefined
       ) {
-        const outcome = goal.loopResult.status;
-        const iterations = goal.loopResult.iterations;
+        const outcome = durableResult.status;
+        const iterations = durableResult.iterations;
         const completion = await completeTuiLoop(goal.goalId, outcome, iterations);
         if (completion?.repeatedCompletedWithin7d) {
           this.track('loop_repeat_completed_7d');
@@ -792,18 +804,33 @@ export class WukongTUI {
         this.showActiveLoopRecovery(record);
         return;
       }
-      if (goal.loopResult !== undefined) {
+      if (goal.providerOutcomeUnknown !== undefined) {
+        this.showError([
+          'Loop cannot resume because a provider request may already have been accepted.',
+          `Request      ${goal.providerOutcomeUnknown.requestId}`,
+          `Idempotency  ${goal.providerOutcomeUnknown.idempotencyKey}`,
+          'Next         Check provider logs or billing first; then end this lifecycle and explicitly start a new Loop only if safe.',
+        ].join('\n'));
+        this.showActiveLoopRecovery(record);
+        return;
+      }
+      const durableResult = durableLoopResultFromGoal(goal);
+      if (durableResult !== undefined) {
         const completion = await completeTuiLoop(
           goal.goalId,
-          goal.loopResult.status,
-          goal.loopResult.iterations,
+          durableResult.status,
+          durableResult.iterations,
         );
         if (completion?.repeatedCompletedWithin7d) this.track('loop_repeat_completed_7d');
         this.restoreEditor();
-        this.showStatus(`Loop already ended · Gate ${goal.loopResult.status}.`);
+        this.showStatus(`Loop already ended · Gate ${durableResult.status}.`);
         return;
       }
       if (goal.status === 'paused' || goal.status === 'blocked') {
+        if (!(await ensureLoopWorkspaceTrustForResume(this, goal))) {
+          this.showActiveLoopRecovery(record);
+          return;
+        }
         const reviewSettings = await reviewSettingsForResume(this, goal);
         if (reviewSettings === false) {
           this.showActiveLoopRecovery(record);
@@ -2371,7 +2398,40 @@ export class WukongTUI {
 
     const chrome = this.state.chromeState.getState();
     if (chrome.uiMode === 'active' || chrome.uiMode === 'blocked') {
-      return chrome.loopPhase ?? { phase: 'waiting', iteration: 0, elapsedMs: 0, hidden: false };
+      const base = chrome.loopPhase
+        ?? { phase: 'waiting' as const, iteration: 0, elapsedMs: 0, hidden: false };
+      if (chrome.uiMode === 'blocked' || base.phase === 'paused') return base;
+
+      const activeTools = this.streamingUI.getActiveToolNames();
+      if (this.state.livePane.mode === 'tool' || activeTools.length > 0) {
+        const phase = loopToolPhase(activeTools);
+        return {
+          ...base,
+          phase,
+          activity: activeTools.length === 0
+            ? 'Running tool'
+            : `Running ${activeTools.join(', ')}`,
+        };
+      }
+      const streamingPhase = this.state.appState.streamingPhase;
+      if (
+        streamingPhase === 'waiting'
+        || streamingPhase === 'thinking'
+        || streamingPhase === 'composing'
+        || this.state.livePane.mode === 'thinking'
+        || this.state.livePane.mode === 'waiting'
+      ) {
+        return {
+          ...base,
+          phase: 'writing',
+          activity: streamingPhase === 'thinking'
+            ? 'Writer is reasoning'
+            : streamingPhase === 'composing'
+              ? 'Writer is responding'
+              : 'Writer is working',
+        };
+      }
+      return base;
     }
 
     const streamingPhase = this.state.appState.streamingPhase;

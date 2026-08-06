@@ -318,8 +318,15 @@ describe('handleProof', () => {
             changedFiles: [],
             gitStatus: '',
             diffStat: '',
-            selectedCommands: [],
-            commandResults: [],
+            selectedCommands: ['pnpm test'],
+            commandResults: [{
+              command: 'pnpm test',
+              status: 'passed',
+              exitCode: 0,
+              durationMs: 12,
+              stdout: '',
+              stderr: '',
+            }],
             risks: [],
           },
           scan: {
@@ -341,8 +348,12 @@ describe('handleProof', () => {
       },
     };
 
-    await handleProof(deps, { report: false });
-    expect(captured[0]).toMatchObject({ writeReport: false, reportPath: undefined });
+    await handleProof(deps, { report: false, commands: ['pnpm test'] });
+    expect(captured[0]).toMatchObject({
+      commands: ['pnpm test'],
+      writeReport: false,
+      reportPath: undefined,
+    });
   });
 
   it('returns 2 on runProof failure', async () => {
@@ -447,8 +458,15 @@ describe('handleJudge', () => {
             changedFiles: [],
             gitStatus: '',
             diffStat: '',
-            selectedCommands: [],
-            commandResults: [],
+            selectedCommands: ['pnpm test'],
+            commandResults: [{
+              command: 'pnpm test',
+              status: 'passed',
+              exitCode: 0,
+              durationMs: 12,
+              stdout: '',
+              stderr: '',
+            }],
             risks: [],
           },
           scan: {
@@ -472,6 +490,57 @@ describe('handleJudge', () => {
 
     await expect(handleJudge(deps, {})).resolves.toBe(0);
     expect(stdout.chunks.join('')).toContain('Verdict: pass');
+    expect(stdout.chunks.join('')).toContain('Checks: 1/1 passed');
+  });
+
+  it('labels an empty verification set as not run even when the proof risk scan passed', async () => {
+    const stdout = writable();
+    const deps: JudgeDeps = {
+      cwd: () => '/workspace',
+      stdout: stdout.writer,
+      stderr: writable().writer,
+      runJudge: async () => ({
+        verdict: 'block',
+        reason: 'No verification commands were discovered or supplied.',
+        mode: 'deterministic',
+        proof: {
+          status: 'passed',
+          cwd: '/workspace',
+          generatedAt: '2026-08-06T00:00:00.000Z',
+          verification: {
+            status: 'passed',
+            cwd: '/workspace',
+            generatedAt: '2026-08-06T00:00:00.000Z',
+            changedFiles: [],
+            gitStatus: '',
+            diffStat: '',
+            selectedCommands: [],
+            commandResults: [],
+            risks: [],
+          },
+          scan: {
+            status: 'passed',
+            cwd: '/workspace',
+            generatedAt: '2026-08-06T00:00:00.000Z',
+            changedFiles: [],
+            gitStatus: '',
+            diffStat: '',
+            risks: [],
+          },
+          summary: 'Risk scan passed without verification commands.',
+          recommendation: 'Supply at least one verification command.',
+          reasonCode: 'passed',
+          snapshotId: 'snapshot-id',
+          workspaceFingerprint: { inputDigest: 'input', configDigest: 'config' },
+          blockers: [],
+        },
+      }),
+    };
+
+    await expect(handleJudge(deps, {})).resolves.toBe(1);
+    expect(stdout.chunks.join('')).toContain('Verification: not run');
+    expect(stdout.chunks.join('')).toContain('Proof bundle: passed (risk scan only)');
+    expect(stdout.chunks.join('')).toContain('Checks: 0/0 passed');
   });
 
   it('returns 2 on runJudge failure', async () => {

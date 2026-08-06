@@ -24,6 +24,9 @@ export { FileTokenStorage } from './storage';
 export type { DevicePollResult, RefreshOptions } from './oauth';
 export { pollDeviceToken, refreshAccessToken, requestDeviceAuthorization } from './oauth';
 
+export { revokeRefreshToken } from './revoke';
+export type { RevokeRefreshTokenOptions, RevokeRefreshTokenResult } from './revoke';
+
 export type { LoginOptions, OAuthManagerOptions, OAuthRefreshOutcome } from './oauth-manager';
 export { OAuthManager, defaultRefreshThreshold, newInstanceId } from './oauth-manager';
 

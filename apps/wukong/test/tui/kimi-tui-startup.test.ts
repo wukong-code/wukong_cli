@@ -4,7 +4,7 @@ import { join } from 'node:path';
 
 import { log, type GoalSnapshot } from '@wukong/wukong-sdk';
 import type { MigrationPlan } from '@wukong/migration-legacy';
-import { beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   cancelLoopRecord,
@@ -35,6 +35,12 @@ import {
   QUERY_TERMINAL_THEME,
   TERMINAL_THEME_LIGHT,
 } from '#/tui/utils/terminal-theme';
+
+const TEST_HOME_DIR = mkdtempSync(join(tmpdir(), 'wukong-tui-startup-home-'));
+
+afterAll(() => {
+  rmSync(TEST_HOME_DIR, { recursive: true, force: true });
+});
 
 vi.mock('#/tui/commands/prompts', async (importOriginal) => {
   const actual = await importOriginal<typeof import('#/tui/commands/prompts')>();
@@ -443,6 +449,7 @@ function loginRequiredError(): Error & { readonly code: string } {
 
 function makeHarness(session = makeSession(), overrides: Record<string, unknown> = {}) {
   return {
+    homeDir: TEST_HOME_DIR,
     getConfig: vi.fn(async () => ({
       models: {
         k2: { model: 'wukong-v1', maxContextSize: 100 },
@@ -1182,6 +1189,9 @@ describe('WukongTUI startup', () => {
       const finishLine = driver.state.editorContainer.children[0] as {
         handleInput(data: string): void;
       };
+      finishLine.handleInput('\u001B[B');
+      finishLine.handleInput('\u001B[B');
+      finishLine.handleInput('\u001B[B');
       finishLine.handleInput('\r');
       const consent = driver.state.editorContainer.children[0] as {
         handleInput(data: string): void;
@@ -1228,8 +1238,8 @@ describe('WukongTUI startup', () => {
       } as never);
 
       const transcript = driver.state.transcriptContainer.render(160).join('\n');
-      expect(transcript).toContain('Gate        PASS');
-      expect(transcript).toContain('Next        Ready to ship.');
+      expect(transcript).toContain('Outcome     PASS');
+      expect(transcript).toContain('Next        Review the diff');
       expect(harness.track).toHaveBeenCalledWith('loop_terminal', {
         outcome: 'PASS',
         iterations: 2,
@@ -1917,7 +1927,10 @@ describe('WukongTUI startup', () => {
       model: '',
       sessionTitle: null,
     });
-    expect(harness.track).toHaveBeenCalledWith('logout', { provider: 'managed:wukong' });
+    expect(harness.track).toHaveBeenCalledWith('logout', {
+      provider: 'managed:wukong',
+      remote_revocation: 'not_attempted',
+    });
   });
 
   it('ignores provider-picker mocks and only disconnects the Wukong account', async () => {
@@ -1958,7 +1971,10 @@ describe('WukongTUI startup', () => {
       sessionId: '',
       model: '',
     });
-    expect(harness.track).toHaveBeenCalledWith('logout', { provider: 'managed:wukong' });
+    expect(harness.track).toHaveBeenCalledWith('logout', {
+      provider: 'managed:wukong',
+      remote_revocation: 'not_attempted',
+    });
   });
 
   it('can log out a stale managed entry even after the OAuth token is gone', async () => {
@@ -2396,7 +2412,7 @@ describe('WukongTUI active Loop recovery', () => {
     const recovering = driver.handleActiveLoopRecovery(activeRecord, 'resume');
     await vi.waitFor(() => {
       expect(driver.state.editorContainer.render(100).join('\n'))
-        .toContain('Allow this workspace to build bounded review input');
+        .toContain('Allow local review access to this workspace');
     });
     const picker = driver.state.editorContainer.children[0] as {
       handleInput(data: string): void;
@@ -2430,6 +2446,7 @@ describe('WukongTUI active Loop recovery', () => {
         goal: goalSnapshot({
           status: 'complete',
           iteration: 2,
+          loopRunId: 'run-1',
           loopResult: {
             schemaVersion: 2,
             status: 'PASS',
@@ -2438,6 +2455,21 @@ describe('WukongTUI active Loop recovery', () => {
             iterations: 2,
             checks: [],
             blockers: [],
+          },
+          loopTerminal: {
+            schemaVersion: 1,
+            runId: 'run-1',
+            contractId: 'contract-1',
+            status: 'PASS',
+            reasonCode: 'passed',
+            continuationPolicy: {
+              mode: 'blocked',
+              automaticRetry: false,
+              requiresPreflightRevalidation: true,
+            },
+            blockerKeys: [],
+            terminalDigest: 'sha256:terminal',
+            createdAt: 1,
           },
         }),
       })),
@@ -2449,5 +2481,76 @@ describe('WukongTUI active Loop recovery', () => {
 
     expect(completeTuiLoopMock).toHaveBeenCalledWith('goal-1', 'PASS', 2);
     expect(driver.state.editorContainer.render(100).join('\n')).not.toContain('Active Loop found');
+  });
+
+  it('does not treat a failed Gate projection as terminal after a crash', async () => {
+    listActiveLoopRunsMock.mockResolvedValue([activeRecord]);
+    const session = makeSession({
+      getGoal: vi.fn(async () => ({
+        goal: goalSnapshot({
+          status: 'paused',
+          loopRunId: 'run-1',
+          loopResult: {
+            schemaVersion: 2,
+            status: 'NEEDS_WORK',
+            reasonCode: 'check_failed',
+            summary: 'Tests failed.',
+            iterations: 1,
+            checks: [],
+            blockers: [],
+          },
+        }),
+      })),
+    });
+    const driver = makeDriver(makeHarness(session), makeStartupInput()) as RecoveryDriver;
+
+    await driver.init();
+    await driver.maybeOfferActiveLoopRecovery();
+
+    expect(completeTuiLoopMock).not.toHaveBeenCalled();
+    expect(driver.state.editorContainer.render(100).join('\n')).toContain('Active Loop found');
+  });
+
+  it('does not expose PASS when the terminal write was not committed as complete', async () => {
+    listActiveLoopRunsMock.mockResolvedValue([activeRecord]);
+    const session = makeSession({
+      getGoal: vi.fn(async () => ({
+        goal: goalSnapshot({
+          status: 'paused',
+          loopRunId: 'run-1',
+          loopResult: {
+            schemaVersion: 2,
+            status: 'PASS',
+            reasonCode: 'passed',
+            summary: 'Gate passed.',
+            iterations: 1,
+            checks: [],
+            blockers: [],
+          },
+          loopTerminal: {
+            schemaVersion: 1,
+            runId: 'run-1',
+            contractId: 'contract-1',
+            status: 'PASS',
+            reasonCode: 'passed',
+            continuationPolicy: {
+              mode: 'blocked',
+              automaticRetry: false,
+              requiresPreflightRevalidation: true,
+            },
+            blockerKeys: [],
+            terminalDigest: 'sha256:terminal',
+            createdAt: 1,
+          },
+        }),
+      })),
+    });
+    const driver = makeDriver(makeHarness(session), makeStartupInput()) as RecoveryDriver;
+
+    await driver.init();
+    await driver.maybeOfferActiveLoopRecovery();
+
+    expect(completeTuiLoopMock).not.toHaveBeenCalled();
+    expect(driver.state.editorContainer.render(100).join('\n')).toContain('Active Loop found');
   });
 });

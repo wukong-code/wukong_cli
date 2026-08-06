@@ -13,22 +13,22 @@ export interface GoalStartPermissionPromptOptions {
 
 export const GOAL_START_MANUAL_OPTIONS: readonly StartPermissionOption[] = [
   {
+    value: 'manual',
+    label: 'Keep Manual and start',
+    description:
+      'Ask before actions that need approval. The goal may pause until you respond.',
+  },
+  {
     value: 'auto',
     label: 'Switch to Auto and start',
     description:
-      'Best if you want Wukong to keep working while you are away. Tools are approved automatically, and questions are skipped.',
+      'Work unattended within policy. Approval-required or high-risk actions stop instead of being approved.',
   },
   {
     value: 'yolo',
     label: 'Switch to YOLO and start',
     description:
-      'Tools and plan changes are approved automatically. Wukong may still ask you questions.',
-  },
-  {
-    value: 'manual',
-    label: 'Start in Manual',
-    description:
-      'Keep approvals on. Wukong will ask before risky actions, so the goal may stop and wait for you.',
+      'High risk: approve ordinary tool and plan actions automatically. Hard deny rules still apply; this is not a sandbox.',
   },
   {
     value: 'cancel',
@@ -39,16 +39,16 @@ export const GOAL_START_MANUAL_OPTIONS: readonly StartPermissionOption[] = [
 
 export const GOAL_START_YOLO_OPTIONS: readonly StartPermissionOption[] = [
   {
-    value: 'auto',
-    label: 'Switch to Auto and start',
-    description:
-      'Best if you want Wukong to keep working while you are away. Tools are approved automatically, and questions are skipped.',
-  },
-  {
     value: 'yolo',
     label: 'Keep YOLO and start',
     description:
-      'Tools and plan changes stay approved automatically. Wukong may still ask you questions.',
+      'High risk: ordinary tool and plan actions stay approved automatically. Hard deny rules still apply; this is not a sandbox.',
+  },
+  {
+    value: 'auto',
+    label: 'Switch to safer Auto and start',
+    description:
+      'Work unattended within policy, but stop when an action requires explicit approval.',
   },
   {
     value: 'cancel',
@@ -66,24 +66,21 @@ const MANUAL_OPTIONS = GOAL_START_MANUAL_OPTIONS;
 const YOLO_OPTIONS = GOAL_START_YOLO_OPTIONS;
 
 const MANUAL_NOTICE_LINES = [
-  'Manual mode asks you before Wukong runs commands, edits files, or takes other risky actions.',
-  'Manual mode is not suitable for unattended goal work.',
-  'You can go back without losing your command.',
+  'Current mode: Manual. Commands, file edits, and other approval-required actions wait for you.',
+  'Choose a different mode only if you understand what will run under your current OS account.',
+  'None of these modes creates a shell or filesystem sandbox. Esc keeps your command.',
 ] as const;
 
 const YOLO_NOTICE_LINES = [
-  'YOLO mode approves tools and plan changes automatically.',
-  'YOLO mode can still stop for questions.',
-  'Switch to Auto if you want questions skipped during goal work.',
+  'Current mode: YOLO. Ordinary tool and plan actions are approved automatically.',
+  'Hard deny rules still apply, but actions run under your current OS account without a sandbox.',
+  'Choose Auto to restore approval boundaries for unattended work. Esc keeps your command.',
 ] as const;
 
 export class GoalStartPermissionPromptComponent extends StartPermissionPromptComponent {
   constructor(opts: GoalStartPermissionPromptOptions) {
     super({
-      title:
-        opts.mode === 'yolo'
-          ? 'Start a goal in YOLO mode?'
-          : 'Start a goal with approvals on?',
+      title: 'Choose permission mode for this goal',
       noticeLines: opts.mode === 'yolo' ? YOLO_NOTICE_LINES : MANUAL_NOTICE_LINES,
       options: opts.mode === 'yolo' ? YOLO_OPTIONS : MANUAL_OPTIONS,
       onSelect: opts.onSelect,

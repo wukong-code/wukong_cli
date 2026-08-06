@@ -67,6 +67,8 @@ export function loopEventSummary(ev: LoopRecordedEvent): string {
       return `${ev.name}#${ev.toolCallId.slice(-8)}`;
     case 'tool.result':
       return `result#${ev.toolCallId.slice(-8)}${ev.result.isError === true ? ' (error)' : ''}`;
+    case 'provider.request':
+      return `${ev.state} · attempt ${ev.attempt}/${ev.maxAttempts} · request#${ev.requestId.slice(-8)}`;
     default: {
       const exhaustive: never = ev;
       return (exhaustive as { type?: string }).type ?? 'unknown';
@@ -379,6 +381,58 @@ export function LoopEventDetail({ event }: { event: LoopRecordedEvent }) {
                 </FieldRow>
               </div>
             </div>
+          ) : null}
+        </div>
+      );
+    }
+    case 'provider.request': {
+      const stateClass =
+        event.state === 'succeeded'
+          ? 'text-[var(--color-sev-success)]'
+          : event.state === 'started'
+            ? 'text-[var(--color-sev-info)]'
+            : event.state === 'outcome_unknown'
+              ? 'text-[var(--color-sev-warning)]'
+              : 'text-[var(--color-sev-error)]';
+      return (
+        <div className="grid grid-cols-[140px_1fr] gap-x-3 gap-y-[2px]">
+          <FieldRow label="state">
+            <span className={stateClass}>{event.state}</span>
+          </FieldRow>
+          <FieldRow label="attempt">
+            <span className="text-fg-1">
+              {event.attempt} / {event.maxAttempts}
+            </span>
+          </FieldRow>
+          <FieldRow label="requestId">
+            <Mono>{event.requestId}</Mono>
+          </FieldRow>
+          <FieldRow label="idempotencyKey" wide>
+            <Mono className="break-all">{event.idempotencyKey}</Mono>
+          </FieldRow>
+          <FieldRow label="step">
+            <span className="text-[var(--color-sev-info)]">{event.step}</span>
+          </FieldRow>
+          <FieldRow label="turnId">
+            <Mono>{event.turnId}</Mono>
+          </FieldRow>
+          {event.statusCode !== undefined ? (
+            <FieldRow label="statusCode">{event.statusCode}</FieldRow>
+          ) : null}
+          {event.outputObserved !== undefined ? (
+            <FieldRow label="outputObserved">{String(event.outputObserved)}</FieldRow>
+          ) : null}
+          {event.errorName !== undefined ? (
+            <FieldRow label="errorName">
+              <Mono>{event.errorName}</Mono>
+            </FieldRow>
+          ) : null}
+          {event.errorMessage !== undefined ? (
+            <FieldRow label="errorMessage" wide>
+              <pre className="whitespace-pre-wrap break-words text-fg-1">
+                {event.errorMessage}
+              </pre>
+            </FieldRow>
           ) : null}
         </div>
       );

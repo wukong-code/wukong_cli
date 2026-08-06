@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 import {
   createRPC,
+  ErrorCodes,
   WukongCore,
   type CoreAPI,
   type SDKAPI,
@@ -392,7 +393,7 @@ max_context_size = 1000000
     });
   });
 
-  it('tracks session_load_failed with the attempted session context', async () => {
+  it('recovers a corrupted state.json from the atomic recovery copy', async () => {
     const rpc = await createTestRpc();
     const created = await rpc.createSession({ workDir });
     await writeFile(join(created.sessionDir, 'state.json'), '{bad json', 'utf-8');
@@ -400,11 +401,28 @@ max_context_size = 1000000
     const records: TelemetryContextRecord[] = [];
     const freshRpc = await createTestRpc({ telemetry: recordingContextTelemetry(records) });
 
-    await expect(freshRpc.resumeSession({ sessionId: created.id })).rejects.toThrow();
+    await expect(freshRpc.resumeSession({ sessionId: created.id })).resolves.toBeDefined();
+    const repairedState = await readFile(join(created.sessionDir, 'state.json'), 'utf-8');
+    expect(() => JSON.parse(repairedState)).not.toThrow();
+    expect(records.some((record) => record.event === 'session_load_failed')).toBe(false);
+  });
+
+  it('tracks session_load_failed when state.json and its recovery copy are corrupted', async () => {
+    const rpc = await createTestRpc();
+    const created = await rpc.createSession({ workDir });
+    await writeFile(join(created.sessionDir, 'state.json'), '{bad json', 'utf-8');
+    await writeFile(join(created.sessionDir, 'state.json.bak'), '{bad backup', 'utf-8');
+
+    const records: TelemetryContextRecord[] = [];
+    const freshRpc = await createTestRpc({ telemetry: recordingContextTelemetry(records) });
+
+    await expect(freshRpc.resumeSession({ sessionId: created.id })).rejects.toThrow(
+      'recovery backup are unreadable',
+    );
     expect(records).toContainEqual({
       event: 'session_load_failed',
       sessionId: created.id,
-      properties: { reason: 'SyntaxError' },
+      properties: { reason: ErrorCodes.SESSION_STATE_INVALID },
     });
   });
 

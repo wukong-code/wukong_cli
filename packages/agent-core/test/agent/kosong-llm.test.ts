@@ -137,6 +137,37 @@ describe('KosongLLM stream timing', () => {
 });
 
 describe('KosongLLM provider request policy', () => {
+  it('forwards the stable idempotency key as a request-scoped header', async () => {
+    let receivedAuth: unknown;
+    const generate: GenerateFn = async (
+      _provider,
+      _systemPrompt,
+      _tools,
+      _history,
+      _callbacks,
+      options,
+    ) => {
+      receivedAuth = options?.auth;
+      return {
+        id: 'response-1',
+        message: { role: 'assistant', content: [], toolCalls: [] },
+        usage: emptyUsage(),
+        finishReason: 'completed',
+        rawFinishReason: 'stop',
+      };
+    };
+    const llm = new KosongLLM({ provider, systemPrompt: 'system', generate });
+
+    await llm.chat({
+      messages: [],
+      tools: [],
+      signal: new AbortController().signal,
+      idempotencyKey: 'wukong-step-1',
+    });
+
+    expect(receivedAuth).toEqual({ headers: { 'Idempotency-Key': 'wukong-step-1' } });
+  });
+
   it('forwards the request-scoped origin lock to the provider generator', async () => {
     const policy = {
       expectedOrigin: 'https://api.example.test/v1',

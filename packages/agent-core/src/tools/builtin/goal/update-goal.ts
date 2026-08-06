@@ -48,6 +48,7 @@ import type {
 import type { Agent } from '#/agent';
 import { resolveWukongHome } from '#/config/path';
 import type { ResolvedRuntimeProvider } from '#/session/provider-manager';
+import { SubagentProviderOutcomeUnknownError } from '#/session/subagent-host';
 import { z } from 'zod';
 
 import type {
@@ -187,7 +188,13 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
             if (contract === null) {
               return { output: 'Goal no longer exists.', stopTurn: true };
             }
-            const iterated = await goal.incrementIteration();
+            // The autonomous Goal driver accounts for each writer iteration
+            // before the turn starts. Direct tool callers (including an
+            // ordinary turn that creates and completes a goal) still need one
+            // iteration recorded here.
+            const iterated = current.iteration === 0
+              ? await goal.incrementIteration()
+              : current;
             if (iterated !== null && iterated.maxIterations !== undefined && iterated.iteration > iterated.maxIterations) {
               goal.recordLoopResult({
                 schemaVersion: 2,
@@ -1003,6 +1010,26 @@ async function runFreshReviewer(
     return result;
   } catch (error) {
     if (signal.aborted) throw error;
+    if (error instanceof SubagentProviderOutcomeUnknownError) {
+      const summary = `Fresh reviewer provider request outcome is unknown (request ${error.request.requestId}, idempotency key ${error.request.idempotencyKey}); blind retry is disabled.`;
+      return {
+        passed: false,
+        terminal: true,
+        terminalStatus: 'ERROR',
+        reasonCode: 'provider_outcome_unknown',
+        reason: summary,
+        checks,
+        blockers: [{
+          id: `provider-request:${error.request.requestId}`,
+          kind: 'review',
+          summary: 'The reviewer provider may have accepted the request before the connection failed.',
+          evidence: `request_id=${error.request.requestId}; idempotency_key=${error.request.idempotencyKey}`,
+          nextAction: 'Reconcile provider logs or billing. Cancel and explicitly start a new Loop only after confirming a new reviewer request is safe.',
+        }],
+        reviewSubjectManifest: broker.manifest,
+        reviewerInputDigest,
+      };
+    }
     if (deadline.timedOut()) {
       await recordReviewerAttempt({ cwd: agent.config.cwd, outcome: 'error' });
       agent.telemetry.track('loop_reviewer_limit_reached', { limit: 'timeout' });
@@ -1768,6 +1795,13 @@ function loopResultFromGate(
     checks: gate.checks ?? [],
     blockers: gate.blockers ?? [],
     findings: gate.findings,
+    changedFiles: gate.proof?.verification.changedFiles,
+    evidence: {
+      verification: gate.proof === undefined ? 'not_run' : 'fresh',
+      reviewer: gate.freshCriteriaVerdict === undefined ? 'not_run' : 'fresh',
+      generatedAt: gate.proof?.generatedAt,
+      snapshotId: gate.proof?.snapshotId,
+    },
   };
 }
 

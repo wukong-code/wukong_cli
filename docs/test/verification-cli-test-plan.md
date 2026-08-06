@@ -108,27 +108,27 @@ pnpm --filter @wukong/agent-core exec vitest run test/tools/wukong-verify.test.t
 
 ```bash
 tsx --tsconfig apps/wukong/tsconfig.dev.json \
-  --import build/register-raw-text-loader.mjs \
+  --import @wukong/build-support/raw-text/register \
   apps/wukong/src/main.ts verify \
   --command "node -e 'process.exit(0)'" \
   --no-report
 
 tsx --tsconfig apps/wukong/tsconfig.dev.json \
-  --import build/register-raw-text-loader.mjs \
+  --import @wukong/build-support/raw-text/register \
   apps/wukong/src/main.ts scan --json
 
-WUKONG_HOME=/tmp/wukong-test \
+WUKONG_CODE_HOME=/tmp/wukong-test \
 tsx --tsconfig apps/wukong/tsconfig.dev.json \
-  --import build/register-raw-text-loader.mjs \
+  --import @wukong/build-support/raw-text/register \
   apps/wukong/src/main.ts guard --status
 ```
 
 高风险命令必须默认阻断：
 
 ```bash
-WUKONG_HOME=/tmp/wukong-test \
+WUKONG_CODE_HOME=/tmp/wukong-test \
 tsx --tsconfig apps/wukong/tsconfig.dev.json \
-  --import build/register-raw-text-loader.mjs \
+  --import @wukong/build-support/raw-text/register \
   apps/wukong/src/main.ts guard -- rm -rf /tmp/wukong-target
 ```
 

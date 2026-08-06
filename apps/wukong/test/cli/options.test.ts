@@ -411,6 +411,7 @@ describe('CLI options parsing', () => {
         'loop',
         'guard',
         'login',
+        'logout',
         'review',
         'roles',
         'doctor',

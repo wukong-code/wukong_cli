@@ -64,6 +64,7 @@
       workspacePaths = [
         ./packages/acp-adapter
         ./packages/agent-core
+        ./packages/build-support
         ./packages/server
         ./packages/server-e2e
         ./packages/kaos
@@ -86,6 +87,7 @@
       workspaceNames = [
         "@wukong/acp-adapter"
         "@wukong/agent-core"
+        "@wukong/build-support"
         "@wukong/server"
         "@wukong/server-e2e"
         "@wukong/kaos"

@@ -31,10 +31,10 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@hono/node-server": "^1.13.7",
+    "@hono/node-server": "^2.0.10",
     "@wukong/agent-core": "workspace:^",
     "@wukong/kosong": "workspace:^",
-    "hono": "^4.7.7"
+    "hono": "^4.12.34"
   },
   "devDependencies": {
     "tsx": "^4.21.0",

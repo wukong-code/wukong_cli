@@ -25,10 +25,12 @@ it('runs a text-only agent turn from prompt to completion', async () => {
     [wire] context.append_message      { "message": { "role": "user", "content": [ { "type": "text", "text": "Hello" } ], "toolCalls": [], "origin": { "kind": "user" } }, "time": "<time>" }
     [wire] context.append_loop_event   { "event": { "type": "step.begin", "uuid": "<uuid-1>", "turnId": "0", "step": 1 }, "time": "<time>" }
     [emit] turn.step.started           { "turnId": 0, "step": 1, "stepId": "<uuid-1>" }
+    [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "started" }, "time": "<time>" }
     [emit] thinking.delta              { "turnId": 0, "delta": "<think-1>" }
     [emit] assistant.delta             { "turnId": 0, "delta": "<text-1>" }
-    [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-2>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "think", "think": "<think-1>" } }, "time": "<time>" }
-    [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-3>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "text", "text": "<text-1>" } }, "time": "<time>" }
+    [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-3>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "think", "think": "<think-1>" } }, "time": "<time>" }
+    [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-4>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "text", "text": "<text-1>" } }, "time": "<time>" }
+    [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "succeeded", "outputObserved": true }, "time": "<time>" }
     [wire] context.append_loop_event   { "event": { "type": "step.end", "uuid": "<uuid-1>", "turnId": "0", "step": 1, "usage": { "inputOther": 3, "output": 8, "inputCacheRead": 0, "inputCacheCreation": 0 }, "finishReason": "end_turn" }, "time": "<time>" }
     [emit] turn.step.completed         { "turnId": 0, "step": 1, "stepId": "<uuid-1>", "usage": { "inputOther": 3, "output": 8, "inputCacheRead": 0, "inputCacheCreation": 0 }, "finishReason": "end_turn" }
     [wire] usage.record                { "model": "mock-model", "usage": { "inputOther": 3, "output": 8, "inputCacheRead": 0, "inputCacheCreation": 0 }, "usageScope": "turn", "time": "<time>" }
@@ -102,9 +104,11 @@ it('runs an agent turn through builtin tool approval and execution', async () =>
     [wire] context.append_message      { "message": { "role": "user", "content": [ { "type": "text", "text": "Run a command that prints lookup-result" } ], "toolCalls": [], "origin": { "kind": "user" } }, "time": "<time>" }
     [wire] context.append_loop_event   { "event": { "type": "step.begin", "uuid": "<uuid-1>", "turnId": "0", "step": 1 }, "time": "<time>" }
     [emit] turn.step.started           { "turnId": 0, "step": 1, "stepId": "<uuid-1>" }
+    [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "started" }, "time": "<time>" }
     [emit] assistant.delta             { "turnId": 0, "delta": "I will run that." }
     [emit] tool.call.delta             { "turnId": 0, "toolCallId": "call_bash", "name": "Bash", "argumentsPart": "{\\"command\\":\\"printf lookup-result\\",\\"timeout\\":60}" }
-    [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-2>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "text", "text": "I will run that." } }, "time": "<time>" }
+    [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-3>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "text", "text": "I will run that." } }, "time": "<time>" }
+    [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "succeeded", "outputObserved": true }, "time": "<time>" }
     [emit] requestApproval             { "turnId": 0, "toolCallId": "call_bash", "toolName": "Bash", "action": "Running: printf lookup-result", "display": { "kind": "command", "command": "printf lookup-result", "cwd": "<cwd>", "language": "bash" } }
   `);
   expect(ctx.lastLlmInput()).toMatchInlineSnapshot(`
@@ -126,12 +130,14 @@ it('runs an agent turn through builtin tool approval and execution', async () =>
     [emit] turn.step.completed                 { "turnId": 0, "step": 1, "stepId": "<uuid-1>", "usage": { "inputOther": 11, "output": 22, "inputCacheRead": 0, "inputCacheCreation": 0 }, "finishReason": "tool_use" }
     [wire] usage.record                        { "model": "mock-model", "usage": { "inputOther": 11, "output": 22, "inputCacheRead": 0, "inputCacheCreation": 0 }, "usageScope": "turn", "time": "<time>" }
     [emit] agent.status.updated                { "model": "mock-model", "contextTokens": 33, "maxContextTokens": 1000000, "contextUsage": 0.000033, "planMode": false, "swarmMode": false, "permission": "manual", "usage": { "byModel": { "mock-model": { "inputOther": 11, "output": 22, "inputCacheRead": 0, "inputCacheCreation": 0 } }, "total": { "inputOther": 11, "output": 22, "inputCacheRead": 0, "inputCacheCreation": 0 }, "currentTurn": { "inputOther": 11, "output": 22, "inputCacheRead": 0, "inputCacheCreation": 0 } } }
-    [wire] context.append_loop_event           { "event": { "type": "step.begin", "uuid": "<uuid-3>", "turnId": "0", "step": 2 }, "time": "<time>" }
-    [emit] turn.step.started                   { "turnId": 0, "step": 2, "stepId": "<uuid-3>" }
+    [wire] context.append_loop_event           { "event": { "type": "step.begin", "uuid": "<uuid-4>", "turnId": "0", "step": 2 }, "time": "<time>" }
+    [emit] turn.step.started                   { "turnId": 0, "step": 2, "stepId": "<uuid-4>" }
+    [wire] context.append_loop_event           { "event": { "type": "provider.request", "requestId": "<uuid-5>", "idempotencyKey": "wukong-<uuid-4>", "turnId": "0", "step": 2, "stepUuid": "<uuid-4>", "attempt": 1, "maxAttempts": 3, "state": "started" }, "time": "<time>" }
     [emit] assistant.delta                     { "turnId": 0, "delta": "The command printed lookup-result." }
-    [wire] context.append_loop_event           { "event": { "type": "content.part", "uuid": "<uuid-4>", "turnId": "0", "step": 2, "stepUuid": "<uuid-3>", "part": { "type": "text", "text": "The command printed lookup-result." } }, "time": "<time>" }
-    [wire] context.append_loop_event           { "event": { "type": "step.end", "uuid": "<uuid-3>", "turnId": "0", "step": 2, "usage": { "inputOther": 38, "output": 12, "inputCacheRead": 0, "inputCacheCreation": 0 }, "finishReason": "end_turn" }, "time": "<time>" }
-    [emit] turn.step.completed                 { "turnId": 0, "step": 2, "stepId": "<uuid-3>", "usage": { "inputOther": 38, "output": 12, "inputCacheRead": 0, "inputCacheCreation": 0 }, "finishReason": "end_turn" }
+    [wire] context.append_loop_event           { "event": { "type": "content.part", "uuid": "<uuid-6>", "turnId": "0", "step": 2, "stepUuid": "<uuid-4>", "part": { "type": "text", "text": "The command printed lookup-result." } }, "time": "<time>" }
+    [wire] context.append_loop_event           { "event": { "type": "provider.request", "requestId": "<uuid-5>", "idempotencyKey": "wukong-<uuid-4>", "turnId": "0", "step": 2, "stepUuid": "<uuid-4>", "attempt": 1, "maxAttempts": 3, "state": "succeeded", "outputObserved": true }, "time": "<time>" }
+    [wire] context.append_loop_event           { "event": { "type": "step.end", "uuid": "<uuid-4>", "turnId": "0", "step": 2, "usage": { "inputOther": 38, "output": 12, "inputCacheRead": 0, "inputCacheCreation": 0 }, "finishReason": "end_turn" }, "time": "<time>" }
+    [emit] turn.step.completed                 { "turnId": 0, "step": 2, "stepId": "<uuid-4>", "usage": { "inputOther": 38, "output": 12, "inputCacheRead": 0, "inputCacheCreation": 0 }, "finishReason": "end_turn" }
     [wire] usage.record                        { "model": "mock-model", "usage": { "inputOther": 38, "output": 12, "inputCacheRead": 0, "inputCacheCreation": 0 }, "usageScope": "turn", "time": "<time>" }
     [emit] agent.status.updated                { "model": "mock-model", "contextTokens": 50, "maxContextTokens": 1000000, "contextUsage": 0.00005, "planMode": false, "swarmMode": false, "permission": "manual", "usage": { "byModel": { "mock-model": { "inputOther": 49, "output": 34, "inputCacheRead": 0, "inputCacheCreation": 0 } }, "total": { "inputOther": 49, "output": 34, "inputCacheRead": 0, "inputCacheCreation": 0 }, "currentTurn": { "inputOther": 49, "output": 34, "inputCacheRead": 0, "inputCacheCreation": 0 } } }
     [emit] turn.ended                          { "turnId": 0, "reason": "completed" }

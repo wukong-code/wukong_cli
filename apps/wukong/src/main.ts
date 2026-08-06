@@ -38,7 +38,11 @@ import { cleanupStaleNativeCacheForCurrent } from './native/native-assets';
 import { installNativeModuleHook } from './native/module-hook';
 import { runNativeAssetSmokeIfRequested } from './native/smoke';
 
-export async function handleMainCommand(opts: CLIOptions, version: string): Promise<void> {
+export async function handleMainCommand(
+  opts: CLIOptions,
+  version: string,
+  environment: { readonly isTTY?: boolean } = {},
+): Promise<void> {
   let validated: ReturnType<typeof validateOptions>;
   try {
     validated = validateOptions(opts);
@@ -48,6 +52,20 @@ export async function handleMainCommand(opts: CLIOptions, version: string): Prom
       process.exit(1);
     }
     throw error;
+  }
+
+  const isTTY = environment.isTTY
+    ?? ((process.stdin.isTTY ?? false) && (process.stdout.isTTY ?? false));
+  if (validated.uiMode === 'shell' && !isTTY) {
+    const resumeHint = opts.session === ''
+      ? 'The session picker cannot run here. Use `wukong -r <session-id> -p "<prompt>"`.'
+      : opts.continue
+        ? 'Use `wukong -c -p "<prompt>"` to continue non-interactively.'
+        : 'Use `wukong -p "<prompt>"` for a non-interactive turn.';
+    process.stderr.write(
+      `error: interactive Wukong requires a TTY. ${resumeHint}\n`,
+    );
+    process.exit(1);
   }
 
   const preflightResult = await runUpdatePreflight(

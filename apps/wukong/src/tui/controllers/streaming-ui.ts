@@ -142,6 +142,10 @@ export class StreamingUIController {
     return this._activeToolCalls.get(id);
   }
 
+  getActiveToolNames(): readonly string[] {
+    return [...new Set([...this._activeToolCalls.values()].map((toolCall) => toolCall.name))];
+  }
+
   hasActiveToolCall(id: string): boolean {
     return this._activeToolCalls.has(id);
   }

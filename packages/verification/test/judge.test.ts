@@ -32,6 +32,16 @@ describe('runJudge', () => {
     expect(result.reason).toContain('failed');
   });
 
+  it('blocks instead of claiming pass when no verification commands ran', async () => {
+    const cwd = await makeTempRepo('wukong-judge-no-evidence-');
+
+    const result = await runJudge({ cwd });
+
+    expect(result.verdict).toBe('block');
+    expect(result.reason).toContain('No verification commands');
+    expect(result.proof.verification.commandResults).toHaveLength(0);
+  });
+
   it('blocks on high-risk changes', async () => {
     const cwd = await makeTempRepo('wukong-judge-highrisk-');
     await writeRepoFile(cwd, 'src/feature.ts', '// TODO: implement feature\n');

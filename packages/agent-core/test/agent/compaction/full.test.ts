@@ -1179,8 +1179,10 @@ describe('FullCompaction', () => {
       [emit] compaction.completed        { "result": { "summary": "Auto compacted summary.", "compactedCount": 4, "tokensBefore": 46, "tokensAfter": 28 } }
       [wire] context.append_loop_event   { "event": { "type": "step.begin", "uuid": "<uuid-1>", "turnId": "0", "step": 1 }, "time": "<time>" }
       [emit] turn.step.started           { "turnId": 0, "step": 1, "stepId": "<uuid-1>" }
+      [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "started" }, "time": "<time>" }
       [emit] assistant.delta             { "turnId": 0, "delta": "I can answer after compaction." }
-      [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-2>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "text", "text": "I can answer after compaction." } }, "time": "<time>" }
+      [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-3>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "text", "text": "I can answer after compaction." } }, "time": "<time>" }
+      [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "succeeded", "outputObserved": true }, "time": "<time>" }
       [wire] context.append_loop_event   { "event": { "type": "step.end", "uuid": "<uuid-1>", "turnId": "0", "step": 1, "usage": { "inputOther": 31, "output": 11, "inputCacheRead": 0, "inputCacheCreation": 0 }, "finishReason": "end_turn" }, "time": "<time>" }
       [emit] turn.step.completed         { "turnId": 0, "step": 1, "stepId": "<uuid-1>", "usage": { "inputOther": 31, "output": 11, "inputCacheRead": 0, "inputCacheCreation": 0 }, "finishReason": "end_turn" }
       [wire] usage.record                { "model": "wukong", "usage": { "inputOther": 31, "output": 11, "inputCacheRead": 0, "inputCacheCreation": 0 }, "usageScope": "turn", "time": "<time>" }
@@ -2036,9 +2038,11 @@ describe('FullCompaction', () => {
       [emit] compaction.completed        { "result": { "summary": "First compacted summary.", "compactedCount": 1, "tokensBefore": 8, "tokensAfter": 6 } }
       [wire] context.append_loop_event   { "event": { "type": "step.begin", "uuid": "<uuid-1>", "turnId": "0", "step": 1 }, "time": "<time>" }
       [emit] turn.step.started           { "turnId": 0, "step": 1, "stepId": "<uuid-1>" }
+      [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "started" }, "time": "<time>" }
       [emit] assistant.delta             { "turnId": 0, "delta": "I need a tool." }
       [emit] tool.call.delta             { "turnId": 0, "toolCallId": "call_missing", "name": "MissingTool", "argumentsPart": "{}" }
-      [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-2>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "text", "text": "I need a tool." } }, "time": "<time>" }
+      [wire] context.append_loop_event   { "event": { "type": "content.part", "uuid": "<uuid-3>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "part": { "type": "text", "text": "I need a tool." } }, "time": "<time>" }
+      [wire] context.append_loop_event   { "event": { "type": "provider.request", "requestId": "<uuid-2>", "idempotencyKey": "wukong-<uuid-1>", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "attempt": 1, "maxAttempts": 3, "state": "succeeded", "outputObserved": true }, "time": "<time>" }
       [wire] context.append_loop_event   { "event": { "type": "tool.call", "uuid": "call_missing", "turnId": "0", "step": 1, "stepUuid": "<uuid-1>", "toolCallId": "call_missing", "name": "MissingTool", "args": {} }, "time": "<time>" }
       [emit] tool.call.started           { "turnId": 0, "toolCallId": "call_missing", "name": "MissingTool", "args": {} }
       [wire] context.append_loop_event   { "event": { "type": "tool.result", "parentUuid": "call_missing", "toolCallId": "call_missing", "result": { "output": "Tool \\"MissingTool\\" not found", "isError": true } }, "time": "<time>" }

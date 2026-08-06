@@ -38,6 +38,8 @@ export interface LLMChatParams {
   tools: readonly Tool[];
   signal: AbortSignal;
   requestLogFields?: LLMRequestLogFields;
+  /** Stable across retries for one logical provider step. */
+  idempotencyKey?: string;
   onTextDelta?: ((delta: string) => void) | undefined;
   onThinkDelta?: ((delta: string) => void) | undefined;
   onToolCallDelta?: ((delta: ToolCallDelta) => void) | undefined;

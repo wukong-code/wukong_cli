@@ -29,7 +29,7 @@ const tsxArgs = [
   '--tsconfig',
   './tsconfig.dev.json',
   '--import',
-  '../../build/register-raw-text-loader.mjs',
+  '@wukong/build-support/raw-text/register',
   './src/main.ts',
   'server',
   'run',

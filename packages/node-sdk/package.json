@@ -64,6 +64,7 @@
   "devDependencies": {
     "@types/yazl": "^2.4.6",
     "@wukong/agent-core": "workspace:^",
+    "@wukong/build-support": "workspace:*",
     "@wukong/kaos": "workspace:^",
     "@wukong/kosong": "workspace:^",
     "@wukong/wukong-oauth": "workspace:^"

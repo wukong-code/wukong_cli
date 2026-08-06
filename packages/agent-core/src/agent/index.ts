@@ -5,7 +5,11 @@ import { ErrorCodes, WukongError, makeErrorPayload } from '#/errors';
 import { log } from '#/logging/logger';
 import type { Logger } from '#/logging/types';
 import type { AgentAPI, AgentEvent, WukongConfig, SDKAgentRPC, UsageStatus } from '#/rpc';
-import { generate, type ProviderRequestPolicy } from '@wukong/kosong';
+import {
+  generate,
+  type ProviderRequestAuth,
+  type ProviderRequestPolicy,
+} from '@wukong/kosong';
 
 import type { EnabledPluginSessionStart } from '#/plugin';
 
@@ -218,7 +222,8 @@ export class Agent {
         });
         return this.rawGenerate(provider, systemPrompt, tools, history, callbacks, requestOptions);
       };
-      if (generateOptions?.auth !== undefined) {
+      const explicitAuth = generateOptions?.auth;
+      if (explicitAuth?.apiKey !== undefined) {
         return run(generateOptions);
       }
       const withAuth =
@@ -229,7 +234,10 @@ export class Agent {
         return run(generateOptions);
       }
       return withAuth((auth) => {
-        return run({ ...generateOptions, auth });
+        return run({
+          ...generateOptions,
+          auth: mergeProviderRequestAuth(auth, explicitAuth),
+        });
       });
     };
   }
@@ -336,7 +344,11 @@ export class Agent {
       setPermission: (payload) => {
         const wasYolo = this.permission.mode === 'yolo';
         const wasAuto = this.permission.mode === 'auto';
-        this.permission.setMode(payload.mode);
+        if (payload.transient === true) {
+          this.permission.setModeTransient(payload.mode);
+        } else {
+          this.permission.setMode(payload.mode);
+        }
         const enabled = this.permission.mode === 'yolo';
         if (enabled !== wasYolo) {
           this.telemetry.track('yolo_toggle', { enabled });
@@ -476,4 +488,19 @@ export class Agent {
       ),
     });
   }
+}
+
+function mergeProviderRequestAuth(
+  resolved: ProviderRequestAuth,
+  explicit: ProviderRequestAuth | undefined,
+): ProviderRequestAuth {
+  if (explicit === undefined) return resolved;
+  return {
+    ...resolved,
+    ...explicit,
+    headers: {
+      ...resolved.headers,
+      ...explicit.headers,
+    },
+  };
 }

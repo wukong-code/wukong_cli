@@ -236,25 +236,25 @@ describe('approval adapter', () => {
     // /goal menu's description.
     expect(adapted.choices).toEqual([
       {
+        label: 'Keep Manual and start',
+        response: 'approved',
+        selected_label: 'manual',
+        description:
+          'Ask before actions that need approval. The goal may pause until you respond.',
+      },
+      {
         label: 'Switch to Auto and start',
         response: 'approved',
         selected_label: 'auto',
         description:
-          'Best if you want Wukong to keep working while you are away. Tools are approved automatically, and questions are skipped.',
+          'Work unattended within policy. Approval-required or high-risk actions stop instead of being approved.',
       },
       {
         label: 'Switch to YOLO and start',
         response: 'approved',
         selected_label: 'yolo',
         description:
-          'Tools and plan changes are approved automatically. Wukong may still ask you questions.',
-      },
-      {
-        label: 'Start in Manual',
-        response: 'approved',
-        selected_label: 'manual',
-        description:
-          'Keep approvals on. Wukong will ask before risky actions, so the goal may stop and wait for you.',
+          'High risk: approve ordinary tool and plan actions automatically. Hard deny rules still apply; this is not a sandbox.',
       },
       {
         label: 'Do not start',
@@ -280,18 +280,18 @@ describe('approval adapter', () => {
     expect(adapted.display).toEqual([{ type: 'brief', text: 'Start goal: Ship the feature' }]);
     expect(adapted.choices).toEqual([
       {
-        label: 'Switch to Auto and start',
-        response: 'approved',
-        selected_label: 'auto',
-        description:
-          'Best if you want Wukong to keep working while you are away. Tools are approved automatically, and questions are skipped.',
-      },
-      {
         label: 'Keep YOLO and start',
         response: 'approved',
         selected_label: 'yolo',
         description:
-          'Tools and plan changes stay approved automatically. Wukong may still ask you questions.',
+          'High risk: ordinary tool and plan actions stay approved automatically. Hard deny rules still apply; this is not a sandbox.',
+      },
+      {
+        label: 'Switch to safer Auto and start',
+        response: 'approved',
+        selected_label: 'auto',
+        description:
+          'Work unattended within policy, but stop when an action requires explicit approval.',
       },
       {
         label: 'Do not start',

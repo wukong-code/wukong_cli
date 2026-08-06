@@ -24,12 +24,12 @@ describe('goalExitCode', () => {
     expect(goalExitCode('paused')).toBe(GOAL_EXIT_CODES.paused);
   });
 
-  it('defaults unknown statuses to 0', () => {
-    expect(goalExitCode('running')).toBe(GOAL_EXIT_CODES.complete);
+  it('fails closed for unknown or non-terminal statuses', () => {
+    expect(goalExitCode('running')).toBe(GOAL_EXIT_CODES.error);
   });
 
-  it('treats undefined as complete', () => {
-    expect(goalExitCode(undefined)).toBe(GOAL_EXIT_CODES.complete);
+  it('fails closed when the durable goal is missing', () => {
+    expect(goalExitCode(undefined)).toBe(GOAL_EXIT_CODES.error);
   });
 });
 
@@ -87,7 +87,35 @@ describe('Loop result contract', () => {
     const snapshot = {
       status: 'complete',
       terminalReason: 'loop:PASS:passed:Delivery gate passed.',
+      loopRunId: 'run-pass',
       iteration: 2,
+      wallClockMs: 100,
+      tokensUsed: 10,
+      gateAttempts: 2,
+      loopTerminal: {
+        schemaVersion: 1,
+        runId: 'run-pass',
+        contractId: 'contract-1',
+        status: 'PASS',
+        reasonCode: 'passed',
+        continuationPolicy: {
+          mode: 'blocked',
+          automaticRetry: false,
+          requiresPreflightRevalidation: true,
+        },
+        blockerKeys: [],
+        terminalDigest: 'sha256:terminal-pass',
+        createdAt: 1,
+      },
+      loopResult: {
+        schemaVersion: 2,
+        status: 'PASS',
+        reasonCode: 'passed',
+        summary: 'Delivery gate passed.',
+        iterations: 2,
+        checks: [],
+        blockers: [],
+      },
     } as any;
 
     expect(loopSummaryJson(snapshot)).toMatchObject({
@@ -96,6 +124,8 @@ describe('Loop result contract', () => {
       status: 'PASS',
       reasonCode: 'passed',
       iterations: 2,
+      writerIterations: 2,
+      gateAttempts: 2,
       blockers: [],
     });
     expect(loopExitCode(snapshot)).toBe(LOOP_EXIT_CODES.PASS);
@@ -105,13 +135,41 @@ describe('Loop result contract', () => {
     const snapshot = {
       status: 'blocked',
       terminalReason: 'loop:NEEDS_WORK:max_iterations:Maximum Loop iterations reached.',
+      loopRunId: 'run-max-iterations',
       iteration: 5,
+      wallClockMs: 100,
+      tokensUsed: 10,
+      loopTerminal: {
+        schemaVersion: 1,
+        runId: 'run-max-iterations',
+        contractId: 'contract-1',
+        status: 'NEEDS_WORK',
+        reasonCode: 'max_iterations',
+        continuationPolicy: {
+          mode: 'same-contract',
+          automaticRetry: false,
+          requiresPreflightRevalidation: true,
+        },
+        blockerKeys: [],
+        terminalDigest: 'sha256:terminal-max-iterations',
+        createdAt: 1,
+      },
+      loopResult: {
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'max_iterations',
+        summary: 'Maximum Loop iterations reached.',
+        iterations: 5,
+        checks: [],
+        blockers: [],
+      },
     } as any;
 
     expect(loopSummaryJson(snapshot)).toMatchObject({
       status: 'NEEDS_WORK',
       reasonCode: 'max_iterations',
       iterations: 5,
+      writerIterations: 5,
     });
     expect(loopExitCode(snapshot)).toBe(LOOP_EXIT_CODES.NEEDS_WORK);
   });
@@ -120,7 +178,34 @@ describe('Loop result contract', () => {
     const snapshot = {
       status: 'blocked',
       terminalReason: 'loop:ERROR:workspace_changed:Workspace changed.',
+      loopRunId: 'run-workspace-changed',
       iteration: 1,
+      wallClockMs: 100,
+      tokensUsed: 10,
+      loopTerminal: {
+        schemaVersion: 1,
+        runId: 'run-workspace-changed',
+        contractId: 'contract-1',
+        status: 'ERROR',
+        reasonCode: 'workspace_changed',
+        continuationPolicy: {
+          mode: 'blocked',
+          automaticRetry: false,
+          requiresPreflightRevalidation: true,
+        },
+        blockerKeys: [],
+        terminalDigest: 'sha256:terminal-workspace-changed',
+        createdAt: 1,
+      },
+      loopResult: {
+        schemaVersion: 2,
+        status: 'ERROR',
+        reasonCode: 'workspace_changed',
+        summary: 'Workspace changed.',
+        iterations: 1,
+        checks: [],
+        blockers: [],
+      },
     } as any;
 
     expect(loopSummaryJson(snapshot)).toMatchObject({

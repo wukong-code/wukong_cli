@@ -2,7 +2,7 @@
 
 > 版本: v1.2（2026-07-09 review 修复：blocked 不再伪造成 verify FAIL、hydrate 取最新事件、wallClock 去双计、warning/judge stats 映射修正）  
 > 状态: Phase 0–2 已落地；Phase 3 polish 可选  
-> 关联: [产品设计](design.md) · [today 设计](today.md) · [像素吉祥物](pixel-mascot.md) · [ROADMAP](../ROADMAP.md)
+> 关联: [产品设计](design.md) · [today 设计](today.md) · [像素吉祥物](pixel-mascot.md) · [ROADMAP](../../ROADMAP.md)
 
 ## 1. 背景与目标
 

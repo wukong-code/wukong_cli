@@ -76,6 +76,20 @@ export class PermissionManager {
     this.agent.emitStatusUpdated();
   }
 
+  /**
+   * Apply a process-local permission override without writing it to the session
+   * wire. Headless callers use this so SIGKILL or power loss cannot leave a
+   * resumed session durably elevated to auto/yolo.
+   */
+  setModeTransient(mode: PermissionMode): void {
+    this.modeOverride = mode;
+    this.agent.replayBuilder.push({
+      type: 'permission_updated',
+      mode,
+    });
+    this.agent.emitStatusUpdated();
+  }
+
   recordApprovalResult(record: PermissionApprovalResultRecord): void {
     this.agent.records.logRecord({
       type: 'permission.record_approval_result',
@@ -128,6 +142,7 @@ export class PermissionManager {
       return this.blockAutoPermission(
         evaluation.result.reason?.['category'],
         evaluation.result.message,
+        context,
       );
     }
     return this.permissionPolicyResolutionToPrepare(
@@ -143,7 +158,7 @@ export class PermissionManager {
     policyName: string | undefined,
   ): Promise<PrepareToolExecutionResult | undefined> {
     if (this.mode === 'auto') {
-      return this.blockAutoPermission('approval_required');
+      return this.blockAutoPermission('approval_required', undefined, context);
     }
     const { signal } = context;
     const id = context.toolCall.id;
@@ -277,6 +292,7 @@ export class PermissionManager {
   private async blockAutoPermission(
     category: PermissionReasonValue | undefined,
     message = 'Auto blocked an action that requires permission. Review it or restart explicitly with YOLO.',
+    context?: PermissionPolicyContext,
   ): Promise<PrepareToolExecutionResult> {
     this.agent.telemetry.track('auto_action_blocked', {
       reason_code: 'permission_required',
@@ -285,14 +301,23 @@ export class PermissionManager {
 
     const current = this.agent.goal.getGoal().goal;
     if (current?.status === 'active' && current.stopCondition !== undefined) {
-      const summary = 'Auto paused the Loop because an action requires explicit permission.';
+      const categoryLabel = typeof category === 'string' ? category : 'unknown';
+      const toolName = context?.toolCall.name ?? 'unknown tool';
+      const summary = `Auto paused the Loop because ${toolName} requires explicit permission (${categoryLabel}).`;
       this.agent.goal.recordLoopResult({
         schemaVersion: 2,
         status: 'NEEDS_WORK',
         reasonCode: 'permission_required',
         summary,
         checks: [],
-        blockers: [],
+        blockers: [{
+          id: `permission-required:${toolName}:${categoryLabel}`,
+          kind: 'risk',
+          summary: `The guarded ${toolName} action was not executed in Auto mode.`,
+          evidence: `tool=${toolName}; category=${categoryLabel}; permission_mode=auto`,
+          nextAction: 'Switch to Manual, run `/loop resume`, and approve the exact action; or explicitly choose YOLO only if you accept the risk; otherwise revise the goal.',
+        }],
+        evidence: { verification: 'not_run', reviewer: 'not_run' },
       });
       await this.agent.goal.markBlocked(
         { reason: `loop:NEEDS_WORK:permission_required:${summary}` },

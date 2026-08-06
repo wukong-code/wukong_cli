@@ -17,7 +17,11 @@ import type { Tool } from '#/tool';
 import type { TokenUsage } from '#/usage';
 import { ApiError as GoogleApiError, GoogleGenAI as GenAIClient } from '@google/genai';
 
-import { requireProviderApiKey, resolveAuthBackedClient } from './request-auth';
+import {
+  mergeRequestHeaders,
+  requireProviderApiKey,
+  resolveAuthBackedClient,
+} from './request-auth';
 
 /**
  * Normalize a Google GenAI (Gemini) `finishReason` value to the unified
@@ -693,7 +697,11 @@ export class GoogleGenAIChatProvider implements ChatProvider {
       this._vertexai || this._apiKey !== undefined ? this._buildClient(this._apiKey) : undefined;
   }
 
-  private _buildClient(apiKey: string | undefined): GenAIClient {
+  private _buildClient(
+    apiKey: string | undefined,
+    requestHeaders?: Record<string, string>,
+  ): GenAIClient {
+    const headers = mergeRequestHeaders(this._defaultHeaders, requestHeaders);
     return new GenAIClient({
       apiKey,
       ...(this._vertexai
@@ -707,8 +715,8 @@ export class GoogleGenAIChatProvider implements ChatProvider {
       // default request headers, so a `User-Agent` here overrides the SDK
       // default (`google-genai-sdk/<ver> …`) while preserving the other
       // defaults (`x-goog-api-client`, `Content-Type`).
-      ...(this._defaultHeaders !== undefined
-        ? { httpOptions: { headers: this._defaultHeaders } }
+      ...(headers !== undefined
+        ? { httpOptions: { headers } }
         : {}),
     });
   }
@@ -836,7 +844,10 @@ export class GoogleGenAIChatProvider implements ChatProvider {
         // request-scoped credentials should instead point their service
         // account at the right principal.
         if (this._vertexai) return this._buildClient(this._apiKey);
-        return this._buildClient(requireProviderApiKey('GoogleGenAIChatProvider', a, this._apiKey));
+        return this._buildClient(
+          requireProviderApiKey('GoogleGenAIChatProvider', a, this._apiKey),
+          a?.headers,
+        );
       },
     );
   }

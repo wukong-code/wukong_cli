@@ -1301,6 +1301,66 @@ command = "vim"
     }
   });
 
+  it('appends one deterministic unverified summary after an ordinary user turn', async () => {
+    const { driver } = await makeDriver();
+
+    driver.sessionEventHandler.handleEvent(
+      {
+        type: 'turn.started',
+        agentId: 'main',
+        sessionId: 'ses-1',
+        turnId: 91,
+        origin: { kind: 'user' },
+      } as Event,
+      () => {},
+    );
+    driver.sessionEventHandler.handleEvent(
+      {
+        type: 'turn.step.completed',
+        agentId: 'main',
+        sessionId: 'ses-1',
+        turnId: 91,
+        step: 1,
+        usage: {
+          inputOther: 10,
+          inputCacheRead: 2,
+          inputCacheCreation: 0,
+          output: 3,
+        },
+      } as Event,
+      () => {},
+    );
+    driver.sessionEventHandler.handleEvent(
+      {
+        type: 'assistant.delta',
+        agentId: 'main',
+        sessionId: 'ses-1',
+        turnId: 91,
+        delta: 'ordinary answer',
+      } as Event,
+      () => {},
+    );
+    driver.sessionEventHandler.handleEvent(
+      {
+        type: 'turn.ended',
+        agentId: 'main',
+        sessionId: 'ses-1',
+        turnId: 91,
+        reason: 'completed',
+        durationMs: 1_200,
+      } as Event,
+      () => {},
+    );
+
+    const transcript = stripSgr(renderTranscript(driver));
+    expect(transcript).toContain('ordinary answer');
+    expect(transcript.match(/Outcome\s+COMPLETED/g)).toHaveLength(1);
+    expect(transcript).toContain('Tokens 15');
+    expect(transcript).toContain('model completion is not verification');
+    expect(transcript).toContain('use `/loop` when a trusted Gate is needed');
+    expect(transcript).not.toContain('Outcome    PASS');
+  });
+
   it('queues bash input with mode bash while a turn is streaming', async () => {
     const { driver, session } = await makeDriver();
     driver.state.appState.streamingPhase = 'waiting';

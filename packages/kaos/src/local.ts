@@ -1,5 +1,6 @@
 import type { ChildProcess, SpawnOptions } from 'node:child_process';
 import { spawn } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import {
   appendFile,
   lstat,
@@ -7,11 +8,13 @@ import {
   open,
   readdir,
   readFile,
+  rename,
   stat,
+  unlink,
   writeFile,
 } from 'node:fs/promises';
 import { homedir } from 'node:os';
-import { isAbsolute, join, normalize } from 'pathe';
+import { dirname, isAbsolute, join, normalize } from 'pathe';
 import type { Readable, Writable } from 'node:stream';
 
 import { detectEnvironmentFromNode, type Environment } from './environment';
@@ -664,6 +667,44 @@ export class LocalKaos implements Kaos {
     return data.length;
   }
 
+  async writeTextAtomic(
+    path: string,
+    data: string,
+    options?: { encoding?: BufferEncoding; backupPath?: string },
+  ): Promise<number> {
+    const encoding = options?.encoding ?? 'utf-8';
+    const bytes = Buffer.from(data, encoding);
+    if (options?.backupPath !== undefined) {
+      await this._writeBytesAtomic(this._resolvePath(options.backupPath), bytes);
+    }
+    await this._writeBytesAtomic(this._resolvePath(path), bytes);
+    return data.length;
+  }
+
+  private async _writeBytesAtomic(target: string, data: Buffer): Promise<void> {
+    const temp = `${target}.tmp.${process.pid}.${randomBytes(4).toString('hex')}`;
+    let renamed = false;
+    try {
+      const handle = await open(temp, 'wx');
+      try {
+        await handle.writeFile(data);
+        await handle.sync();
+      } finally {
+        await handle.close();
+      }
+      // Never unlink the target first: that introduces a crash window where
+      // no valid primary exists. libuv maps rename to replace-existing on
+      // supported Windows filesystems; if replacement is refused (for example
+      // because another process holds the file), surface the error and retain
+      // the old target while the temp file is cleaned below.
+      await rename(temp, target);
+      renamed = true;
+      await syncLocalDirectory(dirname(target));
+    } finally {
+      if (!renamed) await unlink(temp).catch(() => {});
+    }
+  }
+
   async mkdir(path: string, options?: { parents?: boolean; existOk?: boolean }): Promise<void> {
     const resolved = this._resolvePath(path);
     const parents = options?.parents ?? false;
@@ -761,6 +802,16 @@ export class LocalKaos implements Kaos {
       Object.assign(merged, layer);
     }
     return merged;
+  }
+}
+
+async function syncLocalDirectory(path: string): Promise<void> {
+  if (isWindows) return;
+  const handle = await open(path, 'r');
+  try {
+    await handle.sync();
+  } finally {
+    await handle.close();
   }
 }
 

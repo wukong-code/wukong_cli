@@ -14,6 +14,7 @@ import {
   type TokenUsage,
 } from '@wukong/kosong';
 import { basename } from 'pathe';
+import { inspectGit } from '@wukong/verification';
 
 import type { Agent } from '..';
 import {
@@ -37,6 +38,7 @@ import type { AgentEvent, TurnEndedEvent, TurnEndReason } from '../../rpc';
 import type { TelemetryPropertyValue } from '../../telemetry';
 import { abortable, abortError, isUserCancellation, userCancellationReason } from '../../utils/abort';
 import { USER_PROMPT_ORIGIN, type PromptOrigin } from '../context';
+import type { GoalSnapshot } from '../goal';
 import { renderUserPromptHookBlockResult, renderUserPromptHookResult } from '../../session/hooks';
 import { canonicalTelemetryArgs, isPlainRecord } from './canonical-args';
 import { ToolCallDeduplicator } from './tool-dedup';
@@ -397,11 +399,12 @@ export class TurnFlow {
     let turnId = firstTurnId;
     let turnInput = input;
     let turnOrigin = origin;
+    let priorNoActionDigest: string | undefined;
     while (true) {
       const goalBeforeTurn = this.agent.goal.getGoal().goal;
       const iterationBeforeTurn = goalBeforeTurn?.iteration ?? 0;
       if (goalBeforeTurn?.status === 'active' && goalBeforeTurn.budget.overBudget) {
-        await this.agent.goal.markBlocked({ reason: 'A configured budget was reached' });
+        await this.stopLoopNeedsWork('budget_exhausted', 'A configured budget was reached.');
         const ended = await this.endGoalTurnWithoutModel(turnId, turnInput, turnOrigin);
         return { event: ended };
       }
@@ -411,13 +414,29 @@ export class TurnFlow {
       // Wall-clock is tracked live by the store (anchored while `active`), so the
       // timer is correct even when the model completes mid-turn.
       await this.agent.goal.incrementTurn();
+      if (goalBeforeTurn?.stopCondition !== undefined) {
+        await this.agent.goal.incrementIteration();
+      }
+      const historyStart = this.agent.context.history.length;
       const end = await this.runOneTurn(turnId, turnInput, turnOrigin, signal, false, limits);
 
       if (end.event.reason === 'cancelled') {
+        const failedGoal = this.agent.goal.getGoal().goal;
+        if (failedGoal?.stopCondition !== undefined && failedGoal.providerOutcomeUnknown !== undefined) {
+          await this.agent.goal.pauseOnInterrupt({
+            reason: `Stopped after interruption with provider outcome unknown (request ${failedGoal.providerOutcomeUnknown.requestId}, idempotency key ${failedGoal.providerOutcomeUnknown.idempotencyKey}). Reconcile the provider result before starting another request.`,
+          });
+          return end;
+        }
         await this.agent.goal.pauseOnInterrupt({ reason: 'Paused after interruption' });
         return end;
       }
       if (end.event.reason === 'failed') {
+        const failedGoal = this.agent.goal.getGoal().goal;
+        if (failedGoal?.stopCondition !== undefined && failedGoal.providerOutcomeUnknown !== undefined) {
+          await this.stopLoopProviderOutcomeUnknown(failedGoal.providerOutcomeUnknown);
+          return end;
+        }
         await this.agent.goal.pauseActiveGoal({ reason: goalFailurePauseReason(end.event.error) });
         return end;
       }
@@ -426,7 +445,10 @@ export class TurnFlow {
         return end;
       }
       if (end.blockedByUserPromptHook === true) {
-        await this.agent.goal.markBlocked({ reason: 'Blocked by UserPromptSubmit hook' });
+        await this.stopLoopNeedsWork(
+          'user_prompt_hook_blocked',
+          'Blocked by UserPromptSubmit hook',
+        );
         return end;
       }
 
@@ -440,29 +462,39 @@ export class TurnFlow {
       // Hard budgets (turn / token / wall-clock, set via the SDK) are a
       // deterministic ceiling: block when reached. `blocked` is resumable.
       if (goal.budget.overBudget) {
-        await this.agent.goal.markBlocked({ reason: 'A configured budget was reached' });
+        await this.stopLoopNeedsWork('budget_exhausted', 'A configured budget was reached.');
         return end;
       }
+
+      const noActionDigest = this.observeNoActionTurn(historyStart);
+      if (
+        noActionDigest !== undefined
+        && priorNoActionDigest === noActionDigest
+      ) {
+        await this.stopLoopNeedsWork(
+          'no_progress',
+          'The writer repeated the same response twice without using a tool or changing the workspace.',
+          [{
+            id: 'writer_no_action',
+            kind: 'review',
+            summary: 'The writer produced no observable action in two consecutive iterations.',
+            nextAction: 'Review the blocker, adjust the goal or model, then resume or retry the Loop.',
+          }],
+        );
+        return end;
+      }
+      priorNoActionDigest = noActionDigest;
+
       // `maxIterations` is also a hard writer-turn ceiling. The delivery gate
       // normally increments `iteration`, but a model that never calls
       // UpdateGoal must not be able to create unbounded continuation turns.
       if (
         goal.stopCondition !== undefined
         && goal.maxIterations !== undefined
-        && goal.turnsUsed >= goal.maxIterations
+        && goal.iteration >= goal.maxIterations
       ) {
         const summary = 'Maximum Loop iterations reached before the delivery gate passed.';
-        this.agent.goal.recordLoopResult({
-          schemaVersion: 2,
-          status: 'NEEDS_WORK',
-          reasonCode: 'max_iterations',
-          summary,
-          checks: [],
-          blockers: [],
-        });
-        await this.agent.goal.markBlocked({
-          reason: `loop:NEEDS_WORK:max_iterations:${summary}`,
-        }, 'system');
+        await this.stopLoopNeedsWork('max_iterations', summary);
         return end;
       }
 
@@ -487,6 +519,89 @@ export class TurnFlow {
       turnInput = [{ type: 'text', text: GOAL_CONTINUATION_PROMPT }];
       turnOrigin = GOAL_CONTINUATION_ORIGIN;
     }
+  }
+
+  private observeNoActionTurn(
+    historyStart: number,
+  ): string | undefined {
+    const messages = this.agent.context.history.slice(historyStart);
+    const assistantMessages = messages.filter((message) => message.role === 'assistant');
+    if (
+      assistantMessages.length === 0
+      || assistantMessages.some((message) => message.toolCalls.length > 0)
+    ) return undefined;
+    const response = assistantMessages
+      .flatMap((message) => message.content)
+      .filter((part): part is Extract<ContentPart, { type: 'text' }> => part.type === 'text')
+      .map((part) => part.text)
+      .join('\n')
+      .replaceAll(/\s+/g, ' ')
+      .trim()
+      .toLocaleLowerCase();
+    if (response.length === 0) return undefined;
+    return createHash('sha256').update(response).digest('hex');
+  }
+
+  private async stopLoopNeedsWork(
+    reasonCode: string,
+    summary: string,
+    blockers: Parameters<Agent['goal']['recordLoopResult']>[0]['blockers'] = [],
+  ): Promise<void> {
+    const goal = this.agent.goal.getGoal().goal;
+    if (goal?.stopCondition !== undefined) {
+      const workspace = await inspectGit(this.agent.config.cwd);
+      this.agent.goal.recordLoopResult({
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode,
+        summary,
+        checks: [],
+        blockers,
+        changedFiles: workspace.changedFiles,
+        evidence: { verification: 'not_run', reviewer: 'not_run' },
+      });
+      this.agent.goal.recordLoopTerminal({ status: 'NEEDS_WORK', reasonCode });
+      await this.agent.goal.markBlocked({
+        reason: `loop:NEEDS_WORK:${reasonCode}:${summary}`,
+      }, 'system');
+      return;
+    }
+    await this.agent.goal.markBlocked({ reason: summary });
+  }
+
+  private async stopLoopProviderOutcomeUnknown(
+    request: NonNullable<GoalSnapshot['providerOutcomeUnknown']>,
+  ): Promise<void> {
+    const workspace = await inspectGit(this.agent.config.cwd);
+    const summary = [
+      'The provider request outcome is unknown, so blind retry is disabled to avoid duplicate work or cost.',
+      `Request ${request.requestId}; idempotency key ${request.idempotencyKey}.`,
+    ].join(' ');
+    const blockerId = `provider-request:${request.requestId}`;
+    this.agent.goal.recordLoopResult({
+      schemaVersion: 2,
+      status: 'ERROR',
+      reasonCode: 'provider_outcome_unknown',
+      summary,
+      checks: [],
+      blockers: [{
+        id: blockerId,
+        kind: 'review',
+        summary: 'The provider may have accepted the request before the connection failed.',
+        evidence: `request_id=${request.requestId}; idempotency_key=${request.idempotencyKey}`,
+        nextAction: 'Reconcile the request in provider logs or billing. If it did not complete, cancel this Loop and explicitly start a new attempt.',
+      }],
+      changedFiles: workspace.changedFiles,
+      evidence: { verification: 'not_run', reviewer: 'not_run' },
+    });
+    this.agent.goal.recordLoopTerminal({
+      status: 'ERROR',
+      reasonCode: 'provider_outcome_unknown',
+      blockerKeys: [blockerId],
+    });
+    await this.agent.goal.markBlocked({
+      reason: `loop:ERROR:provider_outcome_unknown:${summary}`,
+    }, 'system');
   }
 
   private async endGoalTurnWithoutModel(
@@ -563,7 +678,23 @@ export class TurnFlow {
       if (isAbortError(error)) {
         ended = { type: 'turn.ended', turnId, reason: 'cancelled', durationMs: Date.now() - startedAt };
       } else {
-        const summary = summarizeTurnError(error, turnId);
+        let summary = summarizeTurnError(error, turnId);
+        const providerOutcomeUnknown = this.agent.context.unresolvedProviderRequests
+          .findLast((request) => request.turnId === String(turnId));
+        if (providerOutcomeUnknown !== undefined) {
+          summary = {
+            ...summary,
+            details: {
+              ...summary.details,
+              providerOutcomeUnknown: {
+                requestId: providerOutcomeUnknown.requestId,
+                idempotencyKey: providerOutcomeUnknown.idempotencyKey,
+                state: providerOutcomeUnknown.state,
+                outputObserved: providerOutcomeUnknown.outputObserved === true,
+              },
+            },
+          };
+        }
         void this.agent.hooks?.fireAndForgetTrigger('StopFailure', {
           matcherValue: summary.name,
           inputData: { errorType: summary.name, errorMessage: summary.message },
@@ -880,6 +1011,17 @@ export class TurnFlow {
   private buildDispatchEvent(turnId: number) {
     return createLoopEventDispatcher({
       appendTranscriptRecord: async (event: LoopRecordedEvent) => {
+        if (event.type === 'provider.request') {
+          const goal = this.agent.goal.getGoal().goal;
+          this.agent.context.appendLoopEvent({
+            ...event,
+            ...(goal === null ? {} : {
+              goalId: goal.goalId,
+              ...(goal.loopRunId === undefined ? {} : { loopRunId: goal.loopRunId }),
+            }),
+          });
+          return;
+        }
         this.agent.context.appendLoopEvent(event);
       },
       emitLiveEvent: (event: LoopEvent) => {
@@ -905,6 +1047,7 @@ export class TurnFlow {
         return;
       }
       case "step.begin":
+      case "provider.request":
       case "step.retrying":
       case "tool.progress":
       case "tool.result":
@@ -1076,6 +1219,8 @@ function hasStepBudgetRemaining(maxSteps: number | undefined, currentStep: numbe
 
 function mapLoopEvent(event: LoopEvent, turnId: number): AgentEvent | undefined {
   switch (event.type) {
+    case 'provider.request':
+      return undefined;
     case 'step.begin':
       return {
         type: 'turn.step.started',

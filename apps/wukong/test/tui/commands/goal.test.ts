@@ -26,6 +26,8 @@ const loopLifecycleMocks = vi.hoisted(() => ({
   register: vi.fn(async () => {}),
   complete: vi.fn(async () => {}),
   completeRun: vi.fn(async () => {}),
+  stop: vi.fn(async () => {}),
+  stopRun: vi.fn(async () => {}),
 }));
 
 const loopPreflightMocks = vi.hoisted(() => ({
@@ -42,6 +44,8 @@ vi.mock('#/cli/lib/loop-lifecycle', () => ({
   registerTuiLoop: loopLifecycleMocks.register,
   completeTuiLoop: loopLifecycleMocks.complete,
   completeLoopRun: loopLifecycleMocks.completeRun,
+  stopTuiLoop: loopLifecycleMocks.stop,
+  stopLoopRun: loopLifecycleMocks.stopRun,
 }));
 
 vi.mock('#/cli/lib/workspace-trust', () => ({
@@ -414,8 +418,16 @@ function latestMountedPicker(host: SlashCommandHost): TestPicker {
 }
 
 function confirmLoopStart(host: SlashCommandHost): void {
-  mountedPicker(host).handleInput(ENTER);
+  continueLoopPreflight(host);
   latestMountedPicker(host).handleInput(ENTER);
+}
+
+function continueLoopPreflight(host: SlashCommandHost): void {
+  const preflight = mountedPicker(host);
+  preflight.handleInput(DOWN);
+  preflight.handleInput(DOWN);
+  preflight.handleInput(DOWN);
+  preflight.handleInput(ENTER);
 }
 
 describe('parseGoalCommand', () => {
@@ -678,11 +690,11 @@ describe('handleGoalCommand', () => {
     expect(s.createGoal).not.toHaveBeenCalled();
     expect(manualHost.sendNormalUserInput).not.toHaveBeenCalled();
     const text = stripAnsi(mountedPicker(manualHost).render(80).join('\n'));
-    expect(text).toContain('Manual mode is not suitable for unattended goal work');
-    expect(text).toContain('Return to the input box with your goal command');
+    expect(text).toContain('Current mode: Manual');
+    expect(text).toContain('None of these modes creates a shell or filesystem sandbox');
   });
 
-  it('defaults to Auto when confirming a Manual-mode goal start', async () => {
+  it('defaults to the current Manual mode when confirming a goal start', async () => {
     const { host: manualHost, session: s } = makeHost({ permissionMode: 'manual' });
 
     await handleGoalCommand(manualHost, 'Ship feature X');
@@ -693,8 +705,7 @@ describe('handleGoalCommand', () => {
         expect.objectContaining({ objective: 'Ship feature X' }),
       );
     });
-    expect(s.setPermission).toHaveBeenCalledWith('auto');
-    expect(manualHost.setAppState).toHaveBeenCalledWith({ permissionMode: 'auto' });
+    expect(s.setPermission).not.toHaveBeenCalled();
     expect(manualHost.sendNormalUserInput).toHaveBeenCalledWith('Ship feature X');
   });
 
@@ -703,8 +714,6 @@ describe('handleGoalCommand', () => {
 
     await handleGoalCommand(manualHost, 'Ship feature X');
     const picker = mountedPicker(manualHost);
-    picker.handleInput(DOWN);
-    picker.handleInput(DOWN);
     picker.handleInput(ENTER);
 
     await vi.waitFor(() => {
@@ -721,6 +730,7 @@ describe('handleGoalCommand', () => {
 
     await handleGoalCommand(manualHost, 'Ship feature X');
     const picker = mountedPicker(manualHost);
+    picker.handleInput(DOWN);
     picker.handleInput(DOWN);
     picker.handleInput(ENTER);
 
@@ -767,12 +777,12 @@ describe('handleGoalCommand', () => {
     expect(s.createGoal).not.toHaveBeenCalled();
     expect(yoloHost.sendNormalUserInput).not.toHaveBeenCalled();
     const text = stripAnsi(mountedPicker(yoloHost).render(80).join('\n'));
-    expect(text).toContain('YOLO mode can still stop for questions');
+    expect(text).toContain('Current mode: YOLO');
     expect(text).toContain('Keep YOLO and start');
-    expect(text).not.toContain('Start in Manual');
+    expect(text).toContain('Switch to safer Auto and start');
   });
 
-  it('defaults to Auto when confirming a YOLO-mode goal start', async () => {
+  it('defaults to the current YOLO mode instead of silently changing it', async () => {
     const { host: yoloHost, session: s } = makeHost({ permissionMode: 'yolo' });
 
     await handleGoalCommand(yoloHost, 'Ship feature X');
@@ -783,8 +793,7 @@ describe('handleGoalCommand', () => {
         expect.objectContaining({ objective: 'Ship feature X' }),
       );
     });
-    expect(s.setPermission).toHaveBeenCalledWith('auto');
-    expect(yoloHost.setAppState).toHaveBeenCalledWith({ permissionMode: 'auto' });
+    expect(s.setPermission).not.toHaveBeenCalled();
     expect(yoloHost.sendNormalUserInput).toHaveBeenCalledWith('Ship feature X');
   });
 
@@ -793,7 +802,6 @@ describe('handleGoalCommand', () => {
 
     await handleGoalCommand(yoloHost, 'Ship feature X');
     const picker = mountedPicker(yoloHost);
-    picker.handleInput(DOWN);
     picker.handleInput(ENTER);
 
     await vi.waitFor(() => {
@@ -1248,6 +1256,40 @@ describe('handleLoopSlashCommand', () => {
     expect(host.showError).toHaveBeenCalledWith(expect.stringContaining('Another Goal'));
   });
 
+  it('reviews bounded pre-existing workspace paths and returns to consolidated preflight', async () => {
+    loopPreflightMocks.run.mockResolvedValue({
+      ...loopPreflightReady('fix tests'),
+      workspaceGit: {
+        isRepo: true,
+        changedFileCount: 7,
+        changedFiles: [
+          { status: 'M', path: 'src/one.ts' },
+          { status: 'A', path: 'src/two.ts' },
+          { status: '??', path: 'test/three.test.ts' },
+          { status: 'D', path: 'docs/four.md' },
+          { status: 'M', path: 'packages/five.ts' },
+        ],
+      },
+    } as never);
+    const { host, session } = makeHost();
+
+    await handleLoopSlashCommand(host, 'fix tests');
+    const preflight = mountedPicker(host);
+    expect(stripAnsi(preflight.render(80).join('\n')))
+      .toContain('Review pre-existing workspace changes');
+    preflight.handleInput(DOWN);
+    preflight.handleInput(ENTER);
+
+    const workspace = latestMountedPicker(host);
+    const text = stripAnsi(workspace.render(80).join('\n'));
+    expect(text).toContain('Pre-existing workspace changes');
+    expect(text).toContain('M src/one.ts');
+    expect(text).toContain('2 additional paths');
+    workspace.handleInput(ESCAPE);
+    expect(stripAnsi(latestMountedPicker(host).render(80).join('\n'))).toContain('Loop preflight');
+    expect(session.createGoal).not.toHaveBeenCalled();
+  });
+
   it('does not create an orphan local lifecycle record when goal creation fails', async () => {
     const { host, session } = makeHost();
     session.createGoal.mockRejectedValueOnce(new Error('goal store unavailable'));
@@ -1284,6 +1326,18 @@ describe('handleLoopSlashCommand', () => {
     );
   });
 
+  it('uses Loop-specific resume guidance after /loop pause', async () => {
+    const { host, session } = makeHost();
+    session.getGoal.mockResolvedValue({
+      goal: { ...fakeSnapshot(), stopCondition: 'proof-pass' } as never,
+    });
+
+    await handleLoopSlashCommand(host, 'pause');
+
+    expect(session.pauseGoal).toHaveBeenCalledOnce();
+    expect(host.showStatus).toHaveBeenCalledWith(expect.stringContaining('/loop resume'));
+  });
+
   it('cancels only an actual Loop', async () => {
     const { host, session } = makeHost();
     session.getGoal.mockResolvedValue({
@@ -1293,14 +1347,16 @@ describe('handleLoopSlashCommand', () => {
     await handleLoopSlashCommand(host, 'stop');
 
     expect(session.cancelGoal).toHaveBeenCalledOnce();
-    expect(loopLifecycleMocks.complete).toHaveBeenCalledWith('g1', 'ERROR', 0, 'cancelled');
+    expect(loopLifecycleMocks.stop).toHaveBeenCalledWith('g1', 0);
+    expect(host.showNotice).toHaveBeenCalledWith(expect.stringContaining('STOPPED_BY_USER'));
+    expect(host.showNotice).toHaveBeenCalledWith(expect.stringContaining('start a new /loop'));
   });
 
   it('restores the original /loop command when permission confirmation is cancelled', async () => {
     const { host, session } = makeHost({ permissionMode: 'manual' });
 
     await handleLoopSlashCommand(host, '--max-iterations 3 fix tests');
-    mountedPicker(host).handleInput(ENTER);
+    continueLoopPreflight(host);
     latestMountedPicker(host).handleInput(ENTER);
     latestMountedPicker(host).handleInput(ESCAPE);
 
@@ -1313,8 +1369,9 @@ describe('handleLoopSlashCommand', () => {
     session.createGoal.mockRejectedValueOnce(new Error('goal store unavailable'));
 
     await handleLoopSlashCommand(host, 'fix tests');
-    mountedPicker(host).handleInput(ENTER);
+    continueLoopPreflight(host);
     latestMountedPicker(host).handleInput(ENTER);
+    latestMountedPicker(host).handleInput(DOWN);
     latestMountedPicker(host).handleInput(ENTER);
 
     await vi.waitFor(() => {

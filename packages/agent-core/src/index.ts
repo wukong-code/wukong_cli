@@ -73,6 +73,7 @@ export type {
   LoopRecordedEvent,
   LoopStepBeginEvent,
   LoopStepEndEvent,
+  LoopProviderRequestEvent,
   LoopContentPartEvent,
   LoopToolCallEvent,
   LoopToolResultEvent,

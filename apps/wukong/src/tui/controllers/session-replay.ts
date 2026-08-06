@@ -21,8 +21,9 @@ import type {
 import { formatErrorMessage, isTodoItemShape } from '../utils/event-payload';
 import { formatBackgroundAgentTranscript } from '../utils/background-agent-status';
 import { formatBackgroundTaskTranscript } from '../utils/background-task-status';
-import { buildGoalCompletionMessage } from '../utils/goal-completion';
+import { buildGoalCompletionMessage, buildLoopResultCard } from '../utils/goal-completion';
 import { formatBashOutputForDisplay } from '../utils/shell-output';
+import { durableLoopResultFromGoal } from '#/utils/loop-result';
 import {
   appStateFromResumeAgent,
   backgroundOrigin,
@@ -461,6 +462,18 @@ export class SessionReplayRenderer {
       case 'lifecycle': {
         const lifecycleChange: GoalReplayLifecycleChange = { ...change, kind: 'lifecycle' };
         if (isResumeNormalizationGoalPause(lifecycleChange)) return;
+        const durableResult = durableLoopResultFromGoal(record.snapshot);
+        if (lifecycleChange.status === 'blocked' && durableResult !== undefined) {
+          this.host.appendTranscriptEntry(
+            replayEntry(
+              context,
+              'status',
+              buildLoopResultCard(durableResult, record.snapshot),
+              'plain',
+            ),
+          );
+          return;
+        }
         if (isModelBlockedGoalLifecycle(lifecycleChange)) {
           return;
         }

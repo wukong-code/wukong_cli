@@ -55,68 +55,72 @@ describe('Session.init', () => {
       skills: { explicitDirs: [join(workDir, 'missing-skills')] },
       providerManager: testProviderManager(),
     });
-    const { agent: mainAgent } = await session.createAgent(
-      { type: 'main', generate: scripted.generate },
-      { profile: testProfile() },
-    );
-    mainAgent.config.update({
-      modelAlias: 'mock-model',
-      thinkingLevel: 'off',
-    });
-    mainAgent.tools.setActiveTools([]);
-    events.length = 0;
-    scripted.mockNextResponse({
-      type: 'text',
-      text: 'Explored the project structure, identified the build and test commands, mapped the module layout, and wrote a comprehensive summary into AGENTS.md covering architecture, conventions, and the developer workflow for future agents.',
-    });
+    try {
+      const { agent: mainAgent } = await session.createAgent(
+        { type: 'main', generate: scripted.generate },
+        { profile: testProfile() },
+      );
+      mainAgent.config.update({
+        modelAlias: 'mock-model',
+        thinkingLevel: 'off',
+      });
+      mainAgent.tools.setActiveTools([]);
+      events.length = 0;
+      scripted.mockNextResponse({
+        type: 'text',
+        text: 'Explored the project structure, identified the build and test commands, mapped the module layout, and wrote a comprehensive summary into AGENTS.md covering architecture, conventions, and the developer workflow for future agents.',
+      });
 
-    await session.generateAgentsMd();
+      await session.generateAgentsMd();
 
-    expect(session.agents.size).toBe(2);
-    expect(session.agents.get('main')).toBe(mainAgent);
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'subagent.spawned',
-        agentId: 'main',
-        subagentId: 'agent-0',
-        subagentName: 'coder',
-        parentToolCallId: 'generate-agents-md',
-      }),
-    );
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'turn.started',
-        agentId: 'agent-0',
-        origin: { kind: 'system_trigger', name: 'subagent' },
-      }),
-    );
-    expect(events).toContainEqual(
-      expect.objectContaining({
-        type: 'subagent.completed',
-        agentId: 'main',
-        subagentId: 'agent-0',
-        contextTokens: expect.any(Number),
-      }),
-    );
-    expect(scripted.calls[0]?.history).toMatchObject([
-      {
-        role: 'user',
-        content: [
-          expect.objectContaining({
-            text: expect.stringContaining('Task requirements:'),
-          }),
-        ],
-      },
-    ]);
+      expect(session.agents.size).toBe(2);
+      expect(session.agents.get('main')).toBe(mainAgent);
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'subagent.spawned',
+          agentId: 'main',
+          subagentId: 'agent-0',
+          subagentName: 'coder',
+          parentToolCallId: 'generate-agents-md',
+        }),
+      );
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'turn.started',
+          agentId: 'agent-0',
+          origin: { kind: 'system_trigger', name: 'subagent' },
+        }),
+      );
+      expect(events).toContainEqual(
+        expect.objectContaining({
+          type: 'subagent.completed',
+          agentId: 'main',
+          subagentId: 'agent-0',
+          contextTokens: expect.any(Number),
+        }),
+      );
+      expect(scripted.calls[0]?.history).toMatchObject([
+        {
+          role: 'user',
+          content: [
+            expect.objectContaining({
+              text: expect.stringContaining('Task requirements:'),
+            }),
+          ],
+        },
+      ]);
 
-    const contextText = mainAgent.context.history
-      .flatMap((message) => message.content)
-      .map((part) => (part.type === 'text' ? part.text : ''))
-      .join('\n');
-    expect(contextText).toContain('<system-reminder>');
-    expect(contextText).toContain('Latest AGENTS.md file content:');
-    expect(contextText).toContain('latest project instructions');
-    expect(contextText).not.toContain('Task requirements:');
+      const contextText = mainAgent.context.history
+        .flatMap((message) => message.content)
+        .map((part) => (part.type === 'text' ? part.text : ''))
+        .join('\n');
+      expect(contextText).toContain('<system-reminder>');
+      expect(contextText).toContain('Latest AGENTS.md file content:');
+      expect(contextText).toContain('latest project instructions');
+      expect(contextText).not.toContain('Task requirements:');
+    } finally {
+      await session.close();
+    }
   });
 
   it('loads AGENTS.md via the persistence kaos when the tool kaos rejects readText (Zed ACP "Internal error" regression)', async () => {

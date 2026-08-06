@@ -121,6 +121,9 @@ export class KosongLLM implements LLM {
       onStreamEnd: markStreamEnd,
       requestLogFields: params.requestLogFields,
       providerRequestPolicy: this.providerRequestPolicy,
+      ...(params.idempotencyKey === undefined
+        ? {}
+        : { auth: { headers: { 'Idempotency-Key': params.idempotencyKey } } }),
     };
 
     const result = await this.generate(

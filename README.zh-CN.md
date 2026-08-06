@@ -10,17 +10,22 @@ Wukong Code 是围绕一个主流程构建的终端 AI coding agent：
 给 `/loop` 一个目标，Wukong 会持续修改代码、运行仓库真实检查、从新的只读
 上下文审查结果，并针对同一个目标修复 blocking findings。
 
-## 当前版本：v0.0.21
+## 当前版本：v0.0.22
 
-`0.0.21` 提升了 Loop evidence 的完整性：
+`v0.0.22` 是已发布的 binary。当前源码 checkout 还可能包含未发布的 `0.1.0`
+稳定化改动。下方用户流程描述开发分支，不表示 `0.1.0-rc.1` 已经发布。
 
-- 同一种内置风险出现在不同文件、行或 evidence 位置时，会保留每一个不同
-  occurrence；
-- 每个 occurrence 都根据完整 finding 生成稳定 identity；
-- 字段完全相同的重复输入仍可确定性去重；
-- deterministic Gate failure 继续优先于 reviewer 输出。
+`0.0.22` 在 primary remote catalog 不可用时仍可回退到 models.dev，并澄清 CLI 的
+session 与权限控制：
 
-完整说明见 [v0.0.21 发布说明](docs/releases/0.0.21.md)。
+- primary catalog 不可用时，provider discovery 会回退到 models.dev；
+- 源码包含最终离线 snapshot 路径，但已发布的 0.0.22 native archive 因 release
+  profile 缺陷未嵌入该 snapshot；
+- `-r, --resume` 是 CLI 恢复 session 的规范参数；
+- help 区分 guarded Auto、YOLO、Plan、headless `--yes` 与额外 workspace
+  访问。
+
+完整说明见 [v0.0.22 发布说明](docs/releases/0.0.22.md)。
 
 ## Wukong 能做什么
 
@@ -34,8 +39,9 @@ Wukong Code 是围绕一个主流程构建的终端 AI coding agent：
   由用户显式选择并确定顺序。
 - **恢复未完成工作**：把 Wukong、Codex、Claude Code、Cursor、Kimi Code
   或 Grok 的本地会话作为只读上下文继续。
-- **返回清晰结论**：每个 Loop 都以 `PASS`、`NEEDS_WORK` 或 `ERROR` 结束；
-  未完成时显示 blocker 和下一步。
+- **返回清晰结论**：完成的 Gate 以 `PASS`、`NEEDS_WORK` 或 `ERROR` 结束；
+  `/loop stop` 或 headless 进程在尚无 Gate verdict 时被中断，单独显示为
+  `STOPPED_BY_USER`。
 - **使用自己的模型服务**：通过 `wukong provider` 配置 API Key 和模型。
 
 ## 安装
@@ -67,12 +73,50 @@ wukong
 /loop 为注册表单增加输入校验
 ```
 
-或直接运行：
+Headless 先预览，再把输出中列出的当前 checks、Gate、workspace 和 review 授权
+flags 加回同一条命令。缺少这些显式决定时会安全退出，不会静默开始：
 
 ```sh
-wukong loop "为注册表单增加输入校验"
 wukong loop "为注册表单增加输入校验" --dry-run
+# 审查 dry-run 后，按输出的 “Headless start flags” 重跑同一命令
 ```
+
+### 从输入到处理结果
+
+启动前，TUI 会先用一份 Preflight 汇总展示 Goal、Done when、Must not 原文、已选
+checks/criteria、Writer/Reviewer、脱敏 Provider origin、既有 Git 改动、权限、出站
+输入上限、审批顺序、结果处理和轮次上限，并明确当前没有单独的 provider-call/token
+硬上限。Headless dry-run 会输出同类运行事实和真正启动所需的精确 flags。安全授权仍
+分别确认本地读取、Provider 传输、权限和项目 check 执行；有风险时优先编辑、检查或
+取消，危险 Continue 固定在最后。没有可执行 checks 时选择继续，也不会获得 `PASS`
+捷径。
+
+运行中值得关注的是 writer iteration、耗时、当前 tool/activity，以及真正阻断继续的
+provider、权限或检查问题。TUI 的 `WRITE` / `CHECK` / `REVIEW` 是活动提示；headless
+当前只明确输出 writer iteration 和正在运行的 tool，内部 reviewer 不一定单独显示为
+`REVIEW`。模型回复“完成”不代表项目已经通过。
+
+结束时查看确定性的终态摘要，而不是从模型文案猜结果：
+
+- `PASS`：检查与只读 reviewer 均通过；先查看 `git status --short`、`git diff`，
+  再通过 `/loop status` 或 review feedback 检查 non-blocking findings，最后按自己的
+  流程 commit、push 或交付。
+- `NEEDS_WORK`：查看主要 blocker 与 Next；处理后继续 Loop，或修正 Finish Line
+  重新开始。
+- `ERROR`：provider、check 或本地 state 没有形成可信结论；修复运行条件后重试，
+  不能当作代码失败或 `PASS`。若出现 `provider_outcome_unknown`，先用 request ID /
+  idempotency key 核对 provider logs 或 billing，禁止盲目 resume 或 retry。
+- `PAUSED`：TUI Ctrl-C 或 `/loop pause` 只暂停同一个 Loop，不产生 Gate verdict；
+  workspace 改动保留，可用 `/loop resume` 继续。
+- `STOPPED_BY_USER`：`/loop stop` 或 headless 进程中断在没有 Gate verdict 时停止运行。
+  检查保留的改动；`/loop stop` 会丢弃 contract，headless 仅在 provider outcome
+  已知时提供 resume。
+
+在 preflight 取消不会创建 run。Loop 内 Auto 权限拒绝是
+`NEEDS_WORK/permission_required`，不是 `STOPPED_BY_USER`。自动化只能把最终 durable
+`loop.result` 的 outcome 当作 Gate verdict；dry-run 或其他命令退出 `0` 不代表 `PASS`。
+
+Wukong 不会因为 `PASS` 自动 commit、push 或发布。
 
 恢复其他 coding agent 的本地工作：
 
@@ -89,16 +133,24 @@ wukong loop "为注册表单增加输入校验" --dry-run
 | 命令 | 说明 |
 |---|---|
 | `wukong` | 启动交互式 TUI |
-| `wukong -p <prompt>` | 执行一次非交互 prompt |
+| `wukong -p <prompt>` | 执行一次非交互 prompt；`COMPLETED` 不等于 Loop `PASS` |
 | `wukong provider` | 配置模型 provider 与模型 |
 | `wukong loop <goal>` | 围绕一个目标运行 write → check → review → fix |
 | `wukong review init` | 创建 `.wukong/review-policy.md` |
 | `wukong guard` | 查看命令风险 guard |
 | `wukong login` | 连接可选 Wukong 账号 |
+| `wukong logout` | 撤销账号会话并清除本地凭据 |
 | `wukong doctor` | 校验本地配置 |
 | `wukong upgrade` | 升级原生安装 |
 
 完整参数以 `wukong --help` 为准。
+
+`wukong logout` 会先向账号实际配置的 OAuth host 尝试撤销本地保存的 refresh
+token，随后无论远端结果如何都会继续清理本地 token 和托管配置。远端确认成功时会
+明确显示会话已撤销；网络、限流或服务端错误导致撤销结果为 unknown 时，本地凭据仍
+会删除，同时明确警告服务端会话可能仍有效，并把
+`https://wukong.today/contact` 作为需要立即失效时的下一步。没有 token 时重复执行
+是安全且幂等的；如果本地清理本身失败，命令会报错，不会声称已经成功退出。
 
 ## 本地数据与隐私
 

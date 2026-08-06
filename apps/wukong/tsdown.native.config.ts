@@ -2,9 +2,12 @@ import { readFileSync } from 'node:fs';
 import { builtinModules } from 'node:module';
 import { resolve } from 'node:path';
 
+import {
+  RAW_TEXT_LOADERS,
+  rawTextQueryPlugin,
+} from '@wukong/build-support/raw-text/rolldown';
 import { defineConfig } from 'tsdown';
 
-import { rawTextPlugin } from '../../build/raw-text-plugin.mjs';
 import { BUILT_IN_CATALOG_DEFINE, builtInCatalogDefine } from './scripts/built-in-catalog.mjs';
 
 const appRoot = import.meta.dirname;
@@ -42,7 +45,8 @@ export default defineConfig({
   platform: 'node',
   target: 'node24',
   banner: { js: '#!/usr/bin/env node' },
-  plugins: [rawTextPlugin()],
+  loader: RAW_TEXT_LOADERS,
+  plugins: [rawTextQueryPlugin()],
   alias: {
     '@': resolve(appRoot, 'src'),
   },

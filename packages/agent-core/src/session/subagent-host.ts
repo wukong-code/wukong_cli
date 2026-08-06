@@ -101,6 +101,27 @@ type SubagentCompletion = {
   readonly usage?: TokenUsage;
 };
 
+export class SubagentProviderOutcomeUnknownError extends Error {
+  readonly request: {
+    readonly requestId: string;
+    readonly idempotencyKey: string;
+    readonly state: 'started' | 'outcome_unknown';
+    readonly outputObserved: boolean;
+  };
+
+  constructor(
+    request: SubagentProviderOutcomeUnknownError['request'],
+    cause: unknown,
+  ) {
+    super(
+      `Provider request outcome is unknown (request ${request.requestId}, idempotency key ${request.idempotencyKey}); blind retry is disabled.`,
+      { cause },
+    );
+    this.name = 'SubagentProviderOutcomeUnknownError';
+    this.request = request;
+  }
+}
+
 export type SubagentHandle = {
   readonly agentId: string;
   readonly profileName: string;
@@ -137,8 +158,9 @@ export class SessionSubagentHost {
         await this.configureChild(parent, agent, profile, options);
         return await this.runPromptTurn(parent, id, agent, profile.name, runOptions);
       } catch (error) {
-        this.emitSubagentFailed(parent, id, runOptions, error);
-        throw error;
+        const failure = this.captureUnknownProviderOutcome(parent, id, agent, error);
+        this.emitSubagentFailed(parent, id, runOptions, failure);
+        throw failure;
       }
     });
     return {
@@ -164,6 +186,34 @@ export class SessionSubagentHost {
       }
     });
     return { agentId, profileName, resumed: true, completion };
+  }
+
+  private captureUnknownProviderOutcome(
+    parent: Agent,
+    childId: string,
+    child: Agent,
+    error: unknown,
+  ): unknown {
+    const request = child.context.unresolvedProviderRequests.at(-1);
+    if (
+      request === undefined
+      || (request.state !== 'started' && request.state !== 'outcome_unknown')
+    ) return error;
+    const goal = parent.goal.getGoal().goal;
+    parent.context.appendLoopEvent({
+      ...request,
+      sourceAgentId: childId,
+      ...(goal === null ? {} : {
+        goalId: goal.goalId,
+        ...(goal.loopRunId === undefined ? {} : { loopRunId: goal.loopRunId }),
+      }),
+    });
+    return new SubagentProviderOutcomeUnknownError({
+      requestId: request.requestId,
+      idempotencyKey: request.idempotencyKey,
+      state: request.state,
+      outputObserved: request.outputObserved === true,
+    }, error);
   }
 
   async retry(agentId: string, options: RunSubagentOptions): Promise<SubagentHandle> {

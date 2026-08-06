@@ -42,25 +42,27 @@ export interface HeadlessGoalCreate {
  * Exit codes by final goal status. The lifecycle has only one success outcome
  * (`complete` → 0) and two resumable stopped states: `blocked` (the system
  * stopped pursuing — the model's UpdateGoal, a budget, or an error) and `paused`
- * (a turn abort / SIGINT). Both are non-zero — the goal did not complete. An absent goal
- * (should not happen on the create path) maps to success.
+ * (a turn abort / SIGINT). Both are non-zero — the goal did not complete. A missing
+ * goal or any unknown/non-terminal status is an error: only durable `complete` is success.
  */
 export const GOAL_EXIT_CODES = {
   complete: 0,
+  error: 2,
   blocked: 3,
   paused: 6,
 } as const;
 
 export function goalExitCode(status: string | undefined): number {
+  if (status === undefined) return GOAL_EXIT_CODES.error;
   switch (status) {
+    case 'complete':
+      return GOAL_EXIT_CODES.complete;
     case 'blocked':
       return GOAL_EXIT_CODES.blocked;
     case 'paused':
       return GOAL_EXIT_CODES.paused;
-    case undefined:
-      return GOAL_EXIT_CODES.complete;
     default:
-      return GOAL_EXIT_CODES.complete;
+      return GOAL_EXIT_CODES.error;
   }
 }
 
@@ -110,11 +112,26 @@ export interface LoopSummary {
   readonly reasonCode: string;
   readonly summary: string;
   readonly iterations: number;
+  readonly writerIterations: number;
+  readonly gateAttempts: number | null;
+  readonly continuationMode: 'same-contract' | 'restore-or-revise' | 'revised-loop' | 'blocked' | null;
+  readonly nextAction: string;
   readonly checks: readonly unknown[];
+  readonly changedFiles: ReadonlyArray<{ readonly path: string; readonly status: string }>;
+  readonly evidence: {
+    readonly verification: 'fresh' | 'not_run';
+    readonly reviewer: 'fresh' | 'not_run';
+    readonly generatedAt?: string;
+    readonly snapshotId?: string;
+  };
+  readonly durationMs: number | null;
+  readonly tokensUsed: number | null;
   readonly blockers: ReadonlyArray<{
     readonly id: string;
     readonly summary: string;
     readonly nextAction: string;
+    readonly file?: string;
+    readonly line?: number;
   }>;
 }
 
@@ -126,30 +143,161 @@ export const LOOP_EXIT_CODES = {
 } as const;
 
 export function loopSummaryJson(goal: GoalSnapshot | null): LoopSummary {
-  if (goal?.loopResult !== undefined) {
-    return {
+  const outcome = loopOutcomeFromGoal(goal);
+  const loopTerminal = goal?.loopTerminal;
+  const continuationMode = goal !== null
+    && loopTerminal !== undefined
+    && loopTerminal.runId === goal.loopRunId
+    ? loopTerminal.continuationPolicy.mode
+    : null;
+  if (
+    goal?.loopResult !== undefined
+    && outcome.status === goal.loopResult.status
+    && outcome.reasonCode === goal.loopResult.reasonCode
+  ) {
+    const result: Omit<LoopSummary, 'nextAction'> = {
       type: 'loop.result',
       ...goal.loopResult,
+      changedFiles: goal.loopResult.changedFiles === undefined
+        ? []
+        : [...goal.loopResult.changedFiles],
+      evidence: goal.loopResult.evidence ?? {
+        verification: goal.loopResult.checks.length > 0 ? 'fresh' : 'not_run',
+        reviewer: 'not_run',
+      },
+      durationMs: goal.wallClockMs,
+      tokensUsed: goal.tokensUsed,
+      writerIterations: goal.loopResult.iterations,
+      gateAttempts: goal.gateAttempts ?? null,
+      continuationMode,
     };
+    return { ...result, nextAction: loopSummaryNextAction(result) };
   }
-  const outcome = loopOutcomeFromGoal(goal);
-  return {
+  const result: Omit<LoopSummary, 'nextAction'> = {
     type: 'loop.result',
     schemaVersion: 2,
     status: outcome.status,
     reasonCode: outcome.reasonCode,
     summary: outcome.summary,
     iterations: goal?.iteration ?? 0,
+    writerIterations: goal?.iteration ?? 0,
+    gateAttempts: goal?.gateAttempts ?? null,
+    continuationMode,
     checks: [],
+    changedFiles: [],
+    evidence: { verification: 'not_run', reviewer: 'not_run' },
+    durationMs: goal?.wallClockMs ?? null,
+    tokensUsed: goal?.tokensUsed ?? null,
     blockers: outcome.status === 'PASS'
       ? []
       : [{ id: outcome.reasonCode, summary: outcome.summary, nextAction: loopNextAction(outcome.reasonCode) }],
   };
+  return { ...result, nextAction: loopSummaryNextAction(result) };
+}
+
+export function loopRuntimeErrorSummary(
+  goal: GoalSnapshot | null,
+  errorMessage: string,
+): LoopSummary {
+  const message = errorMessage.replaceAll(/\s+/gu, ' ').trim().slice(0, 500);
+  const summary = message.length === 0
+    ? 'Loop stopped because the provider or runtime failed.'
+    : `Loop stopped because the provider or runtime failed: ${message}`;
+  const iterations = goal?.iteration ?? 0;
+  const result: Omit<LoopSummary, 'nextAction'> = {
+    type: 'loop.result',
+    schemaVersion: 2,
+    status: 'ERROR',
+    reasonCode: 'runtime_error',
+    summary,
+    iterations,
+    writerIterations: iterations,
+    gateAttempts: goal?.gateAttempts ?? null,
+    continuationMode: null,
+    checks: [],
+    changedFiles: [],
+    evidence: { verification: 'not_run', reviewer: 'not_run' },
+    durationMs: goal?.wallClockMs ?? null,
+    tokensUsed: goal?.tokensUsed ?? null,
+    blockers: [{
+      id: 'runtime_error',
+      summary,
+      nextAction: loopNextAction('runtime_error'),
+    }],
+  };
+  return { ...result, nextAction: loopSummaryNextAction(result) };
 }
 
 export function formatLoopSummaryText(goal: GoalSnapshot | null): string {
-  const result = loopSummaryJson(goal);
-  return `Loop ${result.status}: ${result.summary} (iterations: ${String(result.iterations)})`;
+  return formatLoopResultText(loopSummaryJson(goal));
+}
+
+export function formatLoopResultText(result: LoopSummary): string {
+  const passedChecks = result.checks.filter((check) => (
+    typeof check === 'object'
+    && check !== null
+    && 'status' in check
+    && check.status === 'passed'
+  )).length;
+  const checkSummary = result.evidence.verification === 'not_run'
+    ? 'not run'
+    : `${String(passedChecks)}/${String(result.checks.length)} passed`;
+  const changed = result.changedFiles.length === 0
+    ? 'none recorded'
+    : `${String(result.changedFiles.length)} file(s): ${result.changedFiles
+        .slice(0, 6)
+        .map((file) => `${file.status} ${file.path}`)
+        .join(', ')}${result.changedFiles.length > 6 ? ', …' : ''}`;
+  const blockerLines = result.blockers.slice(0, 3).flatMap((blocker, index) => [
+    `Blocker ${String(index + 1)}  ${blocker.summary}${blocker.file === undefined ? '' : ` (${blocker.file}${blocker.line === undefined ? '' : `:${String(blocker.line)}`})`}`,
+    `  Fix      ${blocker.nextAction}`,
+  ]);
+  if (result.blockers.length > 3) {
+    blockerLines.push(`  More     ${String(result.blockers.length - 3)} additional blocker(s); inspect stream-json or \`/loop status\`.`);
+  }
+  return [
+    `Outcome    ${result.status}`,
+    `Reason     ${result.summary}`,
+    `Writer     ${String(result.writerIterations)} iteration(s)`,
+    `Gate       ${result.gateAttempts === null ? 'attempts unavailable' : `${String(result.gateAttempts)} attempt(s)`}`,
+    `Time       ${formatDuration(result.durationMs)} · Tokens ${result.tokensUsed === null ? 'unknown' : String(result.tokensUsed)} · Cost unavailable`,
+    `Workspace  ${changed}`,
+    `Checks     ${checkSummary}`,
+    `Evidence   verification ${result.evidence.verification}; reviewer ${result.evidence.reviewer}`,
+    `Blockers   ${String(result.blockers.length)}`,
+    ...blockerLines,
+    `Unverified ${result.evidence.verification === 'not_run' ? 'No verification evidence was recorded.' : 'Nothing beyond the recorded checks and reviewer evidence.'}`,
+    `Next       ${result.nextAction}`,
+  ].join('\n');
+}
+
+function loopSummaryNextAction(
+  result: Pick<LoopSummary, 'status' | 'reasonCode' | 'continuationMode' | 'blockers'>,
+): string {
+  if (result.status === 'PASS') {
+    return 'Review `git diff`, then explicitly keep or revert the workspace changes.';
+  }
+  if (result.reasonCode === 'provider_outcome_unknown') {
+    return loopNextAction(result.reasonCode);
+  }
+  switch (result.continuationMode) {
+    case 'same-contract':
+      return 'Address every blocker above, then run `/loop resume` under the same frozen Finish Line.';
+    case 'restore-or-revise':
+      return 'Restore the approved workspace/contract and retry, or start `/loop revise` with explicit approval.';
+    case 'revised-loop':
+      return 'Start `/loop revise` and explicitly approve the new Finish Line and Gate.';
+    case 'blocked':
+      return 'This run cannot resume; inspect the blockers, then cancel it or start an explicitly revised/new Loop.';
+    case null:
+      return result.blockers[0]?.nextAction ?? loopNextAction(result.reasonCode);
+  }
+}
+
+function formatDuration(durationMs: number | null): string {
+  if (durationMs === null) return 'unknown';
+  if (durationMs < 1000) return `${String(durationMs)}ms`;
+  return `${(durationMs / 1000).toFixed(1)}s`;
 }
 
 export function loopExitCode(goal: GoalSnapshot | null): number {

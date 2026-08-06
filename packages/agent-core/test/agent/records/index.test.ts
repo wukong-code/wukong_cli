@@ -161,19 +161,54 @@ describe('AgentRecords persistence metadata', () => {
     expect(migrated.message.toolCalls[0]?.['function']).toBeUndefined();
   });
 
-  it('warns but continues when replaying records from a newer wire version', async () => {
+  it('fails closed and blocks writes for records from a newer wire version', async () => {
     const persistence = new InMemoryAgentRecordPersistence([
       {
         type: 'metadata',
         protocol_version: '9.9',
         created_at: 1,
       },
+      {
+        type: 'turn.prompt',
+        input: [{ type: 'text', text: 'must not replay' }],
+        origin: { kind: 'user' },
+      },
+    ]);
+    const { agent } = testAgent({ persistence });
+    const records = agent.records;
+
+    await expect(records.replay()).rejects.toThrow(
+      `Session wire protocol version 9.9 is newer than the current version ${AGENT_WIRE_PROTOCOL_VERSION}`,
+    );
+    expect(agent.context.history).toHaveLength(0);
+    expect(() => {
+      records.logRecord({
+        type: 'turn.prompt',
+        input: [{ type: 'text', text: 'must not append' }],
+        origin: { kind: 'user' },
+      });
+    }).toThrow('Agent records are read-only because replay failed');
+    expect(persistence.records).toHaveLength(2);
+  });
+
+  it('fails closed and blocks writes for an unknown record type', async () => {
+    const persistence = new InMemoryAgentRecordPersistence([
+      {
+        type: 'metadata',
+        protocol_version: AGENT_WIRE_PROTOCOL_VERSION,
+        created_at: 1,
+      },
+      { type: 'future.capability' } as unknown as AgentRecord,
     ]);
     const records = testAgent({ persistence }).agent.records;
 
-    const result = await records.replay();
-    expect(result.warning).toContain('9.9');
-    expect(result.warning).toContain(AGENT_WIRE_PROTOCOL_VERSION);
+    await expect(records.replay()).rejects.toThrow(
+      'AgentRecords replay encountered unsupported record type: future.capability',
+    );
+    expect(() => {
+      records.logRecord({ type: 'context.clear' });
+    }).toThrow('Agent records are read-only because replay failed');
+    expect(persistence.records).toHaveLength(2);
   });
 
   it('rejects replaying records without a registered migration path', async () => {

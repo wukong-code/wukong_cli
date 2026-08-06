@@ -1,4 +1,4 @@
-import { mkdtemp, readFile, realpath, rm, stat } from 'node:fs/promises';
+import { mkdtemp, readFile, readdir, realpath, rm, stat } from 'node:fs/promises';
 import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -179,6 +179,30 @@ describe('LocalKaos', () => {
         lines.push(line);
       }
       expect(lines.join('')).toBe('line1\nline2');
+    });
+  });
+
+  describe('writeTextAtomic', () => {
+    it('durably replaces the target and recovery copy without temp leftovers', async () => {
+      const target = join(tempDir, 'state.json');
+      const backup = join(tempDir, 'state.json.bak');
+
+      await kaos.writeTextAtomic(target, '{"version":1}', { backupPath: backup });
+      await kaos.writeTextAtomic(target, '{"version":2}', { backupPath: backup });
+
+      expect(await readFile(target, 'utf-8')).toBe('{"version":2}');
+      expect(await readFile(backup, 'utf-8')).toBe('{"version":2}');
+      expect((await readdir(tempDir)).some((name) => name.includes('.tmp.'))).toBe(false);
+    });
+
+    it('keeps primary and backup independently valid across replacements', async () => {
+      const target = join(tempDir, 'state.json');
+      const backup = join(tempDir, 'state.json.bak');
+
+      await kaos.writeTextAtomic(target, '{"valid":true}', { backupPath: backup });
+
+      expect(JSON.parse(await readFile(target, 'utf-8'))).toEqual({ valid: true });
+      expect(JSON.parse(await readFile(backup, 'utf-8'))).toEqual({ valid: true });
     });
   });
 

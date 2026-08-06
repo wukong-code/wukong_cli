@@ -149,6 +149,8 @@ export function reduceWireRecords(records: Iterable<AgentRecord>): {
 
   const applyLoopEvent = (event: LoopRecordedEvent, time: number | undefined): void => {
     switch (event.type) {
+      case 'provider.request':
+        return;
       case 'step.begin': {
         closePendingToolResults(time);
         const entry: MutableEntry = {

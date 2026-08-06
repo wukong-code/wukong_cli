@@ -1,4 +1,7 @@
-# `wukong today` / `/today` 设计
+# `wukong today` 设计
+
+> 当前实现只有顶层 `wukong today`。本文中旧的 `/today` 示例是历史候选交互，
+> 不属于 0.0.22 的可见 TUI command surface。
 
 > 版本: v1.0
 > 日期: 2026-07-08

@@ -85,9 +85,9 @@ teardown() {
     run ./install.sh
     [ "$status" -eq 0 ]
     [ -x "$HOME/.wukong/bin/wukong" ]
-    [[ "$output" == *"Installing Wukong CLI for darwin-x64"* ]]
+    [[ "$output" == *"Installing Wukong Code latest for darwin-x64"* ]]
     [[ "$output" == *"wukong-code/releases/latest/download"* ]]
-    [[ "$output" == *"Wukong CLI installed to:"* ]]
+    [[ "$output" == *"Wukong Code installed to:"* ]]
 }
 
 @test "respects WUKONG_INSTALL_DIR override" {
@@ -161,7 +161,7 @@ EOF
 
     run ./install.sh
     [ "$status" -eq 1 ]
-    [[ "$output" == *"Checksum verification failed"* ]]
+    [[ "$output" == *"Release checksum verification failed."* ]]
 }
 
 @test "prints PATH hint when install dir is not on PATH" {

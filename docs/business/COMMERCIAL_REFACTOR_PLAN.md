@@ -135,7 +135,7 @@ Policy 与 Audit 是团队付费价值
 
 | 命令 | 状态 | 目标 |
 |---|---|---|
-| `/today` | TUI 已实现 | **Local Loop Briefing**：今日 verify/scan/proof/guard 统计 + 工作区快照 + streak + 基于状态的 Next；top-level `wukong today` 已提供。详见 [today 设计](../design/today.md) |
+| `wukong today` | top-level CLI 已实现；TUI `/today` 未注册 | **Local Loop Briefing**：今日 verify/scan/proof/guard 统计 + focus + 基于状态的 Next。详见 [today 设计](../design/today.md) |
 | `wukong review` | 待实现 | AI 辅助代码审查，消耗 credits 或本地模型 |
 | `wukong test` | 待实现 | 项目测试入口和模板化测试策略 |
 | `wukong ship` | 待实现 | proof + 版本/changelog/dry-run 发布前 gate |
@@ -158,7 +158,7 @@ Policy 与 Audit 是团队付费价值
 | 层 | 含义 | Wukong 对应 | 状态 |
 |---|---|---|---|
 | 第一层：Agentic Coding Loop | agent 写代码 → 跑测试 → 修错 → 再跑 | `wukong loop` / `/loop`（本机）+ `/goal` + 内部 checks | 本机 top-level/TUI 均已实现；云端 `/schedule` 待实现 |
-| 第二层：Developer Feedback Loop | 人看报告、决定接受、更新规则 | `/proof`、`/judge`、`/today`、`/resume`、`/undo`、`/rules`(待实现) | 本地证据与 TUI briefing 已实现；共享 rules 待实现 |
+| 第二层：Developer Feedback Loop | 人看报告、决定接受、更新规则 | `/proof`、`/judge`、`/resume`、`/undo`、`/rules`(待实现)；briefing 使用 `wukong today` | 本地证据与 top-level briefing 已实现；共享 rules 待实现 |
 | 第三层：External Feedback Loop | 用户 bug、CI 失败、issue、PR review 回到 loop | GitHub Issues、CI、Sentry、Linear、Slack 集成 | 未实现，归 hosted/CI |
 
 ## 3.2 Loop 代码质量保障原则

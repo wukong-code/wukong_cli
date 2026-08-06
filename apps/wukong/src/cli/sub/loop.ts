@@ -7,6 +7,7 @@ import {
   formatLoopPreflightReady,
   resolveLoopReviewProvider,
   runLoopPreflight,
+  type LoopPreflightReady,
 } from '#/cli/lib/loop-preflight';
 import { createWukongCodeHostIdentity } from '#/cli/version';
 import { parseLoopDuration } from '#/utils/duration';
@@ -121,7 +122,10 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
             workspace: process.cwd(),
             mode: 'tui-proposal',
             requireModel: false,
-            reviewProvider: resolveLoopReviewProvider(config, model),
+            reviewProvider: resolveLoopReviewProvider(
+              config,
+              options.reviewModel ?? model,
+            ),
             verificationCatalogDigest: options.verificationCatalogDigest,
             verificationSkills: parseVerificationSkills(options.verificationSkills),
             getActiveGoal: async () => null,
@@ -135,22 +139,32 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
           return;
         }
         const outputFormat = inherited['outputFormat'];
+        const effectiveWriterModel = result.model;
+        const effectiveReviewerModel = options.reviewModel ?? result.model;
+        const effectivePermission = inherited['yolo'] === true && inherited['yes'] === true
+          ? 'yolo' as const
+          : 'auto' as const;
+        const effectiveOptions: LoopCliOptions = {
+          ...options,
+          model: effectiveWriterModel,
+          reviewModel: effectiveReviewerModel,
+        };
         process.stdout.write(
           outputFormat === 'stream-json'
             ? formatLoopDryRun(result, {
                 maxIterations: options.maxIterations,
-                writerModel: options.model,
-                reviewerModel: options.reviewModel,
+                writerModel: effectiveWriterModel,
+                reviewerModel: effectiveReviewerModel,
+                permission: effectivePermission,
                 minIntervalMs: options.minIntervalMs,
               })
-            : `${formatLoopPlan(options)}\n`
-              + `${formatLoopPreflightReady(result, options.maxIterations ?? 10)}\n\n`
-              + `Gate approval  ${result.proposal.gateApproval.approvalSetDigest}\n`
-              + `Warnings       ${result.proposal.finishLineReview.warningSetDigest}\n`
-              + `Project trust  ${result.trustChallenge}\n`
-              + `Broker trust   ${result.brokerTrustProposal.trustProposalDigest}\n`
-              + `Review consent ${result.reviewSubjectConsentProposal.consentProposalDigest}\n`
-              + `Catalog        ${result.verificationCatalog.catalogDigest}\n`,
+            : `${formatLoopPlan(effectiveOptions)}\n`
+              + `${formatLoopPreflightReady(result, options.maxIterations ?? 10, {
+                writerModel: effectiveWriterModel,
+                reviewerModel: effectiveReviewerModel,
+                permission: effectivePermission,
+              })}\n\n`
+              + `${formatHeadlessStartFlags(result)}\n`,
         );
         process.exit(0);
         return;
@@ -255,6 +269,47 @@ export function formatLoopPlan(options: LoopCliOptions): string {
   for (const constraint of options.constraints ?? []) lines.push(`  Must not: ${constraint}`);
   for (const check of options.checks ?? []) lines.push(`  Check: ${check}`);
   return `${lines.join('\n')}\n`;
+}
+
+export function formatHeadlessStartFlags(
+  result: LoopPreflightReady,
+): string {
+  const proposal = result.proposal;
+  const lines = [
+    'Headless start flags (review them, then add the required flags to the same command):',
+  ];
+  if (proposal.gatePlan.requiredChecks.some((check) => check.source !== 'explicit')) {
+    lines.push('  Check choice   --accept-discovered-checks  (or choose --only-explicit-checks)');
+  }
+  lines.push(`  Gate approval  --approve-gate-plan ${proposal.gateApproval.approvalSetDigest}`);
+  if (proposal.finishLineReview.warnings.length > 0) {
+    lines.push(`  Warning ack    --ack-finish-line-warnings ${proposal.finishLineReview.warningSetDigest}`);
+  }
+  if (proposal.gateApproval.hasExecutableChecks) {
+    lines.push(`  Project trust  --trust-workspace ${result.trustChallenge}`);
+  }
+  lines.push(
+    `  Broker trust   --trust-review-subject ${result.brokerTrustChallenge}`,
+    `  Provider send  --ack-review-subject ${result.reviewSubjectConsentProposal.consentProposalDigest}`,
+  );
+  if (result.verificationSelection !== undefined) {
+    lines.push(`  Catalog CAS    --verification-catalog-digest ${result.verificationCatalog.catalogDigest}`);
+    for (const selected of result.verificationSelection.selected) {
+      const entry = result.verificationCatalog.entries.find(
+        (candidate) => candidate.ref.provenanceDigest === selected.ref.provenanceDigest,
+      );
+      if (entry === undefined) {
+        throw new Error(
+          `Selected verification criteria is absent from the dry-run catalog: ${selected.ref.skillName}`,
+        );
+      }
+      lines.push(
+        `  Review skill   --verification-skill ${entry.selectionId}@${selected.ref.provenanceDigest}`,
+      );
+    }
+  }
+  lines.push('  Note           broker trust expires within 10 minutes; rerun --dry-run if any digest or challenge is stale');
+  return lines.join('\n');
 }
 
 function normalizeLoopStopCondition(

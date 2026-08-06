@@ -74,6 +74,10 @@ import type { ColorToken } from '#/tui/theme';
 import { errorReportHintLine } from '../constant/feedback';
 import { formatStepDebugTiming } from '#/utils/usage/debug-timing';
 import { nextTranscriptId } from '../utils/transcript-id';
+import {
+  buildOrdinaryTurnSummary,
+  providerOutcomeUnknownFromTurnDetails,
+} from '../utils/turn-summary';
 import type { BtwPanelController } from './btw-panel';
 import type { StreamingUIController } from './streaming-ui';
 import type { TasksBrowserController } from './tasks-browser';
@@ -143,6 +147,15 @@ export class SessionEventHandler {
   private goalCompletionAwaitingClear = false;
   private goalCompletionTurnEnded = false;
   private currentTurnHasAssistantText = false;
+  private ordinaryTurnFacts: {
+    readonly turnId: number;
+    readonly startedAt: number;
+    readonly steps: Set<number>;
+    readonly tools: Set<string>;
+    readonly failedTools: Set<string>;
+    tokens: number;
+    hadGoal: boolean;
+  } | undefined;
   private pendingModelBlockedFallback: GoalChange | undefined;
   private queuedGoalPromotionPending = false;
   private queuedGoalPromotionInFlight = false;
@@ -160,6 +173,7 @@ export class SessionEventHandler {
     this.goalCompletionAwaitingClear = false;
     this.goalCompletionTurnEnded = false;
     this.currentTurnHasAssistantText = false;
+    this.ordinaryTurnFacts = undefined;
     this.pendingModelBlockedFallback = undefined;
     this.queuedGoalPromotionPending = false;
     this.queuedGoalPromotionInFlight = false;
@@ -305,9 +319,20 @@ export class SessionEventHandler {
   // Private handlers
   // ---------------------------------------------------------------------------
 
-  private handleTurnBegin(_event: TurnStartedEvent): void {
-    void _event;
+  private handleTurnBegin(event: TurnStartedEvent): void {
     this.currentTurnHasAssistantText = false;
+    this.ordinaryTurnFacts = event.origin.kind === 'user'
+      ? {
+          turnId: event.turnId,
+          startedAt: Date.now(),
+          steps: new Set(),
+          tools: new Set(),
+          failedTools: new Set(),
+          tokens: 0,
+          hadGoal: this.host.state.appState.goal !== null
+            && this.host.state.appState.goal !== undefined,
+        }
+      : undefined;
     this.clearAgentSwarmProgress();
     this.host.streamingUI.resetToolUi();
     this.host.streamingUI.setStep(0);
@@ -341,6 +366,10 @@ export class SessionEventHandler {
   }
 
   private handleTurnEnd(event: TurnEndedEvent, sendQueued: (item: QueuedMessage) => void): void {
+    const ordinaryFacts = this.ordinaryTurnFacts?.turnId === event.turnId
+      ? this.ordinaryTurnFacts
+      : undefined;
+    this.ordinaryTurnFacts = undefined;
     this.host.streamingUI.flushNow();
     if (event.reason === 'cancelled') {
       this.markActiveAgentSwarmsCancelled();
@@ -355,12 +384,47 @@ export class SessionEventHandler {
     this.host.streamingUI.resetToolUi();
     this.host.streamingUI.finalizeTurn(sendQueued);
     this.renderPendingModelBlockedFallback();
+    if (ordinaryFacts !== undefined && !ordinaryFacts.hadGoal) {
+      const outcome = event.reason === 'completed'
+        ? 'COMPLETED' as const
+        : event.reason === 'cancelled'
+          ? 'STOPPED_BY_USER' as const
+          : 'ERROR' as const;
+      const reason = event.error?.message
+        ?? (event.reason === 'completed'
+          ? 'The model turn completed; this does not mean the work passed verification.'
+          : event.reason === 'cancelled'
+            ? 'The turn was interrupted before verification.'
+            : event.reason === 'filtered'
+              ? 'Provider safety policy blocked the response.'
+              : 'The model turn failed.');
+      this.host.appendTranscriptEntry({
+        id: nextTranscriptId(),
+        kind: 'status',
+        turnId: String(event.turnId),
+        renderMode: 'plain',
+        content: buildOrdinaryTurnSummary({
+          outcome,
+          reason,
+          steps: ordinaryFacts.steps.size,
+          tools: ordinaryFacts.tools.size,
+          failedTools: ordinaryFacts.failedTools.size,
+          durationMs: event.durationMs ?? Date.now() - ordinaryFacts.startedAt,
+          tokens: ordinaryFacts.tokens > 0 ? ordinaryFacts.tokens : undefined,
+          sessionId: this.host.state.appState.sessionId,
+          providerOutcomeUnknown: providerOutcomeUnknownFromTurnDetails(event.error?.details),
+        }),
+      });
+    }
     this.currentTurnHasAssistantText = false;
     this.goalCompletionTurnEnded = true;
     this.scheduleQueuedGoalPromotion();
   }
 
   private handleStepBegin(event: TurnStepStartedEvent): void {
+    if (this.ordinaryTurnFacts?.turnId === event.turnId) {
+      this.ordinaryTurnFacts.steps.add(event.step);
+    }
     this.host.streamingUI.flushNow();
     this.host.streamingUI.setStep(event.step);
     this.host.streamingUI.resetToolUi();
@@ -377,6 +441,15 @@ export class SessionEventHandler {
   }
 
   private handleStepCompleted(event: TurnStepCompletedEvent): void {
+    if (this.ordinaryTurnFacts?.turnId === event.turnId) {
+      this.ordinaryTurnFacts.steps.add(event.step);
+      if (event.usage !== undefined) {
+        this.ordinaryTurnFacts.tokens += event.usage.inputOther
+          + event.usage.inputCacheRead
+          + event.usage.inputCacheCreation
+          + event.usage.output;
+      }
+    }
     this.host.streamingUI.flushNow();
     this.maybeShowDebugTiming(event);
 
@@ -506,6 +579,9 @@ export class SessionEventHandler {
   }
 
   private handleToolCall(event: ToolCallStartedEvent): void {
+    if (this.ordinaryTurnFacts?.turnId === event.turnId) {
+      this.ordinaryTurnFacts.tools.add(event.toolCallId);
+    }
     const { streamingUI } = this.host;
     streamingUI.flushNow();
     const { turnId, step } = streamingUI.getTurnContext();
@@ -569,6 +645,9 @@ export class SessionEventHandler {
   }
 
   private handleToolResult(event: ToolResultEvent): void {
+    if (this.ordinaryTurnFacts?.turnId === event.turnId && event.isError === true) {
+      this.ordinaryTurnFacts.failedTools.add(event.toolCallId);
+    }
     const { streamingUI } = this.host;
     streamingUI.flushNow();
     const resultData: ToolResultBlockData = {
@@ -657,6 +736,9 @@ export class SessionEventHandler {
   }
 
   private handleGoalUpdated(event: GoalUpdatedEvent): void {
+    if (event.snapshot !== null && this.ordinaryTurnFacts !== undefined) {
+      this.ordinaryTurnFacts.hadGoal = true;
+    }
     this.host.setAppState({ goal: event.snapshot });
     if (
       event.snapshot?.stopCondition === 'proof-pass'
@@ -940,7 +1022,7 @@ export class SessionEventHandler {
         id: nextTranscriptId(),
         kind: 'status',
         renderMode: 'plain',
-        content: buildLoopResultCard(snapshot.loopResult),
+        content: buildLoopResultCard(snapshot.loopResult, snapshot),
       });
       return;
     }

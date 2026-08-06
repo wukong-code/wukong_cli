@@ -1,8 +1,10 @@
 import { fileURLToPath } from 'node:url';
 
+import {
+  RAW_TEXT_LOADERS,
+  rawTextQueryPlugin,
+} from '@wukong/build-support/raw-text/rolldown';
 import { defineConfig } from 'tsdown';
-
-import { rawTextPlugin } from '../../build/raw-text-plugin.mjs';
 
 export default defineConfig({
   entry: ['./src/index.ts'],
@@ -10,7 +12,8 @@ export default defineConfig({
   dts: false,
   outDir: 'dist',
   clean: true,
-  plugins: [rawTextPlugin()],
+  loader: RAW_TEXT_LOADERS,
+  plugins: [rawTextQueryPlugin()],
   banner: {
     js: [
       "import { fileURLToPath as __cjsShimFileURLToPath } from 'node:url';",

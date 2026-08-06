@@ -34,6 +34,10 @@ export interface LoopPhaseState {
   readonly objective?: string;
   /** Recommended recovery action shown for a blocked goal. */
   readonly nextAction?: string;
+  /** Stable terminal outcome for a blocked Loop. */
+  readonly outcome?: 'NEEDS_WORK' | 'ERROR';
+  /** Current system-observed activity, e.g. the active tool. */
+  readonly activity?: string;
   /** Seconds until the next retry when a cron loop is throttled. */
   readonly cronRetryInSec?: number;
   /** Cron interval string, e.g. "1m". */
@@ -129,7 +133,7 @@ export class LoopPhaseComponent implements Component {
     }
 
     if (state.phase === 'blocked') {
-      primaryParts.push(phaseLabel(state.phase));
+      primaryParts.push(state.outcome ?? phaseLabel(state.phase));
       if (state.nextAction) secondaryParts.push(`Next: ${state.nextAction}`);
       if (state.blockedReason) secondaryParts.push(state.blockedReason);
     } else if (state.cronRetryInSec !== undefined && state.cronRetryInSec > 0) {
@@ -140,6 +144,7 @@ export class LoopPhaseComponent implements Component {
     }
 
     primaryParts.push(formatElapsed(state.elapsedMs));
+    if (state.activity) secondaryParts.push(state.activity);
     if (state.phase !== 'blocked' && state.objective) secondaryParts.push(state.objective);
 
     const primary = currentTheme.boldFg(

@@ -6,7 +6,6 @@ import {
   hasPriorCompletedLoopWithin7d,
   recordTrackedLoopStart,
   stageLoopTerminal,
-  type LoopRunLifecycle,
   type LoopRunRecord,
 } from '#/cli/lib/loop-run-store';
 import type { LoopStatus } from '#/utils/loop-result';
@@ -37,13 +36,18 @@ export async function completeLoopRun(
   run: LocalLoopRun,
   outcome: LoopStatus,
   iterations: number,
-  lifecycle: LoopRunLifecycle = 'completed',
 ): Promise<LoopCompletionResult> {
-  const repeatedCompletedWithin7d = lifecycle === 'completed'
-    && (outcome === 'PASS' || outcome === 'NEEDS_WORK')
+  const repeatedCompletedWithin7d = (outcome === 'PASS' || outcome === 'NEEDS_WORK')
     && await hasPriorCompletedLoopWithin7d(run.runId).catch(() => false);
-  await stageLoopTerminal(run.runId, lifecycle, outcome, iterations).catch(() => {});
+  await stageLoopTerminal(run.runId, { status: 'completed', outcome, iterations }).catch(() => {});
   return { repeatedCompletedWithin7d };
+}
+
+export async function stopLoopRun(
+  run: LocalLoopRun,
+  iterations: number,
+): Promise<void> {
+  await stageLoopTerminal(run.runId, { status: 'cancelled', iterations }).catch(() => {});
 }
 
 export async function registerTuiLoop(
@@ -60,14 +64,13 @@ export async function cancelLoopRecord(
   record: LoopRunRecord,
   iterations: number = 0,
 ): Promise<void> {
-  await completeLoopRun({ runId: record.runId }, 'ERROR', iterations, 'cancelled');
+  await stopLoopRun({ runId: record.runId }, iterations);
 }
 
 export async function completeTuiLoop(
   goalId: string,
   outcome: LoopStatus,
   iterations: number,
-  lifecycle: LoopRunLifecycle = 'completed',
 ): Promise<LoopCompletionResult> {
   let run = activeTuiLoops.get(goalId);
   if (run === undefined) {
@@ -76,5 +79,16 @@ export async function completeTuiLoop(
   }
   if (run === undefined) return { repeatedCompletedWithin7d: false };
   activeTuiLoops.delete(goalId);
-  return completeLoopRun(run, outcome, iterations, lifecycle);
+  return completeLoopRun(run, outcome, iterations);
+}
+
+export async function stopTuiLoop(goalId: string, iterations: number): Promise<void> {
+  let run = activeTuiLoops.get(goalId);
+  if (run === undefined) {
+    const record = await findTrackedLoopByGoalId(goalId);
+    if (record !== undefined) run = { runId: record.runId };
+  }
+  if (run === undefined) return;
+  activeTuiLoops.delete(goalId);
+  await stopLoopRun(run, iterations);
 }

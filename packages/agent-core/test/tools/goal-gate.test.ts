@@ -769,6 +769,160 @@ describe('UpdateGoalTool 0.0.20 verification gate', () => {
     }
   });
 
+  it('requires a durable PASS terminal before completing a V3 Loop', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'wukong-v3-terminal-guard-'));
+    try {
+      const { goals } = makeStore();
+      await createBrokeredV3Goal(goals, cwd);
+
+      await expect(goals.markComplete({ reason: 'not proven' }, 'model')).rejects.toMatchObject({
+        code: ErrorCodes.REQUEST_INVALID,
+      });
+      expect(goals.getGoal().goal).toMatchObject({ status: 'active' });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('records a durable NEEDS_WORK terminal when a V3 Loop becomes blocked', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'wukong-v3-blocked-terminal-'));
+    try {
+      const { goals, records } = makeStore();
+      await createBrokeredV3Goal(goals, cwd);
+
+      await goals.markBlocked({ reason: 'Waiting for credentials' }, 'model');
+
+      expect(records.find((record) => record.type === 'loop.run.terminal')).toMatchObject({
+        terminal: {
+          status: 'NEEDS_WORK',
+          reasonCode: 'model_blocked',
+        },
+      });
+      expect(goals.getGoal().goal).toMatchObject({
+        status: 'blocked',
+        loopTerminal: { status: 'NEEDS_WORK' },
+      });
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('preserves a permission blocker and clears the prior result on same-contract resume', async () => {
+    const { goals, records } = makeStore();
+    await createBrokeredGoal(goals);
+    const runtime = goals.createLoopGateReviewRuntime();
+    if (runtime === null) throw new Error('brokered runtime fixture missing');
+    const priorRunId = goals.getGoal().goal?.loopRunId;
+
+    goals.recordLoopResult({
+      schemaVersion: 2,
+      status: 'NEEDS_WORK',
+      reasonCode: 'permission_required',
+      summary: 'Approval is required before writing outside the workspace.',
+      checks: [],
+      blockers: [],
+    });
+    await goals.markBlocked({
+      reason: 'loop:NEEDS_WORK:permission_required:Approval is required.',
+    }, 'system');
+
+    expect(goals.getGoal().goal).toMatchObject({
+      status: 'blocked',
+      loopTerminal: {
+        reasonCode: 'permission_required',
+        continuationPolicy: { mode: 'same-contract' },
+      },
+    });
+
+    const resumed = await goals.resumeGoal({
+      reviewSettings: {
+        brokerReviewTrust: runtime.runSettings.brokerReviewTrust,
+        reviewSubjectConsent: runtime.runSettings.reviewSubjectConsent,
+      },
+    });
+
+    expect(resumed).toMatchObject({
+      status: 'active',
+      iteration: 0,
+      loopResult: undefined,
+      loopTerminal: undefined,
+    });
+    expect(resumed.loopRunId).not.toBe(priorRunId);
+    expect(records).toContainEqual(expect.objectContaining({ type: 'loop.continuation.create' }));
+  });
+
+  it('resets run-local writer and Gate counters while preserving chain totals on continuation', async () => {
+    const { goals } = makeStore();
+    await createBrokeredGoal(goals, { maxIterations: 3 });
+    const runtime = goals.createLoopGateReviewRuntime();
+    if (runtime === null) throw new Error('brokered runtime fixture missing');
+
+    for (let iteration = 1; iteration <= 3; iteration += 1) {
+      await goals.incrementTurn();
+      await goals.incrementIteration();
+    }
+    goals.recordLoopResult({
+      schemaVersion: 2,
+      status: 'NEEDS_WORK',
+      reasonCode: 'max_iterations',
+      summary: 'Maximum Loop iterations reached before the Gate passed.',
+      checks: [],
+      blockers: [],
+    });
+    goals.recordLoopTerminal({ status: 'NEEDS_WORK', reasonCode: 'max_iterations' });
+    await goals.markBlocked({ reason: 'Maximum Loop iterations reached.' }, 'system');
+
+    const resumed = await goals.resumeGoal({
+      reviewSettings: {
+        brokerReviewTrust: runtime.runSettings.brokerReviewTrust,
+        reviewSubjectConsent: runtime.runSettings.reviewSubjectConsent,
+      },
+    });
+    expect(resumed).toMatchObject({
+      status: 'active',
+      iteration: 0,
+      turnsUsed: 3,
+      loopChainIterations: 3,
+      gateAttempts: 0,
+    });
+
+    for (let iteration = 1; iteration <= 3; iteration += 1) {
+      await goals.incrementTurn();
+      const snapshot = await goals.incrementIteration();
+      expect(snapshot).toMatchObject({
+        status: 'active',
+        iteration,
+        turnsUsed: 3 + iteration,
+        loopChainIterations: 3 + iteration,
+      });
+    }
+  });
+
+  it('keeps the canonical budget_exhausted terminal eligible for same-contract continuation', async () => {
+    const { goals } = makeStore();
+    await createBrokeredGoal(goals);
+
+    goals.recordLoopResult({
+      schemaVersion: 2,
+      status: 'NEEDS_WORK',
+      reasonCode: 'budget_exhausted',
+      summary: 'A configured budget was reached.',
+      checks: [],
+      blockers: [],
+    });
+    goals.recordLoopTerminal({ status: 'NEEDS_WORK', reasonCode: 'budget_exhausted' });
+    await goals.markBlocked({ reason: 'A configured budget was reached.' }, 'system');
+
+    expect(goals.getGoal().goal).toMatchObject({
+      status: 'blocked',
+      loopResult: { reasonCode: 'budget_exhausted' },
+      loopTerminal: {
+        reasonCode: 'budget_exhausted',
+        continuationPolicy: { mode: 'same-contract', automaticRetry: false },
+      },
+    });
+  });
+
   it('adds unchanged files matched by the selected recipe scope to the broker', async () => {
     const cwd = await mkdtemp(join(tmpdir(), 'wukong-v3-gate-scope-'));
     try {

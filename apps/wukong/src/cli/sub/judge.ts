@@ -66,12 +66,18 @@ function resolveDeps(deps: Partial<JudgeDeps> | undefined): JudgeDeps {
 }
 
 function formatJudge(result: JudgeResult): string {
+  const totalChecks = result.proof.verification.commandResults.length;
+  const passedChecks = result.proof.verification.commandResults.filter(
+    (command) => command.status === 'passed',
+  ).length;
   return [
     'Wukong judge',
     '',
     `Verdict: ${result.verdict}`,
     `Mode: ${result.mode}`,
-    `Proof status: ${result.proof.status}`,
+    `Verification: ${totalChecks === 0 ? 'not run' : result.proof.verification.status}`,
+    `Proof bundle: ${result.proof.status}${totalChecks === 0 ? ' (risk scan only)' : ''}`,
+    `Checks: ${String(passedChecks)}/${String(totalChecks)} passed`,
     `Changed files: ${String(result.proof.verification.changedFiles.length)}`,
     '',
     'Reason:',

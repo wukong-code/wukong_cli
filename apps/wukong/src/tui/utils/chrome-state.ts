@@ -219,14 +219,11 @@ export class ChromeStateAggregator {
       phase = 'blocked';
     } else if (goal.status === 'paused') {
       phase = 'paused';
-    } else if (goal.stopCondition === 'proof-pass') {
-      phase = this.lastProof?.status === 'blocked' ? 'writing' : 'verifying';
-    } else if (goal.stopCondition === 'verify-pass') {
-      phase = this.lastVerify?.status === 'failed' ? 'writing' : 'verifying';
-    } else if (goal.stopCondition === 'scan-clean') {
-      phase = 'verifying';
-    } else if (goal.stopCondition === 'judge-pass') {
-      phase = 'judging';
+    } else if (
+      (goal.stopCondition === 'proof-pass' && this.lastProof?.status === 'blocked')
+      || (goal.stopCondition === 'verify-pass' && this.lastVerify?.status === 'failed')
+    ) {
+      phase = 'writing';
     }
 
     return {
@@ -237,15 +234,29 @@ export class ChromeStateAggregator {
       // liveWallClockMs); do not add a second local elapsed delta.
       elapsedMs: goal.wallClockMs,
       blockedReason: isBlocked
-        ? this.lastVerify?.detail ?? loop?.summary ?? goal.terminalReason ?? undefined
+        ? goal.loopResult?.blockers[0]?.summary
+          ?? goal.loopResult?.summary
+          ?? this.lastVerify?.detail
+          ?? loop?.summary
+          ?? goal.terminalReason
+          ?? undefined
         : undefined,
       objective: goal.objective,
       nextAction: isBlocked ? this.blockedNextAction() : undefined,
+      outcome: isBlocked
+        ? goal.loopResult?.status === 'ERROR' || loop?.status === 'ERROR'
+          ? 'ERROR'
+          : goal.loopResult?.status === 'NEEDS_WORK' || loop?.status === 'NEEDS_WORK'
+            ? 'NEEDS_WORK'
+            : undefined
+        : undefined,
       warning: isBlocked,
     };
   }
 
   private blockedNextAction(): string {
+    const resultNext = this.goal?.loopResult?.blockers[0]?.nextAction;
+    if (resultNext !== undefined) return resultNext;
     const loop = parseLoopTerminalReason(this.goal?.terminalReason);
     if (loop !== null) return loopNextAction(loop.reasonCode);
     if (this.lastProof?.status === 'blocked') return 'review proof blockers';

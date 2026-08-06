@@ -22,6 +22,11 @@ inputs:
     required: false
     default: '15m'
 
+outputs:
+  signed-and-notarized:
+    description: 'true only after Apple accepts the submission and Gatekeeper verifies the binary'
+    value: ${{ steps.verify.outputs.signed-and-notarized }}
+
 runs:
   using: composite
   steps:
@@ -84,6 +89,7 @@ runs:
         rm -f "$key_path" "$zip_path"
 
     - name: Verify with Gatekeeper online check
+      id: verify
       shell: bash
       env:
         BINARY_PATH: ${{ inputs.binary-path }}
@@ -93,3 +99,4 @@ runs:
         codesign -dv --verbose=2 "$BINARY_PATH"
         echo "==> spctl -a -vvv -t install $BINARY_PATH"
         spctl -a -vvv -t install "$BINARY_PATH"
+        echo 'signed-and-notarized=true' >> "$GITHUB_OUTPUT"

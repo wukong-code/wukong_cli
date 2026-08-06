@@ -1,6 +1,6 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.22 已发布，下一计划版本直接进入 0.1.0 Trusted Local Loop。0.1.0 已完成设计但尚未实施；不包含隔离 worktree / Safe Promote。0.2.0 尚未批准开工。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.22 已发布，下一计划版本直接进入 0.1.0 Trusted Local Loop。0.1.0 已完成设计并部分实施，当前尚未达到 RC；不包含隔离 worktree / Safe Promote。0.2.0 尚未批准开工。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
@@ -13,14 +13,15 @@
 
 ## ✅ 0.0.22 — Provider Catalog Resilience（已发布）
 
-- [x] provider catalog 在维护源、models.dev 与 embedded snapshot 间 fallback，
-  避免单一远程源故障阻断 provider setup（2026-07-31）
+- [x] provider catalog 依次尝试维护源和 models.dev；源码包含最终 embedded
+  snapshot 路径，但公开 0.0.22 native archive 未嵌入该资产，双远端不可用时
+  仍会失败（2026-07-31）
 - [x] 澄清 resume/session、workspace permission、Auto/YOLO/Plan、headless 与
   judge 帮助；保留兼容参数（2026-07-31）
 - [x] 六平台 Release 的 12 个 ZIP/SHA 资产、官网 manifest/installer 与公开
   版本 surface 同步；macOS ARM64 checksum/binary smoke 通过（2026-07-31）
 
-## ⏳ 0.1.0 — Trusted Local Loop（设计完成，未实施）
+## ⏳ 0.1.0 — Trusted Local Loop（部分实施，尚未达到 RC）
 
 > 方案：[docs/design/0.1.0-trusted-local-loop.md](docs/design/0.1.0-trusted-local-loop.md)。
 > 本版继续 Free、local-first、BYOK，只稳定现有单 Loop，不新增执行架构、
@@ -38,11 +39,11 @@
 ### P0：结果语义与 TUI/headless 一致
 
 - [ ] 冻结 `PASS` / `NEEDS_WORK` / `ERROR`、稳定 reason code、continuation policy 和 next action 的唯一映射
-- [ ] Gate verdict 与 run lifecycle 分离；Ctrl-C、`/loop stop` 和用户拒绝显示 `STOPPED_BY_USER`，不伪造 `ERROR` 或 Gate verdict
+- [ ] Gate verdict 与 run lifecycle 分离：TUI Ctrl-C 或 `/loop pause` 为可恢复的 `PAUSED`；`/loop stop` 或尚无 Gate verdict 的 headless 中断为 `STOPPED_BY_USER`；preflight 拒绝不创建 run；active Auto guard 拒绝为 `NEEDS_WORK/permission_required`，均不伪造 `ERROR` 或 Gate verdict
 - [ ] runtime/model/provider/permission 错误不再显示成普通 delivery failure；`BLOCKED` 只作界面阶段，不替代 durable terminal
 - [ ] 修正 `max_iterations` 等可 same-contract continuation 的结果文案，不错误要求启动新 Loop
 - [ ] V2/V3 Goal panel、footer、`/loop status` 与 headless output 一致显示 Finish Line、run、chain usage、blockers、continuation 和下一步
-- [ ] 将 Goal、checks/no-check acknowledgement、dirty paths、workspace trust、exact provider/model、outbound input、iterations、provider-call/token limits 合并到一个可编辑 Preflight，高级字段折叠
+- [ ] 将 Goal、checks/no-check acknowledgement、dirty paths、workspace trust、exact provider/model、outbound input、iterations、provider-call/token limits 合并到一个可编辑 Preflight，高级字段折叠（2026-08-06 已完成统一最终汇总、dirty path review、审批顺序和无独立 call/token cap 的诚实提示；distinct approvals 与 call/token enforcement 仍待完成）
 - [ ] 终态显示 pre-existing dirty、Wukong touched/added/deleted files、checks、provider calls/tokens、blockers 和 next action；Cancel 不回滚并明确列出保留改动
 
 ### P0：Gate、evidence、隐私
@@ -302,7 +303,7 @@
 - [x] 空 catalog 仍判定登录成功并保留 token；不创建 managed model alias、不覆盖 BYOK provider/default，显示“已连接账号，当前无 Wukong 模型”（2026-07-22）
 - [x] catalog 404/5xx 保留未来的 last-known-good 且明确报错；`200 data: []` 是正常空状态，只有 token 缺失时安静跳过 refresh（2026-07-22）
 - [x] `/usage`、`/status` 在登录且 BYOK 模型仍为默认时也显示真实 managed usage；当前为 null/empty，不虚构 Guest/Free 限制（2026-07-22）
-- [x] `/logout` 只清理 Wukong token/provider/default alias，不删除其他 BYOK provider（2026-07-22）
+- [x] `/logout` 先尽力撤销远端 refresh token，再清理本地 Wukong token/provider/default alias；远端 unknown 必须明确提示，且不删除其他 BYOK provider（2026-08-06）
 - [x] Privacy 明确 0.0.18 没有 Wukong 托管推理或 prompt 上传；production 已验证 device authorization → 网站确认页、有效 token → 空 catalog/空 usage，BYOK 保持测试与 logout/re-login 自动化通过（2026-07-22）
 
 ### P0：Cross-Agent Resume
@@ -765,4 +766,4 @@
 
 ---
 
-**最后更新**: 2026-08-03（0.0.22 已发布；0.1.0 Trusted Local Loop 已完成设计，尚未实施）
+**最后更新**: 2026-08-06（0.0.22 已发布；0.1.0 Trusted Local Loop 已部分实施，尚未达到 RC）

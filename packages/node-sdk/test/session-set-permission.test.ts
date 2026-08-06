@@ -60,6 +60,29 @@ describe('Session.setPermission', () => {
     }
   });
 
+  it('keeps transient permission overrides out of the durable session wire', async () => {
+    const homeDir = await makeTempDir(tempDirs, 'wukong-sdk-permission-home-');
+    const workDir = await makeTempDir(tempDirs, 'wukong-sdk-permission-work-');
+    const harness = createWukongHarness({ homeDir, identity: TEST_IDENTITY });
+    const sessionId = 'ses_permission_transient';
+
+    try {
+      const session = await harness.createSession({ id: sessionId, workDir });
+      await session.setPermission('yolo', { transient: true });
+      await expect(session.getStatus()).resolves.toMatchObject({ permission: 'yolo' });
+    } finally {
+      await harness.close();
+    }
+
+    const resumedHarness = createWukongHarness({ homeDir, identity: TEST_IDENTITY });
+    try {
+      const resumed = await resumedHarness.resumeSession({ id: sessionId });
+      await expect(resumed.getStatus()).resolves.toMatchObject({ permission: 'manual' });
+    } finally {
+      await resumedHarness.close();
+    }
+  });
+
   it('rejects after the session is closed', async () => {
     const homeDir = await makeTempDir(tempDirs, 'wukong-sdk-permission-home-');
     const workDir = await makeTempDir(tempDirs, 'wukong-sdk-permission-work-');

@@ -192,7 +192,11 @@ describe('goal session end-to-end', () => {
     const events: Array<Record<string, unknown>> = [];
     const { session, agent, scripted } = await setupSession(sessionDir, events, ['GetGoal']);
     const api = new SessionAPIImpl(session);
-    await api.createGoal({ agentId: 'main', objective: 'work' });
+    await api.createGoal({
+      agentId: 'main',
+      objective: 'work',
+      stopCondition: 'proof-pass',
+    });
     await agent.goal.setBudgetLimits({ budgetLimits: { turnBudget: 1 } }, 'model');
 
     scripted.mockNextResponse({ type: 'text', text: 'step 1' });
@@ -202,7 +206,10 @@ describe('goal session end-to-end', () => {
     await session.flushMetadata();
 
     // One turn, then the turn budget blocks the goal (resumable) — no second turn.
-    expect((await api.getGoal({ agentId: 'main' })).goal?.status).toBe('blocked');
+    expect((await api.getGoal({ agentId: 'main' })).goal).toMatchObject({
+      status: 'blocked',
+      loopResult: { status: 'NEEDS_WORK', reasonCode: 'budget_exhausted' },
+    });
     expect(scripted.calls.length).toBe(1);
   });
 
@@ -414,7 +421,39 @@ describe('goal session end-to-end', () => {
     expect(goal).toMatchObject({
       status: 'blocked',
       turnsUsed: 2,
+      iteration: 2,
       loopResult: { status: 'NEEDS_WORK', reasonCode: 'max_iterations' },
+    });
+  });
+
+  it('stops early when the writer repeats the same no-action response twice', async () => {
+    const sessionDir = await makeTempDir();
+    const events: Array<Record<string, unknown>> = [];
+    const { session, agent, scripted } = await setupSession(sessionDir, events, ['GetGoal', 'UpdateGoal']);
+    const api = new SessionAPIImpl(session);
+    await api.createGoal({
+      agentId: 'main',
+      objective: 'finish the work',
+      stopCondition: 'proof-pass',
+      maxIterations: 10,
+    });
+    scripted.mockNextResponse({ type: 'text', text: 'I will keep working.' });
+    scripted.mockNextResponse({ type: 'text', text: '  I will keep   working.  ' });
+
+    agent.turn.prompt([{ type: 'text', text: 'finish the work' }]);
+    await agent.turn.waitForCurrentTurn();
+
+    const goal = (await api.getGoal({ agentId: 'main' })).goal;
+    expect(scripted.calls).toHaveLength(2);
+    expect(goal).toMatchObject({
+      status: 'blocked',
+      turnsUsed: 2,
+      iteration: 2,
+      loopResult: {
+        status: 'NEEDS_WORK',
+        reasonCode: 'no_progress',
+        evidence: { verification: 'not_run', reviewer: 'not_run' },
+      },
     });
   });
 
@@ -429,7 +468,6 @@ describe('goal session end-to-end', () => {
       const generate: NonNullable<AgentOptions['generate']> = async (...args) => {
         generateCalls += 1;
         if (generateCalls === 1) {
-          await agentRef!.goal.incrementIteration();
           agentRef!.goal.recordLoopResult({
             schemaVersion: 2,
             status: 'NEEDS_WORK',

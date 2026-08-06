@@ -26,8 +26,9 @@ import { MESSAGE_INDENT } from '#/tui/constant/rendering';
 import { STATUS_BULLET } from '#/tui/constant/symbols';
 import { currentTheme } from '#/tui/theme';
 import type { ColorToken } from '#/tui/theme';
-import { parseLoopTerminalReason } from '#/utils/loop-result';
+import { durableLoopResultFromGoal, parseLoopTerminalReason } from '#/utils/loop-result';
 import { formatTokenCount } from '#/utils/usage/usage-format';
+import { buildLoopResultPresentation } from '../../utils/goal-completion';
 import { formatGoalElapsed } from './goal-format';
 import { UsagePanelComponent } from './usage-panel';
 
@@ -126,6 +127,7 @@ export class GoalStatusMessageComponent implements Component {
 
 /** Box title, e.g. ` Goal · active `. */
 export function goalPanelTitle(goal: GoalSnapshot): string {
+  if (goal.providerOutcomeUnknown !== undefined) return ' Loop · ERROR ';
   const loop = parseLoopTerminalReason(goal.terminalReason);
   if (loop !== null) return ` Loop · ${loop.status} `;
   return ` Goal · ${goal.status} `;
@@ -140,10 +142,12 @@ export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRA
   // (active / paused / blocked) is a persisted, resumable goal that still shows
   // its stop condition. A reason is worth surfacing for stopped / complete states.
   const isComplete = goal.status === 'complete';
+  const durableResult = durableLoopResultFromGoal(goal);
   const loop = parseLoopTerminalReason(goal.terminalReason);
   const reason = loop?.summary ?? goal.terminalReason;
   const showReason =
-    (goal.status === 'paused' && reason !== undefined) || goal.status === 'blocked' || isComplete;
+    durableResult === undefined
+    && ((goal.status === 'paused' && reason !== undefined) || goal.status === 'blocked' || isComplete);
   const lines: string[] = [];
 
   // Condition as a blockquote left-trail. Reserve the visible "▌ " prefix before
@@ -160,6 +164,18 @@ export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRA
   lines.push('');
 
   const row = (label: string, val: string): string => `${muted(label.padEnd(LABEL_WIDTH))}${val}`;
+  const wrappedRow = (
+    label: string,
+    text: string,
+    colorize: (input: string) => string = value,
+    maxLines: number = 4,
+  ): void => {
+    const chunks = wrap(text, Math.max(1, wrapWidth - LABEL_WIDTH), maxLines);
+    lines.push(row(label, colorize(chunks[0] ?? '')));
+    for (const chunk of chunks.slice(1)) {
+      lines.push(row('', colorize(chunk)));
+    }
+  };
 
   if (showReason) {
     lines.push(
@@ -172,19 +188,29 @@ export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRA
   }
   lines.push(row('Running', value(formatGoalElapsed(goal.wallClockMs))));
   lines.push(row('Turns', value(`${goal.turnsUsed}`)));
-  lines.push(row('Tokens', value(formatTokenCount(goal.tokensUsed))));
+  lines.push(row('Writer tokens', value(formatTokenCount(goal.tokensUsed))));
+  if (goal.stopCondition !== undefined) {
+    lines.push(row('Review usage', muted('unavailable')));
+  }
   if (goal.stopCondition !== undefined) {
     lines.push(row('Iteration', value(`${goal.iteration}${goal.maxIterations !== undefined ? `/${String(goal.maxIterations)}` : ''}`)));
+    lines.push(row('Gate tries', value(goal.gateAttempts === undefined ? 'unknown' : String(goal.gateAttempts))));
   }
   if (goal.reviewModel !== undefined) {
     lines.push(row('Reviewer', value(goal.reviewModel)));
   }
-  if (goal.loopContract?.schemaVersion === 2) {
+  if (goal.loopContract?.schemaVersion === 2 || goal.loopContract?.schemaVersion === 3) {
+    const gatePlan = goal.loopContract.schemaVersion === 2
+      ? goal.loopContract.gatePlan
+      : goal.loopContract.gatePlan.legacySnapshot;
+    const criteriaSuffix = goal.loopContract.schemaVersion === 3
+      ? ` · ${String(goal.loopContract.verificationCriteria.selected.length)} evidence criteria`
+      : '';
     lines.push(row(
       'Finish line',
       value(
         `${String(goal.loopContract.constraints.length)} constraints · `
-        + `${String(goal.loopContract.gatePlan.requiredChecks.length)} checks`,
+        + `${String(gatePlan.requiredChecks.length)} checks${criteriaSuffix}`,
       ),
     ));
     if (goal.loopRunId !== undefined) {
@@ -193,14 +219,65 @@ export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRA
     if (goal.loopChainIterations !== undefined) {
       lines.push(row('Chain total', value(String(goal.loopChainIterations))));
     }
-    if (goal.loopTerminal !== undefined) {
-      lines.push(row(
-        'Continue',
-        value(goal.loopTerminal.continuationPolicy.mode),
-      ));
+  }
+  if (durableResult !== undefined) {
+    const presentation = buildLoopResultPresentation(durableResult, goal);
+    lines.push(row('Outcome', value(presentation.outcome)));
+    wrappedRow('Reason', presentation.reason);
+    lines.push(row('Checks', value(presentation.checks)));
+    lines.push(row('Evidence', value(presentation.evidence)));
+    wrappedRow('Workspace', presentation.workspace);
+    lines.push(row('Blockers', value(String(presentation.blockerCount))));
+    for (const blocker of presentation.blockers) {
+      wrappedRow(blocker.label, blocker.summary, muted);
+      wrappedRow('Fix', blocker.nextAction, muted);
+    }
+    if (presentation.additionalBlockerCount > 0) {
+      wrappedRow(
+        'More',
+        `${String(presentation.additionalBlockerCount)} additional blocker(s); inspect the durable transcript for details.`,
+        muted,
+      );
+    }
+    wrappedRow('Unverified', presentation.unverified, muted);
+    if (presentation.continuationMode !== undefined) {
+      lines.push(row('Continue', value(presentation.continuationMode)));
+    }
+    wrappedRow('Next', presentation.next);
+  } else if (goal.loopResult !== undefined) {
+    const passedChecks = goal.loopResult.checks.filter((check) => check.status === 'passed').length;
+    lines.push(row('Last gate', value(goal.loopResult.status)));
+    lines.push(row(
+      'Checks',
+      value(goal.loopResult.evidence?.verification === 'not_run'
+        ? 'not run'
+        : `${String(passedChecks)}/${String(goal.loopResult.checks.length)} passed`),
+    ));
+    lines.push(row(
+      'Evidence',
+      value(
+        `verify ${goal.loopResult.evidence?.verification ?? 'unknown'} · `
+        + `review ${goal.loopResult.evidence?.reviewer ?? 'unknown'}`,
+      ),
+    ));
+    if (goal.loopResult.changedFiles !== undefined) {
+      lines.push(row('Changes', value(`${String(goal.loopResult.changedFiles.length)} files`)));
     }
   }
-  const findings = goal.loopResult?.findings ?? [];
+  if (goal.providerOutcomeUnknown !== undefined) {
+    lines.push(row('Provider', currentTheme.fg('error', 'UNKNOWN — request may have been accepted or billed')));
+    lines.push(row('Request', value(goal.providerOutcomeUnknown.requestId)));
+    lines.push(row('Idempotency', value(goal.providerOutcomeUnknown.idempotencyKey)));
+    lines.push(row('Resume', currentTheme.fg('error', 'disabled — blind retry is unsafe')));
+    if (durableResult === undefined) {
+      wrappedRow(
+        'Next',
+        'Check provider logs/billing; cancel and start a new Loop only after confirming a new request is safe.',
+        muted,
+      );
+    }
+  }
+  const findings = durableResult?.findings ?? [];
   if (findings.length > 0) {
     const blocking = findings.filter((finding) => finding.severity === 'blocking');
     const nonBlocking = findings.length - blocking.length;

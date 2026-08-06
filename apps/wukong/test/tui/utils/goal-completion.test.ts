@@ -49,15 +49,19 @@ describe('buildGoalCompletionMessage', () => {
       },
     }));
 
-    expect(text).toContain('Gate        PASS');
-    expect(text).toContain('Iterations  2');
-    expect(text).toContain('Blocker     None');
-    expect(text).toContain('Next        Ready to ship.');
+    expect(text).toContain('Outcome     PASS');
+    expect(text).toContain('Reason      Delivery gate passed.');
+    expect(text).toContain('Writer      2 iteration(s)');
+    expect(text).toContain('Gate        attempts unavailable');
+    expect(text).toContain('Time        4m20s · Writer tokens 12.5k · Reviewer tokens unavailable · Cost unavailable');
+    expect(text).toContain('Checks      not run');
+    expect(text).toContain('Evidence    verification not_run; reviewer not_run');
+    expect(text).toContain('Blockers    0');
+    expect(text).toContain('Next        Review the diff');
     expect(text).not.toContain('loop:PASS');
-    expect(text).not.toContain('tokens');
   });
 
-  it('shows only the primary blocker and next action for a Loop that needs work', () => {
+  it('shows a blocker and its fix for a Loop that needs work', () => {
     const text = buildGoalCompletionMessage(snapshot({
       status: 'blocked',
       loopResult: {
@@ -76,12 +80,13 @@ describe('buildGoalCompletionMessage', () => {
       },
     }));
 
-    expect(text).toBe([
-      'Gate        NEEDS_WORK',
-      'Iterations  3',
-      'Blocker     Auth fixture still fails.',
-      'Next        Fix the fixture and continue the Loop.',
-    ].join('\n'));
+    expect(text).toContain('Outcome     NEEDS_WORK');
+    expect(text).toContain('Reason      Checks failed.');
+    expect(text).toContain('Writer      3 iteration(s)');
+    expect(text).toContain('Blockers    1');
+    expect(text).toContain('Blocker 1   Auth fixture still fails.');
+    expect(text).toContain('Fix       Fix the fixture and continue the Loop.');
+    expect(text).toContain('Next        Fix the fixture and continue the Loop.');
   });
 
   it('shows reviewer-specific recovery instead of a doctor hint when the Gate budget is exhausted', () => {
@@ -98,12 +103,98 @@ describe('buildGoalCompletionMessage', () => {
       },
     }));
 
-    expect(text).toBe([
-      'Gate        ERROR',
-      'Iterations  4',
-      'Blocker     Fresh reviewer reached its dedicated Gate budget.',
-      'Next        Retry the Gate with the same contract; if the limit repeats, narrow the review scope or choose a faster reviewer model.',
-    ].join('\n'));
+    expect(text).toContain('Outcome     ERROR');
+    expect(text).toContain('Writer      4 iteration(s)');
+    expect(text).toContain('Blockers    0');
+    expect(text).toContain('Next        Retry the Gate with the same contract; if the limit repeats, narrow the review scope or choose a faster reviewer model.');
     expect(text).not.toContain('wukong doctor');
+  });
+
+  it('shows three blockers, the overflow count, and the durable same-contract next action', () => {
+    const text = buildGoalCompletionMessage(snapshot({
+      status: 'blocked',
+      loopRunId: 'run-current',
+      gateAttempts: 2,
+      loopTerminal: {
+        schemaVersion: 1,
+        runId: 'run-current',
+        contractId: 'contract-1',
+        status: 'NEEDS_WORK',
+        reasonCode: 'max_iterations',
+        continuationPolicy: {
+          mode: 'same-contract',
+          automaticRetry: false,
+          requiresPreflightRevalidation: true,
+        },
+        blockerKeys: ['one', 'two', 'three', 'four'],
+        terminalDigest: 'terminal-digest',
+        createdAt: 1,
+      },
+      loopResult: {
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'max_iterations',
+        summary: 'Iteration ceiling reached.',
+        iterations: 4,
+        checks: [],
+        blockers: [
+          { id: 'one', kind: 'check', summary: 'First blocker.', nextAction: 'Fix first.' },
+          { id: 'two', kind: 'review', summary: 'Second blocker.', nextAction: 'Fix second.' },
+          { id: 'three', kind: 'workspace', summary: 'Third blocker.', nextAction: 'Fix third.' },
+          { id: 'four', kind: 'risk', summary: 'Fourth blocker.', nextAction: 'Fix fourth.' },
+        ],
+      },
+    }));
+
+    expect(text).toContain('Gate        2 attempt(s)');
+    expect(text).toContain('Blockers    4');
+    expect(text).toContain('Blocker 1   First blocker.');
+    expect(text).toContain('Blocker 2   Second blocker.');
+    expect(text).toContain('Blocker 3   Third blocker.');
+    expect(text).not.toContain('Fourth blocker.');
+    expect(text).toContain('More      1 additional blocker(s)');
+    expect(text).toContain('Continue    same-contract');
+    expect(text).toContain('Next        Address every blocker, then run `/loop resume`');
+  });
+
+  it('does not offer resume when the durable continuation policy is blocked', () => {
+    const text = buildGoalCompletionMessage(snapshot({
+      status: 'blocked',
+      loopRunId: 'run-current',
+      loopTerminal: {
+        schemaVersion: 1,
+        runId: 'run-current',
+        contractId: 'contract-1',
+        status: 'ERROR',
+        reasonCode: 'runtime_error',
+        continuationPolicy: {
+          mode: 'blocked',
+          automaticRetry: false,
+          requiresPreflightRevalidation: true,
+        },
+        blockerKeys: ['runtime'],
+        terminalDigest: 'terminal-digest',
+        createdAt: 1,
+      },
+      loopResult: {
+        schemaVersion: 2,
+        status: 'ERROR',
+        reasonCode: 'runtime_error',
+        summary: 'Runtime state is not recoverable.',
+        iterations: 1,
+        checks: [],
+        blockers: [{
+          id: 'runtime',
+          kind: 'workspace',
+          summary: 'Runtime state is not recoverable.',
+          nextAction: 'Unsafe legacy hint: resume.',
+        }],
+      },
+    }));
+
+    expect(text).toContain('Continue    blocked');
+    expect(text).toContain('Next        This run cannot resume; cancel it or start an explicitly revised/new Loop.');
+    expect(text).not.toContain('Next        Unsafe legacy hint: resume.');
+    expect(text).not.toContain('/loop resume');
   });
 });

@@ -1,14 +1,17 @@
 # Wukong Code 文档
 
-> 当前发布版本：`0.0.21`
+> 当前发布版本：`0.0.22`
+>
+> 本开发 checkout：未发布的 `0.1.0` 稳定化工作，不是 `0.1.0-rc.1`
 
-Wukong Code 的主流程是 **Goal → Write → Check → Review → Fix**。当前文档
-只索引已经发布或已经实现的能力。
+Wukong Code 的主流程是 **Goal → Write → Check → Review → Fix**。下方“已发布”
+只描述 `0.0.22`；标成“开发 checkout”的命令和行为只有从当前源码构建时才可用，
+不能据此推断公开安装包已经包含这些能力。
 
 ## 开始使用
 
 - [用户指南](user-guide.md)
-- [0.0.21 发布说明](releases/0.0.21.md)
+- [0.0.22 发布说明](releases/0.0.22.md)
 - [0.0.21 Loop Evidence Integrity](design/0.0.21-loop-evidence-integrity.md)
 - [CLI 更新与公告](operations/updates-and-announcements.md)
 - [自动化测试计划](test/verification-cli-test-plan.md)
@@ -26,7 +29,7 @@ Wukong Code 的主流程是 **Goal → Write → Check → Review → Fix**。�
 - [Reusable Verification Criteria](design/0.0.20-reusable-verification-skills.md)
 - [Loop Evidence Integrity](design/0.0.21-loop-evidence-integrity.md)
 
-## 当前主要命令
+## 当前开发 checkout 的主要命令
 
 ```text
 wukong
@@ -36,6 +39,7 @@ wukong loop
 wukong review
 wukong guard
 wukong login
+wukong logout
 wukong doctor
 wukong export
 wukong vis
@@ -43,6 +47,8 @@ wukong upgrade
 ```
 
 完整命令和参数以 `wukong --help` 为准。
+其中 `logout` 属于尚未发布的开发分支；公开 `0.0.22` 的实际命令面以其安装包
+中的 `wukong --help` 为准。
 
 ## 开发文档
 

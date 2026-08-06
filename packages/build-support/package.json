@@ -1,0 +1,15 @@
+{
+  "name": "@wukong/build-support",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Repository-owned build and source-execution adapters for Wukong",
+  "license": "MIT",
+  "type": "module",
+  "exports": {
+    "./raw-text/rolldown": "./src/raw-text/rolldown.mjs",
+    "./raw-text/register": "./src/raw-text/register.mjs"
+  },
+  "engines": {
+    "node": ">=22.19.0"
+  }
+}

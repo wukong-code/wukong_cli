@@ -28,6 +28,15 @@ describe('Loop preflight', () => {
     const cwd = await workspace();
     const result = await runLoopPreflight({
       objective: 'fix tests',
+      completionCriterion: 'The exact project checks pass and the reviewer returns PASS',
+      constraints: [
+        'Do not weaken tests',
+        'Do not change public APIs',
+        'Do not overwrite user changes',
+        'Do not send secrets',
+        'Do not skip the fresh review',
+        'Do not claim success without evidence',
+      ],
       model: 'glm-5.2',
       workspace: await realpath(cwd),
       reviewProvider,
@@ -42,7 +51,45 @@ describe('Loop preflight', () => {
       checks: ['pnpm test', 'pnpm typecheck'],
     });
     if (result.ready) {
-      expect(formatLoopPreflightReady(result, 5)).toContain('Run          up to 5 iterations');
+      const output = formatLoopPreflightReady(result, 5, {
+        writerModel: 'writer-alias',
+        reviewerModel: 'reviewer-alias',
+        permission: 'auto',
+      });
+      expect(output).toContain('Iterations   up to 5 writer iterations');
+      expect(output).toContain('Writer       writer-alias');
+      expect(output).toContain('Reviewer     reviewer-alias');
+      expect(output).toContain('Provider     test → https://api.example.test:443');
+      expect(output).toContain('Permission   auto · current OS account · no OS sandbox');
+      expect(output).toContain('Done when    The exact project checks pass');
+      expect(output).toContain('Must not 1   Do not weaken tests');
+      expect(output).toContain('Must not 5   Do not skip the fresh review');
+      expect(output).toContain('Must not     +1 more');
+      expect(output).toContain('Check 1       pnpm test');
+      expect(output).toContain('Check 2       pnpm typecheck');
+      expect(output).toContain('Provider calls no separate cap configured');
+      expect(output).toContain('Token budget no separate cap configured');
+      expect(output).toContain('Outbound     changed tracked files');
+      expect(output).toContain('Result       PASS / NEEDS_WORK / ERROR');
+      const dirtyOutput = formatLoopPreflightReady({
+        ...result,
+        workspaceGit: {
+          isRepo: true,
+          changedFileCount: 7,
+          changedFiles: [
+            { status: 'M', path: 'src/one.ts' },
+            { status: 'A', path: 'src/two.ts' },
+            { status: '??', path: 'test/three.test.ts' },
+            { status: 'D', path: 'docs/four.md' },
+            { status: 'M', path: 'packages/five.ts' },
+            { status: 'M', path: 'packages/six.ts' },
+          ],
+        },
+      }, 5);
+      expect(dirtyOutput).toContain('7 pre-existing changed files');
+      expect(dirtyOutput).toContain('Dirty 1       M src/one.ts');
+      expect(dirtyOutput).toContain('Dirty 5       M packages/five.ts');
+      expect(dirtyOutput).toContain('Dirty        +2 more');
       expect(result.proposal.gatePlan.requiredChecks).toHaveLength(2);
       expect(result.trustChallenge).toContain('.');
       expect(result.verificationCatalog.entries.filter((entry) =>
@@ -266,6 +313,20 @@ describe('Loop preflight', () => {
         freshReviewerPassesPerGateAttempt: 1,
         additionalSkillCommands: 0,
       },
+      runSettings: {
+        writerModel: 'glm-5.2',
+        reviewerModel: 'glm-5.2',
+        permission: 'auto',
+      },
+      headlessStart: {
+        checkDecisionRequired: false,
+        approveGatePlanDigest: none.proposal.gateApproval.approvalSetDigest,
+        trustReviewSubjectChallenge: none.brokerTrustChallenge,
+        acknowledgeReviewSubjectConsentDigest:
+          none.reviewSubjectConsentProposal.consentProposalDigest,
+        verificationCatalogDigest: null,
+        brokerChallengeExpiresWithinMs: 600_000,
+      },
     });
 
     const entry = none.verificationCatalog.entries[0];
@@ -295,6 +356,10 @@ describe('Loop preflight', () => {
       },
       reviewSubjectConsentProposal: {
         provider: { providerId: 'test' },
+      },
+      headlessStart: {
+        trustReviewSubjectChallenge: selected.brokerTrustChallenge,
+        verificationCatalogDigest: selected.verificationCatalog.catalogDigest,
       },
     });
   });

@@ -1,6 +1,6 @@
 # 0.0.13 Review Learning Loop
 
-> 状态：开发中
+> 状态：已随 `0.0.13` 发布
 > 目标版本：`0.0.13`
 > 最后更新：2026-07-16
 > 参考：[0.0.12 Loop-first 开发闭环](verification-loop-v2.md)
@@ -11,7 +11,7 @@
 
 0.0.13 是 **Review Learning Loop 的第一阶段**：先把 Delivery Loop 的 reviewer 变成可操作、可反馈的结构化审查，包含多 finding、项目 policy、独立 reviewer model 和本地反馈。自动归纳和 policy proposal 不在本版实现。
 
-0.0.13 保持免费/BYOK，不实现 Checkout、订阅、customer portal 或付费 entitlement。支付只有在本版本证明用户真实运行 Loop、产生 review feedback 并认可 improver 价值之后，才在 0.1.0 开放。
+0.0.13 保持免费/BYOK，不实现 Checkout、订阅、customer portal 或付费 entitlement。早期设计曾把支付验证指向 0.1.0；该判断已经被后续路线取代。当前 0.1.0 Trusted Local Loop 仍保持免费/BYOK，不开放支付或 entitlement。
 
 两条 Loop 不混在一起：
 
@@ -177,7 +177,10 @@ interface ReviewFeedbackEvent {
 
 样本少于 10 条有反馈 findings 时只显示原始数量，不输出质量百分比结论。不能用“模型生成了更多 comments”作为质量提升证据。
 
-## 9. 免费、Pro 与 Team 边界
+## 9. 历史 Free、Pro 与 Team 矩阵（已废弃）
+
+下表只保留 0.0.13 当时的产品假设用于追溯，不代表当前版本、价格或路线。
+当前 0.1.0 是 Free Trusted Local Loop，没有 Pro、Team、Checkout 或付费发布能力。
 
 | 能力 | 0.0.13 Free | 0.1.0 Pro | 0.1.0+ Team |
 |---|---|---|---|
@@ -191,7 +194,7 @@ interface ReviewFeedbackEvent {
 | GitHub PR comment/status | 无 | 0.1.0：本地预览 Free、发布 Pro | 组织级集成后续 |
 | 自动学习 PR 讨论串 | 无 | 无 | 后续，显式授权 |
 
-0.0.13 只发布 Free 列，Pricing、Dashboard 和 CLI 中的 Pro/Team 保持 `Coming Soon`，不展示价格或可用 Checkout。2026-07-20 曾把 0.1.0 收窄为 PR Gate publish + Billing；该假设现已[归档](historical-pro-pr-gate-billing.md)。2026-07-25 起，0.1.0 是 Free Trusted Local Loop，付费只作为 0.2.0 Reliable Autonomy 候选。
+0.0.13 实际只发布了 Free 列。2026-07-20 曾把 0.1.0 收窄为 PR Gate publish + Billing；该假设现已[归档](historical-pro-pr-gate-billing.md)。2026-07-25 起，0.1.0 是 Free Trusted Local Loop，付费只作为 0.2.0 Reliable Autonomy 候选，仍需另行验证和批准。
 
 ## 10. 0.0.13 实现顺序
 

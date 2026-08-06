@@ -15,9 +15,9 @@ import {
 import { parseLoopDuration } from '#/utils/duration';
 import {
   beginLoopRun,
-  completeLoopRun,
-  completeTuiLoop,
   registerTuiLoop,
+  stopLoopRun,
+  stopTuiLoop,
 } from '#/cli/lib/loop-lifecycle';
 import {
   formatLoopPreflightBlocked,
@@ -526,7 +526,10 @@ async function startGoal(
   return true;
 }
 
-async function pauseGoal(host: SlashCommandHost): Promise<void> {
+async function pauseGoal(
+  host: SlashCommandHost,
+  presentation: 'goal' | 'loop' = 'goal',
+): Promise<void> {
   const session = host.requireSession();
   try {
     await session.pauseGoal();
@@ -540,7 +543,11 @@ async function pauseGoal(host: SlashCommandHost): Promise<void> {
     return;
   }
   host.track('goal_pause');
-  host.showStatus('Goal paused. Use `/goal resume` to continue.');
+  host.showStatus(
+    presentation === 'loop'
+      ? 'Loop paused. Workspace changes remain on disk. Use `/loop resume` to continue the same Finish Line.'
+      : 'Goal paused. Use `/goal resume` to continue.',
+  );
 }
 
 async function resumeGoal(host: SlashCommandHost): Promise<GoalSnapshot | undefined> {
@@ -553,6 +560,17 @@ async function resumeGoal(host: SlashCommandHost): Promise<GoalSnapshot | undefi
   try {
     const session = host.requireSession();
     const current = (await session.getGoal()).goal;
+    if (current?.providerOutcomeUnknown !== undefined) {
+      const unknown = current.providerOutcomeUnknown;
+      host.showError([
+        'Loop cannot resume because a provider request may already have been accepted.',
+        `Request      ${unknown.requestId}`,
+        `Idempotency  ${unknown.idempotencyKey}`,
+        'Next         Check provider logs or billing first. Do not resume blindly; cancel and start a new Loop only after confirming a new request is safe.',
+      ].join('\n'));
+      return undefined;
+    }
+    if (!(await ensureLoopWorkspaceTrustForResume(host, current))) return undefined;
     const reviewSettings = await reviewSettingsForResume(host, current);
     if (reviewSettings === false) return undefined;
     resumed = await session.resumeGoal(
@@ -626,8 +644,9 @@ export async function reviewSettingsForResume(
           `Workspace  ${contract.workspaceIdentity.canonicalRealpath}`,
           `Provider   ${origin.scheme}://${origin.host}:${String(origin.port)}`,
           'Input      changed/scope files and redacted Gate evidence within fixed limits',
-          'Excluded   secrets, private state, binaries, generated and oversized content',
-          'Privacy    sent to your BYOK provider; not uploaded to Wukong',
+          'Excluded   credential/session/trust/log, binary, generated and oversized paths',
+          'Filtered   recognized secret patterns in otherwise eligible text',
+          'Retention  sent to your BYOK provider under that provider\'s policy',
         ].join('\n'),
         noticeTone: 'warning',
         options: [
@@ -663,13 +682,17 @@ export async function reviewSettingsForResume(
   };
 }
 
-async function cancelGoal(host: SlashCommandHost): Promise<void> {
+async function cancelGoal(
+  host: SlashCommandHost,
+  presentation: 'goal' | 'loop' = 'goal',
+): Promise<void> {
   const session = host.requireSession();
+  let active: GoalSnapshot | null = null;
   try {
-    const active = (await session.getGoal()).goal;
+    active = (await session.getGoal()).goal;
     await session.cancelGoal();
     if (active !== null) {
-      await completeTuiLoop(active.goalId, 'ERROR', active.iteration, 'cancelled');
+      await stopTuiLoop(active.goalId, active.iteration);
     }
     if (isStreaming(host)) await session.cancel();
   } catch (error) {
@@ -681,7 +704,18 @@ async function cancelGoal(host: SlashCommandHost): Promise<void> {
     return;
   }
   host.track('goal_cancel');
-  host.showNotice('Goal cancelled.');
+  host.showNotice(
+    presentation === 'loop'
+      ? [
+          'Outcome    STOPPED_BY_USER',
+          'Gate       no PASS / NEEDS_WORK / ERROR verdict was produced',
+          `Writer     ${String(active?.iteration ?? 0)} iteration(s) before stop`,
+          'Workspace  existing changes remain on disk; Wukong did not revert them',
+          'Resume     unavailable because /loop stop discards this Loop contract',
+          'Next       inspect `git status --short` and `git diff`, then keep/revert the changes or start a new /loop',
+        ].join('\n')
+      : 'Goal cancelled.',
+  );
 }
 
 async function showGoalStatus(host: SlashCommandHost): Promise<void> {
@@ -718,7 +752,7 @@ async function pauseLoop(host: SlashCommandHost): Promise<void> {
     host.showStatus('No Loop is active.');
     return;
   }
-  await pauseGoal(host);
+  await pauseGoal(host, 'loop');
 }
 
 async function resumeLoop(host: SlashCommandHost): Promise<void> {
@@ -726,10 +760,6 @@ async function resumeLoop(host: SlashCommandHost): Promise<void> {
   if (goal === null) {
     host.showStatus('No Loop is available to resume.');
     return;
-  }
-  if (goal.loopContract?.schemaVersion === 2 && goal.loopContract.gateApproval.hasExecutableChecks) {
-    const trusted = await ensureTuiWorkspaceTrust(host, goal.loopContract);
-    if (trusted === false) return;
   }
   const previousRunId = goal.loopRunId;
   const resumed = await resumeGoal(host);
@@ -754,7 +784,7 @@ async function cancelLoop(host: SlashCommandHost): Promise<void> {
     host.showStatus('No Loop is active. The current Goal was left unchanged.');
     return;
   }
-  await cancelGoal(host);
+  await cancelGoal(host, 'loop');
 }
 
 function isStreaming(host: SlashCommandHost): boolean {
@@ -987,10 +1017,22 @@ function showFinishLineReview(
   host.mountEditorReplacement(
     new FinishLineReviewComponent({
       proposal: preflight.proposal,
+      summary: formatLoopPreflightReady(
+        preflight,
+        parsed.maxIterations,
+        {
+          writerModel: host.state.appState.model,
+          reviewerModel: parsed.reviewModel ?? host.state.appState.model,
+          permission: host.state.appState.permissionMode,
+        },
+        { includeHeading: false },
+      ),
       maxIterations: parsed.maxIterations,
       selectedCriteriaCount: preflight.verificationSelection?.selected.length ?? 0,
       suggestedCriteriaCount: preflight.verificationCatalog.suggestions.length,
-      reviewProviderOrigin: formatReviewProviderOrigin(preflight),
+      permissionMode: host.state.appState.permissionMode,
+      missingUsageCaps: true,
+      workspaceGit: preflight.workspaceGit,
       onSelect: (choice) => {
         void handleFinishLineReviewChoice(
           host,
@@ -1050,6 +1092,16 @@ async function handleFinishLineReviewChoice(
       return;
     case 'checks':
       showFrozenChecks(
+        host,
+        parsed,
+        draft,
+        rawArgs,
+        preflight,
+        discoveredCheckDecision,
+      );
+      return;
+    case 'workspace':
+      showWorkspaceChanges(
         host,
         parsed,
         draft,
@@ -1129,12 +1181,15 @@ function showAdvancedLoopSettings(
   const limits = [...new Set([parsed.maxIterations, 5, 10, 20])].toSorted((a, b) => a - b);
   host.mountEditorReplacement(
     new ChoicePickerComponent({
-      title: 'Advanced Loop settings',
+      title: 'Loop run limit',
       hint: '↑↓ navigate · Enter apply · Esc back',
       notice: [
         `Reviewer      ${parsed.reviewModel ?? 'fresh reviewer using the active model'}`,
         `Permission    ${host.state.appState.permissionMode}`,
         `Every         ${parsed.minIntervalMs === undefined ? 'after each writer attempt' : `${String(parsed.minIntervalMs)} ms`}`,
+        'Provider calls have no separate cap configured for this run.',
+        'Token usage has no separate cap configured for this run.',
+        'Cancel the preflight if an iteration limit alone is not acceptable.',
         'Use /loop flags to change reviewer model or interval.',
       ].join('\n'),
       options: limits.map((limit) => ({
@@ -1241,6 +1296,83 @@ function showFrozenChecks(
   );
 }
 
+function showWorkspaceChanges(
+  host: SlashCommandHost,
+  parsed: Extract<ParsedLoopCommand, { kind: 'create' }>,
+  draft: FinishLineDraft,
+  rawArgs: string,
+  preflight: LoopPreflightReady,
+  discoveredCheckDecision: DiscoveredCheckDecision,
+): void {
+  const git = preflight.workspaceGit;
+  if (git === undefined || git.changedFileCount === 0) {
+    showFinishLineReview(
+      host,
+      parsed,
+      draft,
+      rawArgs,
+      preflight,
+      discoveredCheckDecision,
+    );
+    return;
+  }
+  const files = git.changedFiles;
+  host.mountEditorReplacement(
+    new ChoicePickerComponent({
+      title: 'Pre-existing workspace changes',
+      hint: '↑↓ navigate · Enter select · Esc cancel',
+      notice: [
+        `Workspace  ${preflight.workspace}`,
+        `Before     ${String(git.changedFileCount)} changed file${git.changedFileCount === 1 ? '' : 's'} already exist before this Loop`,
+        ...files.map((file, index) =>
+          `File ${String(index + 1).padEnd(6)} ${file.status} ${file.path}`,
+        ),
+        ...(git.changedFileCount > files.length
+          ? [`More       ${String(git.changedFileCount - files.length)} additional path${git.changedFileCount - files.length === 1 ? '' : 's'}; inspect git status for the full list`]
+          : []),
+        'Handling   Loop changes are not isolated or reverted automatically; review git status and diff after the terminal result',
+      ].join('\n'),
+      noticeTone: 'warning',
+      options: [
+        {
+          value: 'back',
+          label: 'Back to preflight',
+          description: 'Keep the current proposal and review the remaining fields.',
+        },
+        {
+          value: 'cancel',
+          label: 'Cancel and inspect workspace',
+          description: 'Create no trust grant, contract, or run; restore the /loop command for later.',
+        },
+      ],
+      onSelect: (value) => {
+        if (value === 'cancel') {
+          cancelFinishLine(host, rawArgs);
+          return;
+        }
+        showFinishLineReview(
+          host,
+          parsed,
+          draft,
+          rawArgs,
+          preflight,
+          discoveredCheckDecision,
+        );
+      },
+      onCancel: () => {
+        showFinishLineReview(
+          host,
+          parsed,
+          draft,
+          rawArgs,
+          preflight,
+          discoveredCheckDecision,
+        );
+      },
+    }),
+  );
+}
+
 async function confirmReviewSubjectAccess(
   host: SlashCommandHost,
   parsed: Extract<ParsedLoopCommand, { kind: 'create' }>,
@@ -1253,22 +1385,24 @@ async function confirmReviewSubjectAccess(
   await new Promise<void>((resolve) => {
     host.mountEditorReplacement(
       new ChoicePickerComponent({
-        title: 'Allow bounded review input for this run?',
+        title: `Send bounded review data to ${parsed.reviewModel ?? preflight.model}?`,
         hint: '↑↓ navigate · Enter select · Esc cancel',
         notice: [
-          `Provider       ${formatReviewProviderOrigin(preflight)}`,
-          'Allowed input  changed tracked files, explicitly selected untracked files,',
-          '               scope-matched files, and redacted project-check evidence',
-          'Always exclude secrets, private keys, generated output, and binary files',
-          'Limits         200 files · 2 MiB source · 512 KiB Gate evidence',
-          'Destination    your configured BYOK provider; Wukong does not retain file contents',
+          `Reviewer      ${parsed.reviewModel ?? preflight.model}`,
+          `Destination   ${formatReviewProviderOrigin(preflight)} (your configured provider)`,
+          'May include   changed tracked files, selected untracked/scope-matched files,',
+          '              and redacted project-check evidence',
+          'Hard exclude  credential/session/trust/log, generated-output, and binary paths',
+          'Filtering     recognized secret/private-key patterns in eligible text',
+          'Limits        200 files · 2 MiB source · 512 KiB Gate evidence',
+          'Retention     the destination provider\'s data and retention policy applies',
         ].join('\n'),
         noticeTone: 'warning',
         options: [
           {
             value: 'allow',
-            label: 'Allow once and start',
-            description: 'Bind this exact provider, policy, workspace, and run only.',
+            label: 'Allow this run and start',
+            description: 'Authorize this exact provider, policy, workspace, and run only.',
           },
           {
             value: 'cancel',
@@ -1387,7 +1521,7 @@ async function startConfirmedLoop(
               },
             };
         finalized = { ...result, proposal: trustedProposal, trustGrant };
-        host.showStatus(formatLoopPreflightReady(result, parsed.maxIterations));
+        host.showStatus('Loop approvals confirmed. Starting the bounded run.');
         return {
           maxIterations: parsed.maxIterations,
           completionCriterion: result.proposal.completionCriterion,
@@ -1413,7 +1547,7 @@ async function startConfirmedLoop(
         if (run.repeatedWithin7d === true) host.track('loop_repeat_started_7d');
       },
       onCreateError: async () => {
-        if (run !== undefined) await completeLoopRun(run, 'ERROR', 0, 'cancelled');
+        if (run !== undefined) await stopLoopRun(run, 0);
       },
       sendInput: () => {
         host.sendNormalUserInput(draft.objective);
@@ -1448,24 +1582,25 @@ async function confirmTuiBrokerReviewTrust(
   return new Promise<BrokerReviewTrustBindingV1 | false>((resolve) => {
     host.mountEditorReplacement(
       new ChoicePickerComponent({
-        title: 'Allow this workspace to build bounded review input?',
+        title: 'Allow local review access to this workspace?',
         hint: '↑↓ navigate · Enter select · Esc cancel',
         notice: [
-          `Workspace  ${input.canonicalRealpath}`,
-          `Identity   ${input.workspaceIdentityDigest}`,
-          'Scope      brokered review subjects only; no shell or filesystem tool access',
-          'Outbound   this trust does not authorize provider transmission',
+          `Workspace   ${input.canonicalRealpath}`,
+          `Binding     exact workspace identity ${shortSecurityDigest(input.workspaceIdentityDigest)}`,
+          'Allows      reading candidate source/evidence to assemble a bounded review payload',
+          'Does not    run commands, edit files, or send data to a provider',
+          'Next        provider transmission is confirmed separately for this run',
         ].join('\n'),
         noticeTone: 'warning',
         options: [
           {
             value: 'session',
-            label: 'Trust once',
-            description: 'Keep this broker-read grant only for this Wukong process.',
+            label: 'Allow local read once',
+            description: 'Keep this exact workspace read grant only for this Wukong process.',
           },
           {
             value: 'remembered-local',
-            label: 'Remember locally',
+            label: 'Remember local read access',
             description: 'Store this exact workspace/policy grant in the local 0600 trust store.',
           },
           {
@@ -1508,30 +1643,54 @@ async function confirmTuiBrokerReviewTrust(
   });
 }
 
+export async function ensureLoopWorkspaceTrustForResume(
+  host: SlashCommandHost,
+  goal: GoalSnapshot | null,
+): Promise<boolean> {
+  const contract = goal?.loopContract;
+  if (
+    (goal?.status !== 'paused' && goal?.status !== 'blocked')
+    || (contract?.schemaVersion !== 2 && contract?.schemaVersion !== 3)
+    || !contract.gateApproval?.hasExecutableChecks
+  ) {
+    return true;
+  }
+  return (await ensureTuiWorkspaceTrust(host, contract)) !== false;
+}
+
 async function ensureTuiWorkspaceTrust(
   host: SlashCommandHost,
-  proposal: Pick<FinishLineProposal, 'gateApproval' | 'gatePlan' | 'workspaceIdentity'>,
+  proposal: Pick<FinishLineProposal, 'gateApproval' | 'gatePlan' | 'workspaceIdentity'> | {
+    readonly gateApproval: FinishLineProposal['gateApproval'];
+    readonly gatePlan: {
+      readonly legacySnapshot: FinishLineProposal['gatePlan'];
+    };
+    readonly workspaceIdentity: FinishLineProposal['workspaceIdentity'];
+  },
 ): Promise<WorkspaceTrustGrant | undefined | false> {
   if (!proposal.gateApproval.hasExecutableChecks) return undefined;
   const existing = await findWorkspaceTrust(proposal.workspaceIdentity.workspaceIdentityDigest);
   if (existing !== undefined) return existing;
+  const gatePlan = 'legacySnapshot' in proposal.gatePlan
+    ? proposal.gatePlan.legacySnapshot
+    : proposal.gatePlan;
   return new Promise<WorkspaceTrustGrant | false>((resolve) => {
     host.mountEditorReplacement(
       new ChoicePickerComponent({
-        title: 'Trust this workspace before running project checks?',
+        title: 'Allow this workspace to run the selected project checks?',
         hint: '↑↓ navigate · Enter select · Esc cancel',
         notice: [
-          `Canonical path   ${proposal.workspaceIdentity.canonicalRealpath}`,
-          `Identity         ${proposal.workspaceIdentity.workspaceIdentityDigest}`,
-          `Selected checks  ${String(proposal.gatePlan.requiredChecks.length)}`,
-          'Risk summary     project shell commands run with current OS permissions',
+          `Workspace   ${proposal.workspaceIdentity.canonicalRealpath}`,
+          `Binding     exact workspace identity ${shortSecurityDigest(proposal.workspaceIdentity.workspaceIdentityDigest)}`,
+          `Checks      ${String(gatePlan.requiredChecks.length)} frozen project command${gatePlan.requiredChecks.length === 1 ? '' : 's'}`,
+          'Risk        commands run with your current OS account; this is not a shell sandbox',
         ].join('\n'),
         noticeTone: 'warning',
         options: [
           {
             value: 'session',
-            label: 'Trust once',
-            description: 'Valid only for this Wukong process.',
+            label: 'Allow checks once',
+            description: 'Valid only for this Wukong process and exact workspace identity.',
           },
           {
             value: 'remembered-local',
@@ -1647,6 +1806,14 @@ function loopContractInput(
 function formatReviewProviderOrigin(preflight: LoopPreflightReady): string {
   const origin = preflight.reviewSubjectConsentProposal.provider.endpointOrigin;
   return `${origin.scheme}://${origin.host}:${String(origin.port)}`;
+}
+
+function shortSecurityDigest(value: string): string {
+  const separator = value.indexOf(':');
+  const prefix = separator >= 0 ? value.slice(0, separator + 1) : '';
+  const digest = separator >= 0 ? value.slice(separator + 1) : value;
+  if (digest.length <= 16) return value;
+  return `${prefix}${digest.slice(0, 8)}…${digest.slice(-8)}`;
 }
 
 function selectedCriteriaChoices(

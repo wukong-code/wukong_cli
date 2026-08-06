@@ -167,6 +167,12 @@ function restoreAgentRecord(agent: Agent, input: AgentRecord): void {
     case 'goal.clear':
       agent.goal.restoreClear(input);
       return;
+    default:
+      throw new Error(
+        `AgentRecords replay encountered unsupported record type: ${String(
+          (input as { readonly type?: unknown }).type,
+        )}`,
+      );
   }
 }
 
@@ -181,6 +187,7 @@ export interface AgentRecordsReplayOptions {
 export class AgentRecords {
   private _restoring: RestoringContext | null = null;
   private metadataInitialized = false;
+  private writeBlockedReason: string | undefined;
 
   constructor(
     private readonly agent: Agent,
@@ -193,6 +200,11 @@ export class AgentRecords {
 
   logRecord(record: AgentRecord): void {
     if (this._restoring !== null) return;
+    if (this.writeBlockedReason !== undefined) {
+      throw new Error(
+        `Agent records are read-only because replay failed: ${this.writeBlockedReason}`,
+      );
+    }
     const stamped: AgentRecord =
       record.time !== undefined ? record : { ...record, time: Date.now() };
     if (
@@ -229,40 +241,44 @@ export class AgentRecords {
     let migrations: readonly WireMigration[] = [];
     let hasMetadata = false;
     let shouldRewrite = false;
-    let warning: string | undefined;
     const replayedRecords: AgentRecord[] | undefined = rewriteMigratedRecords ? [] : undefined;
     let completed = true;
-    for await (const record of this.persistence.read()) {
-      if (!hasMetadata) {
-        if (record.type !== 'metadata') {
-          throw new Error('AgentRecords replay expected metadata as the first record');
-        }
-        hasMetadata = true;
-        this.metadataInitialized = true;
-        const readVersion = record.protocol_version;
-        if (isNewerWireVersion(readVersion)) {
-          warning = `Session wire protocol version ${readVersion} is newer than the current version ${AGENT_WIRE_PROTOCOL_VERSION}. Records will be replayed without migration.`;
-          shouldRewrite = false;
-        } else {
+    try {
+      for await (const record of this.persistence.read()) {
+        if (!hasMetadata) {
+          if (record.type !== 'metadata') {
+            throw new Error('AgentRecords replay expected metadata as the first record');
+          }
+          hasMetadata = true;
+          this.metadataInitialized = true;
+          const readVersion = record.protocol_version;
+          if (isNewerWireVersion(readVersion)) {
+            throw new Error(
+              `Session wire protocol version ${readVersion} is newer than the current version ${AGENT_WIRE_PROTOCOL_VERSION}. Upgrade Wukong before resuming this session.`,
+            );
+          }
           migrations = resolveWireMigrations(readVersion);
           shouldRewrite = readVersion !== AGENT_WIRE_PROTOCOL_VERSION;
         }
+        let migratedRecord = migrateWireRecord(
+          record as WireMigrationRecord,
+          migrations,
+        ) as AgentRecord;
+        if (migratedRecord.type === 'metadata') {
+          migratedRecord = {
+            ...migratedRecord,
+            protocol_version: AGENT_WIRE_PROTOCOL_VERSION,
+          };
+        }
+        replayedRecords?.push(migratedRecord);
+        if (this.restore(migratedRecord)) {
+          completed = false;
+          break;
+        }
       }
-      let migratedRecord = migrateWireRecord(
-        record as WireMigrationRecord,
-        migrations,
-      ) as AgentRecord;
-      if (migratedRecord.type === 'metadata') {
-        migratedRecord = {
-          ...migratedRecord,
-          protocol_version: AGENT_WIRE_PROTOCOL_VERSION,
-        };
-      }
-      replayedRecords?.push(migratedRecord);
-      if (this.restore(migratedRecord)) {
-        completed = false;
-        break;
-      }
+    } catch (error) {
+      this.writeBlockedReason = error instanceof Error ? error.message : 'unknown replay error';
+      throw error;
     }
     if (completed && shouldRewrite && replayedRecords !== undefined) {
       this.persistence.rewrite(replayedRecords);
@@ -273,7 +289,7 @@ export class AgentRecords {
         await this.agent.blobStore.rehydrateParts(msg.content);
       }
     }
-    return { warning };
+    return { warning: undefined };
   }
 
   async flush(): Promise<void> {
