@@ -437,6 +437,15 @@ export class TurnFlow {
           await this.stopLoopProviderOutcomeUnknown(failedGoal.providerOutcomeUnknown);
           return end;
         }
+        if (end.event.error?.code === ErrorCodes.LOOP_PROVIDER_CALL_LIMIT) {
+          const role = end.event.error.details?.['role'];
+          const limit = end.event.error.details?.['limit'];
+          await this.stopLoopNeedsWork(
+            'budget_exhausted',
+            `${typeof role === 'string' ? role : 'Provider'} provider-call limit${typeof limit === 'number' ? ` (${String(limit)})` : ''} was reached before another request could be sent.`,
+          );
+          return end;
+        }
         await this.agent.goal.pauseActiveGoal({ reason: goalFailurePauseReason(end.event.error) });
         return end;
       }

@@ -112,6 +112,12 @@ export interface AgentRecordEvents {
     reviewModel?: string;
     maxIterations?: number;
     minIntervalMs?: number;
+    writerProviderCallLimit?: number;
+    reviewerProviderCallLimit?: number;
+    tokenBudget?: number;
+    workspaceChangeBaseline?: {
+      files: readonly { path: string; status: string }[];
+    };
   };
   'goal.update': {
     status?: GoalStatus;
@@ -123,6 +129,7 @@ export interface AgentRecordEvents {
     reason?: string;
     actor?: GoalActor;
     loopResult?: LoopResult;
+    providerCalls?: { writer: number; reviewer: number };
   };
   'goal.contract.create': {
     goalId: string;

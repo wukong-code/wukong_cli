@@ -243,6 +243,7 @@ function finishLineProposal(objective: string) {
       warningSetDigest: 'sha256:warnings',
       guardPolicyVersion: 'gate-guard/1',
       orderedChecks: [],
+      noExecutableChecksDecisionDigest: 'sha256:no-check',
       approvalSetDigest: 'sha256:approval',
       hasExecutableChecks: false,
     },
@@ -253,6 +254,13 @@ function finishLineProposal(objective: string) {
       excludedChecks: [],
       builtinRiskScanPolicyVersion: 'builtin-risk-scan/1',
       planDigest: 'sha256:plan',
+    },
+    noExecutableChecksDecision: {
+      schemaVersion: 1,
+      policyVersion: 'no-executable-checks/1',
+      decisionDigest: 'sha256:no-check',
+      status: 'acknowledged',
+      acknowledgedAt: 1,
     },
     reviewPolicy: { mode: 'advisory-live' },
   } as const;
@@ -417,8 +425,12 @@ function latestMountedPicker(host: SlashCommandHost): TestPicker {
   return mock.mock.calls.at(-1)?.[0] as TestPicker;
 }
 
-function confirmLoopStart(host: SlashCommandHost): void {
+async function confirmLoopStart(host: SlashCommandHost): Promise<void> {
   continueLoopPreflight(host);
+  await vi.waitFor(() => {
+    expect((host.mountEditorReplacement as ReturnType<typeof vi.fn>).mock.calls.length)
+      .toBeGreaterThan(1);
+  });
   latestMountedPicker(host).handleInput(ENTER);
 }
 
@@ -590,6 +602,31 @@ describe('parseLoopCommand', () => {
       stopCondition: 'proof-pass',
       maxIterations: 3,
       minIntervalMs: 3_600_000,
+    });
+  });
+
+  it('parses separate provider-call ceilings and token budget', () => {
+    expect(parseLoopCommand(
+      '--writer-call-limit 12 --reviewer-call-limit 4 --token-budget 50000 fix tests',
+    )).toEqual({
+      kind: 'create',
+      objective: 'fix tests',
+      stopCondition: 'proof-pass',
+      maxIterations: 10,
+      writerProviderCallLimit: 12,
+      reviewerProviderCallLimit: 4,
+      tokenBudget: 50000,
+    });
+  });
+
+  it.each([
+    '--writer-call-limit 0 fix',
+    '--reviewer-call-limit 2oops fix',
+    '--token-budget 1.5 fix',
+  ])('rejects invalid Loop usage ceiling: %s', (args) => {
+    expect(parseLoopCommand(args)).toMatchObject({
+      kind: 'error',
+      message: expect.stringContaining('positive integer'),
     });
   });
 
@@ -1205,7 +1242,7 @@ describe('handleLoopSlashCommand', () => {
     const { host, session } = makeHost();
 
     await handleLoopSlashCommand(host, '--until verify-pass --every 5m --max-iterations 3 fix tests');
-    confirmLoopStart(host);
+    await confirmLoopStart(host);
     await vi.waitFor(() => {
       expect(session.createGoal).toHaveBeenCalled();
     });
@@ -1231,7 +1268,7 @@ describe('handleLoopSlashCommand', () => {
     const { host, session } = makeHost();
 
     await handleLoopSlashCommand(host, '--max-iterations 12 fix tests');
-    confirmLoopStart(host);
+    await confirmLoopStart(host);
     await vi.waitFor(() => {
       expect(session.createGoal).toHaveBeenCalled();
     });
@@ -1295,7 +1332,7 @@ describe('handleLoopSlashCommand', () => {
     session.createGoal.mockRejectedValueOnce(new Error('goal store unavailable'));
 
     await handleLoopSlashCommand(host, 'fix tests');
-    confirmLoopStart(host);
+    await confirmLoopStart(host);
     await vi.waitFor(() => {
       expect(host.showError).toHaveBeenCalled();
     });
@@ -1370,7 +1407,15 @@ describe('handleLoopSlashCommand', () => {
 
     await handleLoopSlashCommand(host, 'fix tests');
     continueLoopPreflight(host);
+    await vi.waitFor(() => {
+      expect((host.mountEditorReplacement as ReturnType<typeof vi.fn>).mock.calls.length)
+        .toBeGreaterThan(1);
+    });
     latestMountedPicker(host).handleInput(ENTER);
+    await vi.waitFor(() => {
+      expect((host.mountEditorReplacement as ReturnType<typeof vi.fn>).mock.calls.length)
+        .toBeGreaterThan(2);
+    });
     latestMountedPicker(host).handleInput(DOWN);
     latestMountedPicker(host).handleInput(ENTER);
 

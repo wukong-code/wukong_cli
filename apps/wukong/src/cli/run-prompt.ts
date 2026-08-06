@@ -377,6 +377,8 @@ async function runHeadlessGoal(
       mode: 'headless',
       approveGatePlanDigest: goal.approveGatePlanDigest,
       acknowledgeWarningSetDigest: goal.acknowledgeWarningSetDigest,
+      acknowledgeNoExecutableChecksDigest:
+        goal.acknowledgeNoExecutableChecksDigest,
       trustWorkspaceChallenge: goal.trustWorkspaceChallenge,
       verificationCatalogDigest: goal.verificationCatalogDigest,
       verificationSkills: goal.verificationSkills,
@@ -402,6 +404,11 @@ async function runHeadlessGoal(
         writerModel: preflight.model,
         reviewerModel: goal.reviewModel ?? preflight.model,
         permission,
+        ...(goal.kind !== 'loop' ? {} : {
+          writerProviderCallLimit: goal.writerProviderCallLimit,
+          reviewerProviderCallLimit: goal.reviewerProviderCallLimit,
+          tokenBudget: goal.tokenBudget,
+        }),
       },
     )}\n`);
   }
@@ -425,7 +432,23 @@ async function runHeadlessGoal(
       ...(goal.stopCondition === undefined ? {} : { stopCondition: goal.stopCondition }),
       reviewModel: goal.reviewModel,
       ...(maxIterations === undefined ? {} : { maxIterations }),
+      ...(goal.kind !== 'loop' || goal.writerProviderCallLimit === undefined
+        ? {}
+        : { writerProviderCallLimit: goal.writerProviderCallLimit }),
+      ...(goal.kind !== 'loop' || goal.reviewerProviderCallLimit === undefined
+        ? {}
+        : { reviewerProviderCallLimit: goal.reviewerProviderCallLimit }),
+      ...(goal.kind !== 'loop' || goal.tokenBudget === undefined
+        ? {}
+        : { tokenBudget: goal.tokenBudget }),
       ...(goal.minIntervalMs === undefined ? {} : { minIntervalMs: goal.minIntervalMs }),
+      ...(loopPreflight?.workspaceGit === undefined
+        ? {}
+        : {
+            workspaceChangeBaseline: {
+              files: loopPreflight.workspaceGit.changedFiles,
+            },
+          }),
       ...(loopPreflight !== undefined
         ? {
             loopContract: loopPreflight.contractSchemaVersion === 3
@@ -462,6 +485,8 @@ async function runHeadlessGoal(
                       },
                   gateApproval: loopPreflight.proposal.gateApproval,
                   legacyGatePlan: loopPreflight.proposal.gatePlan,
+                  noExecutableChecksDecision:
+                    loopPreflight.proposal.noExecutableChecksDecision,
                   reviewPolicy: loopPreflight.proposal.reviewPolicy,
                   verificationCriteria: loopPreflight.verificationSelection!,
                   selectedRecipes: loopPreflight.selectedRecipes,
@@ -478,6 +503,8 @@ async function runHeadlessGoal(
                   workspaceTrust: loopPreflight.proposal.workspaceTrust,
                   gateApproval: loopPreflight.proposal.gateApproval,
                   gatePlan: loopPreflight.proposal.gatePlan,
+                  noExecutableChecksDecision:
+                    loopPreflight.proposal.noExecutableChecksDecision,
                   reviewPolicy: loopPreflight.proposal.reviewPolicy,
                   reviewSettings: reviewSettings!,
                   source: 'user' as const,

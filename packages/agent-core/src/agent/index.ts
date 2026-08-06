@@ -132,6 +132,7 @@ export class Agent {
 
   private additionalDirs: readonly string[];
   private providerRequestPolicy: ProviderRequestPolicy | undefined;
+  private providerCallReservation: (() => Promise<unknown>) | undefined;
 
   constructor(options: AgentOptions) {
     this.type = options.type ?? 'main';
@@ -207,11 +208,15 @@ export class Agent {
     this.providerRequestPolicy = policy;
   }
 
+  setProviderCallReservation(reservation: (() => Promise<unknown>) | undefined): void {
+    this.providerCallReservation = reservation;
+  }
+
   get generate(): typeof generate {
     return async (provider, systemPrompt, tools, history, callbacks, options) => {
       const { requestLogFields, generateOptions } = splitGenerateOptions(options);
       const modelAlias = this.config.modelAlias;
-      const run = (requestOptions: Parameters<typeof generate>[5]) => {
+      const run = async (requestOptions: Parameters<typeof generate>[5]) => {
         this.llmRequestLogger.logRequest({
           provider,
           modelAlias,
@@ -220,6 +225,7 @@ export class Agent {
           messages: history,
           fields: requestLogFields,
         });
+        await this.reserveProviderCallBeforeSend();
         return this.rawGenerate(provider, systemPrompt, tools, history, callbacks, requestOptions);
       };
       const explicitAuth = generateOptions?.auth;
@@ -240,6 +246,16 @@ export class Agent {
         });
       });
     };
+  }
+
+  private async reserveProviderCallBeforeSend(): Promise<void> {
+    if (this.providerCallReservation !== undefined) {
+      await this.providerCallReservation();
+      return;
+    }
+    if (this.type === 'main') {
+      await this.goal.reserveProviderCall('writer');
+    }
   }
 
   get llm(): KosongLLM {

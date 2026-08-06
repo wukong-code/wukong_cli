@@ -139,9 +139,9 @@ describe('runProof', () => {
 
     expect(result.status).toBe('blocked');
     expect(result.recommendation).toContain('no project checks were discovered');
-    expect(result.reasonCode).toBe('tests_missing');
+    expect(result.reasonCode).toBe('checks_missing');
     expect(result.blockers[0]).toMatchObject({
-      id: 'tests_missing',
+      id: 'checks_missing',
       file: 'src/feature.ts',
     });
   });

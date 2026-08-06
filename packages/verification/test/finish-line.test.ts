@@ -85,6 +85,81 @@ describe('Finish Line and frozen Gate Plan', () => {
     if (changed.ok) expect(changed.proposal.finishLineReview.acknowledgedWarningIds).toEqual([]);
   });
 
+  it('requires a separate exact no-check decision when discovery finds no applicable checks', async () => {
+    const cwd = await makeTempDir('wukong-finish-line-no-check-');
+    const initial = await buildFinishLine({
+      cwd,
+      objective: 'Update the documentation',
+      includeDiscoveredChecks: true,
+    });
+    expect(initial.ok).toBe(true);
+    if (!initial.ok) return;
+
+    expect(initial.proposal.noExecutableChecksDecision).toMatchObject({
+      schemaVersion: 1,
+      policyVersion: 'no-executable-checks/1',
+      status: 'confirmation-required',
+    });
+    const decisionDigest = initial.proposal.noExecutableChecksDecision?.decisionDigest;
+    expect(decisionDigest).toMatch(/^sha256:/u);
+
+    const warningOnly = await buildFinishLine({
+      cwd,
+      objective: 'Update the documentation',
+      includeDiscoveredChecks: true,
+      acknowledgeWarningSetDigest: initial.proposal.finishLineReview.warningSetDigest,
+    });
+    expect(warningOnly.ok).toBe(true);
+    if (!warningOnly.ok) return;
+    expect(warningOnly.proposal.finishLineReview.acknowledgedWarningIds).not.toHaveLength(0);
+    expect(warningOnly.proposal.noExecutableChecksDecision?.status)
+      .toBe('confirmation-required');
+
+    const acknowledged = await buildFinishLine({
+      cwd,
+      objective: 'Update the documentation',
+      includeDiscoveredChecks: true,
+      acknowledgeWarningSetDigest: initial.proposal.finishLineReview.warningSetDigest,
+      acknowledgeNoExecutableChecksDigest: decisionDigest,
+    });
+    expect(acknowledged.ok).toBe(true);
+    if (!acknowledged.ok) return;
+    expect(acknowledged.proposal.noExecutableChecksDecision).toMatchObject({
+      decisionDigest,
+      status: 'acknowledged',
+      acknowledgedAt: expect.any(Number),
+    });
+
+    const stale = await buildFinishLine({
+      cwd,
+      objective: 'Change the runtime implementation',
+      includeDiscoveredChecks: true,
+      acknowledgeNoExecutableChecksDigest: decisionDigest,
+    });
+    expect(stale.ok).toBe(true);
+    if (stale.ok) expect(stale.proposal.noExecutableChecksDecision?.status)
+      .toBe('confirmation-required');
+  });
+
+  it('does not offer a no-check decision after applicable discovered checks were excluded', async () => {
+    const cwd = await makeTempDir('wukong-finish-line-excluded-check-');
+    const built = await buildFinishLine({
+      cwd,
+      objective: 'Change the implementation',
+      includeDiscoveredChecks: false,
+      discoveredCommands: [{
+        command: 'pnpm test',
+        source: 'project-inferred',
+      }],
+    });
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+
+    expect(built.proposal.gatePlan.requiredChecks).toHaveLength(0);
+    expect(built.proposal.gatePlan.excludedChecks).toHaveLength(1);
+    expect(built.proposal.noExecutableChecksDecision).toBeUndefined();
+  });
+
   it('rejects inline credentials and destructive checks before persistence', async () => {
     const cwd = await makeTempDir('wukong-finish-line-guard-');
     const secret = await buildFinishLine({

@@ -246,7 +246,7 @@ function buildBlockers(
   if (hasUnverifiedSourceChanges(verification)) {
     const file = verification.changedFiles.find((changed) => SOURCE_CHANGE_PATTERN.test(changed.path))?.path;
     blockers.push({
-      id: 'tests_missing',
+      id: 'checks_missing',
       kind: 'workspace',
       summary: 'Source code changed but no project checks were discovered.',
       file,

@@ -142,6 +142,30 @@ function makeReviewSettings(
   };
 }
 
+async function buildAcknowledgedNoCheckFinishLine(input: {
+  readonly objective: string;
+  readonly completionCriterion?: string;
+}) {
+  const initial = await buildFinishLine({
+    cwd: process.cwd(),
+    objective: input.objective,
+    completionCriterion: input.completionCriterion,
+    includeDiscoveredChecks: true,
+    discoveredCommands: [],
+  });
+  if (!initial.ok) return initial;
+  return buildFinishLine({
+    cwd: process.cwd(),
+    objective: input.objective,
+    completionCriterion: input.completionCriterion,
+    includeDiscoveredChecks: true,
+    discoveredCommands: [],
+    acknowledgeWarningSetDigest: initial.proposal.finishLineReview.warningSetDigest,
+    acknowledgeNoExecutableChecksDigest:
+      initial.proposal.noExecutableChecksDecision?.decisionDigest,
+  });
+}
+
 async function recordBrokeredGate(
   goals: GoalMode,
   input: {
@@ -277,6 +301,138 @@ describe('GoalMode creation', () => {
     expect(snapshot.budget.overBudget).toBe(false);
   });
 
+  it('rejects a no-check acceptance contract unless the separate decision is acknowledged', async () => {
+    const { goals } = makeGoalMode();
+    const initial = await buildFinishLine({
+      cwd: process.cwd(),
+      objective: 'Update documentation only',
+      includeDiscoveredChecks: true,
+      discoveredCommands: [],
+    });
+    expect(initial.ok).toBe(true);
+    if (!initial.ok) return;
+
+    const warningOnly = await buildFinishLine({
+      cwd: process.cwd(),
+      objective: initial.proposal.objective,
+      includeDiscoveredChecks: true,
+      discoveredCommands: [],
+      acknowledgeWarningSetDigest: initial.proposal.finishLineReview.warningSetDigest,
+    });
+    expect(warningOnly.ok).toBe(true);
+    if (!warningOnly.ok) return;
+    const warningOnlyContract = {
+      schemaVersion: 2 as const,
+      objective: warningOnly.proposal.objective,
+      constraints: warningOnly.proposal.constraints,
+      finishLineReview: warningOnly.proposal.finishLineReview,
+      workspaceIdentity: warningOnly.proposal.workspaceIdentity,
+      gateApproval: warningOnly.proposal.gateApproval,
+      gatePlan: warningOnly.proposal.gatePlan,
+      reviewPolicy: warningOnly.proposal.reviewPolicy,
+      source: 'user' as const,
+    };
+    await expect(goals.createGoal({
+      objective: warningOnly.proposal.objective,
+      stopCondition: 'proof-pass',
+      loopContract: warningOnlyContract,
+    })).rejects.toThrow('No executable checks decision must be acknowledged');
+
+    const acknowledged = await buildFinishLine({
+      cwd: process.cwd(),
+      objective: initial.proposal.objective,
+      includeDiscoveredChecks: true,
+      discoveredCommands: [],
+      acknowledgeWarningSetDigest: initial.proposal.finishLineReview.warningSetDigest,
+      acknowledgeNoExecutableChecksDigest:
+        initial.proposal.noExecutableChecksDecision?.decisionDigest,
+    });
+    expect(acknowledged.ok).toBe(true);
+    if (!acknowledged.ok) return;
+    await expect(goals.createGoal({
+      objective: acknowledged.proposal.objective,
+      stopCondition: 'proof-pass',
+      loopContract: {
+        ...warningOnlyContract,
+        finishLineReview: acknowledged.proposal.finishLineReview,
+        gateApproval: acknowledged.proposal.gateApproval,
+        noExecutableChecksDecision: acknowledged.proposal.noExecutableChecksDecision,
+      },
+    })).resolves.toMatchObject({
+      loopContract: {
+        noExecutableChecksDecision: {
+          status: 'acknowledged',
+        },
+      },
+    });
+  });
+
+  it('persists separate writer and reviewer provider-call ceilings and rejects before overspend', async () => {
+    const { goals, records } = makeGoalMode();
+    const finishLine = await buildFinishLine({
+      cwd: process.cwd(),
+      objective: 'Bound provider calls',
+      completionCriterion: 'The frozen check passes within the approved cost limits',
+      explicitChecks: ['node -e "process.exit(0)"'],
+      includeDiscoveredChecks: false,
+    });
+    expect(finishLine.ok).toBe(true);
+    if (!finishLine.ok) return;
+
+    const created = await goals.createGoal({
+      objective: finishLine.proposal.objective,
+      completionCriterion: finishLine.proposal.completionCriterion,
+      stopCondition: 'proof-pass',
+      writerProviderCallLimit: 1,
+      reviewerProviderCallLimit: 2,
+      tokenBudget: 1_000,
+      loopContract: {
+        schemaVersion: 2,
+        objective: finishLine.proposal.objective,
+        completionCriterion: finishLine.proposal.completionCriterion,
+        constraints: finishLine.proposal.constraints,
+        finishLineReview: finishLine.proposal.finishLineReview,
+        workspaceIdentity: finishLine.proposal.workspaceIdentity,
+        workspaceTrust: finishLine.proposal.workspaceTrust,
+        gateApproval: finishLine.proposal.gateApproval,
+        gatePlan: finishLine.proposal.gatePlan,
+        reviewPolicy: finishLine.proposal.reviewPolicy,
+        source: 'user',
+      },
+    });
+    expect(created).toMatchObject({
+      budget: { tokenBudget: 1_000 },
+      providerUsage: {
+        writerCalls: 0,
+        reviewerCalls: 0,
+        writerCallLimit: 1,
+        reviewerCallLimit: 2,
+        remainingWriterCalls: 1,
+        remainingReviewerCalls: 2,
+      },
+    });
+
+    await expect(goals.reserveProviderCall('writer')).resolves.toMatchObject({
+      providerUsage: { writerCalls: 1, remainingWriterCalls: 0 },
+    });
+    await expect(goals.reserveProviderCall('writer')).rejects.toMatchObject({
+      name: 'LoopProviderCallLimitError',
+      role: 'writer',
+      limit: 1,
+    });
+    await goals.reserveProviderCall('reviewer');
+    await goals.reserveProviderCall('reviewer');
+    await expect(goals.reserveProviderCall('reviewer')).rejects.toMatchObject({
+      name: 'LoopProviderCallLimitError',
+      role: 'reviewer',
+      limit: 2,
+    });
+    expect(records.filter((record) => record.type === 'goal.update').at(-1))
+      .toMatchObject({
+        providerCalls: { writer: 1, reviewer: 2 },
+      });
+  });
+
   it('rejects empty and too-long objectives', async () => {
     const { goals } = makeGoalMode();
 
@@ -321,11 +477,9 @@ describe('GoalMode creation', () => {
 describe('GoalMode lifecycle', () => {
   it('creates only one continuation run for concurrent resume requests', async () => {
     const { goals, records } = makeGoalMode();
-    const finishLine = await buildFinishLine({
-      cwd: process.cwd(),
+    const finishLine = await buildAcknowledgedNoCheckFinishLine({
       objective: 'Continue once',
       completionCriterion: 'The next bounded run finishes',
-      includeDiscoveredChecks: false,
     });
     expect(finishLine.ok).toBe(true);
     if (!finishLine.ok) return;
@@ -348,6 +502,7 @@ describe('GoalMode lifecycle', () => {
         workspaceTrust: finishLine.proposal.workspaceTrust,
         gateApproval: finishLine.proposal.gateApproval,
         gatePlan: finishLine.proposal.gatePlan,
+        noExecutableChecksDecision: finishLine.proposal.noExecutableChecksDecision,
         reviewPolicy: finishLine.proposal.reviewPolicy,
         source: 'user',
       },
@@ -375,11 +530,9 @@ describe('GoalMode lifecycle', () => {
 
   it('assigns brokered review settings to a legacy active V2 run before resume', async () => {
     const { goals, records } = makeGoalMode();
-    const finishLine = await buildFinishLine({
-      cwd: process.cwd(),
+    const finishLine = await buildAcknowledgedNoCheckFinishLine({
       objective: 'Resume a legacy V2 run',
       completionCriterion: 'The run uses brokered review settings',
-      includeDiscoveredChecks: false,
     });
     expect(finishLine.ok).toBe(true);
     if (!finishLine.ok) return;
@@ -402,6 +555,7 @@ describe('GoalMode lifecycle', () => {
         workspaceTrust: finishLine.proposal.workspaceTrust,
         gateApproval: finishLine.proposal.gateApproval,
         gatePlan: finishLine.proposal.gatePlan,
+        noExecutableChecksDecision: finishLine.proposal.noExecutableChecksDecision,
         reviewPolicy: finishLine.proposal.reviewPolicy,
         source: 'user',
       },
@@ -456,11 +610,9 @@ describe('GoalMode lifecycle', () => {
 
   it('requires a new consent binding for a terminal continuation', async () => {
     const { goals } = makeGoalMode();
-    const finishLine = await buildFinishLine({
-      cwd: process.cwd(),
+    const finishLine = await buildAcknowledgedNoCheckFinishLine({
       objective: 'Continue with fresh consent',
       completionCriterion: 'The next run has its own consent binding',
-      includeDiscoveredChecks: false,
     });
     expect(finishLine.ok).toBe(true);
     if (!finishLine.ok) return;
@@ -487,6 +639,7 @@ describe('GoalMode lifecycle', () => {
         workspaceTrust: finishLine.proposal.workspaceTrust,
         gateApproval: finishLine.proposal.gateApproval,
         gatePlan: finishLine.proposal.gatePlan,
+        noExecutableChecksDecision: finishLine.proposal.noExecutableChecksDecision,
         reviewPolicy: finishLine.proposal.reviewPolicy,
         reviewSettings: firstSettings,
         source: 'user',
@@ -658,6 +811,7 @@ describe('GoalMode records', () => {
         workspaceTrust: finishLine.proposal.workspaceTrust,
         gateApproval: finishLine.proposal.gateApproval,
         gatePlan: finishLine.proposal.gatePlan,
+        noExecutableChecksDecision: finishLine.proposal.noExecutableChecksDecision,
         reviewPolicy: finishLine.proposal.reviewPolicy,
         reviewSettings: makeReviewSettings(
           finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
@@ -684,11 +838,9 @@ describe('GoalMode records', () => {
 
   it('persists a V2 contract, run, complete Gate attempt, and terminal result', async () => {
     const { goals, records } = makeGoalMode();
-    const finishLine = await buildFinishLine({
-      cwd: process.cwd(),
+    const finishLine = await buildAcknowledgedNoCheckFinishLine({
       objective: 'Ship an explicit Finish Line',
       completionCriterion: 'The frozen gate and reviewer both pass',
-      includeDiscoveredChecks: false,
     });
     expect(finishLine.ok).toBe(true);
     if (!finishLine.ok) return;
@@ -712,6 +864,7 @@ describe('GoalMode records', () => {
         workspaceTrust: finishLine.proposal.workspaceTrust,
         gateApproval: finishLine.proposal.gateApproval,
         gatePlan: finishLine.proposal.gatePlan,
+        noExecutableChecksDecision: finishLine.proposal.noExecutableChecksDecision,
         reviewPolicy: finishLine.proposal.reviewPolicy,
         reviewSettings: makeReviewSettings(
           finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
@@ -759,6 +912,37 @@ describe('GoalMode records', () => {
       loopRunId: created.loopRunId,
       loopTerminal: { status: 'PASS', reasonCode: 'passed' },
     });
+
+    const scanRecord = records.find(
+      (record) => record.type === 'loop.builtin-risk-scan-result.create',
+    );
+    const replayedAttemptRecord = records.find(
+      (record) => record.type === 'loop.gate-attempt.create',
+    );
+    if (
+      replayedAttemptRecord?.type !== 'loop.gate-attempt.create'
+      || scanRecord?.type !== 'loop.builtin-risk-scan-result.create'
+    ) throw new Error('Gate replay identity fixtures missing');
+    expect(() => replayed.restoreLoopAuditRecord(replayedAttemptRecord)).not.toThrow();
+    expect(() => replayed.restoreLoopAuditRecord(scanRecord)).not.toThrow();
+
+    const conflictingScanBase = {
+      ...scanRecord.result,
+      scanResultRef: `${scanRecord.result.scanResultRef}-late`,
+    };
+    const { scanResultDigest: _discardedDigest, ...conflictingScanPayload } =
+      conflictingScanBase;
+    const lateScan = {
+      type: 'loop.builtin-risk-scan-result.create' as const,
+      result: {
+        ...conflictingScanPayload,
+        scanResultDigest: canonicalDigest(
+          'wukong/builtin-risk-scan-result/v1',
+          conflictingScanPayload,
+        ),
+      },
+    };
+    expect(() => replayed.restoreLoopAuditRecord(lateScan)).toThrow('late producer');
 
     const proofRecord = records.find((record) => record.type === 'loop.proof-aggregate.create');
     if (proofRecord?.type !== 'loop.proof-aggregate.create') throw new Error('proof record missing');
@@ -1024,6 +1208,49 @@ describe('GoalMode records', () => {
     expect(goals.getGoal().goal?.budget.turnBudget).toBe(2);
   });
 
+  it('restores Loop provider-call counters and token ceiling without reopening budget', async () => {
+    const { goals } = makeGoalMode();
+
+    goals.restoreCreate({
+      type: 'goal.create',
+      goalId: 'g-budgeted-loop',
+      objective: 'finish within durable limits',
+      stopCondition: 'proof-pass',
+      writerProviderCallLimit: 1,
+      reviewerProviderCallLimit: 2,
+      tokenBudget: 500,
+      time: Date.parse('2026-01-01T00:00:00.000Z'),
+    });
+    goals.restoreUpdate({
+      type: 'goal.update',
+      providerCalls: { writer: 1, reviewer: 2 },
+      tokensUsed: 450,
+    });
+
+    expect(goals.getGoal().goal).toMatchObject({
+      tokensUsed: 450,
+      budget: { tokenBudget: 500, remainingTokens: 50 },
+      providerUsage: {
+        writerCalls: 1,
+        reviewerCalls: 2,
+        writerCallLimit: 1,
+        reviewerCallLimit: 2,
+        remainingWriterCalls: 0,
+        remainingReviewerCalls: 0,
+      },
+    });
+    await expect(goals.reserveProviderCall('writer')).rejects.toMatchObject({
+      code: ErrorCodes.LOOP_PROVIDER_CALL_LIMIT,
+      role: 'writer',
+      limit: 1,
+    });
+    await expect(goals.reserveProviderCall('reviewer')).rejects.toMatchObject({
+      code: ErrorCodes.LOOP_PROVIDER_CALL_LIMIT,
+      role: 'reviewer',
+      limit: 2,
+    });
+  });
+
   it.each(['verify-pass', 'scan-clean', 'judge-pass'] as const)(
     'migrates legacy %s Goal records to the proof gate',
     (stopCondition) => {
@@ -1090,6 +1317,51 @@ describe('GoalMode records', () => {
     restored.restoreUpdate(update);
 
     expect(restored.getGoal().goal?.loopResult).toEqual(result);
+  });
+
+  it('attributes final changed files against the frozen pre-run workspace baseline', async () => {
+    const { goals, records } = makeGoalMode();
+    await goals.createGoal({
+      objective: 'change files without claiming user work',
+      stopCondition: 'proof-pass',
+      workspaceChangeBaseline: {
+        files: [
+          { path: 'src/pre-existing.ts', status: 'M' },
+          { path: 'notes/untracked.md', status: '??' },
+        ],
+      },
+    });
+
+    const result = goals.recordLoopResult({
+      schemaVersion: 2,
+      status: 'NEEDS_WORK',
+      reasonCode: 'checks_failed',
+      summary: 'Checks failed.',
+      checks: [],
+      blockers: [],
+      changedFiles: [
+        { path: 'src/pre-existing.ts', status: 'M' },
+        { path: 'src/introduced.ts', status: '??' },
+      ],
+    });
+
+    expect(result?.changedFiles).toEqual([
+      {
+        path: 'src/pre-existing.ts',
+        status: 'M',
+        attribution: 'pre_existing_or_modified',
+      },
+      {
+        path: 'src/introduced.ts',
+        status: '??',
+        attribution: 'introduced_by_loop',
+      },
+    ]);
+    expect(records.find((record) => record.type === 'goal.create')).toMatchObject({
+      workspaceChangeBaseline: {
+        files: [{ path: 'src/pre-existing.ts' }, { path: 'notes/untracked.md' }],
+      },
+    });
   });
 
   it('projects restored goal status changes into replay records', () => {

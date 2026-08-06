@@ -6,6 +6,8 @@ interface GoalCompletionStats {
   readonly terminalReason?: string | undefined;
   readonly turnsUsed: number;
   readonly tokensUsed: number;
+  readonly providerUsage?: GoalSnapshot['providerUsage'];
+  readonly budget?: GoalSnapshot['budget'];
   readonly wallClockMs: number;
   readonly gateAttempts?: number | undefined;
   readonly loopResult?: GoalSnapshot['loopResult'];
@@ -16,7 +18,13 @@ interface GoalCompletionStats {
 type LoopResult = NonNullable<GoalSnapshot['loopResult']>;
 type LoopResultStats = Pick<
   GoalCompletionStats,
-  'tokensUsed' | 'wallClockMs' | 'gateAttempts' | 'loopRunId' | 'loopTerminal'
+  | 'tokensUsed'
+  | 'providerUsage'
+  | 'budget'
+  | 'wallClockMs'
+  | 'gateAttempts'
+  | 'loopRunId'
+  | 'loopTerminal'
 >;
 
 export interface LoopResultBlockerPresentation {
@@ -36,6 +44,7 @@ export interface LoopResultPresentation {
   readonly writer: string;
   readonly gate: string;
   readonly time: string;
+  readonly usage: string;
   readonly workspace: string;
   readonly checks: string;
   readonly evidence: string;
@@ -87,6 +96,7 @@ export function buildLoopResultCard(
     `Writer      ${presentation.writer}`,
     `Gate        ${presentation.gate}`,
     `Time        ${presentation.time}`,
+    `Usage       ${presentation.usage}`,
     `Workspace   ${presentation.workspace}`,
     `Checks      ${presentation.checks}`,
     `Evidence    ${presentation.evidence}`,
@@ -133,7 +143,7 @@ export function buildLoopResultPresentation(
     ? 'none recorded'
     : `${String(changedFiles.length)} file(s): ${changedFiles
         .slice(0, 5)
-        .map((file) => `${file.status} ${file.path}`)
+        .map((file) => `${file.status} ${file.path}${formatFileAttribution(file.attribution)}`)
         .join(', ')}${changedFiles.length > 5 ? ', …' : ''}`;
   const blockers = result.blockers.slice(0, 3).map((blocker, index) => ({
     label: `Blocker ${String(index + 1)}`,
@@ -148,6 +158,7 @@ export function buildLoopResultPresentation(
       ? 'attempts unavailable'
       : `${String(stats.gateAttempts)} attempt(s)`,
     time: `${stats === undefined ? 'unknown' : formatElapsed(stats.wallClockMs)} · Writer tokens ${stats === undefined ? 'unknown' : formatTokens(stats.tokensUsed)} · Reviewer tokens unavailable · Cost unavailable`,
+    usage: formatLoopUsage(stats),
     workspace: changedSummary,
     checks: evidence.verification === 'not_run'
       ? 'not run'
@@ -162,6 +173,28 @@ export function buildLoopResultPresentation(
     ...(continuationMode === undefined ? {} : { continuationMode }),
     next,
   };
+}
+
+function formatFileAttribution(
+  attribution: NonNullable<LoopResult['changedFiles']>[number]['attribution'],
+): string {
+  if (attribution === 'introduced_by_loop') return ' [introduced by Loop]';
+  if (attribution === 'pre_existing_or_modified') return ' [pre-existing or modified]';
+  return ' [attribution unavailable]';
+}
+
+function formatLoopUsage(stats: LoopResultStats | undefined): string {
+  if (stats === undefined) return 'Writer calls unknown · Reviewer calls unknown · Tokens unknown';
+  const usage = stats.providerUsage;
+  const writer = usage === undefined
+    ? 'unknown'
+    : `${String(usage.writerCalls)}${usage.writerCallLimit === null ? ' (uncapped)' : `/${String(usage.writerCallLimit)}`}`;
+  const reviewer = usage === undefined
+    ? 'unknown'
+    : `${String(usage.reviewerCalls)}${usage.reviewerCallLimit === null ? ' (uncapped)' : `/${String(usage.reviewerCallLimit)}`}`;
+  const tokenBudget = stats.budget?.tokenBudget;
+  const tokens = `${formatTokens(stats.tokensUsed)}${tokenBudget === undefined || tokenBudget === null ? ' (uncapped)' : `/${formatTokens(tokenBudget)}`}`;
+  return `Writer calls ${writer} · Reviewer calls ${reviewer} · Tokens ${tokens}`;
 }
 
 function formatElapsed(ms: number): string {

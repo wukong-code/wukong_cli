@@ -122,6 +122,20 @@ describe('loop pure helpers', () => {
         expect(output).toContain('Reviewer model: slow');
     });
 
+    it('shows configured writer, reviewer, and token ceilings in the plan', () => {
+        const output = formatLoopPlan({
+            objective: 'fix tests',
+            until: 'proof-pass',
+            maxIterations: 3,
+            writerProviderCallLimit: 12,
+            reviewerProviderCallLimit: 4,
+            tokenBudget: 50_000,
+        });
+        expect(output).toContain('Writer call limit: 12');
+        expect(output).toContain('Reviewer call limit: 4');
+        expect(output).toContain('Token budget: 50000');
+    });
+
     it('prints the actual short-lived broker challenge and complete required flags', () => {
         const output = formatHeadlessStartFlags({
             proposal: {
@@ -133,6 +147,9 @@ describe('loop pure helpers', () => {
                 finishLineReview: {
                     warnings: [{ id: 'missing-done-when' }],
                     warningSetDigest: 'sha256:warnings',
+                },
+                noExecutableChecksDecision: {
+                    decisionDigest: 'sha256:no-check',
                 },
             },
             trustChallenge: 'project.challenge',
@@ -146,6 +163,7 @@ describe('loop pure helpers', () => {
         expect(output).toContain('--accept-discovered-checks');
         expect(output).toContain('--approve-gate-plan sha256:approval');
         expect(output).toContain('--ack-finish-line-warnings sha256:warnings');
+        expect(output).toContain('--ack-no-executable-checks sha256:no-check');
         expect(output).toContain('--trust-workspace project.challenge');
         expect(output).toContain('--trust-review-subject short-lived.broker-challenge');
         expect(output).not.toContain('sha256:not-the-challenge');
@@ -196,6 +214,25 @@ describe('loop command', () => {
         exit.mockRestore();
     });
 
+    it.each([
+        ['--writer-call-limit', '2oops'],
+        ['--reviewer-call-limit', '0'],
+        ['--token-budget', '3.5'],
+    ])('rejects malformed %s value %s before running', async (flag, value) => {
+        const runs: unknown[] = [];
+        const stderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+        const exit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+        const program = createProgram('0.0.0', (options) => runs.push(options), () => {});
+
+        await program.parseAsync(['node', 'wukong', 'loop', 'fix tests', flag, value]);
+
+        expect(stderr).toHaveBeenCalledWith(`error: ${flag} must be a positive integer.\n`);
+        expect(exit).toHaveBeenCalledWith(1);
+        expect(runs).toHaveLength(0);
+        stderr.mockRestore();
+        exit.mockRestore();
+    });
+
     it('prints the inherited writer model in dry-run output', async () => {
         const runs: unknown[] = [];
         const stdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
@@ -210,6 +247,12 @@ describe('loop command', () => {
             '--dry-run',
             '--model',
             'fast',
+            '--writer-call-limit',
+            '12',
+            '--reviewer-call-limit',
+            '4',
+            '--token-budget',
+            '50000',
             '--review-model',
             'slow',
         ]);
@@ -236,6 +279,12 @@ describe('loop command', () => {
             '3',
             '--model',
             'fast',
+            '--writer-call-limit',
+            '12',
+            '--reviewer-call-limit',
+            '4',
+            '--token-budget',
+            '50000',
         ]);
 
         expect(runs).toHaveLength(1);
@@ -246,6 +295,9 @@ describe('loop command', () => {
                 kind: 'loop',
                 objective: 'fix failing tests',
                 maxIterations: 3,
+                writerProviderCallLimit: 12,
+                reviewerProviderCallLimit: 4,
+                tokenBudget: 50000,
             },
         });
     });
@@ -272,6 +324,8 @@ describe('loop command', () => {
             'approval-digest',
             '--ack-finish-line-warnings',
             'warning-digest',
+            '--ack-no-executable-checks',
+            'no-check-digest',
             '--trust-workspace',
             'trust-challenge',
         ]);
@@ -284,6 +338,7 @@ describe('loop command', () => {
             discoveredCheckDecision: 'only-explicit',
             approveGatePlanDigest: 'approval-digest',
             acknowledgeWarningSetDigest: 'warning-digest',
+            acknowledgeNoExecutableChecksDigest: 'no-check-digest',
             trustWorkspaceChallenge: 'trust-challenge',
         });
     });

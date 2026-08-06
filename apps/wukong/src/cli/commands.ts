@@ -135,6 +135,13 @@ export function createProgram(
         replace: false,
         stopCondition: 'proof-pass',
         maxIterations: loop.maxIterations!,
+        ...(loop.writerProviderCallLimit === undefined
+          ? {}
+          : { writerProviderCallLimit: loop.writerProviderCallLimit }),
+        ...(loop.reviewerProviderCallLimit === undefined
+          ? {}
+          : { reviewerProviderCallLimit: loop.reviewerProviderCallLimit }),
+        ...(loop.tokenBudget === undefined ? {} : { tokenBudget: loop.tokenBudget }),
         ...(loop.minIntervalMs === undefined ? {} : { minIntervalMs: loop.minIntervalMs }),
         ...(loop.reviewModel === undefined ? {} : { reviewModel: loop.reviewModel }),
         ...(loop.doneWhen === undefined ? {} : { completionCriterion: loop.doneWhen }),
@@ -154,6 +161,12 @@ export function createProgram(
         ...(loop.acknowledgeWarningSetDigest === undefined
           ? {}
           : { acknowledgeWarningSetDigest: loop.acknowledgeWarningSetDigest }),
+        ...(loop.acknowledgeNoExecutableChecksDigest === undefined
+          ? {}
+          : {
+              acknowledgeNoExecutableChecksDigest:
+                loop.acknowledgeNoExecutableChecksDigest,
+            }),
         ...(loop.verificationCatalogDigest === undefined
           ? {}
           : { verificationCatalogDigest: loop.verificationCatalogDigest }),

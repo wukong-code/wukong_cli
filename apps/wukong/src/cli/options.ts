@@ -7,6 +7,9 @@ export interface CLIHeadlessGoal {
   readonly replace: false;
   readonly stopCondition: 'proof-pass';
   readonly maxIterations: number;
+  readonly writerProviderCallLimit?: number;
+  readonly reviewerProviderCallLimit?: number;
+  readonly tokenBudget?: number;
   readonly minIntervalMs?: number;
   readonly reviewModel?: string;
   readonly completionCriterion?: string;
@@ -16,6 +19,7 @@ export interface CLIHeadlessGoal {
   readonly trustWorkspaceChallenge?: string;
   readonly approveGatePlanDigest?: string;
   readonly acknowledgeWarningSetDigest?: string;
+  readonly acknowledgeNoExecutableChecksDigest?: string;
   readonly verificationCatalogDigest?: string;
   readonly verificationSkills?: readonly {
     readonly selectionId: string;

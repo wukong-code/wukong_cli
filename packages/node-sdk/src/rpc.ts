@@ -566,6 +566,10 @@ export abstract class SDKRpcClientBase {
       reviewModel: input.reviewModel,
       maxIterations: input.maxIterations,
       minIntervalMs: input.minIntervalMs,
+      writerProviderCallLimit: input.writerProviderCallLimit,
+      reviewerProviderCallLimit: input.reviewerProviderCallLimit,
+      tokenBudget: input.tokenBudget,
+      workspaceChangeBaseline: input.workspaceChangeBaseline,
       loopContract: input.loopContract,
     });
   }

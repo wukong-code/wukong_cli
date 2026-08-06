@@ -100,6 +100,8 @@ export interface LoopPreflightBlocked {
     | 'gate_approval_mismatch'
     | 'check_permission_required'
     | 'finish_line_warning_ack_required'
+    | 'no_executable_checks_ack_required'
+    | 'no_executable_checks_not_applicable'
     | 'inline_secret_rejected'
     | 'verification_catalog_changed'
     | 'verification_criteria_invalid'
@@ -119,6 +121,9 @@ export interface LoopRuntimeFacts {
   readonly writerModel?: string;
   readonly reviewerModel?: string;
   readonly permission?: 'manual' | 'auto' | 'yolo';
+  readonly writerProviderCallLimit?: number;
+  readonly reviewerProviderCallLimit?: number;
+  readonly tokenBudget?: number;
 }
 
 export interface LoopPreflightOptions {
@@ -133,6 +138,7 @@ export interface LoopPreflightOptions {
   readonly getActiveGoal: () => Promise<GoalSnapshot | null>;
   readonly approveGatePlanDigest?: string;
   readonly acknowledgeWarningSetDigest?: string;
+  readonly acknowledgeNoExecutableChecksDigest?: string;
   readonly trustWorkspaceChallenge?: string;
   readonly verificationCatalogDigest?: string;
   readonly verificationSkills?: readonly {
@@ -308,6 +314,8 @@ export async function runLoopPreflight(
       includeDiscoveredChecks: decision !== 'only-explicit',
       excludedDiscoveredReason: decision === 'only-explicit' ? 'only-explicit' : 'tui-confirmed',
       acknowledgeWarningSetDigest: options.acknowledgeWarningSetDigest,
+      acknowledgeNoExecutableChecksDigest:
+        options.acknowledgeNoExecutableChecksDigest,
       discoveredCommands,
     });
   } catch (error) {
@@ -431,6 +439,26 @@ export async function runLoopPreflight(
       )
     : undefined;
   if (mode === 'headless' || mode === 'tui-confirmed') {
+    if (proposal.gatePlan.requiredChecks.length === 0) {
+      if (proposal.noExecutableChecksDecision === undefined) {
+        return blocked(
+          'no_executable_checks_not_applicable',
+          'Applicable project checks were excluded, so the no-check policy does not apply.',
+          'Revise the Loop and include the applicable discovered checks.',
+          proposal,
+          trustChallenge,
+        );
+      }
+      if (proposal.noExecutableChecksDecision.status !== 'acknowledged') {
+        return blocked(
+          'no_executable_checks_ack_required',
+          'No executable checks apply only after a separate exact confirmation.',
+          `Re-run with --ack-no-executable-checks ${proposal.noExecutableChecksDecision.decisionDigest}`,
+          proposal,
+          trustChallenge,
+        );
+      }
+    }
     if (
       proposal.finishLineReview.warnings.length > 0
       && options.acknowledgeWarningSetDigest
@@ -654,7 +682,13 @@ export function formatLoopPreflightReady(
             ? [`Must not     +${String(contract.constraints.length - constraints.length)} more · use Edit finish line to review all`]
             : []),
         ]),
-    `Verification ${String(checks.length)} required project check${checks.length === 1 ? '' : 's'}${checks.length === 0 ? ' · none approved; PASS requires recorded verification evidence' : ''}`,
+    `Verification ${String(checks.length)} required project check${checks.length === 1 ? '' : 's'}${checks.length === 0
+      ? contract.noExecutableChecksDecision?.status === 'acknowledged'
+        ? ' · No executable checks apply · confirmed; no project command will run'
+        : contract.noExecutableChecksDecision === undefined
+          ? ' · applicable checks were excluded; revise the Loop'
+          : ' · No executable checks apply · explicit confirmation required'
+      : ''}`,
     ...visibleChecks.map((check, index) =>
       `Check ${String(index + 1).padEnd(7)} ${boundedSummaryValue(check.displayCommand)}`,
     ),
@@ -672,8 +706,9 @@ export function formatLoopPreflightReady(
     `Permission   ${permission} · current OS account · no OS sandbox`,
     ...formatWorkspaceGitState(result),
     `Iterations   up to ${String(maxIterations)} writer iterations`,
-    'Provider calls no separate cap configured',
-    'Token budget no separate cap configured',
+    `Writer calls ${runtime.writerProviderCallLimit === undefined ? 'no separate cap configured' : `up to ${String(runtime.writerProviderCallLimit)}`}`,
+    `Reviewer calls ${runtime.reviewerProviderCallLimit === undefined ? 'no separate cap configured' : `up to ${String(runtime.reviewerProviderCallLimit)}`}`,
+    `Token budget ${runtime.tokenBudget === undefined ? 'no separate cap configured' : `up to ${String(runtime.tokenBudget)}`}`,
     'Outbound     changed tracked files, selected untracked/scope-matched files, and redacted Gate evidence',
     'Excluded     credential/session/trust/log, generated-output, binary, and oversized paths; recognized secret patterns filtered',
     `Payload      up to ${String(limits.maxFiles)} files · ${formatByteLimit(limits.maxTotalBytes)} source · ${formatByteLimit(limits.maxGateEvidenceTotalBytes)} Gate evidence`,

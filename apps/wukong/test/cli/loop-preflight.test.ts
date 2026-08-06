@@ -67,7 +67,8 @@ describe('Loop preflight', () => {
       expect(output).toContain('Must not     +1 more');
       expect(output).toContain('Check 1       pnpm test');
       expect(output).toContain('Check 2       pnpm typecheck');
-      expect(output).toContain('Provider calls no separate cap configured');
+      expect(output).toContain('Writer calls no separate cap configured');
+      expect(output).toContain('Reviewer calls no separate cap configured');
       expect(output).toContain('Token budget no separate cap configured');
       expect(output).toContain('Outbound     changed tracked files');
       expect(output).toContain('Result       PASS / NEEDS_WORK / ERROR');
@@ -97,23 +98,83 @@ describe('Loop preflight', () => {
     }
   });
 
-  it('allows a Loop with no checks but labels the missing evidence', async () => {
+  it('proposes a separate no-check decision and requires its exact acknowledgement', async () => {
     const cwd = await workspace();
-    const result = await runLoopPreflight({
+    const base = {
       objective: 'create a module',
       model: 'glm-5.2',
       workspace: cwd,
       reviewProvider,
       getActiveGoal: async () => null,
       discoverChecks: async () => [],
+    };
+    const result = await runLoopPreflight({
+      ...base,
+      mode: 'tui-proposal',
     });
 
     expect(result.ready).toBe(true);
     if (result.ready) {
-      expect(formatLoopPreflightReady(result, 2)).toContain('Verification 0 required project checks');
+      expect(formatLoopPreflightReady(result, 2))
+        .toContain('No executable checks apply · explicit confirmation required');
       expect(result.proposal.finishLineReview.warnings.map((warning) => warning.code))
         .toContain('no_resolved_checks');
+      expect(result.proposal.noExecutableChecksDecision).toMatchObject({
+        policyVersion: 'no-executable-checks/1',
+        status: 'confirmation-required',
+      });
+
+      const warningOnly = await runLoopPreflight({
+        ...base,
+        mode: 'tui-confirmed',
+        acknowledgeWarningSetDigest: result.proposal.finishLineReview.warningSetDigest,
+      });
+      expect(warningOnly).toMatchObject({
+        ready: false,
+        reasonCode: 'no_executable_checks_ack_required',
+        proposal: {
+          noExecutableChecksDecision: {
+            status: 'confirmation-required',
+          },
+        },
+      });
+
+      const acknowledged = await runLoopPreflight({
+        ...base,
+        mode: 'tui-confirmed',
+        acknowledgeWarningSetDigest: result.proposal.finishLineReview.warningSetDigest,
+        acknowledgeNoExecutableChecksDigest:
+          result.proposal.noExecutableChecksDecision?.decisionDigest,
+      });
+      expect(acknowledged).toMatchObject({
+        ready: false,
+        reasonCode: 'review_subject_trust_required',
+        proposal: {
+          noExecutableChecksDecision: {
+            status: 'acknowledged',
+          },
+        },
+      });
     }
+  });
+
+  it('rejects no-check confirmation when applicable discovered checks were excluded', async () => {
+    const cwd = await workspace();
+    const result = await runLoopPreflight({
+      objective: 'change implementation',
+      model: 'glm-5.2',
+      workspace: cwd,
+      reviewProvider,
+      mode: 'tui-confirmed',
+      discoveredCheckDecision: 'only-explicit',
+      getActiveGoal: async () => null,
+      discoverChecks: async () => ['pnpm test'],
+    });
+
+    expect(result).toMatchObject({
+      ready: false,
+      reasonCode: 'no_executable_checks_not_applicable',
+    });
   });
 
   it('blocks before quota when model, workspace, active Goal, or checks config is invalid', async () => {

@@ -18,6 +18,9 @@ export interface LoopCliOptions {
   readonly objective?: string;
   readonly until?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
   readonly maxIterations?: number;
+  readonly writerProviderCallLimit?: number;
+  readonly reviewerProviderCallLimit?: number;
+  readonly tokenBudget?: number;
   readonly minIntervalMs?: number;
   readonly dryRun?: boolean;
   readonly model?: string;
@@ -30,6 +33,7 @@ export interface LoopCliOptions {
   readonly trustWorkspaceChallenge?: string;
   readonly approveGatePlanDigest?: string;
   readonly acknowledgeWarningSetDigest?: string;
+  readonly acknowledgeNoExecutableChecksDigest?: string;
   readonly verificationCatalogDigest?: string;
   readonly verificationSkills?: readonly string[];
   readonly trustReviewSubjectChallenge?: string;
@@ -45,6 +49,9 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
     .argument('<objective>', 'The objective to iterate toward.')
     .option('--until <condition>', 'Advanced compatibility option. Loop always uses proof-pass.', 'proof-pass')
     .option('--max-iterations <n>', 'Maximum iterations before giving up.', '10')
+    .option('--writer-call-limit <n>', 'Maximum writer provider requests for this Loop.')
+    .option('--reviewer-call-limit <n>', 'Maximum reviewer provider requests for this Loop.')
+    .option('--token-budget <n>', 'Maximum total Goal tokens for this Loop.')
     .option('--every <duration>', 'Optional minimum interval between iterations (e.g. 5m, 1h).')
     .option('--model <model>', 'Writer model alias for this Loop session.')
     .option('--review-model <model>', 'Independent reviewer model alias for this Loop.')
@@ -56,12 +63,24 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
     .option('--trust-workspace <challenge>', 'Exact short-lived workspace trust challenge from --dry-run.')
     .option('--approve-gate-plan <digest>', 'Exact Gate approval-set digest from --dry-run.')
     .option('--ack-finish-line-warnings <digest>', 'Exact Finish Line warning-set digest from --dry-run.')
+    .option('--ack-no-executable-checks <digest>', 'Confirm the exact versioned no-executable-checks decision from --dry-run.')
     .option('--verification-catalog-digest <digest>', 'Exact Verification Criteria catalog digest from --dry-run.')
     .option('--verification-skill <identity@digest>', 'Select an exact Verification Skill identity and provenance digest. Repeat to set flat order.', collectOption, [])
     .option('--trust-review-subject <challenge>', 'Exact short-lived local broker trust challenge from --dry-run.')
     .option('--ack-review-subject <digest>', 'Exact run-scoped BYOK review-subject consent digest from --dry-run.')
     .option('--dry-run', 'Validate arguments and print the planned loop without running it.', false)
     .action(async (objective: string, raw: RawLoopOptions, command: Command) => {
+      for (const [flag, value] of [
+        ['--writer-call-limit', raw.writerCallLimit],
+        ['--reviewer-call-limit', raw.reviewerCallLimit],
+        ['--token-budget', raw.tokenBudget],
+      ] as const) {
+        if (value !== undefined && parsePositiveInteger(value) === undefined) {
+          process.stderr.write(`error: ${flag} must be a positive integer.\n`);
+          process.exit(1);
+          return;
+        }
+      }
       const everyResult = parseEvery(raw.every);
       if (everyResult.kind === 'error') {
         process.stderr.write(`error: ${everyResult.message}\n`);
@@ -78,6 +97,9 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
         objective,
         until,
         maxIterations: parseMaxIterations(raw.maxIterations),
+        writerProviderCallLimit: parsePositiveInteger(raw.writerCallLimit),
+        reviewerProviderCallLimit: parsePositiveInteger(raw.reviewerCallLimit),
+        tokenBudget: parsePositiveInteger(raw.tokenBudget),
         minIntervalMs: everyResult.ms,
         dryRun: raw.dryRun === true,
         model: raw.model ?? (inherited['model'] as string | undefined),
@@ -90,6 +112,7 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
         trustWorkspaceChallenge: raw.trustWorkspace,
         approveGatePlanDigest: raw.approveGatePlan,
         acknowledgeWarningSetDigest: raw.ackFinishLineWarnings,
+        acknowledgeNoExecutableChecksDigest: raw.ackNoExecutableChecks,
         verificationCatalogDigest: raw.verificationCatalogDigest,
         verificationSkills: raw.verificationSkill,
         trustReviewSubjectChallenge: raw.trustReviewSubject,
@@ -153,6 +176,9 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
           outputFormat === 'stream-json'
             ? formatLoopDryRun(result, {
                 maxIterations: options.maxIterations,
+                writerProviderCallLimit: options.writerProviderCallLimit,
+                reviewerProviderCallLimit: options.reviewerProviderCallLimit,
+                tokenBudget: options.tokenBudget,
                 writerModel: effectiveWriterModel,
                 reviewerModel: effectiveReviewerModel,
                 permission: effectivePermission,
@@ -163,6 +189,9 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
                 writerModel: effectiveWriterModel,
                 reviewerModel: effectiveReviewerModel,
                 permission: effectivePermission,
+                writerProviderCallLimit: options.writerProviderCallLimit,
+                reviewerProviderCallLimit: options.reviewerProviderCallLimit,
+                tokenBudget: options.tokenBudget,
               })}\n\n`
               + `${formatHeadlessStartFlags(result)}\n`,
         );
@@ -182,6 +211,9 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
 interface RawLoopOptions {
   readonly until?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
   readonly maxIterations: string;
+  readonly writerCallLimit?: string;
+  readonly reviewerCallLimit?: string;
+  readonly tokenBudget?: string;
   readonly every?: string;
   readonly dryRun?: boolean;
   readonly model?: string;
@@ -194,6 +226,7 @@ interface RawLoopOptions {
   readonly trustWorkspace?: string;
   readonly approveGatePlan?: string;
   readonly ackFinishLineWarnings?: string;
+  readonly ackNoExecutableChecks?: string;
   readonly verificationCatalogDigest?: string;
   readonly verificationSkill: string[];
   readonly trustReviewSubject?: string;
@@ -248,6 +281,11 @@ export function validateLoopOptions(options: LoopCliOptions): ValidationResult {
 }
 
 export function parseMaxIterations(raw: string): number | undefined {
+  return parsePositiveInteger(raw);
+}
+
+export function parsePositiveInteger(raw: string | undefined): number | undefined {
+  if (raw === undefined) return undefined;
   if (!/^[1-9]\d*$/.test(raw)) return undefined;
   const value = Number(raw);
   return Number.isSafeInteger(value) ? value : undefined;
@@ -265,6 +303,13 @@ export function formatLoopPlan(options: LoopCliOptions): string {
   }
   if (options.model !== undefined) lines.push(`  Writer model: ${options.model}`);
   if (options.reviewModel !== undefined) lines.push(`  Reviewer model: ${options.reviewModel}`);
+  if (options.writerProviderCallLimit !== undefined) {
+    lines.push(`  Writer call limit: ${String(options.writerProviderCallLimit)}`);
+  }
+  if (options.reviewerProviderCallLimit !== undefined) {
+    lines.push(`  Reviewer call limit: ${String(options.reviewerProviderCallLimit)}`);
+  }
+  if (options.tokenBudget !== undefined) lines.push(`  Token budget: ${String(options.tokenBudget)}`);
   if (options.doneWhen !== undefined) lines.push(`  Done when: ${options.doneWhen}`);
   for (const constraint of options.constraints ?? []) lines.push(`  Must not: ${constraint}`);
   for (const check of options.checks ?? []) lines.push(`  Check: ${check}`);
@@ -284,6 +329,9 @@ export function formatHeadlessStartFlags(
   lines.push(`  Gate approval  --approve-gate-plan ${proposal.gateApproval.approvalSetDigest}`);
   if (proposal.finishLineReview.warnings.length > 0) {
     lines.push(`  Warning ack    --ack-finish-line-warnings ${proposal.finishLineReview.warningSetDigest}`);
+  }
+  if (proposal.noExecutableChecksDecision !== undefined) {
+    lines.push(`  No-check ack   --ack-no-executable-checks ${proposal.noExecutableChecksDecision.decisionDigest}`);
   }
   if (proposal.gateApproval.hasExecutableChecks) {
     lines.push(`  Project trust  --trust-workspace ${result.trustChallenge}`);

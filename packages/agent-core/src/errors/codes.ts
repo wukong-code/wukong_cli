@@ -48,6 +48,7 @@ export const ErrorCodes = {
 
   CONTEXT_OVERFLOW: 'context.overflow',
   LOOP_MAX_STEPS_EXCEEDED: 'loop.max_steps_exceeded',
+  LOOP_PROVIDER_CALL_LIMIT: 'loop.provider_call_limit',
   PROVIDER_API_ERROR: 'provider.api_error',
   PROVIDER_RATE_LIMIT: 'provider.rate_limit',
   PROVIDER_AUTH_ERROR: 'provider.auth_error',
@@ -302,6 +303,12 @@ export const WUKONG_ERROR_INFO = {
     retryable: false,
     public: true,
     action: 'For a user turn, increase loop_control.max_steps_per_turn or split the task; for an internal workflow, follow its parent result.',
+  },
+  'loop.provider_call_limit': {
+    title: 'Loop provider call limit reached',
+    retryable: false,
+    public: true,
+    action: 'Increase the matching writer or reviewer call limit, then resume the goal.',
   },
   'provider.api_error': {
     title: 'Provider API error',

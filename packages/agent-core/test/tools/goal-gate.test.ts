@@ -158,11 +158,24 @@ async function createBrokeredV3Goal(goals: GoalMode, cwd: string): Promise<{
       }],
     }),
   );
+  const initialFinishLine = await buildFinishLine({
+    cwd,
+    objective: 'Keep API failures typed',
+    completionCriterion: 'The API criterion and frozen Gate pass',
+    includeDiscoveredChecks: true,
+    discoveredCommands: [],
+  });
+  if (!initialFinishLine.ok) throw new Error(initialFinishLine.failure.message);
   const finishLine = await buildFinishLine({
     cwd,
     objective: 'Keep API failures typed',
     completionCriterion: 'The API criterion and frozen Gate pass',
-    includeDiscoveredChecks: false,
+    includeDiscoveredChecks: true,
+    discoveredCommands: [],
+    acknowledgeWarningSetDigest:
+      initialFinishLine.proposal.finishLineReview.warningSetDigest,
+    acknowledgeNoExecutableChecksDigest:
+      initialFinishLine.proposal.noExecutableChecksDecision?.decisionDigest,
   });
   if (!finishLine.ok) throw new Error(finishLine.failure.message);
   const catalog = await discoverVerificationCriteriaCatalog({
@@ -206,6 +219,7 @@ async function createBrokeredV3Goal(goals: GoalMode, cwd: string): Promise<{
       },
       gateApproval: finishLine.proposal.gateApproval,
       legacyGatePlan: finishLine.proposal.gatePlan,
+      noExecutableChecksDecision: finishLine.proposal.noExecutableChecksDecision,
       reviewPolicy: finishLine.proposal.reviewPolicy,
       verificationCriteria: selection,
       selectedRecipes: [{
@@ -545,12 +559,25 @@ describe('UpdateGoalTool 0.0.20 verification gate', () => {
         expectedOrigin: 'https://api.anthropic.com',
         redirect: 'error',
       },
+      providerCallRole: 'reviewer',
       internalTools: expect.arrayContaining([
         expect.objectContaining({ name: 'ReadReviewSubject' }),
         expect.objectContaining({ name: 'SearchReviewSubjects' }),
         expect.objectContaining({ name: 'ReadGateEvidence' }),
       ]),
     }));
+    const passResultRecord = records.find(
+      (record) => record.type === 'goal.update' && record.loopResult?.status === 'PASS',
+    );
+    expect(passResultRecord).toMatchObject({
+      loopResult: {
+        evidence: {
+          completeness: 'complete',
+          fresh: true,
+          missingProducers: [],
+        },
+      },
+    });
     const durableOrder = records
       .map((record) => record.type)
       .filter((type) => type.startsWith('loop.'));
@@ -656,7 +683,15 @@ describe('UpdateGoalTool 0.0.20 verification gate', () => {
     expect(spawn).toHaveBeenCalledOnce();
     expect(goals.getGoal().goal).toMatchObject({
       status: 'blocked',
-      loopResult: { status: 'ERROR', reasonCode: 'reviewer_invalid_output' },
+      loopResult: {
+        status: 'ERROR',
+        reasonCode: 'reviewer_invalid_output',
+        evidence: {
+          completeness: 'partial',
+          fresh: false,
+          missingProducers: ['fresh-reviewer', 'workspace-freshness'],
+        },
+      },
     });
     expect(records.some((record) => record.type === 'loop.review-subject-manifest.create')).toBe(true);
     expect(records.some((record) => record.type === 'loop.fresh-criteria-verdict.create')).toBe(false);

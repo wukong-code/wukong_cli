@@ -6,9 +6,15 @@ import {
 } from '@wukong/kosong';
 
 import type { Agent } from '../agent';
+import type { LoopProviderCallRole } from '../agent/goal';
 import type { ExecutableTool } from '../loop';
 import type { PromptOrigin } from '../agent/context';
-import { ErrorCodes, fromWukongErrorPayload, type WukongErrorPayload } from '../errors';
+import {
+  ErrorCodes,
+  fromWukongErrorPayload,
+  isWukongError,
+  type WukongErrorPayload,
+} from '../errors';
 import { DenyAllPermissionPolicy } from '../agent/permission/policies/deny-all';
 import { InMemoryAgentRecordPersistence } from '../agent/records';
 import { isAbortError } from '../loop/errors';
@@ -88,6 +94,8 @@ export interface RunSubagentOptions {
   readonly internalTools?: readonly ExecutableTool[];
   /** Request-scoped provider origin lock for bounded isolated children. */
   readonly providerRequestPolicy?: ProviderRequestPolicy;
+  /** Charge each provider request to the parent Goal's matching Loop budget. */
+  readonly providerCallRole?: LoopProviderCallRole;
 }
 
 export interface SpawnSubagentOptions extends RunSubagentOptions {
@@ -179,6 +187,7 @@ export class SessionSubagentHost {
       try {
         child.config.update({ modelAlias: parent.config.modelAlias });
         child.setProviderRequestPolicy(options.providerRequestPolicy);
+        this.configureProviderCallReservation(parent, child, options.providerCallRole);
         return await this.runPromptTurn(parent, agentId, child, profileName, runOptions);
       } catch (error) {
         this.emitSubagentFailed(parent, agentId, runOptions, error);
@@ -194,6 +203,9 @@ export class SessionSubagentHost {
     child: Agent,
     error: unknown,
   ): unknown {
+    if (isWukongError(error) && error.code === ErrorCodes.LOOP_PROVIDER_CALL_LIMIT) {
+      return error;
+    }
     const request = child.context.unresolvedProviderRequests.at(-1);
     if (
       request === undefined
@@ -224,6 +236,7 @@ export class SessionSubagentHost {
         runOptions.signal.throwIfAborted();
         child.config.update({ modelAlias: parent.config.modelAlias });
         child.setProviderRequestPolicy(options.providerRequestPolicy);
+        this.configureProviderCallReservation(parent, child, options.providerCallRole);
         this.emitSubagentStarted(parent, agentId);
         const turnId = child.turn.retry('agent-host');
         if (turnId === null) {
@@ -434,7 +447,11 @@ export class SessionSubagentHost {
     profile: ResolvedAgentProfile,
     options: Pick<
       SpawnSubagentOptions,
-      'modelAlias' | 'isolated' | 'internalTools' | 'providerRequestPolicy'
+      | 'modelAlias'
+      | 'isolated'
+      | 'internalTools'
+      | 'providerRequestPolicy'
+      | 'providerCallRole'
     >,
   ): Promise<void> {
     child.config.update({
@@ -443,6 +460,7 @@ export class SessionSubagentHost {
       thinkingLevel: parent.config.thinkingLevel,
     });
     child.setProviderRequestPolicy(options.providerRequestPolicy);
+    this.configureProviderCallReservation(parent, child, options.providerCallRole);
 
     const context = options.isolated === true
       ? undefined
@@ -464,6 +482,16 @@ export class SessionSubagentHost {
       capability_mode: readOnlyProfile(profile.tools) ? 'read_only' : 'bounded',
       allowed_tool_count: profile.tools.length,
     });
+  }
+
+  private configureProviderCallReservation(
+    parent: Agent,
+    child: Agent,
+    role: LoopProviderCallRole | undefined,
+  ): void {
+    child.setProviderCallReservation(
+      role === undefined ? undefined : () => parent.goal.reserveProviderCall(role),
+    );
   }
 
   private async triggerSubagentStart(

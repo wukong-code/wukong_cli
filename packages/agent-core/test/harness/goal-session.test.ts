@@ -745,6 +745,41 @@ describe('goal session end-to-end', () => {
     expect(goal?.tokensUsed).toBeGreaterThan(1);
   });
 
+  it('blocks before a second raw provider call when the writer call ceiling is reached', async () => {
+    const sessionDir = await makeTempDir();
+    const events: Array<Record<string, unknown>> = [];
+    const { session, agent, scripted } = await setupSession(sessionDir, events, ['GetGoal']);
+    const api = new SessionAPIImpl(session);
+    await api.createGoal({
+      agentId: 'main',
+      objective: 'work within one provider call',
+      writerProviderCallLimit: 1,
+    });
+
+    scripted.mockNextResponse({
+      type: 'function',
+      id: 'g1',
+      name: 'GetGoal',
+      arguments: JSON.stringify({}),
+    });
+    scripted.mockNextResponse({ type: 'text', text: 'must not be sent' });
+
+    agent.turn.prompt([{ type: 'text', text: 'work' }]);
+    await agent.turn.waitForCurrentTurn();
+
+    const goal = (await api.getGoal({ agentId: 'main' })).goal;
+    expect(scripted.calls).toHaveLength(1);
+    expect(goal).toMatchObject({
+      status: 'blocked',
+      providerUsage: {
+        writerCalls: 1,
+        writerCallLimit: 1,
+        remainingWriterCalls: 0,
+      },
+    });
+    expect(goal?.terminalReason).toContain('writer provider-call limit');
+  });
+
   it('preserves terminal status and demotes active goals across resume', async () => {
     const sessionDir = await makeTempDir();
     const events: Array<Record<string, unknown>> = [];

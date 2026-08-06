@@ -9,6 +9,7 @@ import type { VerificationCommand } from './types';
 export const FINISH_LINE_WARNING_POLICY_VERSION = 'finish-line-warnings/1';
 export const GATE_GUARD_POLICY_VERSION = 'gate-guard/1';
 export const BUILTIN_RISK_SCAN_POLICY_VERSION = 'builtin-risk-scan/1';
+export const NO_EXECUTABLE_CHECKS_POLICY_VERSION = 'no-executable-checks/1';
 
 export type GateCheckSource = VerificationCommand['source'];
 
@@ -83,6 +84,14 @@ export interface GatePlan {
   readonly planDigest: string;
 }
 
+export interface NoExecutableChecksDecisionV1 {
+  readonly schemaVersion: 1;
+  readonly policyVersion: string;
+  readonly decisionDigest: string;
+  readonly status: 'confirmation-required' | 'acknowledged';
+  readonly acknowledgedAt?: number;
+}
+
 export interface GateApprovalOrderedCheck {
   readonly checkId: string;
   readonly resolution: RequiredGateCheck['resolution'];
@@ -99,6 +108,7 @@ interface GateApprovalBindingBase {
   readonly warningSetDigest: string;
   readonly guardPolicyVersion: string;
   readonly orderedChecks: readonly GateApprovalOrderedCheck[];
+  readonly noExecutableChecksDecisionDigest?: string;
   readonly approvalSetDigest: string;
 }
 
@@ -149,6 +159,7 @@ export interface FinishLineProposal {
   readonly workspaceTrust?: WorkspaceTrustBinding;
   readonly gateApproval: GateApprovalBinding;
   readonly gatePlan: GatePlan;
+  readonly noExecutableChecksDecision?: NoExecutableChecksDecisionV1;
   readonly reviewPolicy: ReviewPolicyBinding;
 }
 
@@ -161,6 +172,7 @@ export interface BuildFinishLineOptions {
   readonly includeDiscoveredChecks: boolean;
   readonly excludedDiscoveredReason?: ExcludedGateCheck['reason'];
   readonly acknowledgeWarningSetDigest?: string;
+  readonly acknowledgeNoExecutableChecksDigest?: string;
   readonly discoveredCommands?: readonly VerificationCommand[];
 }
 
@@ -278,11 +290,19 @@ export async function buildFinishLine(
     id: `constraint-${String(index + 1)}`,
     text: text.trim(),
   }));
+  const noExecutableChecksDecision = buildNoExecutableChecksDecision({
+    objective,
+    completionCriterion,
+    constraints,
+    gatePlan,
+    acknowledgeDigest: options.acknowledgeNoExecutableChecksDigest,
+  });
   const finishLineCore = {
     objective,
     completionCriterion: completionCriterion ?? null,
     constraints,
     gatePlanDigest: gatePlan.planDigest,
+    noExecutableChecksDecisionDigest: noExecutableChecksDecision?.decisionDigest,
   };
   const finishLineDigest = canonicalDigest('wukong/finish-line/v1', finishLineCore);
   const warnings = finishLineWarnings({
@@ -316,6 +336,7 @@ export async function buildFinishLine(
     warningSetDigest,
     guardPolicyVersion: GATE_GUARD_POLICY_VERSION,
     orderedChecks,
+    noExecutableChecksDecisionDigest: noExecutableChecksDecision?.decisionDigest,
     ...(hasExecutableChecks
       ? { hasExecutableChecks: true as const, workspaceIdentityDigest: workspaceIdentity.workspaceIdentityDigest }
       : { hasExecutableChecks: false as const }),
@@ -339,6 +360,7 @@ export async function buildFinishLine(
       : undefined,
     gateApproval,
     gatePlan,
+    noExecutableChecksDecision,
     reviewPolicy,
   };
   if (Buffer.byteLength(canonicalJson(proposal), 'utf8') > MAX_CONTRACT_BYTES) {
@@ -351,6 +373,41 @@ export async function buildFinishLine(
     };
   }
   return { ok: true, proposal };
+}
+
+function buildNoExecutableChecksDecision(input: {
+  readonly objective: string;
+  readonly completionCriterion?: string;
+  readonly constraints: readonly LoopConstraint[];
+  readonly gatePlan: GatePlan;
+  readonly acknowledgeDigest?: string;
+}): NoExecutableChecksDecisionV1 | undefined {
+  if (
+    input.gatePlan.requiredChecks.length > 0
+    || input.gatePlan.excludedChecks.length > 0
+  ) {
+    return undefined;
+  }
+  const decisionCore = {
+    schemaVersion: 1 as const,
+    policyVersion: NO_EXECUTABLE_CHECKS_POLICY_VERSION,
+    objective: input.objective,
+    completionCriterion: input.completionCriterion ?? null,
+    constraints: input.constraints,
+    gatePlanDigest: input.gatePlan.planDigest,
+  };
+  const decisionDigest = canonicalDigest(
+    'wukong/no-executable-checks-decision/v1',
+    decisionCore,
+  );
+  const acknowledged = input.acknowledgeDigest === decisionDigest;
+  return {
+    schemaVersion: 1,
+    policyVersion: NO_EXECUTABLE_CHECKS_POLICY_VERSION,
+    decisionDigest,
+    status: acknowledged ? 'acknowledged' : 'confirmation-required',
+    acknowledgedAt: acknowledged ? Date.now() : undefined,
+  };
 }
 
 export async function validateFrozenGatePlan(

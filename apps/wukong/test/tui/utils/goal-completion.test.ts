@@ -61,6 +61,44 @@ describe('buildGoalCompletionMessage', () => {
     expect(text).not.toContain('loop:PASS');
   });
 
+  it('shows exact writer/reviewer calls and remaining token budget', () => {
+    const text = buildGoalCompletionMessage(snapshot({
+      providerUsage: {
+        writerCalls: 3,
+        reviewerCalls: 2,
+        writerCallLimit: 12,
+        reviewerCallLimit: 4,
+        remainingWriterCalls: 9,
+        remainingReviewerCalls: 2,
+      },
+      budget: {
+        tokenBudget: 50_000,
+        turnBudget: null,
+        wallClockBudgetMs: null,
+        remainingTokens: 37_500,
+        remainingTurns: null,
+        remainingWallClockMs: null,
+        tokenBudgetReached: false,
+        turnBudgetReached: false,
+        wallClockBudgetReached: false,
+        overBudget: false,
+      },
+      loopResult: {
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'checks_failed',
+        summary: 'Checks failed.',
+        iterations: 3,
+        checks: [],
+        blockers: [],
+      },
+    }));
+
+    expect(text).toContain(
+      'Usage       Writer calls 3/12 · Reviewer calls 2/4 · Tokens 12.5k/50.0k',
+    );
+  });
+
   it('shows a blocker and its fix for a Loop that needs work', () => {
     const text = buildGoalCompletionMessage(snapshot({
       status: 'blocked',

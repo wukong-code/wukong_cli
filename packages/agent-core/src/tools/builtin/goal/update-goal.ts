@@ -58,6 +58,7 @@ import type {
   LoopGateDeterministicEvidenceV1,
   LoopGateReviewRuntimeV2,
   LoopResult,
+  LoopResultEvidence,
   LoopResultFinding,
   LoopReviewAttempt,
   LoopReviewBlocker,
@@ -275,7 +276,7 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
             if (!gate.passed) {
               if (gate.terminal === true) {
                 const terminalStatus = gate.terminalStatus ?? 'ERROR';
-                goal.recordLoopResult(loopResultFromGate(terminalStatus, gate));
+                goal.recordLoopResult(loopResultFromGate(terminalStatus, gate, contract));
                 goal.recordLoopTerminal({
                   status: terminalStatus,
                   reasonCode: gate.reasonCode ?? 'verification_error',
@@ -301,7 +302,7 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
                   reasonCode: 'max_iterations',
                   reason: `Maximum Loop iterations reached. Last blocker: ${gate.reason}`,
                 };
-                goal.recordLoopResult(loopResultFromGate('NEEDS_WORK', maxResult));
+                goal.recordLoopResult(loopResultFromGate('NEEDS_WORK', maxResult, contract));
                 goal.recordLoopTerminal({
                   status: 'NEEDS_WORK',
                   reasonCode: 'max_iterations',
@@ -317,7 +318,7 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
                 );
                 return { output: 'Maximum iterations reached.', stopTurn: true };
               }
-              goal.recordLoopResult(loopResultFromGate('NEEDS_WORK', gate));
+              goal.recordLoopResult(loopResultFromGate('NEEDS_WORK', gate, contract));
               const feedback = buildGateFeedback(gate);
               this.agent.context.appendSystemReminder(
                 `Loop delivery gate returned NEEDS_WORK. Address the structured blockers before marking complete again.\n${feedback}`,
@@ -330,7 +331,7 @@ export class UpdateGoalTool implements BuiltinTool<UpdateGoalToolInput> {
                 stopTurn: current.minIntervalMs !== undefined,
               };
             }
-            goal.recordLoopResult(loopResultFromGate('PASS', gate));
+            goal.recordLoopResult(loopResultFromGate('PASS', gate, contract));
             goal.recordLoopTerminal({
               status: 'PASS',
               reasonCode: gate.reasonCode ?? 'passed',
@@ -407,6 +408,7 @@ interface GateResult {
   readonly reviewSubjectManifest?: ReviewSubjectManifestV1;
   readonly freshCriteriaVerdict?: FreshCriteriaVerdictV1;
   readonly reviewerInputDigest?: string;
+  readonly workspaceFresh?: boolean;
 }
 
 async function runGoalGate(
@@ -918,6 +920,7 @@ async function runFreshReviewer(
         expectedOrigin: providerEndpoint,
         redirect: 'error',
       },
+      providerCallRole: 'reviewer',
     });
     const completion = await handle.completion;
     const verdict = parseFreshCriteriaVerdict(completion.result);
@@ -1407,6 +1410,7 @@ function gateResultFromFreshVerdict(input: {
     reviewSubjectManifest: input.manifest,
     freshCriteriaVerdict: input.verdict,
     reviewerInputDigest: input.reviewerInputDigest,
+    workspaceFresh: true,
   };
   if (input.verdict.status === 'PASS') {
     return {
@@ -1786,7 +1790,9 @@ function recordGateAudit(
 function loopResultFromGate(
   status: LoopResult['status'],
   gate: GateResult,
+  contract: LoopContract,
 ): Omit<LoopResult, 'iterations'> {
+  const completeness = gateCompleteness(gate, contract);
   return {
     schemaVersion: 2,
     status,
@@ -1799,9 +1805,62 @@ function loopResultFromGate(
     evidence: {
       verification: gate.proof === undefined ? 'not_run' : 'fresh',
       reviewer: gate.freshCriteriaVerdict === undefined ? 'not_run' : 'fresh',
+      ...completeness,
       generatedAt: gate.proof?.generatedAt,
       snapshotId: gate.proof?.snapshotId,
     },
+  };
+}
+
+function gateCompleteness(
+  gate: GateResult,
+  contract: LoopContract,
+): Pick<
+  LoopResultEvidence,
+  | 'completeness'
+  | 'fresh'
+  | 'expectedProducers'
+  | 'observedProducers'
+  | 'missingProducers'
+> {
+  if (contract.schemaVersion === 1) {
+    return {
+      completeness: 'inconclusive',
+      fresh: false,
+      expectedProducers: ['revised-loop-contract'],
+      observedProducers: [],
+      missingProducers: ['revised-loop-contract'],
+    };
+  }
+  const frozen = frozenGateView(contract).gatePlan;
+  const checkProducer = frozen.requiredChecks.length === 0
+    ? 'no-check-decision'
+    : 'required-checks';
+  const expected = [
+    checkProducer,
+    'builtin-risk-scan',
+    'review-subject-manifest',
+    'fresh-reviewer',
+    'workspace-freshness',
+  ];
+  const observed = [
+    ...(gate.proof === undefined ? [] : [checkProducer, 'builtin-risk-scan']),
+    ...(gate.reviewSubjectManifest === undefined ? [] : ['review-subject-manifest']),
+    ...(gate.freshCriteriaVerdict === undefined ? [] : ['fresh-reviewer']),
+    ...(gate.workspaceFresh === true ? ['workspace-freshness'] : []),
+  ];
+  const observedSet = new Set(observed);
+  const missing = expected.filter((producer) => !observedSet.has(producer));
+  return {
+    completeness: missing.length === 0
+      ? 'complete'
+      : observed.length === 0
+        ? 'inconclusive'
+        : 'partial',
+    fresh: missing.length === 0 && gate.workspaceFresh === true,
+    expectedProducers: expected,
+    observedProducers: observed,
+    missingProducers: missing,
   };
 }
 

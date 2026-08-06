@@ -362,6 +362,12 @@ export interface CreateGoalPayload {
   readonly reviewModel?: string;
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
+  readonly writerProviderCallLimit?: number;
+  readonly reviewerProviderCallLimit?: number;
+  readonly tokenBudget?: number;
+  readonly workspaceChangeBaseline?: {
+    readonly files: readonly { readonly path: string; readonly status: string }[];
+  };
   readonly loopContract?:
     | import('../agent/goal').LoopContractV2Input
     | import('../agent/goal').LoopContractV3Input;

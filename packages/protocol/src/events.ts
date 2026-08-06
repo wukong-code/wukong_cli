@@ -172,6 +172,7 @@ export interface LoopResultFinding {
 export interface LoopResultChangedFile {
   readonly path: string;
   readonly status: string;
+  readonly attribution?: 'introduced_by_loop' | 'pre_existing_or_modified';
 }
 
 export interface LoopResultEvidence {
@@ -179,6 +180,11 @@ export interface LoopResultEvidence {
   readonly verification: 'fresh' | 'not_run';
   /** Whether an independent reviewer produced a fresh verdict for this result. */
   readonly reviewer: 'fresh' | 'not_run';
+  readonly completeness?: 'complete' | 'partial' | 'inconclusive';
+  readonly fresh?: boolean;
+  readonly expectedProducers?: readonly string[];
+  readonly observedProducers?: readonly string[];
+  readonly missingProducers?: readonly string[];
   readonly generatedAt?: string;
   readonly snapshotId?: string;
 }
@@ -549,6 +555,14 @@ export interface GoalSnapshot {
   readonly status: GoalStatus;
   readonly turnsUsed: number;
   readonly tokensUsed: number;
+  readonly providerUsage?: {
+    readonly writerCalls: number;
+    readonly reviewerCalls: number;
+    readonly writerCallLimit: number | null;
+    readonly reviewerCallLimit: number | null;
+    readonly remainingWriterCalls: number | null;
+    readonly remainingReviewerCalls: number | null;
+  };
   readonly wallClockMs: number;
   readonly budget: GoalBudgetReport;
   readonly terminalReason?: string;
@@ -619,6 +633,7 @@ export type WukongErrorCode =
   | 'auth.login_required'
   | 'context.overflow'
   | 'loop.max_steps_exceeded'
+  | 'loop.provider_call_limit'
   | 'provider.api_error'
   | 'provider.rate_limit'
   | 'provider.auth_error'
@@ -1246,11 +1261,17 @@ export const loopResultFindingSchema = z.object({
 export const loopResultChangedFileSchema = z.object({
   path: z.string(),
   status: z.string(),
+  attribution: z.enum(['introduced_by_loop', 'pre_existing_or_modified']).optional(),
 }) satisfies z.ZodType<LoopResultChangedFile>;
 
 export const loopResultEvidenceSchema = z.object({
   verification: z.enum(['fresh', 'not_run']),
   reviewer: z.enum(['fresh', 'not_run']),
+  completeness: z.enum(['complete', 'partial', 'inconclusive']).optional(),
+  fresh: z.boolean().optional(),
+  expectedProducers: z.array(z.string()).optional(),
+  observedProducers: z.array(z.string()).optional(),
+  missingProducers: z.array(z.string()).optional(),
   generatedAt: z.string().optional(),
   snapshotId: z.string().optional(),
 }) satisfies z.ZodType<LoopResultEvidence>;
@@ -1626,6 +1647,14 @@ export const goalSnapshotSchema = z.object({
   status: goalStatusSchema,
   turnsUsed: z.number(),
   tokensUsed: z.number(),
+  providerUsage: z.object({
+    writerCalls: z.number().int().nonnegative(),
+    reviewerCalls: z.number().int().nonnegative(),
+    writerCallLimit: z.number().int().positive().nullable(),
+    reviewerCallLimit: z.number().int().positive().nullable(),
+    remainingWriterCalls: z.number().int().nonnegative().nullable(),
+    remainingReviewerCalls: z.number().int().nonnegative().nullable(),
+  }).optional(),
   wallClockMs: z.number(),
   budget: goalBudgetReportSchema,
   terminalReason: z.string().optional(),
@@ -1711,6 +1740,7 @@ export const wukongErrorCodeSchema = z.enum([
   'auth.login_required',
   'context.overflow',
   'loop.max_steps_exceeded',
+  'loop.provider_call_limit',
   'provider.api_error',
   'provider.rate_limit',
   'provider.auth_error',

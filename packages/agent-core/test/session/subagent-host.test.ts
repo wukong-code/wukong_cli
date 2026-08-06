@@ -41,6 +41,49 @@ afterEach(async () => {
 });
 
 describe('SessionSubagentHost', () => {
+  it('charges reviewer requests to the parent Loop and blocks spawn/retry before overspend', async () => {
+    const parent = testAgent();
+    parent.configure();
+    await parent.agent.goal.createGoal({
+      objective: 'review within one request',
+      stopCondition: 'proof-pass',
+      reviewerProviderCallLimit: 1,
+    });
+
+    const child = testAgent();
+    child.mockNextResponse({ type: 'text', text: 'short' });
+    child.mockNextResponse({ type: 'text', text: 'must not be sent' });
+    const host = new SessionSubagentHost(fakeSession(parent.agent, child.agent), 'main');
+
+    const handle = await host.spawn({
+      profileName: 'fresh-reviewer',
+      parentToolCallId: 'review',
+      prompt: 'Review the bounded evidence',
+      description: 'Fresh review',
+      runInBackground: false,
+      signal,
+      providerCallRole: 'reviewer',
+    });
+    await expect(handle.completion).rejects.toThrow('reviewer provider-call limit');
+    expect(child.llmCalls).toHaveLength(1);
+    expect(parent.agent.goal.getGoal().goal?.providerUsage).toMatchObject({
+      reviewerCalls: 1,
+      reviewerCallLimit: 1,
+      remainingReviewerCalls: 0,
+    });
+
+    const retry = await host.retry(handle.agentId, {
+      parentToolCallId: 'review',
+      prompt: 'Retry review',
+      description: 'Fresh review retry',
+      runInBackground: false,
+      signal,
+      providerCallRole: 'reviewer',
+    });
+    await expect(retry.completion).rejects.toThrow('reviewer provider-call limit');
+    expect(child.llmCalls).toHaveLength(1);
+  });
+
   it('emits a suspended event for a requeued child', () => {
     const parent = testAgent();
     parent.configure();

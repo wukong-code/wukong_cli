@@ -9,6 +9,7 @@ import {
   FINISH_LINE_WARNING_POLICY_VERSION,
   FRESH_REVIEWER_POLICY_VERSION,
   GATE_GUARD_POLICY_VERSION,
+  NO_EXECUTABLE_CHECKS_POLICY_VERSION,
   REVIEW_SUBJECT_POLICY_VERSION,
   validateVerificationCriteriaSelection,
   validateFrozenGatePlan,
@@ -17,6 +18,7 @@ import {
   type GateApprovalBinding,
   type FreshCriteriaVerdictV1,
   type GatePlan,
+  type NoExecutableChecksDecisionV1,
   type ReviewSubjectManifestV1,
   type ReviewSubjectConsentBindingV1,
   type ReviewPolicyBinding,
@@ -166,11 +168,24 @@ export interface LoopResultFinding {
 export interface LoopResultChangedFile {
   readonly path: string;
   readonly status: string;
+  readonly attribution?: 'introduced_by_loop' | 'pre_existing_or_modified';
+}
+
+export interface WorkspaceChangeBaseline {
+  readonly files: readonly {
+    readonly path: string;
+    readonly status: string;
+  }[];
 }
 
 export interface LoopResultEvidence {
   readonly verification: 'fresh' | 'not_run';
   readonly reviewer: 'fresh' | 'not_run';
+  readonly completeness?: 'complete' | 'partial' | 'inconclusive';
+  readonly fresh?: boolean;
+  readonly expectedProducers?: readonly string[];
+  readonly observedProducers?: readonly string[];
+  readonly missingProducers?: readonly string[];
   readonly generatedAt?: string;
   readonly snapshotId?: string;
 }
@@ -256,6 +271,7 @@ export interface LoopContractV2 {
   readonly acceptanceCriteria: readonly LoopAcceptanceCriterion[];
   readonly verificationPlan: readonly LoopVerificationStep[];
   readonly gatePlan: GatePlan;
+  readonly noExecutableChecksDecision?: NoExecutableChecksDecisionV1;
   readonly reviewPolicy: ReviewPolicyBinding;
   readonly source: 'user' | 'planner' | 'fallback';
   readonly createdAt: number;
@@ -309,6 +325,7 @@ export interface LoopContractV3 {
   readonly verificationPlan: readonly LoopVerificationStep[];
   readonly verificationCriteria: VerificationCriteriaSelectionV1;
   readonly gatePlan: GatePlanV2;
+  readonly noExecutableChecksDecision?: NoExecutableChecksDecisionV1;
   readonly reviewPolicy: ReviewPolicyBinding;
   readonly source: 'user' | 'planner' | 'fallback';
   readonly createdAt: number;
@@ -329,6 +346,7 @@ export interface LoopContractV2Input {
   readonly workspaceTrust?: WorkspaceTrustBinding;
   readonly gateApproval: GateApprovalBinding;
   readonly gatePlan: GatePlan;
+  readonly noExecutableChecksDecision?: NoExecutableChecksDecisionV1;
   readonly reviewPolicy: ReviewPolicyBinding;
   readonly source: 'user';
   readonly supersedesContractId?: string;
@@ -349,6 +367,7 @@ export interface LoopContractV3Input {
   readonly workspaceTrust: WorkspaceTrustBindingV2;
   readonly gateApproval: GateApprovalBinding;
   readonly legacyGatePlan: GatePlan;
+  readonly noExecutableChecksDecision?: NoExecutableChecksDecisionV1;
   readonly reviewPolicy: ReviewPolicyBinding;
   readonly verificationCriteria: VerificationCriteriaSelectionV1;
   readonly selectedRecipes: readonly {
@@ -780,6 +799,15 @@ interface GoalState {
   status: GoalStatus;
   turnsUsed: number;
   tokensUsed: number;
+  providerCallLimits: {
+    writer?: number;
+    reviewer?: number;
+  };
+  providerCalls: {
+    writer: number;
+    reviewer: number;
+  };
+  workspaceChangeBaseline?: WorkspaceChangeBaseline;
   /** Accumulated active-pursuit time from completed `active` intervals. */
   wallClockMs: number;
   /**
@@ -844,6 +872,7 @@ export interface GoalSnapshot {
   readonly status: GoalStatus;
   readonly turnsUsed: number;
   readonly tokensUsed: number;
+  readonly providerUsage?: LoopProviderUsageReport;
   readonly wallClockMs: number;
   readonly budget: GoalBudgetReport;
   readonly terminalReason?: string;
@@ -900,8 +929,39 @@ export interface CreateGoalInput {
   readonly reviewModel?: string;
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
+  readonly writerProviderCallLimit?: number;
+  readonly reviewerProviderCallLimit?: number;
+  readonly tokenBudget?: number;
+  readonly workspaceChangeBaseline?: WorkspaceChangeBaseline;
   readonly replace?: boolean;
   readonly loopContract?: LoopContractV2Input | LoopContractV3Input;
+}
+
+export type LoopProviderCallRole = 'writer' | 'reviewer';
+
+export interface LoopProviderUsageReport {
+  readonly writerCalls: number;
+  readonly reviewerCalls: number;
+  readonly writerCallLimit: number | null;
+  readonly reviewerCallLimit: number | null;
+  readonly remainingWriterCalls: number | null;
+  readonly remainingReviewerCalls: number | null;
+}
+
+export class LoopProviderCallLimitError extends WukongError {
+  readonly role: LoopProviderCallRole;
+  readonly limit: number;
+
+  constructor(role: LoopProviderCallRole, limit: number) {
+    super(
+      ErrorCodes.LOOP_PROVIDER_CALL_LIMIT,
+      `${role} provider-call limit (${String(limit)}) reached before request send`,
+      { details: { role, limit } },
+    );
+    this.name = 'LoopProviderCallLimitError';
+    this.role = role;
+    this.limit = limit;
+  }
 }
 
 interface GoalReasonInput {
@@ -994,8 +1054,16 @@ export class GoalMode {
       status: 'active',
       turnsUsed: 0,
       tokensUsed: 0,
+      providerCallLimits: {
+        writer: record.writerProviderCallLimit,
+        reviewer: record.reviewerProviderCallLimit,
+      },
+      providerCalls: { writer: 0, reviewer: 0 },
+      workspaceChangeBaseline: record.workspaceChangeBaseline,
       wallClockMs: 0,
-      budgetLimits: {},
+      budgetLimits: record.tokenBudget === undefined
+        ? {}
+        : { tokenBudget: record.tokenBudget },
       loopRunReviewSettingsAssignments: new Map(),
       loopRunTerminals: new Map(),
       gateAttemptCompletions: new Map(),
@@ -1025,6 +1093,7 @@ export class GoalMode {
     }
     if (record.turnsUsed !== undefined) state.turnsUsed = record.turnsUsed;
     if (record.tokensUsed !== undefined) state.tokensUsed = record.tokensUsed;
+    if (record.providerCalls !== undefined) state.providerCalls = record.providerCalls;
     if (record.iteration !== undefined) state.iteration = record.iteration;
     if (record.wallClockMs !== undefined) {
       state.wallClockMs = record.wallClockMs;
@@ -1156,6 +1225,15 @@ export class GoalMode {
     ) {
       throw new RangeError('maxIterations must be a positive safe integer');
     }
+    for (const [name, value] of [
+      ['writerProviderCallLimit', input.writerProviderCallLimit],
+      ['reviewerProviderCallLimit', input.reviewerProviderCallLimit],
+      ['tokenBudget', input.tokenBudget],
+    ] as const) {
+      if (value !== undefined && (!Number.isSafeInteger(value) || value <= 0)) {
+        throw new RangeError(`${name} must be a positive safe integer`);
+      }
+    }
 
     const existing = this.state;
     if (existing !== undefined) {
@@ -1207,9 +1285,17 @@ export class GoalMode {
       status: 'active',
       turnsUsed: 0,
       tokensUsed: 0,
+      providerCallLimits: {
+        writer: input.writerProviderCallLimit,
+        reviewer: input.reviewerProviderCallLimit,
+      },
+      providerCalls: { writer: 0, reviewer: 0 },
+      workspaceChangeBaseline: input.workspaceChangeBaseline,
       wallClockMs: 0,
       wallClockResumedAt: Date.now(),
-      budgetLimits: {},
+      budgetLimits: input.tokenBudget === undefined
+        ? {}
+        : { tokenBudget: input.tokenBudget },
       loopRunReviewSettingsAssignments: new Map(),
       loopRunTerminals: new Map(),
       gateAttemptCompletions: new Map(),
@@ -1230,6 +1316,10 @@ export class GoalMode {
       reviewModel: state.reviewModel,
       maxIterations: state.maxIterations,
       minIntervalMs: state.minIntervalMs,
+      writerProviderCallLimit: state.providerCallLimits.writer,
+      reviewerProviderCallLimit: state.providerCallLimits.reviewer,
+      tokenBudget: state.budgetLimits.tokenBudget,
+      workspaceChangeBaseline: state.workspaceChangeBaseline,
     });
     this.trackGoalCreated(actor, input.replace === true);
     if (input.loopContract !== undefined) {
@@ -1294,6 +1384,7 @@ export class GoalMode {
         },
       ],
       gatePlan: input.gatePlan,
+      noExecutableChecksDecision: input.noExecutableChecksDecision,
       reviewPolicy: input.reviewPolicy,
       source: input.source,
       createdAt: Date.now(),
@@ -1474,6 +1565,7 @@ export class GoalMode {
       ],
       verificationCriteria: input.verificationCriteria,
       gatePlan,
+      noExecutableChecksDecision: input.noExecutableChecksDecision,
       reviewPolicy: input.reviewPolicy,
       source: input.source,
       createdAt: Date.now(),
@@ -2706,6 +2798,26 @@ export class GoalMode {
     return this.toSnapshot(state);
   }
 
+  async reserveProviderCall(role: LoopProviderCallRole): Promise<GoalSnapshot | null> {
+    const state = this.state;
+    if (state === undefined || state.status !== 'active') return null;
+    if (state.stopCondition === undefined && state.providerCallLimits[role] === undefined) {
+      return this.toSnapshot(state);
+    }
+    const limit = state.providerCallLimits[role];
+    const used = state.providerCalls[role];
+    if (limit !== undefined && used >= limit) {
+      throw new LoopProviderCallLimitError(role, limit);
+    }
+    state.providerCalls = {
+      ...state.providerCalls,
+      [role]: used + 1,
+    };
+    this.persistState(state, { silent: true });
+    this.appendGoalUpdate({ providerCalls: state.providerCalls });
+    return this.toSnapshot(state);
+  }
+
   async incrementTurn(): Promise<GoalSnapshot | null> {
     const state = this.state;
     if (state === undefined || state.status !== 'active') return null;
@@ -2733,6 +2845,14 @@ export class GoalMode {
     if (state === undefined) return null;
     const loopResult: LoopResult = {
       ...result,
+      ...(result.changedFiles === undefined
+        ? {}
+        : {
+            changedFiles: attributeChangedFiles(
+              result.changedFiles,
+              state.workspaceChangeBaseline,
+            ),
+          }),
       iterations: state.iteration,
     };
     state.loopResult = loopResult;
@@ -2903,6 +3023,7 @@ export class GoalMode {
       status: state.status,
       turnsUsed: state.turnsUsed,
       tokensUsed: state.tokensUsed,
+      providerUsage: providerUsageReport(state),
       wallClockMs: liveWallClockMs(state, Date.now()),
       budget: computeBudgetReport(state, Date.now()),
       terminalReason: state.terminalReason,
@@ -2962,6 +3083,11 @@ function restoreGateAuditRecord(
     }
     const contract = state.loopContract;
     const run = state.currentLoopRun;
+    const existingAudit = state.restoredGateAudits.get(record.attempt.attemptId);
+    if (existingAudit !== undefined) {
+      if (canonicalJson(existingAudit.attempt) === canonicalJson(record.attempt)) return;
+      throw new Error('Loop record replay failed: conflicting duplicate Gate attempt');
+    }
     if (
       contract === undefined
       || contract.schemaVersion === 1
@@ -2970,7 +3096,6 @@ function restoreGateAuditRecord(
       || contract.contractId !== record.attempt.contractId
       || contract.gatePlan.planDigest !== record.attempt.planDigest
       || contract.gateApproval.approvalSetDigest !== record.attempt.gateApprovalDigest
-      || state.restoredGateAudits.has(record.attempt.attemptId)
     ) {
       throw new Error('Loop record replay failed: Gate attempt binding mismatch');
     }
@@ -3012,6 +3137,10 @@ function restoreGateAuditRecord(
     || payload.planDigest !== audit.attempt.planDigest
   ) {
     throw new Error('Loop record replay failed: Gate audit binding mismatch');
+  }
+  if (isExactGateAuditDuplicate(audit, record)) return;
+  if (state.gateAttemptCompletions.has(payload.attemptId)) {
+    throw new Error('Loop record replay failed: late producer after Gate completion');
   }
 
   switch (record.type) {
@@ -3153,6 +3282,38 @@ function restoreGateAuditRecord(
       audit.snapshot = record.snapshot;
       return;
     }
+  }
+}
+
+function isExactGateAuditDuplicate(
+  audit: RestoredGateAudit,
+  record: AgentRecordOf<
+    | 'loop.gate-check-result.create'
+    | 'loop.builtin-risk-scan-result.create'
+    | 'loop.reviewer-result.create'
+    | 'loop.review-subject-manifest.create'
+    | 'loop.fresh-criteria-verdict.create'
+    | 'loop.proof-aggregate.create'
+    | 'loop.evidence-snapshot.create'
+  >,
+): boolean {
+  switch (record.type) {
+    case 'loop.gate-check-result.create':
+      return audit.checks.some(
+        (existing) => existing.checkResultDigest === record.result.checkResultDigest,
+      );
+    case 'loop.builtin-risk-scan-result.create':
+      return audit.scan?.scanResultDigest === record.result.scanResultDigest;
+    case 'loop.reviewer-result.create':
+      return audit.reviewer?.reviewerResultDigest === record.result.reviewerResultDigest;
+    case 'loop.review-subject-manifest.create':
+      return audit.manifest?.manifestDigest === record.result.manifestDigest;
+    case 'loop.fresh-criteria-verdict.create':
+      return audit.freshVerdict?.verdictDigest === record.result.verdictDigest;
+    case 'loop.proof-aggregate.create':
+      return audit.aggregate?.proofAggregateDigest === record.result.proofAggregateDigest;
+    case 'loop.evidence-snapshot.create':
+      return audit.snapshot?.evidenceDigest === record.snapshot.evidenceDigest;
   }
 }
 
@@ -3321,6 +3482,37 @@ function computeBudgetReport(
   };
 }
 
+function providerUsageReport(state: GoalState): LoopProviderUsageReport {
+  const writerCallLimit = state.providerCallLimits.writer ?? null;
+  const reviewerCallLimit = state.providerCallLimits.reviewer ?? null;
+  return {
+    writerCalls: state.providerCalls.writer,
+    reviewerCalls: state.providerCalls.reviewer,
+    writerCallLimit,
+    reviewerCallLimit,
+    remainingWriterCalls: writerCallLimit === null
+      ? null
+      : Math.max(0, writerCallLimit - state.providerCalls.writer),
+    remainingReviewerCalls: reviewerCallLimit === null
+      ? null
+      : Math.max(0, reviewerCallLimit - state.providerCalls.reviewer),
+  };
+}
+
+function attributeChangedFiles(
+  files: readonly LoopResultChangedFile[],
+  baseline: WorkspaceChangeBaseline | undefined,
+): readonly LoopResultChangedFile[] {
+  if (baseline === undefined) return files;
+  const preExisting = new Set(baseline.files.map((file) => file.path));
+  return files.map((file) => ({
+    ...file,
+    attribution: preExisting.has(file.path)
+      ? 'pre_existing_or_modified'
+      : 'introduced_by_loop',
+  }));
+}
+
 function budgetTelemetryProperties(limits: GoalBudgetLimits): TelemetryProperties {
   return {
     has_token_budget: limits.tokenBudget !== undefined,
@@ -3417,6 +3609,43 @@ function validateLoopContractInput(
   const hasExecutableChecks = gatePlan.requiredChecks.some(
     (check) => check.resolution === 'resolved',
   );
+  const requiresNoExecutableChecksDecision = gatePlan.requiredChecks.length === 0;
+  if (requiresNoExecutableChecksDecision) {
+    const decision = input.noExecutableChecksDecision;
+    if (
+      gatePlan.excludedChecks.length > 0
+      || decision === undefined
+      || decision.status !== 'acknowledged'
+      || decision.policyVersion !== NO_EXECUTABLE_CHECKS_POLICY_VERSION
+    ) {
+      throw new WukongError(
+        ErrorCodes.REQUEST_INVALID,
+        'No executable checks decision must be acknowledged before starting the Loop',
+      );
+    }
+    const decisionCore = {
+      schemaVersion: decision.schemaVersion,
+      policyVersion: decision.policyVersion,
+      objective,
+      completionCriterion: completionCriterion ?? null,
+      constraints: input.constraints,
+      gatePlanDigest: gatePlan.planDigest,
+    };
+    if (
+      canonicalDigest('wukong/no-executable-checks-decision/v1', decisionCore)
+        !== decision.decisionDigest
+    ) {
+      throw new WukongError(
+        ErrorCodes.REQUEST_INVALID,
+        'No executable checks decision does not match the frozen Finish Line',
+      );
+    }
+  } else if (input.noExecutableChecksDecision !== undefined) {
+    throw new WukongError(
+      ErrorCodes.REQUEST_INVALID,
+      'No executable checks decision is not applicable to a Loop with required checks',
+    );
+  }
   if (
     hasExecutableChecks !== input.gateApproval.hasExecutableChecks
     || input.gateApproval.gatePlanDigest !== gatePlan.planDigest
@@ -3424,6 +3653,8 @@ function validateLoopContractInput(
       || input.gateApproval.guardPolicyVersion !== GATE_GUARD_POLICY_VERSION
       || gatePlan.builtinRiskScanPolicyVersion !== BUILTIN_RISK_SCAN_POLICY_VERSION
       || input.finishLineReview.warningPolicyVersion !== FINISH_LINE_WARNING_POLICY_VERSION
+      || input.gateApproval.noExecutableChecksDecisionDigest
+        !== input.noExecutableChecksDecision?.decisionDigest
     || input.gateApproval.orderedChecks.length !== gatePlan.requiredChecks.length
   ) {
     throw new WukongError(ErrorCodes.REQUEST_INVALID, 'Loop Gate approval does not match the frozen plan');
@@ -3483,6 +3714,7 @@ function validateLoopContractInput(
     completionCriterion: completionCriterion ?? null,
     constraints: input.constraints,
     gatePlanDigest: gatePlan.planDigest,
+    noExecutableChecksDecisionDigest: input.noExecutableChecksDecision?.decisionDigest,
   };
   if (
     canonicalDigest('wukong/finish-line/v1', finishLineCore)
@@ -3507,6 +3739,8 @@ function validateLoopContractInput(
     warningSetDigest: input.gateApproval.warningSetDigest,
     guardPolicyVersion: input.gateApproval.guardPolicyVersion,
     orderedChecks: input.gateApproval.orderedChecks,
+    noExecutableChecksDecisionDigest:
+      input.gateApproval.noExecutableChecksDecisionDigest,
     hasExecutableChecks: input.gateApproval.hasExecutableChecks,
     ...(input.gateApproval.hasExecutableChecks
       ? { workspaceIdentityDigest: input.gateApproval.workspaceIdentityDigest }

@@ -206,9 +206,9 @@ describe('real monorepo proof E2E', () => {
     const result = await runProof({ cwd, writeReport: false });
 
     expect(result.status).toBe('blocked');
-    expect(result.reasonCode).toBe('tests_missing');
+    expect(result.reasonCode).toBe('checks_missing');
     expect(result.blockers[0]).toMatchObject({
-      id: 'tests_missing',
+      id: 'checks_missing',
       summary: 'Source code changed but no project checks were discovered.',
       nextAction: 'Add a project test/typecheck script or configure .wukong/checks.json.',
     });

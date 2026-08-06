@@ -190,7 +190,27 @@ export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRA
   lines.push(row('Turns', value(`${goal.turnsUsed}`)));
   lines.push(row('Writer tokens', value(formatTokenCount(goal.tokensUsed))));
   if (goal.stopCondition !== undefined) {
-    lines.push(row('Review usage', muted('unavailable')));
+    const providerUsage = goal.providerUsage;
+    if (providerUsage === undefined) {
+      lines.push(row('Provider calls', muted('usage unavailable')));
+    } else {
+      lines.push(row(
+        'Writer calls',
+        value(formatCallUsage(providerUsage.writerCalls, providerUsage.writerCallLimit)),
+      ));
+      lines.push(row(
+        'Reviewer calls',
+        value(formatCallUsage(providerUsage.reviewerCalls, providerUsage.reviewerCallLimit)),
+      ));
+    }
+    if (goal.budget.tokenBudget !== null) {
+      lines.push(row(
+        'Token budget',
+        value(
+          `${formatTokenCount(goal.budget.remainingTokens ?? 0)} remaining of ${formatTokenCount(goal.budget.tokenBudget)}`,
+        ),
+      ));
+    }
   }
   if (goal.stopCondition !== undefined) {
     lines.push(row('Iteration', value(`${goal.iteration}${goal.maxIterations !== undefined ? `/${String(goal.maxIterations)}` : ''}`)));
@@ -306,6 +326,10 @@ export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRA
     );
   }
   return lines;
+}
+
+function formatCallUsage(used: number, limit: number | null): string {
+  return limit === null ? `${String(used)} (uncapped)` : `${String(used)}/${String(limit)}`;
 }
 
 /** The configured hard stop(s), or null when the goal is unbounded. */

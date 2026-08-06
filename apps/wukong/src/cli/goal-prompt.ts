@@ -20,6 +20,9 @@ export interface HeadlessGoalCreate {
   readonly replace: boolean;
   readonly stopCondition?: 'proof-pass' | 'verify-pass' | 'scan-clean' | 'judge-pass';
   readonly maxIterations?: number;
+  readonly writerProviderCallLimit?: number;
+  readonly reviewerProviderCallLimit?: number;
+  readonly tokenBudget?: number;
   readonly minIntervalMs?: number;
   readonly reviewModel?: string;
   readonly completionCriterion?: string;
@@ -29,6 +32,7 @@ export interface HeadlessGoalCreate {
   readonly trustWorkspaceChallenge?: string;
   readonly approveGatePlanDigest?: string;
   readonly acknowledgeWarningSetDigest?: string;
+  readonly acknowledgeNoExecutableChecksDigest?: string;
   readonly verificationCatalogDigest?: string;
   readonly verificationSkills?: readonly {
     readonly selectionId: string;
@@ -117,7 +121,11 @@ export interface LoopSummary {
   readonly continuationMode: 'same-contract' | 'restore-or-revise' | 'revised-loop' | 'blocked' | null;
   readonly nextAction: string;
   readonly checks: readonly unknown[];
-  readonly changedFiles: ReadonlyArray<{ readonly path: string; readonly status: string }>;
+  readonly changedFiles: ReadonlyArray<{
+    readonly path: string;
+    readonly status: string;
+    readonly attribution?: 'introduced_by_loop' | 'pre_existing_or_modified';
+  }>;
   readonly evidence: {
     readonly verification: 'fresh' | 'not_run';
     readonly reviewer: 'fresh' | 'not_run';
@@ -126,6 +134,9 @@ export interface LoopSummary {
   };
   readonly durationMs: number | null;
   readonly tokensUsed: number | null;
+  readonly providerUsage: GoalSnapshot['providerUsage'] | null;
+  readonly tokenBudget: number | null;
+  readonly remainingTokens: number | null;
   readonly blockers: ReadonlyArray<{
     readonly id: string;
     readonly summary: string;
@@ -167,6 +178,9 @@ export function loopSummaryJson(goal: GoalSnapshot | null): LoopSummary {
       },
       durationMs: goal.wallClockMs,
       tokensUsed: goal.tokensUsed,
+      providerUsage: goal.providerUsage ?? null,
+      tokenBudget: goal.budget?.tokenBudget ?? null,
+      remainingTokens: goal.budget?.remainingTokens ?? null,
       writerIterations: goal.loopResult.iterations,
       gateAttempts: goal.gateAttempts ?? null,
       continuationMode,
@@ -188,6 +202,9 @@ export function loopSummaryJson(goal: GoalSnapshot | null): LoopSummary {
     evidence: { verification: 'not_run', reviewer: 'not_run' },
     durationMs: goal?.wallClockMs ?? null,
     tokensUsed: goal?.tokensUsed ?? null,
+    providerUsage: goal?.providerUsage ?? null,
+    tokenBudget: goal?.budget.tokenBudget ?? null,
+    remainingTokens: goal?.budget.remainingTokens ?? null,
     blockers: outcome.status === 'PASS'
       ? []
       : [{ id: outcome.reasonCode, summary: outcome.summary, nextAction: loopNextAction(outcome.reasonCode) }],
@@ -219,6 +236,9 @@ export function loopRuntimeErrorSummary(
     evidence: { verification: 'not_run', reviewer: 'not_run' },
     durationMs: goal?.wallClockMs ?? null,
     tokensUsed: goal?.tokensUsed ?? null,
+    providerUsage: goal?.providerUsage ?? null,
+    tokenBudget: goal?.budget.tokenBudget ?? null,
+    remainingTokens: goal?.budget.remainingTokens ?? null,
     blockers: [{
       id: 'runtime_error',
       summary,
@@ -246,7 +266,7 @@ export function formatLoopResultText(result: LoopSummary): string {
     ? 'none recorded'
     : `${String(result.changedFiles.length)} file(s): ${result.changedFiles
         .slice(0, 6)
-        .map((file) => `${file.status} ${file.path}`)
+        .map((file) => `${file.status} ${file.path}${formatFileAttribution(file.attribution)}`)
         .join(', ')}${result.changedFiles.length > 6 ? ', …' : ''}`;
   const blockerLines = result.blockers.slice(0, 3).flatMap((blocker, index) => [
     `Blocker ${String(index + 1)}  ${blocker.summary}${blocker.file === undefined ? '' : ` (${blocker.file}${blocker.line === undefined ? '' : `:${String(blocker.line)}`})`}`,
@@ -261,6 +281,7 @@ export function formatLoopResultText(result: LoopSummary): string {
     `Writer     ${String(result.writerIterations)} iteration(s)`,
     `Gate       ${result.gateAttempts === null ? 'attempts unavailable' : `${String(result.gateAttempts)} attempt(s)`}`,
     `Time       ${formatDuration(result.durationMs)} · Tokens ${result.tokensUsed === null ? 'unknown' : String(result.tokensUsed)} · Cost unavailable`,
+    `Usage      ${formatLoopUsage(result)}`,
     `Workspace  ${changed}`,
     `Checks     ${checkSummary}`,
     `Evidence   verification ${result.evidence.verification}; reviewer ${result.evidence.reviewer}`,
@@ -269,6 +290,30 @@ export function formatLoopResultText(result: LoopSummary): string {
     `Unverified ${result.evidence.verification === 'not_run' ? 'No verification evidence was recorded.' : 'Nothing beyond the recorded checks and reviewer evidence.'}`,
     `Next       ${result.nextAction}`,
   ].join('\n');
+}
+
+function formatFileAttribution(
+  attribution: LoopSummary['changedFiles'][number]['attribution'],
+): string {
+  if (attribution === 'introduced_by_loop') return ' [introduced by Loop]';
+  if (attribution === 'pre_existing_or_modified') return ' [pre-existing or modified]';
+  return ' [attribution unavailable]';
+}
+
+function formatLoopUsage(
+  result: Pick<LoopSummary, 'providerUsage' | 'tokensUsed' | 'tokenBudget'>,
+): string {
+  const usage = result.providerUsage;
+  const writer = usage == null
+    ? 'unknown'
+    : `${String(usage.writerCalls)}${usage.writerCallLimit === null ? ' (uncapped)' : `/${String(usage.writerCallLimit)}`}`;
+  const reviewer = usage == null
+    ? 'unknown'
+    : `${String(usage.reviewerCalls)}${usage.reviewerCallLimit === null ? ' (uncapped)' : `/${String(usage.reviewerCallLimit)}`}`;
+  const tokens = result.tokensUsed === null
+    ? 'unknown'
+    : `${String(result.tokensUsed)}${result.tokenBudget === null ? ' (uncapped)' : `/${String(result.tokenBudget)}`}`;
+  return `Writer calls ${writer} · Reviewer calls ${reviewer} · Tokens ${tokens}`;
 }
 
 function loopSummaryNextAction(

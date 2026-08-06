@@ -103,6 +103,9 @@ export interface GoalStartOptions {
     readonly maxIterations?: number;
     readonly completionCriterion?: string;
     readonly loopContract?: LoopContractV2Input | LoopContractV3Input;
+    readonly workspaceChangeBaseline?: {
+      readonly files: readonly { readonly path: string; readonly status: string }[];
+    };
   } | false>;
   readonly afterCreate?: (snapshot: GoalSnapshot) => void | Promise<void>;
   readonly onCreateError?: () => void | Promise<void>;
@@ -123,6 +126,9 @@ export type ParsedGoalCommand =
       readonly maxIterations?: number;
       readonly minIntervalMs?: number;
       readonly reviewModel?: string;
+      readonly writerProviderCallLimit?: number;
+      readonly reviewerProviderCallLimit?: number;
+      readonly tokenBudget?: number;
     }
   | { readonly kind: 'next-add'; readonly objective: string }
   | { readonly kind: 'next-manage' }
@@ -499,6 +505,10 @@ async function startGoal(
       reviewModel: parsed.reviewModel,
       maxIterations,
       minIntervalMs: parsed.minIntervalMs,
+      writerProviderCallLimit: parsed.writerProviderCallLimit,
+      reviewerProviderCallLimit: parsed.reviewerProviderCallLimit,
+      tokenBudget: parsed.tokenBudget,
+      workspaceChangeBaseline: prepared?.workspaceChangeBaseline,
       loopContract: prepared?.loopContract,
     });
   } catch (error) {
@@ -808,6 +818,9 @@ export type ParsedLoopCommand =
       readonly maxIterations: number;
       readonly minIntervalMs?: number;
       readonly reviewModel?: string;
+      readonly writerProviderCallLimit?: number;
+      readonly reviewerProviderCallLimit?: number;
+      readonly tokenBudget?: number;
       readonly replace?: boolean;
       readonly supersedesGoalId?: string;
       readonly supersedesContractId?: string;
@@ -829,6 +842,9 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
   let maxIterations = DEFAULT_MAX_ITERATIONS;
   let minIntervalMs: number | undefined;
   let reviewModel: string | undefined;
+  let writerProviderCallLimit: number | undefined;
+  let reviewerProviderCallLimit: number | undefined;
+  let tokenBudget: number | undefined;
 
   while (index < tokens.length) {
     const token = tokens[index];
@@ -857,6 +873,25 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
         continue;
       }
       return { kind: 'error', message: '`--max-iterations` requires a positive integer.' };
+    }
+    if (
+      token === '--writer-call-limit'
+      || token === '--reviewer-call-limit'
+      || token === '--token-budget'
+    ) {
+      const rawValue = tokens[index + 1];
+      if (rawValue === undefined || !/^[1-9]\d*$/u.test(rawValue)) {
+        return { kind: 'error', message: `\`${token}\` requires a positive integer.` };
+      }
+      const value = Number(rawValue);
+      if (!Number.isSafeInteger(value)) {
+        return { kind: 'error', message: `\`${token}\` requires a positive safe integer.` };
+      }
+      if (token === '--writer-call-limit') writerProviderCallLimit = value;
+      if (token === '--reviewer-call-limit') reviewerProviderCallLimit = value;
+      if (token === '--token-budget') tokenBudget = value;
+      index += 2;
+      continue;
     }
     if (token === '--every') {
       const rawDuration = tokens[index + 1];
@@ -911,6 +946,9 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
     maxIterations,
     minIntervalMs,
     reviewModel,
+    writerProviderCallLimit,
+    reviewerProviderCallLimit,
+    tokenBudget,
   };
 }
 
@@ -923,7 +961,7 @@ export async function handleLoopSlashCommand(host: SlashCommandHost, args: strin
         'Usage: /loop [options] -- <objective>',
         '       /loop revise [options] -- <new objective>',
         '       /loop status|pause|resume|stop',
-        'Options: --max-iterations <n> --every <duration> --review-model <alias>',
+        'Options: --max-iterations <n> --every <duration> --review-model <alias> --writer-call-limit <n> --reviewer-call-limit <n> --token-budget <n>',
       ].join('\n'));
       return;
     case 'error':
@@ -1024,6 +1062,9 @@ function showFinishLineReview(
           writerModel: host.state.appState.model,
           reviewerModel: parsed.reviewModel ?? host.state.appState.model,
           permission: host.state.appState.permissionMode,
+          writerProviderCallLimit: parsed.writerProviderCallLimit,
+          reviewerProviderCallLimit: parsed.reviewerProviderCallLimit,
+          tokenBudget: parsed.tokenBudget,
         },
         { includeHeading: false },
       ),
@@ -1031,7 +1072,10 @@ function showFinishLineReview(
       selectedCriteriaCount: preflight.verificationSelection?.selected.length ?? 0,
       suggestedCriteriaCount: preflight.verificationCatalog.suggestions.length,
       permissionMode: host.state.appState.permissionMode,
-      missingUsageCaps: true,
+      missingUsageCaps:
+        parsed.writerProviderCallLimit === undefined
+        || parsed.reviewerProviderCallLimit === undefined
+        || parsed.tokenBudget === undefined,
       workspaceGit: preflight.workspaceGit,
       onSelect: (choice) => {
         void handleFinishLineReviewChoice(
@@ -1153,6 +1197,12 @@ async function handleFinishLineReviewChoice(
       return;
     case 'start':
       {
+        if (
+          preflight.proposal.gatePlan.requiredChecks.length === 0
+          && !await confirmTuiNoExecutableChecks(host, preflight)
+        ) {
+          return;
+        }
         const brokerReviewTrust = preflight.brokerReviewTrust
           ?? await ensureTuiBrokerReviewTrust(host, preflight);
         if (brokerReviewTrust === false) return;
@@ -1168,6 +1218,58 @@ async function handleFinishLineReviewChoice(
       }
       return;
   }
+}
+
+async function confirmTuiNoExecutableChecks(
+  host: SlashCommandHost,
+  preflight: LoopPreflightReady,
+): Promise<boolean> {
+  const decision = preflight.proposal.noExecutableChecksDecision;
+  if (decision?.status === 'acknowledged') return true;
+  if (decision === undefined) {
+    host.showError(
+      'Loop not started: applicable project checks were excluded. Revise the Loop and include them.',
+    );
+    return false;
+  }
+  return new Promise<boolean>((resolve) => {
+    host.mountEditorReplacement(
+      new ChoicePickerComponent({
+        title: 'No executable checks apply?',
+        hint: '↑↓ navigate · Enter select · Esc cancel',
+        notice: [
+          `Policy      ${decision.policyVersion}`,
+          'Project     discovery found no applicable executable project checks',
+          'Still runs  builtin risk scan, static evidence, and a fresh reviewer',
+          'Will block  source changes without checks as NEEDS_WORK/checks_missing',
+          'Terminal    explicitly states that no project command ran',
+        ].join('\n'),
+        noticeTone: 'warning',
+        options: [
+          {
+            value: 'cancel',
+            label: 'Cancel and revise checks',
+            description: 'Return without creating a contract, trust grant, or run.',
+          },
+          {
+            value: 'confirm',
+            label: 'Confirm no executable checks apply',
+            description: 'Bind this exact versioned decision to the Acceptance Contract.',
+          },
+        ],
+        onSelect: (value) => {
+          host.restoreEditor();
+          if (value !== 'confirm') host.showStatus('Loop not started.');
+          resolve(value === 'confirm');
+        },
+        onCancel: () => {
+          host.restoreEditor();
+          host.showStatus('Loop not started.');
+          resolve(false);
+        },
+      }),
+    );
+  });
 }
 
 function showAdvancedLoopSettings(
@@ -1471,6 +1573,9 @@ async function startConfirmedLoop(
       maxIterations: parsed.maxIterations,
       minIntervalMs: parsed.minIntervalMs,
       reviewModel: parsed.reviewModel,
+      writerProviderCallLimit: parsed.writerProviderCallLimit,
+      reviewerProviderCallLimit: parsed.reviewerProviderCallLimit,
+      tokenBudget: parsed.tokenBudget,
     },
     rawArgs,
     {
@@ -1487,6 +1592,8 @@ async function startConfirmedLoop(
           mode: 'tui-confirmed',
           acknowledgeWarningSetDigest:
             initialPreflight.proposal.finishLineReview.warningSetDigest,
+          acknowledgeNoExecutableChecksDigest:
+            initialPreflight.proposal.noExecutableChecksDecision?.decisionDigest,
           verificationSkills:
             selectedCriteriaChoices(initialPreflight),
           verificationCatalogDigest:
@@ -1525,6 +1632,9 @@ async function startConfirmedLoop(
         return {
           maxIterations: parsed.maxIterations,
           completionCriterion: result.proposal.completionCriterion,
+          workspaceChangeBaseline: result.workspaceGit === undefined
+            ? undefined
+            : { files: result.workspaceGit.changedFiles },
           loopContract: loopContractInput(
             finalized,
             parsed.supersedesGoalId,
@@ -1776,6 +1886,7 @@ function loopContractInput(
       workspaceTrust,
       gateApproval: proposal.gateApproval,
       legacyGatePlan: proposal.gatePlan,
+      noExecutableChecksDecision: proposal.noExecutableChecksDecision,
       reviewPolicy: proposal.reviewPolicy,
       verificationCriteria: preflight.verificationSelection!,
       selectedRecipes: preflight.selectedRecipes,
@@ -1795,6 +1906,7 @@ function loopContractInput(
     workspaceTrust: proposal.workspaceTrust,
     gateApproval: proposal.gateApproval,
     gatePlan: proposal.gatePlan,
+    noExecutableChecksDecision: proposal.noExecutableChecksDecision,
     reviewPolicy: proposal.reviewPolicy,
     reviewSettings,
     source: 'user',

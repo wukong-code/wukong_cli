@@ -92,6 +92,12 @@ export interface CreateGoalInput {
   readonly reviewModel?: string;
   readonly maxIterations?: number;
   readonly minIntervalMs?: number;
+  readonly writerProviderCallLimit?: number;
+  readonly reviewerProviderCallLimit?: number;
+  readonly tokenBudget?: number;
+  readonly workspaceChangeBaseline?: {
+    readonly files: readonly { readonly path: string; readonly status: string }[];
+  };
   readonly loopContract?: LoopContractV2Input | LoopContractV3Input;
 }
 

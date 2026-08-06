@@ -58,6 +58,40 @@ describe('buildGoalReportLines', () => {
     expect(out).toContain('128.4k'); // formatTokenCount
   });
 
+  it('shows live writer/reviewer call usage and token budget for a Loop', () => {
+    const out = lines(goal({
+      stopCondition: 'proof-pass',
+      providerUsage: {
+        writerCalls: 3,
+        reviewerCalls: 2,
+        writerCallLimit: 12,
+        reviewerCallLimit: 4,
+        remainingWriterCalls: 9,
+        remainingReviewerCalls: 2,
+      },
+      budget: {
+        turnBudget: null,
+        tokenBudget: 50_000,
+        wallClockBudgetMs: null,
+        remainingTokens: 37_500,
+        remainingTurns: null,
+        remainingWallClockMs: null,
+        tokenBudgetReached: false,
+        turnBudgetReached: false,
+        wallClockBudgetReached: false,
+        overBudget: false,
+      },
+    }));
+
+    expect(out).toContain('Writer calls');
+    expect(out).toContain('3/12');
+    expect(out).toContain('Reviewer calls');
+    expect(out).toContain('2/4');
+    expect(out).toContain('Token budget');
+    expect(out).toContain('37.5k remaining of 50.0k');
+    expect(out).not.toContain('Review usage');
+  });
+
   it('shows a no-stop-condition note for an unbounded active goal', () => {
     expect(lines(goal())).toContain('No stop condition — runs until evaluated complete.');
   });

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   formatGoalSummaryText,
+  formatLoopResultText,
   goalExitCode,
   GOAL_EXIT_CODES,
   goalSummaryJson,
@@ -129,6 +130,90 @@ describe('Loop result contract', () => {
       blockers: [],
     });
     expect(loopExitCode(snapshot)).toBe(LOOP_EXIT_CODES.PASS);
+  });
+
+  it('reports exact provider-call and token usage in JSON and text Loop results', () => {
+    const snapshot = {
+      status: 'blocked',
+      terminalReason: 'loop:NEEDS_WORK:budget_exhausted:Budget exhausted.',
+      loopRunId: 'run-budget',
+      iteration: 3,
+      wallClockMs: 100,
+      tokensUsed: 12_500,
+      budget: { tokenBudget: 50_000, remainingTokens: 37_500 },
+      providerUsage: {
+        writerCalls: 3,
+        reviewerCalls: 2,
+        writerCallLimit: 12,
+        reviewerCallLimit: 4,
+        remainingWriterCalls: 9,
+        remainingReviewerCalls: 2,
+      },
+      loopTerminal: {
+        schemaVersion: 1,
+        runId: 'run-budget',
+        contractId: 'contract-budget',
+        status: 'NEEDS_WORK',
+        reasonCode: 'budget_exhausted',
+        continuationPolicy: {
+          mode: 'same-contract',
+          automaticRetry: false,
+          requiresPreflightRevalidation: true,
+        },
+        blockerKeys: [],
+        terminalDigest: 'sha256:terminal-budget',
+        createdAt: 1,
+      },
+      loopResult: {
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'budget_exhausted',
+        summary: 'Budget exhausted.',
+        iterations: 3,
+        checks: [],
+        blockers: [],
+      },
+    } as any;
+
+    const result = loopSummaryJson(snapshot);
+    expect(result).toMatchObject({
+      providerUsage: snapshot.providerUsage,
+      tokenBudget: 50_000,
+      remainingTokens: 37_500,
+    });
+    expect(formatLoopResultText(result)).toContain(
+      'Usage      Writer calls 3/12 · Reviewer calls 2/4 · Tokens 12500/50000',
+    );
+  });
+
+  it('labels Loop-introduced and pre-existing changed files separately', () => {
+    const text = formatLoopResultText({
+      type: 'loop.result',
+      schemaVersion: 2,
+      status: 'NEEDS_WORK',
+      reasonCode: 'checks_failed',
+      summary: 'Checks failed.',
+      iterations: 1,
+      writerIterations: 1,
+      gateAttempts: 1,
+      continuationMode: 'same-contract',
+      nextAction: 'Fix checks.',
+      checks: [],
+      changedFiles: [
+        { path: 'src/new.ts', status: '??', attribution: 'introduced_by_loop' },
+        { path: 'src/existing.ts', status: 'M', attribution: 'pre_existing_or_modified' },
+      ],
+      evidence: { verification: 'not_run', reviewer: 'not_run' },
+      durationMs: 1,
+      tokensUsed: 10,
+      providerUsage: null,
+      tokenBudget: null,
+      remainingTokens: null,
+      blockers: [],
+    });
+
+    expect(text).toContain('?? src/new.ts [introduced by Loop]');
+    expect(text).toContain('M src/existing.ts [pre-existing or modified]');
   });
 
   it('maps max iterations to NEEDS_WORK and exit 1', () => {

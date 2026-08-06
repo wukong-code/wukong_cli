@@ -169,7 +169,12 @@ vi.mock('#/cli/lib/loop-preflight', () => ({
       consentDigest: 'sha256:consent-binding',
     },
   }),
-  runLoopPreflight: vi.fn(async (input: { objective: string; model: string; workspace: string }) => ({
+  runLoopPreflight: vi.fn(async (input: {
+    objective: string;
+    model: string;
+    workspace: string;
+    acknowledgeNoExecutableChecksDigest?: string;
+  }) => ({
     ready: true,
     model: input.model,
     workspace: input.workspace,
@@ -264,6 +269,7 @@ vi.mock('#/cli/lib/loop-preflight', () => ({
         warningSetDigest: 'sha256:warnings',
         guardPolicyVersion: 'gate-guard/1',
         orderedChecks: [],
+        noExecutableChecksDecisionDigest: 'sha256:no-check',
         approvalSetDigest: 'sha256:approval',
         hasExecutableChecks: false,
       },
@@ -274,6 +280,17 @@ vi.mock('#/cli/lib/loop-preflight', () => ({
         excludedChecks: [],
         builtinRiskScanPolicyVersion: 'builtin-risk-scan/1',
         planDigest: 'sha256:plan',
+      },
+      noExecutableChecksDecision: {
+        schemaVersion: 1,
+        policyVersion: 'no-executable-checks/1',
+        decisionDigest: 'sha256:no-check',
+        status: input.acknowledgeNoExecutableChecksDigest === 'sha256:no-check'
+          ? 'acknowledged'
+          : 'confirmation-required',
+        ...(input.acknowledgeNoExecutableChecksDigest === 'sha256:no-check'
+          ? { acknowledgedAt: 1 }
+          : {}),
       },
       reviewPolicy: { mode: 'advisory-live' },
     },
@@ -1193,6 +1210,19 @@ describe('WukongTUI startup', () => {
       finishLine.handleInput('\u001B[B');
       finishLine.handleInput('\u001B[B');
       finishLine.handleInput('\r');
+      await vi.waitFor(() => {
+        expect(driver.state.editorContainer.render(100).join('\n'))
+          .toContain('No executable checks apply?');
+      });
+      const noCheck = driver.state.editorContainer.children[0] as {
+        handleInput(data: string): void;
+      };
+      noCheck.handleInput('\u001B[B');
+      noCheck.handleInput('\r');
+      await vi.waitFor(() => {
+        expect(driver.state.editorContainer.render(100).join('\n'))
+          .toContain('Send bounded review data');
+      });
       const consent = driver.state.editorContainer.children[0] as {
         handleInput(data: string): void;
       };
