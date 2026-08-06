@@ -3,7 +3,7 @@
 > 适用范围: 当前 `wukong_cli` 开发分支；已发布 binary 基线为 `v0.0.22`
 > 更新时间: 2026-08-06
 > 定位: 给 Wukong 一个目标，通过 Goal → Write → Check → Review → Fix 循环直到没有 blocking finding。
-> 版本边界: 本文中的开发分支行为尚未构成 `0.1.0-rc.1` 发布。Loop、冻结验收合同、prior blocker 复审、无进展 strategist、Permission Mode v2、结构化 review findings、项目 review policy、本地 feedback、独立 reviewer model 和高级诊断命令已实现；当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
+> 版本边界: 本文中的开发分支行为尚未构成 `0.1.0-rc.1` 发布。0.1.0 只稳定可控、可恢复、可解释的单 Loop；可执行 provider-call/token 上限、可信 no-check、完整文件归因和升级/恢复证据仍未完成。完整多层 coverage schema、direct-shell content/PATH attestation 和价格数据库已后移。当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
 
 ## 安装正式版
 
@@ -190,7 +190,9 @@ Guest 试用或月度次数，也不请求 Wukong quota 服务。默认单次最
    provider-call/token 硬上限。Headless dry-run 列出同类运行事实与 required flags。
    本地读取、Provider 传输、权限和项目 check 执行仍分别授权，避免一次确认静默扩权。
    有风险时应先编辑、查看 dirty workspace 或取消；危险 Continue 固定在最后。
-   “Continue anyway”不放宽 Gate，没有可执行 checks 时仍不能得到 `PASS`。
+   “Continue anyway”不放宽 Gate，没有可执行 checks 时仍不能得到 `PASS`。0.1.0
+   目标会把“确实无适用 checks”的 versioned policy decision 与普通 warning 分开，
+   并在这里提供真实执行的 provider-call/token 上限；当前 checkout 尚未闭环。
 3. **执行中**：关注 writer iteration、累计耗时、当前 tool/activity 和真实 blocker。
    TUI 的 `WRITE` / `CHECK` / `REVIEW` 只是活动提示；headless 当前只明确报告 writer
    iteration 与 running tool，内部 reviewer 不一定单独显示为 `REVIEW`。相同输出或
@@ -199,7 +201,8 @@ Guest 试用或月度次数，也不请求 Wukong quota 服务。默认单次最
    显示可获得的 Gate 状态、writer iteration、Gate attempt、耗时、workspace、checks、
    evidence、主要 blocker 与确定性的 Next。token、cost、provider call count、reviewer
    usage 和文件归因只有底层记录可证明时才显示；`unavailable` 或 `unknown` 不能被补写
-   成成功数据。
+   成成功数据。0.1.0 RC 前必须补齐 calls/tokens/retries/remaining，以及
+   pre-existing 与 Wukong touched/added/deleted 的分别展示。
 5. **结果后处理**：Wukong 不会因为 `PASS` 自动 commit、push 或发布。先检查
    `git status --short`、`git diff`，并用 `/loop status` 或 review feedback 检查
    non-blocking findings，再决定提交、继续 Loop、修改 Finish Line，或处理

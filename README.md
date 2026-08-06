@@ -17,6 +17,13 @@ findings against the same goal.
 unreleased `0.1.0` stabilization work. The user-flow notes below describe the
 development checkout; they do not mean that `0.1.0-rc.1` has been published.
 
+The 0.1.0 target is deliberately narrow: one controllable, recoverable, and
+explainable local Loop. Before RC it must add enforceable provider-call/token
+limits, a trustworthy no-check decision, pre-existing-versus-Wukong file
+attribution, complete terminal usage/next actions, and upgrade/recovery proof.
+Full multi-layer coverage schemas, direct-shell content/PATH attestation, and a
+provider pricing database are deferred rather than release blockers.
+
 Version `0.0.22` keeps provider setup usable when the primary remote catalog is down and
 clarifies the CLI's session and permission controls:
 

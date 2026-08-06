@@ -15,6 +15,11 @@ Wukong Code 是围绕一个主流程构建的终端 AI coding agent：
 `v0.0.22` 是已发布的 binary。当前源码 checkout 还可能包含未发布的 `0.1.0`
 稳定化改动。下方用户流程描述开发分支，不表示 `0.1.0-rc.1` 已经发布。
 
+0.1.0 已收敛为一条可控、可恢复、可解释的本地单 Loop。RC 前必须补齐可执行的
+provider-call/token 上限、可信 no-check decision、既有改动与 Wukong 改动归因、
+完整终态 usage/next action，以及升级/恢复证据。完整多层 coverage schema、
+direct-shell content/PATH attestation 和 provider 价格数据库后移，不再阻塞版本。
+
 `0.0.22` 在 primary remote catalog 不可用时仍可回退到 models.dev，并澄清 CLI 的
 session 与权限控制：
 

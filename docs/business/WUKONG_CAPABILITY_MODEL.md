@@ -273,7 +273,7 @@ Managed Gate 的价值不是模型代理转售，而是提供独立、稳定、�
 
 ### 0.1.0：Free Trusted Local Loop
 
-0.1.0 不做付费实验。旧的 isolated worktree、Safe Promote 与 target Final Gate 方案已经取消；当前规格以 [0.1.0 Trusted Local Loop](../design/0.1.0-trusted-local-loop.md) 为准，只把既有 Finish Line、reusable criteria、durable lifecycle、安装升级、恢复和跨平台行为稳定为 Free + BYOK 产品。单前台 Loop 不登录、不查 entitlement，也不设置 Wukong 次数或 token quota。
+0.1.0 不做付费实验。旧的 isolated worktree、Safe Promote 与 target Final Gate 方案已经取消；当前规格以 [0.1.0 Trusted Local Loop](../design/0.1.0-trusted-local-loop.md) 为准，把既有 Finish Line、reusable criteria 和 durable lifecycle 收敛为一条可控、可恢复、可解释的 Free + BYOK 单 Loop，重点补齐 call/token limits、no-check、文件归因、终态、兼容恢复和真实跨平台证据。完整多层 coverage schema 与 direct-shell content/PATH attestation 后移。单前台 Loop 不登录、不查 entitlement，也不设置 Wukong 商业次数或 token quota；用户主动配置的运行预算属于成本保护，不是付费配额。
 
 ### 0.2.0：Reliable Autonomy 邀请制候选
 

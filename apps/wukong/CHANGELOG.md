@@ -217,7 +217,9 @@
 
 > This entry predates the public Wukong Code release sequence. The planned
 > public `v0.1.0` is the Free Trusted Local Loop milestone defined in
-> `ROADMAP.md`.
+> `ROADMAP.md`: one controllable, recoverable, explainable local Loop. Full
+> multi-layer coverage-schema replacement and direct-shell content/PATH
+> attestation are not public 0.1.0 blockers.
 
 ### Minor Changes
 

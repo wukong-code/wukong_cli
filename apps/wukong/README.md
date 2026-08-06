@@ -35,7 +35,11 @@ remain active instead of reporting a false remote success.
 
 The published binary baseline is `v0.0.22`; this package checkout may contain
 unreleased `0.1.0` stabilization and is not evidence that `0.1.0-rc.1` has
-shipped. The normal interactive path starts from an editable Goal or an
+shipped. Version 0.1.0 is scoped to one controllable, recoverable, explainable
+local Loop: enforceable call/token limits, no-check policy, file attribution,
+terminal usage/next actions, and upgrade/recovery proof are the remaining RC
+contracts. Full coverage-schema replacement and direct-shell content/PATH
+attestation are deferred. The normal interactive path starts from an editable Goal or an
 optional `/resume`, then enters `/loop` and Gate. Version 0.0.21 preserves every
 distinct built-in risk occurrence under a stable evidence identity when the
 same risk kind appears at different files, lines, or evidence locations. Exact

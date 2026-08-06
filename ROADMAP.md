@@ -1,15 +1,15 @@
 # Wukong Code Roadmap
 
-> 最后更新: 2026-08-03
+> 最后更新: 2026-08-06
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 
 0.0.22 已完成 provider catalog resilience 与 CLI session/permission clarity
 维护发布。下一计划版本直接进入
-0.1.0 Trusted Local Loop：稳定现有 Finish Line、Gate、恢复、安装升级和
-跨平台行为，补齐 consolidated Preflight、no-check、dirty workspace、
-STOPPED_BY_USER、provider outcome/cost 与首次成功漏斗，并冻结 coverage
-completeness、DirectShellBindingV1 与 stage-verify-publish-exact release
-provenance；不新增执行架构。产品继续 Free + BYOK；隔离 worktree / Safe
+0.1.0 Trusted Local Loop：交付一条可控、可恢复、可解释的单 Loop，补齐可编辑
+Preflight、可信 no-check、provider-call/token 上限、dirty workspace 文件归因、
+STOPPED_BY_USER、provider outcome、最小 Gate completeness/freshness、安装升级和
+跨平台验证；不再用完整多层 coverage schema 或 direct-shell content attestation
+阻塞 RC。产品继续 Free + BYOK；隔离 worktree / Safe
 Promote 实验已经取消，当前没有付费计划、Checkout 或 entitlement。
 
 当前版本真相源：
@@ -157,7 +157,7 @@ worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继�
 
 | 版本 | 状态与目标 | 发布门槛 |
 |---|---|---|
-| `0.1.0` | **部分实施，尚未达到 RC。** Trusted Local Loop：稳定 Finish Line、criteria/evidence、durable lifecycle、三态 Gate verdict 与 STOPPED_BY_USER、合并 Preflight、no-check、dirty workspace、provider outcome/cost、安装升级、五来源 Resume、跨平台和 public truth；冻结 coverage root binding、DirectShellBindingV1 和 ReleaseProvenanceV1；RC 不增加新的执行架构 | 25 名 opt-in 全分母，20 名无实时指导完成 install/upgrade + provider smoke + Preflight，15 名首次真实 PASS 且都获得完整 14 天观察窗口，其中 7 名在首次 PASS 后第 1–14 天主动完成第二个不同 Goal PASS；P0/release-blocking P1、false PASS、原状态丢失、越界写入、静默重复 provider request 与隐私冲突为 0；RC 稳定 14 天；授权案例单列为宣传门槛；公开资产通过 stage-verify-publish-exact 与 provenance 验证 |
+| `0.1.0` | **部分实施，尚未达到 RC。** 可控、可恢复、可解释的 Trusted Local Loop：可编辑 Preflight、可信 no-check、调用/token 上限、三态 Gate verdict 与 STOPPED_BY_USER、文件归因、恢复兼容、最小 completeness/freshness、五来源 Resume、六平台安装升级和 public truth；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移 | RC admission P0 先清零；随后 25 名 opt-in 全分母，20 名无实时指导完成 install/upgrade + provider smoke + executable Preflight，15 名首次真实 PASS 且全部获得 14 天窗口，7 名主动完成第二个不同 Goal PASS；false PASS、原状态丢失、越界写入、静默重复 provider request 与隐私冲突为 0；公开资产通过 stage-verify-publish-exact、公开 URL provenance 和 fresh install/upgrade 验证；授权案例只阻断集中宣传 |
 | `0.2.0` | Pro Reliable Autonomy：保留为待重新评审的可靠自治与商业验证候选；不能继承已经取消的 Promote、lease、fencing 或 Final Gate 设计 | 0.1.0 发布并稳定观察至少 30 天；先验证重复多任务监督需求，再单独批准技术方案、Pilot 权益和收费门槛 |
 
 当前顺序是：0.0.22 → 0.1.0-rc.1 → 真实项目与 opt-in cohort → 0.1.0。
@@ -173,10 +173,9 @@ worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继�
 
 `0.0.21` 只修复 Loop evidence integrity；不改变 Loop 的写入、执行或发布
 模型。`0.0.22` 只增加 provider catalog resilience 与 CLI clarity，作为
-0.1.0 的当前直接升级基线，不改变 Trusted Local Loop 范围。`0.1.0` 已重新
-设计为现有单 Loop 的稳定合同版，详细 P0/P1、兼容、
-隐私、GateCoverageRecordV1、DirectShellBindingV1、
-ReleaseProvenanceV1 和四类发布门槛见
+0.1.0 的当前直接升级基线，不改变 Trusted Local Loop 范围。`0.1.0` 已收敛为
+现有单 Loop 的用户合同稳定版，详细 RC admission P0、最小 Gate completeness/
+freshness、兼容、隐私、发布与 cohort 门槛见
 [0.1.0 Trusted Local Loop](docs/design/0.1.0-trusted-local-loop.md)。
 `0.2.0` 仍只是更后的可靠自治候选，不能复用已取消的 Promote 架构。当前均
 不新增默认 `/agents`、`/parallel`、`/worktree` 或 `/supervisor` 命令；
@@ -573,7 +572,7 @@ telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
 - 0.0.20 先把有/无 Skill 的所有新 reviewer attempt 统一到 broker trust + run-scoped BYOK provider consent，再可选接入已有 Verification Skill 的 strict qualitative criteria；不执行 Skill command，也不新增顶层命令。
 - 0.0.21 只做 repeated-risk evidence identity 修复与六平台一致发布；不增加新的执行架构。
 - 0.0.22 只做 provider catalog resilience 与 CLI clarity 维护发布；不增加新的执行架构。
-- 0.1.0 规格已重新设计：只稳定现有 Trusted Local Loop 的 V1/V2/V3 兼容、durable lifecycle、Gate/evidence、三态 verdict + STOPPED_BY_USER、合并 Preflight、no-check、dirty workspace、provider outcome/cost、五来源 Resume、跨平台和安装升级，并冻结 Gate coverage root binding、DirectShellBindingV1 与 stage-verify-publish-exact release provenance；RC 期间不加大功能，并要求全分母 opt-in cohort、P0/release-blocking P1 清零和 14 天稳定门槛。
+- 0.1.0 规格已收敛：只稳定可控、可恢复、可解释的单 Loop，补齐可编辑 Preflight、可信 no-check、provider-call/token 上限、文件归因、provider outcome、最小 Gate completeness/freshness、兼容恢复、五来源 Resume、六平台安装升级和 stage-verify-publish-exact；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移。RC 期间不加大功能，并要求全分母 opt-in cohort、P0/release-blocking P1 清零和 14 天稳定门槛。
 - 0.2.0 是未批准且待重新评审的 Reliable Autonomy 候选；不能继承已取消的 Promote/lease/fencing 设计，在 0.1.0 真实验证前不开工、不公开 Checkout。
 - 公告与更新通道分离：公告 JSON 由 Web 静态文件维护，失败不阻塞 CLI。
 - `/report` 和 Hosted Report/上传路径保持删除；本地 Gate 结果只在已有显式保存能力下留档。

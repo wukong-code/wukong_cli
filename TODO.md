@@ -24,92 +24,81 @@
 ## ⏳ 0.1.0 — Trusted Local Loop（部分实施，尚未达到 RC）
 
 > 方案：[docs/design/0.1.0-trusted-local-loop.md](docs/design/0.1.0-trusted-local-loop.md)。
-> 本版继续 Free、local-first、BYOK，只稳定现有单 Loop，不新增执行架构、
-> 默认命令、付费或托管能力。
+> 本版只交付可控、可恢复、可解释的 Free local-first BYOK 单 Loop。完整多层
+> coverage schema、direct-shell content attestation 和价格数据库不再阻塞 0.1.0。
 
-### P0：合同、终态与恢复
+### RC admission P0：用户输入、Preflight 与成本控制
 
-- [ ] 建立 0.0.22 → 0.1.0 直接升级与 0.0.21 records 向后兼容的 config、provider、session、V1/V2/V3 contract、Gate Plan、consent、attempt/terminal 和 active-run compatibility matrix
-- [ ] 冻结 legacy 迁移：历史 terminal PASS 只读保留；缺 coverage 的 active legacy attempt 明确非 PASS 后新开 0.1.0 attempt；V1 继续执行必须 Revised V3
-- [ ] 修复 V3 的 complete/blocked 保护：V2/V3 都必须引用完整 durable PASS terminal，直接 SDK、恢复重放和内部状态入口均不能绕过
-- [ ] 覆盖 crash/restart、append fault、重复 terminal、并发 Continue、跨 run/digest corruption 和 legacy restore-or-revise；无法证明完整性时 fail closed
-- [ ] provider request 已发送但响应结果无法证明时持久化 `request_outcome_unknown`，不静默重发；Retry 提示可能重复调用/计费并复用 provider idempotency key（如支持）
-- [ ] 保证 objective、Done when、Must not、required checks、selected criteria 和 provider origin 在恢复与升级中不被静默改写或扩权
+- [ ] 将 consolidated Preflight 完成到可编辑状态：Goal、Done when、Must not、checks/no-check、dirty paths、exact provider/model、outbound input、permission、iterations、provider-call ceiling 和可选 token budget；高级字段折叠，危险 Continue 固定最后（2026-08-06 已完成统一汇总、dirty review、审批顺序和无 cap 的诚实提示）
+- [ ] 保持 local-read、provider-send、permission、project-check execution distinct approvals；Cancel 不创建 contract/trust/run，也不调用 provider
+- [ ] 把现有 Goal token/turn budget 接入 Loop Preflight、runtime 和 terminal；新增 writer/reviewer provider-call ceiling，真实阻断超限并显示 calls/tokens/retries/remaining
+- [ ] `budget_exhausted` 返回 `NEEDS_WORK` 且允许 same-contract Continue；无可靠 pricing source 时只显示 `Cost unavailable`，不建设价格数据库
 
-### P0：结果语义与 TUI/headless 一致
+### RC admission P0：no-check 与 Gate 完整性
 
-- [ ] 冻结 `PASS` / `NEEDS_WORK` / `ERROR`、稳定 reason code、continuation policy 和 next action 的唯一映射
-- [ ] Gate verdict 与 run lifecycle 分离：TUI Ctrl-C 或 `/loop pause` 为可恢复的 `PAUSED`；`/loop stop` 或尚无 Gate verdict 的 headless 中断为 `STOPPED_BY_USER`；preflight 拒绝不创建 run；active Auto guard 拒绝为 `NEEDS_WORK/permission_required`，均不伪造 `ERROR` 或 Gate verdict
-- [ ] runtime/model/provider/permission 错误不再显示成普通 delivery failure；`BLOCKED` 只作界面阶段，不替代 durable terminal
-- [ ] 修正 `max_iterations` 等可 same-contract continuation 的结果文案，不错误要求启动新 Loop
-- [ ] V2/V3 Goal panel、footer、`/loop status` 与 headless output 一致显示 Finish Line、run、chain usage、blockers、continuation 和下一步
-- [ ] 将 Goal、checks/no-check acknowledgement、dirty paths、workspace trust、exact provider/model、outbound input、iterations、provider-call/token limits 合并到一个可编辑 Preflight，高级字段折叠（2026-08-06 已完成统一最终汇总、dirty path review、审批顺序和无独立 call/token cap 的诚实提示；distinct approvals 与 call/token enforcement 仍待完成）
-- [ ] 终态显示 pre-existing dirty、Wukong touched/added/deleted files、checks、provider calls/tokens、blockers 和 next action；Cancel 不回滚并明确列出保留改动
-
-### P0：Gate、evidence、隐私
-
-- [ ] required checks、单次 risk scan、单次 fresh reviewer、aggregate、freshness 和 terminal 使用同一 attempt lineage；修复后完整重跑 frozen plan
-- [ ] 冻结 no-check 合同：有适用 checks 必须执行；只有 versioned discovery/policy 判定无适用 executable checks 时才允许显式 acknowledgement；source change 缺本应存在检查为 NEEDS_WORK/checks_missing；tool/runtime 不可用为 ERROR，已运行失败为 NEEDS_WORK，弱化 check 必须 Revised Loop
+- [ ] 通用 Finish Line warning 不再代替 no-check：只有 versioned discovery/policy 证明无适用 executable checks 时，才能显式确认并写入 Acceptance Contract
+- [ ] source change 缺本应存在 checks 为 `NEEDS_WORK/checks_missing`；tool/permission/runtime 不可用为 `ERROR`；check 已运行失败为 `NEEDS_WORK`；弱化 frozen check 必须 Revised Loop
+- [ ] 在现有 attempt/aggregate/snapshot/terminal 上实现最小 completeness/freshness：绑定 expected/observed checks/no-check、risk scan、fresh reviewer 和 workspace before/after，输出 `complete|partial|inconclusive`
+- [ ] 只有同 attempt `complete` 且 fresh 才能 PASS；partial/inconclusive/stale、budget exhausted、stop、interrupt、corruption、跨 attempt 或 conflicting duplicate 永不 PASS；exact replay 幂等且 terminal 后拒绝 late write
 - [ ] 保持 deterministic failure 不可覆盖、distinct risk occurrence 不丢失、完全相同输入才去重；seeded blocker false PASS 为 0
-- [ ] 完成 V1/V2/V3、无 Skill/有 Skill、consent 拒绝、selected-ref/subject/workspace/provider drift、secret exclusion、limit 和 corrupt evidence 负向 E2E
-- [ ] Codex/Claude/Cursor/Kimi/Grok 导入均不能授予 trust、permission、checks、criteria 或 consent；覆盖隐藏敏感字段、损坏格式、symlink escape、workspace mismatch 和外部路径负向 fixture
-- [ ] reviewer 继续只读 bounded/redacted attempt-scoped input；源码、本地 raw evidence、session、日志和 secret 不进入 Wukong Web/D1
-- [ ] `/login` 空模型目录仍成功且不改变 BYOK 默认 provider；`/feedback` 继续只发送用户预览确认的受控文本
-- [ ] 写入前记录 workspace baseline、dirty paths 和首次触碰文件 pre-edit digest；区分 pre-existing 与 Loop changes，外部同路径写入必须停写并重新确认
-- [ ] workspace 清理必须先证明当前 run ownership；负向测试保证不自动 stash、commit、reset、checkout、push、删除用户文件或清理未知状态
 
-### P0：0.1.0 Base Security Contracts
+### RC admission P0：结果、文件归因与恢复
 
-- [ ] 定义 `GateCoverageRecordV1` 与 `FinalFreshnessRecordedV1`：冻结 expected producers（含 no-check acknowledgement），绑定 observed records/digests，输出 `complete|partial|inconclusive`
-- [ ] 新增 `ProofAggregateRecordedV3`、`LoopEvidenceSnapshotCreatedV3`、`GateAttemptCompletedV2`，共同绑定同 attempt 的 coverage ref/digest；V2 terminal 区分 verdict/stopped_by_user/interrupted，只有 verdict 携带三态并引用 aggregate/snapshot；旧 schema 只读，不能产生新的 0.1.0 PASS
-- [ ] 所有 producer schema 写稳定 producerIdentity/producerIdempotencyKey/canonical payloadDigest；coverage 不使用包含随机 ref/createdAt 的 record digest 做 replay join
-- [ ] 实现唯一幂等 attempt finalizer/outbox：正常 producer 完成写 complete freshness；提前 stop/signal/crash 写 incomplete/stopped/interrupted freshness 并形成 partial/inconclusive coverage；仅 verdict disposition 写 aggregate/snapshot/Gate verdict，stop/interruption 的 gateVerdict 为空；terminal 后拒绝 late write
-- [ ] 冻结 coverage 映射：complete 可得 NEEDS_WORK/ERROR；partial 仅在未 terminal 时可同 attempt 恢复；inconclusive 永不在当前 attempt PASS；精确重复 canonicalize，冲突重复 fail closed
-- [ ] 定义 `DirectShellBindingV1`：只绑定实际 exec shell 的 canonical realpath、content digest/size/stable metadata、cwd/workspace、PATH、command、approval 和 Gate Plan digest
-- [ ] spawn 前后验证 direct shell；覆盖 PATH shadow、symlink/realpath/content drift、shell replacement、protected-root 和 approval mismatch，合法 toolchain drift进入可操作 reapprove
-- [ ] 明确 binding 不覆盖 shell 内的 package manager、pipeline、shebang、script 或 descendants，不能消除 TOCTOU，也不构成 sandbox/runtime attestation
-- [ ] 定义 `ReleaseProvenanceV1`：manifest 分开记录 source repo/tag/full SHA/main ancestry 与 distribution repo/release tag/URL，并将 distribution tag 绑定 source identity/version/RC approval；最终 asset 对应唯一 build output，publish 不重建
-- [ ] 第三方 GitHub Actions 使用 full commit SHA，checkout 设置 `persist-credentials: false` 和最小权限；12 个公开资产生成并验证 OIDC provenance/attestation
-- [ ] 发布链改成 build/package → 从 ZIP 解压 smoke → staging artifacts → manifest/attestation → draft release → exact upload（禁止 clobber）→ 最终 publish；失败不改变 public latest
-- [ ] 从公开下载 URL 校验 asset name/size/SHA/source run/provenance，attestation issuer 必须是真实 source repo；说明 OIDC 不替代 Gatekeeper/SmartScreen 签名信任，并验收 unsigned 用户路径或另行批准 OS signing
+- [ ] 冻结 `PASS|NEEDS_WORK|ERROR` 与 `PAUSED|STOPPED_BY_USER` 的 reason/continuation/next-action 映射，并让 TUI、headless JSON、Goal panel、footer、`/loop status` 读取同一 durable result
+- [ ] 终态显示 decisive evidence、pre-existing dirty、Wukong touched/added/deleted、checks、calls/tokens/retries/remaining、blocker 和 next；Cancel/Stop 不回滚并明确 Review/Keep/Revert
+- [ ] 写入前记录 workspace/repo baseline；首次触碰路径记录 pre-edit state/digest；外部进程同路径写入时停写并要求重新确认
+- [ ] workspace cleanup 只处理可证明由当前 run 拥有的临时状态；不自动 stash、commit、reset、checkout、push、删除或回滚用户文件
+- [ ] 建立 0.0.22 → 0.1.0 直接升级与 0.0.21 records 兼容矩阵，覆盖 config、provider、session、Goal、contract、criteria、attempt/terminal 和 active run
+- [ ] 历史 terminal PASS 只读保留；无法满足当前不变量的 legacy active attempt 明确结束为非 PASS，再由用户选择 Revised Loop；不静默改写 Goal/check/provider 或扩权
+- [ ] 覆盖 crash/restart、append fault、corrupt/cross-run record、duplicate terminal、concurrent Continue、late write、stop/pause/resume 和 restore-or-revise
+- [ ] provider outcome unknown guard 已有主要实现；补齐 durable replay/恢复矩阵，保持 request ID/idempotency key、可能重复计费警告和无盲目 Resume/Retry
 
-### P0：跨平台、安装与升级
+### RC admission P0：隐私、Resume、跨平台与发布
 
-- [ ] 统一 Gate runner 与 Bash runtime 的 timeout、cancel 和完整 process-tree cleanup；Windows 不只调用单进程 `kill`
-- [ ] 恢复 Windows 实机 CI，并覆盖 macOS/Linux/Windows 的 quoting、空格、Unicode、timeout、cancel、process tree 和 contract restore
-- [ ] 六平台 native bundle 完成功能一致的启动、version、基本 Loop 与 checksum smoke；不引入 Windows FFI 或平台专用隐藏降级
-- [ ] 六平台 fresh install 通过；macOS/Linux 验证 atomic native upgrade，Windows 明确退出后重新运行已校验 installer，不在运行进程内覆盖 executable
-- [ ] 六平台 0.0.22 → 0.1.0 直接升级后旧配置与 active Loop 保持可恢复，并覆盖 0.0.21 records 向后兼容；installer、manifest、tag、12 个资产、SHA 和 ReleaseProvenanceV1 同一 release identity
-- [ ] 验证卸载说明与 release rollback：回撤二进制不破坏旧状态，新 schema 无法被旧二进制读取时必须明确提示并保留可恢复数据
+- [ ] reviewer 继续只读 bounded/redacted attempt-scoped input；源码、raw local evidence、session、日志和 secret 不进入 Wukong Web/D1；`/feedback` 只发送用户预览确认文本
+- [ ] `/login` 空模型目录成功且不改变 BYOK default；Codex/Claude/Cursor/Kimi/Grok 导入只生成 editable Goal，不授予 checks/criteria/trust/permission/consent
+- [ ] 五来源覆盖隐藏敏感字段、损坏格式、symlink escape、workspace mismatch、外部路径和空结果 fixture
+- [ ] exact Gate command 绑定 cwd/workspace、resolved direct shell 和 approval；0.1.0 不实现完整 shell binary content/PATH/descendant attestation
+- [ ] 统一 Gate runner/Bash timeout、cancel 和 process-tree cleanup；恢复 Windows 实机 CI 并覆盖 quoting、空格、Unicode、timeout、cancel 和 contract restore
+- [ ] 六平台 native bundle 完成 version、provider、Resume、基本 Loop、stop/recovery 和 checksum smoke；fresh install 与 0.0.22 → 0.1.0 upgrade 后旧状态可恢复
+- [ ] release workflow 全部 checkout 使用 `persist-credentials: false` 和最小权限；保持 full-SHA Actions、staging ZIP smoke、macOS signing/notarization、OIDC attestation、draft byte verification 和 publish-no-rebuild
+- [ ] 沿用 `release-provenance.json` 证明 source tag/full SHA、workflow run、六个平台和 asset SHA；从公开 URL 回读 name/size/SHA/attestation 并完成 fresh install/upgrade，失败不改变 latest
+- [ ] installer、manifest、tag、12 个 assets/SHA、README、docs、Web、Today、Changelog 和 What's Changed 使用同一 release identity；验证 rollback 不破坏用户状态
 
-### P1：真实项目、Resume 与可理解性
+### RC 期间验证：真实项目、Provider 与用户理解
 
-- [ ] Node、Python、Rust、Go、monorepo 和至少一个 Windows repo 各完成 blocker → fix → full rerun → PASS
-- [ ] 覆盖小型 bug、失败测试、多文件 feature、refactor、docs/config 无 executable checks、dirty workspace、tool missing 等真实任务类型
-- [ ] API compatibility、migration/log-security、frontend/design、monorepo package 四类 criteria 完成 deterministic、with/without、adversarial 和重复稳定 eval
+- [ ] Node、Python、Rust、Go、monorepo 和至少一个 Windows repo 各完成 blocker → fix → full rerun → PASS；覆盖 bug、失败测试、多文件 feature、refactor、docs/config no-check、dirty workspace 和 tool missing
+- [ ] provider 覆盖 valid、invalid key、model not found、rate limit、timeout 和 outcome unknown；首次成功可归因 install/provider/Preflight/Loop/Gate/stop
+- [ ] API compatibility、migration/log-security、frontend/design、monorepo package criteria 完成 deterministic、with/without、adversarial 和重复稳定 eval
 - [ ] Codex、Claude Code、Cursor、Kimi Code、Grok 各完成 picker → editable Goal → Preflight → Loop → terminal/recovery smoke
-- [ ] 首次用户不读内部文档也能理解 Finish Line、workspace 权限、provider-visible input、Gate verdict、STOPPED_BY_USER、保留改动和 next action
-- [ ] Preflight/终态显示 provider calls、tokens、retries、budget；只有可靠 pricing source/version 时显示费用估算，不伪造金额
-- [ ] provider 配置覆盖 valid、invalid key、model not found、rate limit 和 timeout；首次成功漏斗能归因 install/provider/Preflight/Loop/Gate/stop 阶段
-- [ ] 分层日常 targeted gate 与完整 release gate，减少重复测试时间，但不删除合同、安全、恢复和六平台覆盖
+- [ ] 首次用户不读内部文档也能理解 Finish Line、workspace 权限、provider-visible input、Gate verdict、STOPPED_BY_USER、文件归因、budget 和 next action
+- [ ] 同一 fresh fixture 连续三次保持 check order、terminal 和 reason code；targeted/full test、typecheck、lint、build、docs、installer validator 与 clean checkout 通过
 
-### 发布门槛
+### 正式 0.1.0 发布门槛
 
-- [ ] targeted/full test、typecheck、lint、build、docs、installer validator、clean checkout、coverage/executable/provenance fault injection 和六平台 native RC 通过
-- [ ] 25 名 opt-in 全部进入分母；20 名无实时指导完成 install/upgrade + provider smoke + Preflight；15 名首次真实 PASS 且都获得完整 14 天观察窗口；其中 7 名在首次 PASS 后第 1–14 天主动完成第二个不同 Goal PASS
-- [ ] 建立非 telemetry 私有 cohort ledger：记录最小 onboarding/Preflight/PASS 时间、exit stage/reason、terminal comprehension、主动重复、cost/latency 接受度和反馈引用；不记录源码、路径、Goal、prompt、transcript、evidence 或 credential，90 天后删除 participant-level 记录
-- [ ] fresh install 到可执行 Preflight（参与者已有 API Key）中位数 ≤5 分钟、P90 ≤15 分钟；至少 80% 完成者能解释终态、evidence、保留改动和 next action
-- [ ] P0/release-blocking P1、false PASS、pre-existing state loss、workspace 外越界写入、静默重复 provider request、隐私/consent violation 和不可恢复状态为 0；严重事件才重置 14 天 RC
-- [ ] 3 个脱敏授权案例作为正式宣传/launch gate 单列，不阻塞 binary correctness
-- [ ] README、docs、Web、Download、Today、Changelog、What's Changed、manifest、installer 和公开 provenance 只描述/证明已验收能力并与 release 一致
+- [ ] 25 名 opt-in 全部进入分母；20 名无实时指导完成 install/upgrade + provider smoke + executable Preflight；15 名首次真实 PASS 且都获得完整 14 天窗口；7 名在第 1–14 天主动完成第二个不同 Goal PASS
+- [ ] 私有 cohort ledger 只记录最小时间、exit stage/reason、理解、repeat、cost/latency 接受度和反馈引用；不记录源码、路径、Goal、prompt、transcript、evidence 或 credential，90 天后删除 participant-level 记录
+- [ ] 已有 API Key 时 fresh install 到 executable Preflight 中位数 ≤5 分钟、P90 ≤15 分钟；到达 terminal 的用户至少 80% 能解释结果、evidence、保留改动和 next action
+- [ ] P0/release-blocking P1、false PASS、pre-existing state loss、workspace 外写入、静默重复 provider request、privacy/consent violation 和不可恢复状态为 0；严重事件重算 14 天 RC
+- [ ] 3 个脱敏授权案例只作为正式宣传/launch gate，不阻塞 binary correctness
+- [ ] 公开版本、12 assets/SHA、installer、manifest、release notes、Web 和 provenance 从公开 URL 验收一致
 
-### 明确不做
+### P1：值得做但不阻塞 rc.1
 
-- isolated worktree、Candidate Gate、Safe Promote、lease/fencing、target Final Gate、Windows FFI；
-- 并行 Agent、Detach、Supervisor、PR Gate、`/ship`、完整 runtime sandbox；
-- Hosted execution、managed model/credits、payment、quota、entitlement、Team、新 telemetry event/Web-D1 metrics backend 或用 telemetry 推断 cohort；
-- canonical JSON/SARIF 外部 evidence 导入、`@openai/codex-security` 直接依赖及其 Workbench/完整扫描 CLI；
-- Skill command/chaining、authoring/Marketplace、dynamic workflow graph 和新的默认顶层命令。
+- [ ] 把当前 tool/streaming 推导的 activity hints 升级为 TUI/headless 共用的稳定 phase event
+- [ ] 优化 Goal panel、footer、Preflight 和终态信息密度，不做大规模 TUI 重设计
+- [ ] 扩展更多真实 repo、Resume/adversarial fixture、性能基线和 onboarding 文案
+- [ ] 审计并公开现有 optional CLI telemetry 的 exact fields、endpoint、retention 和 opt-out；不新增 event/backend，也不用 telemetry 推断 cohort
+- [ ] 有真实 threat evidence 后再评审完整 direct-shell content/PATH attestation、多层 coverage schema 或公开 evidence interchange
+
+### 明确后移或不做
+
+- 0.1.0 不要求同时新增 `GateCoverageRecordV1`、`FinalFreshnessRecordedV1`、`ProofAggregateRecordedV3`、`LoopEvidenceSnapshotCreatedV3`、`GateAttemptCompletedV2` 的整套替换；只实现最小 completeness/freshness 不变量；
+- 不实现完整 `DirectShellBindingV1` content/PATH/descendant attestation，也不新增 provider 价格数据库；
+- 不做 isolated worktree、Candidate Gate、Safe Promote、lease/fencing、target Final Gate、Windows FFI；
+- 不做并行 Loop、Detach、Supervisor、PR Gate、`/ship`、完整 runtime sandbox；
+- 不做 Hosted execution、managed model/credits、payment、quota、entitlement、Team、新 telemetry backend；
+- 不做 canonical JSON/SARIF 外部 evidence 导入、Codex Security Workbench、Skill command/marketplace、dynamic workflow graph 或新的默认顶层命令。
 
 ## ✅ 0.0.19 — Explicit Finish Line（已发布；验证债务保留）
 
