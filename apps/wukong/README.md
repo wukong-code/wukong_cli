@@ -36,10 +36,12 @@ remain active instead of reporting a false remote success.
 The published binary baseline is `v0.0.22`; this package checkout may contain
 unreleased `0.1.0` stabilization and is not evidence that `0.1.0-rc.1` has
 shipped. Version 0.1.0 is scoped to one controllable, recoverable, explainable
-local Loop: enforceable call/token limits, no-check policy, file attribution,
-terminal usage/next actions, and upgrade/recovery proof are the remaining RC
-contracts. Full coverage-schema replacement and direct-shell content/PATH
-attestation are deferred. The normal interactive path starts from an editable Goal or an
+local Loop. Enforceable call/token limits, versioned no-check policy, file
+attribution, terminal usage/next actions, compatibility fixtures, and native
+release smoke are implemented and covered locally. RC still requires a current
+six-platform candidate run and zero release-blocking defects; final release
+also requires public-asset and opt-in cohort evidence. Full coverage-schema
+replacement and direct-shell content/PATH attestation are deferred. The normal interactive path starts from an editable Goal or an
 optional `/resume`, then enters `/loop` and Gate. Version 0.0.21 preserves every
 distinct built-in risk occurrence under a stable evidence identity when the
 same risk kind appears at different files, lines, or evidence locations. Exact
@@ -64,8 +66,10 @@ Provider discovery first reads the models.dev-compatible catalog configured by
 tries `https://models.dev/api.json`. The source contains a final snapshot path,
 but the official v0.0.22 native archives omitted the snapshot because of a
 release-profile defect. Do not promise offline provider discovery for that
-published binary. A source or development build may use the final fallback only
-when its packaged assets have been verified to contain the snapshot.
+published binary. The unreleased 0.1.0 release workflow now embeds the snapshot
+and ZIP-smokes provider discovery; the current macOS ARM64 release-profile ZIP
+passed that deterministic smoke locally. This still requires six-platform
+candidate CI before RC and does not repair the already published v0.0.22 asset.
 
 Passing `--url` to `wukong provider catalog list` or
 `wukong provider catalog add` disables fallback so custom catalogs fail

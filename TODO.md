@@ -1,6 +1,6 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.22 已发布，下一计划版本直接进入 0.1.0 Trusted Local Loop。0.1.0 已完成设计并部分实施，当前尚未达到 RC；不包含隔离 worktree / Safe Promote。0.2.0 尚未批准开工。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.22 已发布，下一计划版本直接进入 0.1.0 Trusted Local Loop。0.1.0 实现侧 RC P0 已完成本地自动化，当前仍未进入 RC、未发布；不包含隔离 worktree / Safe Promote。0.2.0 尚未批准开工。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
@@ -21,7 +21,7 @@
 - [x] 六平台 Release 的 12 个 ZIP/SHA 资产、官网 manifest/installer 与公开
   版本 surface 同步；macOS ARM64 checksum/binary smoke 通过（2026-07-31）
 
-## ⏳ 0.1.0 — Trusted Local Loop（部分实施，尚未达到 RC）
+## ⏳ 0.1.0 — Trusted Local Loop（实现侧 P0 已自动化，尚未进入 RC）
 
 > 方案：[docs/design/0.1.0-trusted-local-loop.md](docs/design/0.1.0-trusted-local-loop.md)。
 > 本版只交付可控、可恢复、可解释的 Free local-first BYOK 单 Loop。完整多层
@@ -29,50 +29,54 @@
 
 ### RC admission P0：用户输入、Preflight 与成本控制
 
-- [ ] 将 consolidated Preflight 完成到可编辑状态：Goal、Done when、Must not、checks/no-check、dirty paths、exact provider/model、outbound input、permission、iterations、provider-call ceiling 和可选 token budget；高级字段折叠，危险 Continue 固定最后（2026-08-06 已完成统一汇总、dirty review、审批顺序和无 cap 的诚实提示）
-- [ ] 保持 local-read、provider-send、permission、project-check execution distinct approvals；Cancel 不创建 contract/trust/run，也不调用 provider
-- [ ] 把现有 Goal token/turn budget 接入 Loop Preflight、runtime 和 terminal；新增 writer/reviewer provider-call ceiling，真实阻断超限并显示 calls/tokens/retries/remaining
-- [ ] `budget_exhausted` 返回 `NEEDS_WORK` 且允许 same-contract Continue；无可靠 pricing source 时只显示 `Cost unavailable`，不建设价格数据库
+- [x] 将 consolidated Preflight 完成到可编辑状态：Goal、Done when、Must not、checks/no-check、dirty paths、exact provider/model、outbound input、permission、iterations、provider-call ceiling 和可选 token budget；高级字段折叠，危险 Continue 固定最后（2026-08-06）
+- [x] 保持 local-read、provider-send、permission、project-check execution distinct approvals；Cancel 不创建 contract/trust/run，也不调用 provider（2026-08-06）
+- [x] 把现有 Goal token/turn budget 接入 Loop Preflight、runtime 和 terminal；新增 writer/reviewer provider-call ceiling，真实阻断超限并显示 calls/tokens/retries/remaining（2026-08-06）
+- [x] `budget_exhausted` 返回 `NEEDS_WORK` 且允许 same-contract Continue；无可靠 pricing source 时只显示 `Cost unavailable`，不建设价格数据库（2026-08-06）
 
 ### RC admission P0：no-check 与 Gate 完整性
 
-- [ ] 通用 Finish Line warning 不再代替 no-check：只有 versioned discovery/policy 证明无适用 executable checks 时，才能显式确认并写入 Acceptance Contract
-- [ ] source change 缺本应存在 checks 为 `NEEDS_WORK/checks_missing`；tool/permission/runtime 不可用为 `ERROR`；check 已运行失败为 `NEEDS_WORK`；弱化 frozen check 必须 Revised Loop
-- [ ] 在现有 attempt/aggregate/snapshot/terminal 上实现最小 completeness/freshness：绑定 expected/observed checks/no-check、risk scan、fresh reviewer 和 workspace before/after，输出 `complete|partial|inconclusive`
-- [ ] 只有同 attempt `complete` 且 fresh 才能 PASS；partial/inconclusive/stale、budget exhausted、stop、interrupt、corruption、跨 attempt 或 conflicting duplicate 永不 PASS；exact replay 幂等且 terminal 后拒绝 late write
-- [ ] 保持 deterministic failure 不可覆盖、distinct risk occurrence 不丢失、完全相同输入才去重；seeded blocker false PASS 为 0
+- [x] 通用 Finish Line warning 不再代替 no-check：只有 versioned discovery/policy 证明无适用 executable checks 时，才能显式确认并写入 Acceptance Contract（2026-08-06）
+- [x] source change 缺本应存在 checks 为 `NEEDS_WORK/checks_missing`；tool/permission/runtime 不可用为 `ERROR`；check 已运行失败为 `NEEDS_WORK`；弱化 frozen check 必须 Revised Loop（2026-08-06）
+- [x] 在现有 attempt/aggregate/snapshot/terminal 上实现最小 completeness/freshness：绑定 expected/observed checks/no-check、risk scan、fresh reviewer 和 workspace before/after，输出 `complete|partial|inconclusive`（2026-08-06）
+- [x] 只有同 attempt `complete` 且 fresh 才能 PASS；partial/inconclusive/stale、budget exhausted、stop、interrupt、corruption、跨 attempt 或 conflicting duplicate 永不 PASS；exact replay 幂等且 terminal 后拒绝 late write（2026-08-06）
+- [x] 保持 deterministic failure 不可覆盖、distinct risk occurrence 不丢失、完全相同输入才去重；seeded blocker false PASS 为 0（2026-08-06）
 
 ### RC admission P0：结果、文件归因与恢复
 
-- [ ] 冻结 `PASS|NEEDS_WORK|ERROR` 与 `PAUSED|STOPPED_BY_USER` 的 reason/continuation/next-action 映射，并让 TUI、headless JSON、Goal panel、footer、`/loop status` 读取同一 durable result
-- [ ] 终态显示 decisive evidence、pre-existing dirty、Wukong touched/added/deleted、checks、calls/tokens/retries/remaining、blocker 和 next；Cancel/Stop 不回滚并明确 Review/Keep/Revert
-- [ ] 写入前记录 workspace/repo baseline；首次触碰路径记录 pre-edit state/digest；外部进程同路径写入时停写并要求重新确认
-- [ ] workspace cleanup 只处理可证明由当前 run 拥有的临时状态；不自动 stash、commit、reset、checkout、push、删除或回滚用户文件
-- [ ] 建立 0.0.22 → 0.1.0 直接升级与 0.0.21 records 兼容矩阵，覆盖 config、provider、session、Goal、contract、criteria、attempt/terminal 和 active run
-- [ ] 历史 terminal PASS 只读保留；无法满足当前不变量的 legacy active attempt 明确结束为非 PASS，再由用户选择 Revised Loop；不静默改写 Goal/check/provider 或扩权
-- [ ] 覆盖 crash/restart、append fault、corrupt/cross-run record、duplicate terminal、concurrent Continue、late write、stop/pause/resume 和 restore-or-revise
-- [ ] provider outcome unknown guard 已有主要实现；补齐 durable replay/恢复矩阵，保持 request ID/idempotency key、可能重复计费警告和无盲目 Resume/Retry
+- [x] 冻结 `PASS|NEEDS_WORK|ERROR` 与 `PAUSED|STOPPED_BY_USER` 的 reason/continuation/next-action 映射，并让 TUI、headless JSON、Goal panel、footer、`/loop status` 读取同一 durable result（2026-08-06）
+- [x] 终态显示 decisive evidence、pre-existing dirty、Wukong touched/added/deleted、checks、calls/tokens/retries/remaining、blocker 和 next；Cancel/Stop 不回滚并明确 Review/Keep/Revert（2026-08-06）
+- [x] 写入前记录 workspace/repo baseline；首次触碰路径记录 pre-edit state/digest；外部进程同路径写入时停写并要求重新确认（2026-08-06）
+- [x] workspace cleanup 只处理可证明由当前 run 拥有的临时状态；不自动 stash、commit、reset、checkout、push、删除或回滚用户文件（2026-08-06）
+- [x] 建立 0.0.22 → 0.1.0 直接升级与 0.0.21 records 兼容矩阵，覆盖 config、provider、session、Goal、contract、criteria、attempt/terminal 和 active run（2026-08-06）
+- [x] 历史 terminal PASS 只读保留；无法满足当前不变量的 legacy active attempt 明确结束为非 PASS，再由用户选择 Revised Loop；不静默改写 Goal/check/provider 或扩权（2026-08-06）
+- [x] 覆盖 crash/restart、append fault、corrupt/cross-run record、duplicate terminal、concurrent Continue、late write、stop/pause/resume 和 restore-or-revise（2026-08-06）
+- [x] provider outcome unknown guard 已有主要实现；补齐 durable replay/恢复矩阵，保持 request ID/idempotency key、可能重复计费警告和无盲目 Resume/Retry（2026-08-06）
 
 ### RC admission P0：隐私、Resume、跨平台与发布
 
-- [ ] reviewer 继续只读 bounded/redacted attempt-scoped input；源码、raw local evidence、session、日志和 secret 不进入 Wukong Web/D1；`/feedback` 只发送用户预览确认文本
-- [ ] `/login` 空模型目录成功且不改变 BYOK default；Codex/Claude/Cursor/Kimi/Grok 导入只生成 editable Goal，不授予 checks/criteria/trust/permission/consent
-- [ ] 五来源覆盖隐藏敏感字段、损坏格式、symlink escape、workspace mismatch、外部路径和空结果 fixture
-- [ ] exact Gate command 绑定 cwd/workspace、resolved direct shell 和 approval；0.1.0 不实现完整 shell binary content/PATH/descendant attestation
-- [ ] 统一 Gate runner/Bash timeout、cancel 和 process-tree cleanup；恢复 Windows 实机 CI 并覆盖 quoting、空格、Unicode、timeout、cancel 和 contract restore
-- [ ] 六平台 native bundle 完成 version、provider、Resume、基本 Loop、stop/recovery 和 checksum smoke；fresh install 与 0.0.22 → 0.1.0 upgrade 后旧状态可恢复
-- [ ] release workflow 全部 checkout 使用 `persist-credentials: false` 和最小权限；保持 full-SHA Actions、staging ZIP smoke、macOS signing/notarization、OIDC attestation、draft byte verification 和 publish-no-rebuild
+- [x] reviewer 继续只读 bounded/redacted attempt-scoped input；源码、raw local evidence、session、日志和 secret 不进入 Wukong Web/D1；`/feedback` 只发送用户预览确认文本（2026-08-06，既有合同全量回归通过）
+- [x] `/login` 空模型目录成功且不改变 BYOK default；Codex/Claude/Cursor/Kimi/Grok 导入只生成 editable Goal，不授予 checks/criteria/trust/permission/consent（2026-08-06，既有合同全量回归通过）
+- [x] 五来源覆盖隐藏敏感字段、损坏格式、symlink escape、workspace mismatch、外部路径和空结果 fixture（2026-08-06）
+- [x] exact Gate command 绑定 cwd/workspace、resolved direct shell 和 approval；0.1.0 不实现完整 shell binary content/PATH/descendant attestation（2026-08-06）
+- [x] 统一 Gate runner/Bash timeout、cancel 和 process-tree cleanup，并为 Windows quoting、空格、Unicode、timeout、cancel 和 contract restore 建立 workflow/自动化合同（2026-08-06）
+- [ ] 用当前候选实际跑完 Windows 和其余五个平台的 CI，不以 workflow 静态测试代替实机结果
+- [x] 六平台 native bundle 的 version、provider、Resume、基本 Loop、stop/recovery、checksum 与 0.0.22 → 0.1.0 状态恢复已进入 workflow/ZIP smoke；本地 macOS ARM64 release-profile ZIP 已通过（2026-08-06）
+- [ ] 用当前候选实际完成六平台 fresh install、0.0.22 → 0.1.0 upgrade 与旧状态恢复
+- [x] release workflow 全部 checkout 使用 `persist-credentials: false` 和最小权限；保持 full-SHA Actions、staging ZIP smoke、macOS signing/notarization、OIDC attestation、draft byte verification 和 publish-no-rebuild（2026-08-06，workflow 合同与静态测试）
 - [ ] 沿用 `release-provenance.json` 证明 source tag/full SHA、workflow run、六个平台和 asset SHA；从公开 URL 回读 name/size/SHA/attestation 并完成 fresh install/upgrade，失败不改变 latest
 - [ ] installer、manifest、tag、12 个 assets/SHA、README、docs、Web、Today、Changelog 和 What's Changed 使用同一 release identity；验证 rollback 不破坏用户状态
 
 ### RC 期间验证：真实项目、Provider 与用户理解
 
-- [ ] Node、Python、Rust、Go、monorepo 和至少一个 Windows repo 各完成 blocker → fix → full rerun → PASS；覆盖 bug、失败测试、多文件 feature、refactor、docs/config no-check、dirty workspace 和 tool missing
-- [ ] provider 覆盖 valid、invalid key、model not found、rate limit、timeout 和 outcome unknown；首次成功可归因 install/provider/Preflight/Loop/Gate/stop
+- [x] Node、Python、Rust、Go 和 monorepo 的真实工具链 fixture 覆盖 blocker → fix → full rerun → PASS，以及 docs/config no-check、dirty workspace 和 tool missing（2026-08-06）
+- [ ] 至少一个 Windows 实际 repo 完成同一 blocker → fix → full rerun → PASS 用户流程
+- [x] provider 覆盖 valid、invalid key、model not found、rate limit、timeout 和 outcome unknown；首次成功可归因 install/provider/Preflight/Loop/Gate/stop（2026-08-06）
 - [ ] API compatibility、migration/log-security、frontend/design、monorepo package criteria 完成 deterministic、with/without、adversarial 和重复稳定 eval
 - [ ] Codex、Claude Code、Cursor、Kimi Code、Grok 各完成 picker → editable Goal → Preflight → Loop → terminal/recovery smoke
 - [ ] 首次用户不读内部文档也能理解 Finish Line、workspace 权限、provider-visible input、Gate verdict、STOPPED_BY_USER、文件归因、budget 和 next action
-- [ ] 同一 fresh fixture 连续三次保持 check order、terminal 和 reason code；targeted/full test、typecheck、lint、build、docs、installer validator 与 clean checkout 通过
+- [x] targeted/full test、typecheck、lint、build、sherif、package lint 与本地 native installer/ZIP validator 通过（2026-08-06）
+- [ ] 当前候选在 clean checkout 连续三次保持 check order、terminal 和 reason code，并完成 docs/installer 全量候选验收
 
 ### 正式 0.1.0 发布门槛
 
@@ -755,4 +759,4 @@
 
 ---
 
-**最后更新**: 2026-08-06（0.0.22 已发布；0.1.0 Trusted Local Loop 已部分实施，尚未达到 RC）
+**最后更新**: 2026-08-06（0.0.22 已发布；0.1.0 实现侧 RC P0 已完成本地自动化，尚未进入 RC）

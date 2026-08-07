@@ -42,6 +42,16 @@ export interface WireRenderer<K extends RecordType> {
  *  over the full `RecordType` union, so TypeScript forces an entry per kind. */
 type RendererMap = { [K in RecordType]: WireRenderer<K> };
 
+function workspacePathStateSummary(
+  state: AgentRecordOf<'goal.workspace-path-touch.create'>['before'],
+): string {
+  const parts: string[] = [state.kind];
+  if (state.size !== undefined) parts.push(`${state.size} B`);
+  if (state.digest !== undefined) parts.push(`sha256:${state.digest.slice(0, 12)}`);
+  if (state.error !== undefined) parts.push(state.error);
+  return parts.join(' · ');
+}
+
 export const WIRE_RENDERERS: RendererMap = {
   metadata: {
     tone: 'meta',
@@ -585,6 +595,33 @@ export const WIRE_RENDERERS: RendererMap = {
         ),
       };
     },
+  },
+
+  'goal.workspace-path-touch.create': {
+    tone: 'meta',
+    label: 'touch+',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.path}</Mono>
+          <Dim>before {workspacePathStateSummary(r.before)}</Dim>
+        </span>
+      ),
+    }),
+  },
+
+  'goal.workspace-path-touch.update': {
+    tone: 'meta',
+    label: 'touch',
+    headline: (r) => ({
+      main: (
+        <span className="flex items-center gap-2 min-w-0">
+          <Mono>{r.path}</Mono>
+          <Dim>→ {workspacePathStateSummary(r.after)}</Dim>
+          <Mono>{r.toolCallId}</Mono>
+        </span>
+      ),
+    }),
   },
 
   'goal.contract.create': {

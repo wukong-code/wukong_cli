@@ -108,6 +108,7 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           ref: ${{ inputs.source-ref != '' && inputs.source-ref || github.ref }}
+          persist-credentials: false
 
       - name: Setup pnpm
         uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
@@ -120,6 +121,20 @@ jobs:
 
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+
+      - name: Cross-platform Resume, cancellation, quoting, and process lifecycle tests
+        shell: bash
+        run: |
+          pnpm exec vitest run \
+            apps/wukong/test/cli/run-prompt.test.ts \
+            packages/agent-core/test/agent/v0.0.22-compat.test.ts \
+            packages/agent-core/test/harness/goal-session.test.ts \
+            packages/agent-core/test/tools/shell-cancel.test.ts \
+            packages/agent-core/test/tools/shell-quoting.test.ts \
+            packages/agent-core/test/tools/bash-windows-kill.test.ts \
+            packages/kosong/test/e2e/provider-error-handling.test.ts \
+            packages/kaos/test/e2e/process-lifecycle.test.ts \
+            --testTimeout=30000
 
       - name: Setup macOS keychain
         if: runner.os == 'macOS' && inputs.sign-macos
@@ -194,6 +209,7 @@ jobs:
         shell: bash
         env:
           WUKONG_CODE_NATIVE_SMOKE_ARCHIVE: ${{ github.workspace }}/apps/wukong/dist-native/artifacts/wukong-${{ matrix.target }}.zip
+          WUKONG_CODE_EXPECT_BUILT_IN_CATALOG: ${{ inputs.release-artifact && '1' || '0' }}
         run: pnpm --filter @wukong.today/code run test:native:smoke
 
       - name: Upload staged native artifact

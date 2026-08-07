@@ -1,0 +1,13 @@
+# Frozen from the provider/model field shape accepted by the v0.0.22 release.
+default_model = "release-openai"
+
+[providers."release-openai"]
+type = "openai_responses"
+base_url = "https://api.openai.com/v1"
+api_key = "v0.0.22-fixture-key"
+
+[models."release-openai"]
+provider = "release-openai"
+model = "gpt-5"
+max_context_size = 262144
+capabilities = ["image_in", "thinking"]

@@ -315,6 +315,7 @@ async function readCandidate(
       lastJsonObjects(safeSourcePath, fileStat.size),
     ]);
     const records = [...headRecords, ...tailRecords];
+    if (records.length === 0) return undefined;
     const title =
       (candidate.title ?? findTitle(candidate.source, records) ?? `${displaySource(candidate.source)} session`)
         .slice(0, maxTitleLength);
@@ -383,6 +384,17 @@ function userText(
     return contentText(asRecord(record['message'])?.['content']);
   }
   if (source === 'kimi') {
+    const recordKind = (
+      stringValue(record['type'])
+      ?? stringValue(record['role'])
+      ?? stringValue(record['kind'])
+    )?.toLowerCase();
+    if (
+      recordKind !== undefined
+      && recordKind !== 'user'
+      && recordKind !== 'request'
+      && recordKind !== 'prompt'
+    ) return undefined;
     return contentText(record['content']);
   }
   if (source === 'grok') {
@@ -399,6 +411,16 @@ function contentText(value: unknown): string | undefined {
   const text = value
     .map((part) => {
       const record = asRecord(part);
+      const blockType = stringValue(record?.['type'])?.toLowerCase();
+      if (
+        blockType !== undefined
+        && blockType !== 'text'
+        && blockType !== 'input_text'
+        && blockType !== 'user_text'
+        && blockType !== 'plain_text'
+      ) return undefined;
+      const role = stringValue(record?.['role'])?.toLowerCase();
+      if (role !== undefined && role !== 'user') return undefined;
       return stringValue(record?.['text']) ?? stringValue(record?.['content']);
     })
     .filter((item): item is string => item !== undefined)

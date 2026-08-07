@@ -490,7 +490,9 @@ export class SessionSubagentHost {
     role: LoopProviderCallRole | undefined,
   ): void {
     child.setProviderCallReservation(
-      role === undefined ? undefined : () => parent.goal.reserveProviderCall(role),
+      role === undefined
+        ? undefined
+        : (input) => parent.goal.reserveProviderCall(role, input),
     );
   }
 

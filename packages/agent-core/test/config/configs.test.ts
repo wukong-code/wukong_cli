@@ -128,6 +128,27 @@ claim_stale_after_ms = 15000
 `;
 
 describe('harness config TOML loader', () => {
+  it('loads the immutable v0.0.22 BYOK provider config without migration', async () => {
+    const fixtureUrl = new URL(
+      '../fixtures/compat/v0.0.22/config.toml',
+      import.meta.url,
+    );
+    const fixture = await readFile(fixtureUrl, 'utf8');
+    const config = parseConfigString(fixture, 'v0.0.22/config.toml');
+
+    expect(config.defaultModel).toBe('release-openai');
+    expect(config.providers['release-openai']).toEqual({
+      type: 'openai_responses',
+      baseUrl: 'https://api.openai.com/v1',
+      apiKey: 'v0.0.22-fixture-key',
+    });
+    expect(config.models?.['release-openai']).toMatchObject({
+      provider: 'release-openai',
+      model: 'gpt-5',
+      maxContextSize: 262144,
+    });
+  });
+
   it('parses the current config.toml shape through explicit field mappings', () => {
     const config = parseConfigString(COMPLETE_TOML, 'config.toml');
 

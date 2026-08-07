@@ -124,11 +124,23 @@ export interface LoopSummary {
   readonly changedFiles: ReadonlyArray<{
     readonly path: string;
     readonly status: string;
-    readonly attribution?: 'introduced_by_loop' | 'pre_existing_or_modified';
+    readonly attribution?:
+      | 'introduced_by_loop'
+      | 'modified_by_loop'
+      | 'deleted_by_loop'
+      | 'pre_existing_or_modified'
+      | 'unknown';
+    readonly preExisting?: boolean;
+    readonly touchedByLoop?: boolean;
   }>;
   readonly evidence: {
     readonly verification: 'fresh' | 'not_run';
     readonly reviewer: 'fresh' | 'not_run';
+    readonly completeness?: 'complete' | 'partial' | 'inconclusive';
+    readonly fresh?: boolean;
+    readonly expectedProducers?: readonly string[];
+    readonly observedProducers?: readonly string[];
+    readonly missingProducers?: readonly string[];
     readonly generatedAt?: string;
     readonly snapshotId?: string;
   };
@@ -203,8 +215,8 @@ export function loopSummaryJson(goal: GoalSnapshot | null): LoopSummary {
     durationMs: goal?.wallClockMs ?? null,
     tokensUsed: goal?.tokensUsed ?? null,
     providerUsage: goal?.providerUsage ?? null,
-    tokenBudget: goal?.budget.tokenBudget ?? null,
-    remainingTokens: goal?.budget.remainingTokens ?? null,
+    tokenBudget: goal?.budget?.tokenBudget ?? null,
+    remainingTokens: goal?.budget?.remainingTokens ?? null,
     blockers: outcome.status === 'PASS'
       ? []
       : [{ id: outcome.reasonCode, summary: outcome.summary, nextAction: loopNextAction(outcome.reasonCode) }],
@@ -237,8 +249,8 @@ export function loopRuntimeErrorSummary(
     durationMs: goal?.wallClockMs ?? null,
     tokensUsed: goal?.tokensUsed ?? null,
     providerUsage: goal?.providerUsage ?? null,
-    tokenBudget: goal?.budget.tokenBudget ?? null,
-    remainingTokens: goal?.budget.remainingTokens ?? null,
+    tokenBudget: goal?.budget?.tokenBudget ?? null,
+    remainingTokens: goal?.budget?.remainingTokens ?? null,
     blockers: [{
       id: 'runtime_error',
       summary,
@@ -266,7 +278,7 @@ export function formatLoopResultText(result: LoopSummary): string {
     ? 'none recorded'
     : `${String(result.changedFiles.length)} file(s): ${result.changedFiles
         .slice(0, 6)
-        .map((file) => `${file.status} ${file.path}${formatFileAttribution(file.attribution)}`)
+        .map((file) => `${file.status} ${file.path}${formatFileAttribution(file)}`)
         .join(', ')}${result.changedFiles.length > 6 ? ', …' : ''}`;
   const blockerLines = result.blockers.slice(0, 3).flatMap((blocker, index) => [
     `Blocker ${String(index + 1)}  ${blocker.summary}${blocker.file === undefined ? '' : ` (${blocker.file}${blocker.line === undefined ? '' : `:${String(blocker.line)}`})`}`,
@@ -284,36 +296,90 @@ export function formatLoopResultText(result: LoopSummary): string {
     `Usage      ${formatLoopUsage(result)}`,
     `Workspace  ${changed}`,
     `Checks     ${checkSummary}`,
-    `Evidence   verification ${result.evidence.verification}; reviewer ${result.evidence.reviewer}`,
+    `Evidence   ${formatLoopEvidence(result.evidence)}`,
     `Blockers   ${String(result.blockers.length)}`,
     ...blockerLines,
-    `Unverified ${result.evidence.verification === 'not_run' ? 'No verification evidence was recorded.' : 'Nothing beyond the recorded checks and reviewer evidence.'}`,
+    `Unverified ${formatUnverifiedEvidence(result.evidence)}`,
     `Next       ${result.nextAction}`,
   ].join('\n');
 }
 
-function formatFileAttribution(
-  attribution: LoopSummary['changedFiles'][number]['attribution'],
-): string {
-  if (attribution === 'introduced_by_loop') return ' [introduced by Loop]';
-  if (attribution === 'pre_existing_or_modified') return ' [pre-existing or modified]';
+function formatLoopEvidence(evidence: LoopSummary['evidence']): string {
+  return [
+    ...(evidence.completeness === undefined
+      ? []
+      : [`completeness ${evidence.completeness}`]),
+    ...(evidence.fresh === undefined ? [] : [`fresh ${evidence.fresh ? 'yes' : 'no'}`]),
+    `verification ${evidence.verification}`,
+    `reviewer ${evidence.reviewer}`,
+    ...((evidence.missingProducers?.length ?? 0) === 0
+      ? []
+      : [`missing ${evidence.missingProducers!.join(', ')}`]),
+  ].join('; ');
+}
+
+function formatUnverifiedEvidence(evidence: LoopSummary['evidence']): string {
+  if ((evidence.missingProducers?.length ?? 0) > 0) {
+    return `Missing Gate producers: ${evidence.missingProducers!.join(', ')}.`;
+  }
+  return evidence.verification === 'not_run'
+    ? 'No verification evidence was recorded.'
+    : 'Nothing beyond the recorded checks and reviewer evidence.';
+}
+
+function formatFileAttribution(file: LoopSummary['changedFiles'][number]): string {
+  if (file.attribution === 'introduced_by_loop') return ' [introduced by Loop]';
+  if (file.attribution === 'modified_by_loop') {
+    return file.preExisting === true
+      ? ' [pre-existing; modified by Loop]'
+      : ' [modified by Loop]';
+  }
+  if (file.attribution === 'deleted_by_loop') {
+    return file.preExisting === true
+      ? ' [pre-existing; deleted by Loop]'
+      : ' [deleted by Loop]';
+  }
+  if (file.attribution === 'pre_existing_or_modified') {
+    return file.preExisting === true
+      ? ' [pre-existing; Loop touch unknown]'
+      : ' [pre-existing or modified]';
+  }
   return ' [attribution unavailable]';
 }
 
 function formatLoopUsage(
-  result: Pick<LoopSummary, 'providerUsage' | 'tokensUsed' | 'tokenBudget'>,
+  result: Pick<LoopSummary, 'providerUsage' | 'tokensUsed' | 'tokenBudget' | 'remainingTokens'>,
 ): string {
   const usage = result.providerUsage;
-  const writer = usage == null
+  const writer = usage === undefined || usage === null
     ? 'unknown'
-    : `${String(usage.writerCalls)}${usage.writerCallLimit === null ? ' (uncapped)' : `/${String(usage.writerCallLimit)}`}`;
-  const reviewer = usage == null
+    : formatCallBudget(
+        usage.writerCalls,
+        usage.writerCallLimit,
+        usage.remainingWriterCalls,
+      );
+  const reviewer = usage === undefined || usage === null
     ? 'unknown'
-    : `${String(usage.reviewerCalls)}${usage.reviewerCallLimit === null ? ' (uncapped)' : `/${String(usage.reviewerCallLimit)}`}`;
+    : formatCallBudget(
+        usage.reviewerCalls,
+        usage.reviewerCallLimit,
+        usage.remainingReviewerCalls,
+      );
+  const retries = usage === undefined || usage === null
+    ? 'unknown'
+    : String((usage.writerRetries ?? 0) + (usage.reviewerRetries ?? 0));
   const tokens = result.tokensUsed === null
     ? 'unknown'
-    : `${String(result.tokensUsed)}${result.tokenBudget === null ? ' (uncapped)' : `/${String(result.tokenBudget)}`}`;
-  return `Writer calls ${writer} · Reviewer calls ${reviewer} · Tokens ${tokens}`;
+    : `${String(result.tokensUsed)}${result.tokenBudget === null
+      ? ' (uncapped)'
+      : `/${String(result.tokenBudget)} (${String(result.remainingTokens ?? 0)} remaining)`}`;
+  return `Writer calls ${writer} · Reviewer calls ${reviewer} · Retries ${retries} · Tokens ${tokens}`;
+}
+
+function formatCallBudget(used: number, limit: number | null, remaining: number | null): string {
+  return limit === null
+    ? `${String(used)} (uncapped)`
+    : `${String(used)}/${String(limit)} (${String(remaining ?? 0)} remaining)`;
 }
 
 function loopSummaryNextAction(

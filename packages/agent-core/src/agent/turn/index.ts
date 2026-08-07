@@ -951,7 +951,16 @@ export class TurnFlow {
               return undefined;
             },
             authorizeToolExecution: async (ctx) => {
-              return this.agent.permission.beforeToolCall(ctx);
+              const permission = await this.agent.permission.beforeToolCall(ctx);
+              if (
+                permission?.block === true
+                || permission?.syntheticResult !== undefined
+              ) return permission;
+              const workspaceGuard = await this.agent.goal.beforeWorkspaceWrite(
+                ctx.toolCall.id,
+                ctx.execution.accesses ?? [],
+              );
+              return workspaceGuard ?? permission;
             },
             finalizeToolResult: async (ctx) => {
               // Resolve dedup BEFORE firing the PostToolUse hook so same-step
@@ -963,6 +972,7 @@ export class TurnFlow {
                 ctx.args,
                 ctx.result,
               );
+              await this.agent.goal.afterWorkspaceWrite(ctx.toolCall.id, finalResult);
               const { isError, output } = finalResult;
               const event = isError === true ? 'PostToolUseFailure' : 'PostToolUse';
               void this.agent.hooks?.fireAndForgetTrigger(event, {

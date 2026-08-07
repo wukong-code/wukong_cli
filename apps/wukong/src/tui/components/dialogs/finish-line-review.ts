@@ -82,8 +82,10 @@ export class FinishLineReviewComponent extends ChoicePickerComponent {
     reviewChoices.push(
       {
         value: 'advanced',
-        label: 'Review run limit',
-        description: `Review the ${String(options.maxIterations)}-iteration run limit. Provider-call and token caps are not separately configured.`,
+        label: 'Edit run limits',
+        description: options.missingUsageCaps === true
+          ? `Edit the ${String(options.maxIterations)}-iteration limit and configure provider-call/token ceilings.`
+          : `Edit the ${String(options.maxIterations)}-iteration limit and current provider-call/token ceilings.`,
       },
     );
     const choices: readonly ChoiceOption[] = [

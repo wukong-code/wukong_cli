@@ -3,7 +3,7 @@
 > 适用范围: 当前 `wukong_cli` 开发分支；已发布 binary 基线为 `v0.0.22`
 > 更新时间: 2026-08-06
 > 定位: 给 Wukong 一个目标，通过 Goal → Write → Check → Review → Fix 循环直到没有 blocking finding。
-> 版本边界: 本文中的开发分支行为尚未构成 `0.1.0-rc.1` 发布。0.1.0 只稳定可控、可恢复、可解释的单 Loop；可执行 provider-call/token 上限、可信 no-check、完整文件归因和升级/恢复证据仍未完成。完整多层 coverage schema、direct-shell content/PATH attestation 和价格数据库已后移。当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
+> 版本边界: 本文中的开发分支行为尚未构成 `0.1.0-rc.1` 发布。0.1.0 只稳定可控、可恢复、可解释的单 Loop；可执行 provider-call/token 上限、可信 no-check、完整文件归因和兼容/发布自动化已在当前 checkout 实现。六平台当前候选、公开资产、opt-in cohort 和 14 天稳定性证据仍未完成。完整多层 coverage schema、direct-shell content/PATH attestation 和价格数据库已后移。当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
 
 ## 安装正式版
 
@@ -101,7 +101,9 @@ Provider 目录默认先后读取：
 release-profile 缺陷没有嵌入该 snapshot。因此两个网络目录都不可用时，不能承诺
 公开 `v0.0.22` binary 的 `/provider` 或未指定 `--url` 的
 `wukong provider catalog` 仍可离线工作；应按明确错误恢复网络或提供可用 catalog。
-只有确认当前 source/development build 确实打包 snapshot 后，才能依赖最后一级回退。
+当前未发布的 0.1.0 release workflow 已嵌入 snapshot 并在 ZIP 中执行 provider smoke；
+本次 macOS ARM64 release-profile ZIP 使用确定性 snapshot 已通过。它仍需六平台候选 CI，
+也不会改变已发布 `v0.0.22` 的缺陷。
 
 可通过环境变量替换首选目录：
 
@@ -186,23 +188,25 @@ Guest 试用或月度次数，也不请求 Wukong quota 服务。默认单次最
    或密码写进 prompt。
 2. **启动前确认**：TUI 先在一份 Preflight 中显示成功条件、Must not 原文、逐项
    checks、review criteria、Writer/Reviewer、脱敏 Provider origin、既有 dirty paths、
-   权限、出站范围/体积、审批顺序、结果处理和轮次上限；还会明确当前没有单独的
-   provider-call/token 硬上限。Headless dry-run 列出同类运行事实与 required flags。
+   权限、出站范围/体积、审批顺序、结果处理、轮次上限、writer/reviewer
+   provider-call ceiling 和可选 token budget。Headless dry-run 列出同类运行事实与
+   required flags。
    本地读取、Provider 传输、权限和项目 check 执行仍分别授权，避免一次确认静默扩权。
    有风险时应先编辑、查看 dirty workspace 或取消；危险 Continue 固定在最后。
-   “Continue anyway”不放宽 Gate，没有可执行 checks 时仍不能得到 `PASS`。0.1.0
-   目标会把“确实无适用 checks”的 versioned policy decision 与普通 warning 分开，
-   并在这里提供真实执行的 provider-call/token 上限；当前 checkout 尚未闭环。
-3. **执行中**：关注 writer iteration、累计耗时、当前 tool/activity 和真实 blocker。
+   “Continue anyway”不放宽 Gate。只有 versioned policy 证明没有适用 executable
+   checks 时，文档/配置任务才能采用显式 no-check decision；source change 缺少本应
+   存在的 checks 会得到 `NEEDS_WORK/checks_missing`，不能得到 `PASS`。
+3. **执行中**：关注 writer iteration、累计耗时、当前 tool/activity、
+   calls/tokens/retries/remaining budget 和真实 blocker。
    TUI 的 `WRITE` / `CHECK` / `REVIEW` 只是活动提示；headless 当前只明确报告 writer
    iteration 与 running tool，内部 reviewer 不一定单独显示为 `REVIEW`。相同输出或
    blocker 不再无限重复；达到无进展条件会提前停止。
 4. **得到结果**：终态摘要由本地运行记录生成，而不是相信模型的结束文案。它应
    显示可获得的 Gate 状态、writer iteration、Gate attempt、耗时、workspace、checks、
-   evidence、主要 blocker 与确定性的 Next。token、cost、provider call count、reviewer
-   usage 和文件归因只有底层记录可证明时才显示；`unavailable` 或 `unknown` 不能被补写
-   成成功数据。0.1.0 RC 前必须补齐 calls/tokens/retries/remaining，以及
-   pre-existing 与 Wukong touched/added/deleted 的分别展示。
+   evidence、主要 blocker 与确定性的 Next。calls/tokens/retries/remaining 以及
+   pre-existing、Wukong introduced/modified/deleted 和 unknown 会按 durable record 分开
+   展示；无法证明的 token/cost 或文件归因保持 `unavailable` / `unknown`，不能补写成
+   成功数据。
 5. **结果后处理**：Wukong 不会因为 `PASS` 自动 commit、push 或发布。先检查
    `git status --short`、`git diff`，并用 `/loop status` 或 review feedback 检查
    non-blocking findings，再决定提交、继续 Loop、修改 Finish Line，或处理
@@ -218,7 +222,7 @@ Guest 试用或月度次数，也不请求 Wukong quota 服务。默认单次最
 
 在 preflight 选择取消不会创建 run，也不产生上述结果。
 
-0.0.19 的新 Loop 会先进入 Finish Line；当前开发 TUI 已将实际输入、运行设置、dirty workspace、出站边界与结果处理合并到最终 Preflight 汇总，但 distinct security approvals 仍分别执行。确认后才创建合同与 run。`--dry-run` 只生成完整提案、workspace challenge、warning digest 和 Gate approval digest，不创建信任授权、合同或 run。Headless 真正执行 discovered checks 时必须确认 dry-run 返回的精确 digest；`--yes`、Auto 或 YOLO 都不能代替。项目 check 会按当前 OS 权限运行可信 workspace 里的 shell，Wukong 会执行静态风险拦截，但不宣称提供完整 shell sandbox。没有可执行 checks 时即使确认 warning，也不能生成 `PASS`，应补充 checks 或按终态 `Next` 处理。
+0.0.19 的新 Loop 会先进入 Finish Line；当前开发 TUI 已将实际输入、运行设置、dirty workspace、出站边界与结果处理合并到最终 Preflight 汇总，但 distinct security approvals 仍分别执行。确认后才创建合同与 run。`--dry-run` 只生成完整提案、workspace challenge、warning digest 和 Gate approval digest，不创建信任授权、合同或 run。Headless 真正执行 discovered checks 时必须确认 dry-run 返回的精确 digest；`--yes`、Auto 或 YOLO 都不能代替。项目 check 会按当前 OS 权限运行可信 workspace 里的 shell，Wukong 会执行静态风险拦截，但不宣称提供完整 shell sandbox。没有适用 executable checks 时必须采用可审计的 versioned no-check decision；它只覆盖 policy 允许的文档/配置改动。source change 缺少必需 checks 时必须补充 checks 或按 `NEEDS_WORK/checks_missing` 的 `Next` 处理。
 
 0.0.20 会在 Finish Line 的 **Review verification** 中列出本机现有
 Verification Skill 的 strict criteria sidecar。`○ suggested` 只表示

@@ -10,6 +10,7 @@ import { inflateRawSync } from 'node:zlib';
 import { afterEach, describe, expect, it } from 'vitest';
 
 import { appRoot } from '../../../scripts/native/paths.mjs';
+import { verifyArchiveChecksum } from '../../../scripts/native/verify-archive.mjs';
 
 const execFileAsync = promisify(execFile);
 const packageScript = resolve(appRoot, 'scripts/native/package.mjs');
@@ -146,5 +147,24 @@ describe('native release artifacts', () => {
         },
       },
     });
+  });
+
+  it('verifies an exact public archive checksum and rejects filename or digest drift', async () => {
+    const releaseDir = await mkdtemp(join(tmpdir(), 'wukong-public-archive-'));
+    const archivePath = join(releaseDir, 'wukong-linux-x64.zip');
+    const checksumPath = `${archivePath}.sha256`;
+    const archiveBytes = Buffer.from('public release bytes');
+    await writeFile(archivePath, archiveBytes);
+    await writeFile(checksumPath, `${sha256(archiveBytes)}  wukong-linux-x64.zip\n`);
+
+    await expect(verifyArchiveChecksum(archivePath, checksumPath)).resolves.toEqual({
+      archiveName: 'wukong-linux-x64.zip',
+      sha256: sha256(archiveBytes),
+    });
+
+    await writeFile(checksumPath, `${sha256(archiveBytes)}  another.zip\n`);
+    await expect(verifyArchiveChecksum(archivePath, checksumPath)).rejects.toThrow(
+      'does not exactly match',
+    );
   });
 });

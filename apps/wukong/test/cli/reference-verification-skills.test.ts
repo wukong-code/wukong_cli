@@ -10,6 +10,7 @@ const root = join(import.meta.dirname, '..', '..', 'reference-verification-skill
 
 const cases = {
   'api-compatibility': {
+    expectedCriteria: ['compatibility-explicit', 'failures-typed'],
     triggers: [
       'api/openapi.json',
       'apps/web/api/login.ts',
@@ -31,6 +32,7 @@ const cases = {
     ],
   },
   'migration-safety': {
+    expectedCriteria: ['mixed-version-safe', 'retry-recovery-bounded'],
     triggers: [
       'db/schema.sql',
       'migrations/001_add_user.sql',
@@ -52,6 +54,7 @@ const cases = {
     ],
   },
   'log-security': {
+    expectedCriteria: ['sensitive-content-excluded', 'failure-observable-without-payload'],
     triggers: [
       'apps/api/src/logger.ts',
       'apps/web/telemetry/events.ts',
@@ -73,6 +76,7 @@ const cases = {
     ],
   },
   'frontend-design': {
+    expectedCriteria: ['states-complete', 'interaction-consistent'],
     triggers: [
       'apps/admin/src/components/Nav.tsx',
       'apps/admin/src/pages/Home.tsx',
@@ -105,6 +109,17 @@ describe('packaged reference verification criteria', () => {
         version: '0.0.20-test',
         assetDigest,
       };
+      const fixedEvalCatalog = await discoverVerificationCriteriaCatalog({
+        workspaceRoot: import.meta.dirname,
+        roots: [source],
+        changedPaths: [fixture.triggers[0]],
+      });
+      const fixedEvalEntry = fixedEvalCatalog.entries.find((entry) => (
+        entry.ref.criteriaId === skillName
+      ));
+      expect(fixedEvalEntry?.recipe.criteria.map((criterion) => criterion.id)).toEqual(
+        fixture.expectedCriteria,
+      );
       for (const path of fixture.triggers) {
         const catalog = await discoverVerificationCriteriaCatalog({
           workspaceRoot: import.meta.dirname,

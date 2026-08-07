@@ -132,7 +132,8 @@ export class Agent {
 
   private additionalDirs: readonly string[];
   private providerRequestPolicy: ProviderRequestPolicy | undefined;
-  private providerCallReservation: (() => Promise<unknown>) | undefined;
+  private providerCallReservation:
+    ((input: { readonly retry: boolean }) => Promise<unknown>) | undefined;
 
   constructor(options: AgentOptions) {
     this.type = options.type ?? 'main';
@@ -208,7 +209,9 @@ export class Agent {
     this.providerRequestPolicy = policy;
   }
 
-  setProviderCallReservation(reservation: (() => Promise<unknown>) | undefined): void {
+  setProviderCallReservation(
+    reservation: ((input: { readonly retry: boolean }) => Promise<unknown>) | undefined,
+  ): void {
     this.providerCallReservation = reservation;
   }
 
@@ -225,7 +228,7 @@ export class Agent {
           messages: history,
           fields: requestLogFields,
         });
-        await this.reserveProviderCallBeforeSend();
+        await this.reserveProviderCallBeforeSend(requestLogFields?.attempt !== undefined);
         return this.rawGenerate(provider, systemPrompt, tools, history, callbacks, requestOptions);
       };
       const explicitAuth = generateOptions?.auth;
@@ -248,13 +251,13 @@ export class Agent {
     };
   }
 
-  private async reserveProviderCallBeforeSend(): Promise<void> {
+  private async reserveProviderCallBeforeSend(retry: boolean): Promise<void> {
     if (this.providerCallReservation !== undefined) {
-      await this.providerCallReservation();
+      await this.providerCallReservation({ retry });
       return;
     }
     if (this.type === 'main') {
-      await this.goal.reserveProviderCall('writer');
+      await this.goal.reserveProviderCall('writer', { retry });
     }
   }
 

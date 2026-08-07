@@ -8,6 +8,7 @@ import { buildFinishLine } from '@wukong/verification';
 
 import { FinishLineEditorComponent } from '#/tui/components/dialogs/finish-line-editor';
 import { FinishLineReviewComponent } from '#/tui/components/dialogs/finish-line-review';
+import { LoopRuntimeEditorComponent } from '#/tui/components/dialogs/loop-runtime-editor';
 
 const paths: string[] = [];
 const ANSI = /\u001B\[[0-9;]*m/g;
@@ -89,7 +90,7 @@ describe('Finish Line TUI dialogs', () => {
     expect(rendered).toContain('Continue anyway to approvals');
     expect(rendered).not.toContain('Review checks');
     expect(rendered).toContain('Review pre-existing workspace changes');
-    expect(rendered).toContain('Review run limit');
+    expect(rendered).toContain('Edit run limits');
     expect(rendered).toContain('current OS account');
     expect(rendered).toContain('no OS sandbox');
     expect(rendered).toContain('Workspace');
@@ -99,5 +100,67 @@ describe('Finish Line TUI dialogs', () => {
     for (const line of review.render(39)) {
       expect(visibleWidth(line)).toBeLessThanOrEqual(39);
     }
+  });
+
+  it('shows configured usage ceilings without claiming they are missing', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'wukong-finish-line-caps-'));
+    paths.push(cwd);
+    const built = await buildFinishLine({
+      cwd,
+      objective: 'Ship within explicit limits',
+      includeDiscoveredChecks: true,
+    });
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const review = new FinishLineReviewComponent({
+      proposal: built.proposal,
+      summary: 'Writer calls 12\nReviewer calls 4\nToken budget 50000',
+      maxIterations: 10,
+      missingUsageCaps: false,
+      onSelect: vi.fn(),
+      onCancel: vi.fn(),
+    });
+
+    const rendered = strip(review.render(72));
+    expect(rendered).toContain('Edit run limits');
+    expect(rendered).not.toContain('not separately configured');
+  });
+
+  it('edits every runtime ceiling in Preflight and submits one validated draft', () => {
+    const onDone = vi.fn();
+    const editor = new LoopRuntimeEditorComponent({
+      maxIterations: 10,
+      writerModel: 'writer-model',
+      writerProviderCallLimit: 12,
+      reviewerProviderCallLimit: 4,
+      tokenBudget: 50_000,
+      reviewModel: 'reviewer-model',
+      minIntervalMs: 1_000,
+    }, onDone);
+    editor.focused = true;
+
+    const rendered = strip(editor.render(72));
+    expect(rendered).toContain('Maximum iterations');
+    expect(rendered).toContain('Writer model');
+    expect(rendered).toContain('Writer provider calls');
+    expect(rendered).toContain('Reviewer provider calls');
+    expect(rendered).toContain('Token budget');
+    expect(rendered).toContain('Reviewer model');
+    expect(rendered).toContain('Minimum interval (ms)');
+    for (let index = 0; index < 6; index += 1) editor.handleInput('\t');
+    editor.handleInput('\r');
+
+    expect(onDone).toHaveBeenCalledWith({
+      kind: 'submit',
+      draft: {
+        maxIterations: 10,
+        writerModel: 'writer-model',
+        writerProviderCallLimit: 12,
+        reviewerProviderCallLimit: 4,
+        tokenBudget: 50_000,
+        reviewModel: 'reviewer-model',
+        minIntervalMs: 1_000,
+      },
+    });
   });
 });

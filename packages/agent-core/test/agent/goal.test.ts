@@ -1,3 +1,8 @@
+import { mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { LocalKaos, type Kaos } from '@wukong/kaos';
 import { describe, expect, it } from 'vitest';
 import {
   acknowledgeReviewSubjectConsent,
@@ -27,7 +32,7 @@ interface TelemetryRecord {
   readonly properties: TelemetryProperties;
 }
 
-function makeGoalMode() {
+function makeGoalMode(options: { readonly kaos?: Kaos; readonly cwd?: string } = {}) {
   const records: AgentRecord[] = [];
   const replay: AgentReplayRecord[] = [];
   const events: Array<{ readonly type: string; readonly snapshot?: GoalSnapshot | null; readonly change?: GoalChange }> = [];
@@ -58,9 +63,10 @@ function makeGoalMode() {
       },
     },
     config: {
-      cwd: process.cwd(),
+      cwd: options.cwd ?? process.cwd(),
       modelAlias: 'writer-model',
     },
+    kaos: options.kaos ?? ({ pathClass: () => 'posix' } as unknown as Kaos),
     permission: {
       mode: 'manual',
     },
@@ -85,6 +91,10 @@ function replayGoalRecord(goals: GoalMode, record: AgentRecord): void {
       break;
     case 'goal.contract.create':
       goals.restoreContractCreate(record);
+      break;
+    case 'goal.workspace-path-touch.create':
+    case 'goal.workspace-path-touch.update':
+      goals.restoreWorkspacePathTouch(record);
       break;
     case 'loop.run.create':
       goals.restoreLoopRunCreate(record);
@@ -405,6 +415,8 @@ describe('GoalMode creation', () => {
       providerUsage: {
         writerCalls: 0,
         reviewerCalls: 0,
+        writerRetries: 0,
+        reviewerRetries: 0,
         writerCallLimit: 1,
         reviewerCallLimit: 2,
         remainingWriterCalls: 1,
@@ -412,8 +424,8 @@ describe('GoalMode creation', () => {
       },
     });
 
-    await expect(goals.reserveProviderCall('writer')).resolves.toMatchObject({
-      providerUsage: { writerCalls: 1, remainingWriterCalls: 0 },
+    await expect(goals.reserveProviderCall('writer', { retry: true })).resolves.toMatchObject({
+      providerUsage: { writerCalls: 1, writerRetries: 1, remainingWriterCalls: 0 },
     });
     await expect(goals.reserveProviderCall('writer')).rejects.toMatchObject({
       name: 'LoopProviderCallLimitError',
@@ -421,15 +433,16 @@ describe('GoalMode creation', () => {
       limit: 1,
     });
     await goals.reserveProviderCall('reviewer');
-    await goals.reserveProviderCall('reviewer');
+    await goals.reserveProviderCall('reviewer', { retry: true });
     await expect(goals.reserveProviderCall('reviewer')).rejects.toMatchObject({
       name: 'LoopProviderCallLimitError',
       role: 'reviewer',
       limit: 2,
     });
-    expect(records.filter((record) => record.type === 'goal.update').at(-1))
+    expect(records.findLast((record) => record.type === 'goal.update'))
       .toMatchObject({
         providerCalls: { writer: 1, reviewer: 2 },
+        providerRetries: { writer: 1, reviewer: 1 },
       });
   });
 
@@ -923,8 +936,12 @@ describe('GoalMode records', () => {
       replayedAttemptRecord?.type !== 'loop.gate-attempt.create'
       || scanRecord?.type !== 'loop.builtin-risk-scan-result.create'
     ) throw new Error('Gate replay identity fixtures missing');
-    expect(() => replayed.restoreLoopAuditRecord(replayedAttemptRecord)).not.toThrow();
-    expect(() => replayed.restoreLoopAuditRecord(scanRecord)).not.toThrow();
+    expect(() => {
+      replayed.restoreLoopAuditRecord(replayedAttemptRecord);
+    }).not.toThrow();
+    expect(() => {
+      replayed.restoreLoopAuditRecord(scanRecord);
+    }).not.toThrow();
 
     const conflictingScanBase = {
       ...scanRecord.result,
@@ -942,7 +959,9 @@ describe('GoalMode records', () => {
         ),
       },
     };
-    expect(() => replayed.restoreLoopAuditRecord(lateScan)).toThrow('late producer');
+    expect(() => {
+      replayed.restoreLoopAuditRecord(lateScan);
+    }).toThrow('late producer');
 
     const proofRecord = records.find((record) => record.type === 'loop.proof-aggregate.create');
     if (proofRecord?.type !== 'loop.proof-aggregate.create') throw new Error('proof record missing');
@@ -1224,6 +1243,7 @@ describe('GoalMode records', () => {
     goals.restoreUpdate({
       type: 'goal.update',
       providerCalls: { writer: 1, reviewer: 2 },
+      providerRetries: { writer: 1, reviewer: 2 },
       tokensUsed: 450,
     });
 
@@ -1233,6 +1253,8 @@ describe('GoalMode records', () => {
       providerUsage: {
         writerCalls: 1,
         reviewerCalls: 2,
+        writerRetries: 1,
+        reviewerRetries: 2,
         writerCallLimit: 1,
         reviewerCallLimit: 2,
         remainingWriterCalls: 0,
@@ -1319,6 +1341,44 @@ describe('GoalMode records', () => {
     expect(restored.getGoal().goal?.loopResult).toEqual(result);
   });
 
+  it('rejects a PASS Loop result unless Gate evidence is complete and fresh', async () => {
+    const { goals, records } = makeGoalMode();
+    await goals.createGoal({
+      objective: 'never persist a false PASS',
+      stopCondition: 'proof-pass',
+    });
+
+    for (const evidence of [
+      undefined,
+      {
+        verification: 'fresh' as const,
+        reviewer: 'fresh' as const,
+        completeness: 'partial' as const,
+        fresh: true,
+      },
+      {
+        verification: 'fresh' as const,
+        reviewer: 'fresh' as const,
+        completeness: 'complete' as const,
+        fresh: false,
+      },
+    ]) {
+      expect(() => goals.recordLoopResult({
+        schemaVersion: 2,
+        status: 'PASS',
+        reasonCode: 'passed',
+        summary: 'This must not be persisted.',
+        checks: [],
+        blockers: [],
+        evidence,
+      })).toThrow(/complete and fresh/u);
+    }
+
+    expect(records.filter((record) => (
+      record.type === 'goal.update' && record.loopResult?.status === 'PASS'
+    ))).toHaveLength(0);
+  });
+
   it('attributes final changed files against the frozen pre-run workspace baseline', async () => {
     const { goals, records } = makeGoalMode();
     await goals.createGoal({
@@ -1350,11 +1410,13 @@ describe('GoalMode records', () => {
         path: 'src/pre-existing.ts',
         status: 'M',
         attribution: 'pre_existing_or_modified',
+        preExisting: true,
       },
       {
         path: 'src/introduced.ts',
         status: '??',
-        attribution: 'introduced_by_loop',
+        attribution: 'unknown',
+        preExisting: false,
       },
     ]);
     expect(records.find((record) => record.type === 'goal.create')).toMatchObject({
@@ -1362,6 +1424,244 @@ describe('GoalMode records', () => {
         files: [{ path: 'src/pre-existing.ts' }, { path: 'notes/untracked.md' }],
       },
     });
+  });
+
+  it('attributes only directly observed writes to the Loop', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'wukong-goal-touch-'));
+    try {
+      const target = join(workspace, 'introduced.ts');
+      const kaos = (await LocalKaos.create()).withCwd(workspace);
+      const { goals } = makeGoalMode({ kaos, cwd: workspace });
+      await goals.createGoal({
+        objective: 'write one observed file',
+        stopCondition: 'proof-pass',
+        workspaceChangeBaseline: { files: [] },
+      });
+
+      expect(await goals.beforeWorkspaceWrite('write-1', [
+        { kind: 'file', operation: 'write', path: target },
+      ])).toBeUndefined();
+      await writeFile(target, 'created by the loop\n');
+      await goals.afterWorkspaceWrite('write-1', { output: 'ok' });
+
+      const result = goals.recordLoopResult({
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'checks_failed',
+        summary: 'Checks failed.',
+        checks: [],
+        blockers: [],
+        changedFiles: [{ path: 'introduced.ts', status: '??' }],
+      });
+
+      expect(result?.changedFiles).toEqual([{
+        path: 'introduced.ts',
+        status: '??',
+        attribution: 'introduced_by_loop',
+        preExisting: false,
+        touchedByLoop: true,
+      }]);
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it('separates directly modified and deleted files from pre-existing dirty state', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'wukong-goal-existing-touch-'));
+    try {
+      const modified = join(workspace, 'modified.ts');
+      const deleted = join(workspace, 'deleted.ts');
+      await writeFile(modified, 'user dirty baseline\n');
+      await writeFile(deleted, 'clean baseline\n');
+      const kaos = (await LocalKaos.create()).withCwd(workspace);
+      const { goals } = makeGoalMode({ kaos, cwd: workspace });
+      await goals.createGoal({
+        objective: 'modify one dirty file and delete one clean file',
+        stopCondition: 'proof-pass',
+        workspaceChangeBaseline: {
+          files: [{ path: 'modified.ts', status: 'M' }],
+        },
+      });
+
+      expect(await goals.beforeWorkspaceWrite('modify-1', [
+        { kind: 'file', operation: 'write', path: modified },
+      ])).toBeUndefined();
+      await writeFile(modified, 'loop changed this\n');
+      await goals.afterWorkspaceWrite('modify-1', { output: 'ok' });
+
+      expect(await goals.beforeWorkspaceWrite('delete-1', [
+        { kind: 'file', operation: 'write', path: deleted },
+      ])).toBeUndefined();
+      await rm(deleted);
+      await goals.afterWorkspaceWrite('delete-1', { output: 'ok' });
+
+      const result = goals.recordLoopResult({
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'checks_failed',
+        summary: 'Checks failed.',
+        checks: [],
+        blockers: [],
+        changedFiles: [
+          { path: 'modified.ts', status: 'M' },
+          { path: 'deleted.ts', status: 'D' },
+        ],
+      });
+
+      expect(result?.changedFiles).toEqual([
+        {
+          path: 'modified.ts',
+          status: 'M',
+          attribution: 'modified_by_loop',
+          preExisting: true,
+          touchedByLoop: true,
+        },
+        {
+          path: 'deleted.ts',
+          status: 'D',
+          attribution: 'deleted_by_loop',
+          preExisting: false,
+          touchedByLoop: true,
+        },
+      ]);
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it('does not attribute a path when the direct write never completed successfully', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'wukong-goal-failed-touch-'));
+    try {
+      const target = join(workspace, 'introduced.ts');
+      const kaos = (await LocalKaos.create()).withCwd(workspace);
+      const { goals } = makeGoalMode({ kaos, cwd: workspace });
+      await goals.createGoal({
+        objective: 'do not claim a failed write',
+        stopCondition: 'proof-pass',
+        workspaceChangeBaseline: { files: [] },
+      });
+
+      expect(await goals.beforeWorkspaceWrite('write-failed', [
+        { kind: 'file', operation: 'write', path: target },
+      ])).toBeUndefined();
+      await goals.afterWorkspaceWrite('write-failed', { output: 'permission denied', isError: true });
+      await writeFile(target, 'created outside the loop\n');
+
+      const result = goals.recordLoopResult({
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'tool_failed',
+        summary: 'The write tool failed.',
+        checks: [],
+        blockers: [],
+        changedFiles: [{ path: 'introduced.ts', status: '??' }],
+      });
+
+      expect(result?.changedFiles).toEqual([{
+        path: 'introduced.ts',
+        status: '??',
+        attribution: 'unknown',
+        preExisting: false,
+      }]);
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it('persists first-touch digests and blocks an external same-path mutation before overwrite', async () => {
+    const workspace = await mkdtemp(join(tmpdir(), 'wukong-goal-conflict-'));
+    try {
+      const target = join(workspace, 'src.ts');
+      await writeFile(target, 'user baseline\n');
+      const kaos = (await LocalKaos.create()).withCwd(workspace);
+      const { goals, records } = makeGoalMode({ kaos, cwd: workspace });
+      await goals.createGoal({
+        objective: 'edit without overwriting concurrent user work',
+        stopCondition: 'proof-pass',
+        workspaceChangeBaseline: { files: [] },
+      });
+      const accesses = [{
+        kind: 'file' as const,
+        operation: 'readwrite' as const,
+        path: target,
+      }];
+
+      expect(await goals.beforeWorkspaceWrite('edit-1', accesses)).toBeUndefined();
+      await writeFile(target, 'loop edit\n');
+      await goals.afterWorkspaceWrite('edit-1', { output: 'ok' });
+
+      const firstTouch = records.find((record) => record.type === 'goal.workspace-path-touch.create');
+      expect(firstTouch).toMatchObject({
+        type: 'goal.workspace-path-touch.create',
+        path: target,
+        before: { kind: 'file', size: 14 },
+      });
+      expect(firstTouch?.type === 'goal.workspace-path-touch.create'
+        ? firstTouch.before.digest
+        : undefined).toMatch(/^[a-f0-9]{64}$/u);
+      expect(records.find((record) => record.type === 'goal.workspace-path-touch.update')).toMatchObject({
+        type: 'goal.workspace-path-touch.update',
+        path: target,
+        toolCallId: 'edit-1',
+        after: { kind: 'file', size: 10 },
+      });
+
+      const restored = makeGoalMode({ kaos, cwd: workspace }).goals;
+      for (const record of records) replayGoalRecord(restored, record);
+
+      await writeFile(target, 'external edit\n');
+      const blocked = await restored.beforeWorkspaceWrite('edit-2', accesses);
+      expect(blocked).toMatchObject({ block: true });
+      expect(blocked?.reason).toContain('changed outside this Loop');
+      expect(restored.getGoal().goal).toMatchObject({
+        status: 'blocked',
+        loopResult: {
+          status: 'NEEDS_WORK',
+          reasonCode: 'workspace_changed_externally',
+        },
+      });
+    } finally {
+      await rm(workspace, { recursive: true, force: true });
+    }
+  });
+
+  it('accepts an exact workspace-touch replay duplicate and rejects a conflicting duplicate', () => {
+    const { goals } = makeGoalMode();
+    goals.restoreCreate({
+      type: 'goal.create',
+      goalId: 'g-touch-replay',
+      objective: 'replay workspace touch records safely',
+      stopCondition: 'proof-pass',
+    });
+    goals.restoreWorkspacePathTouch({
+      type: 'goal.workspace-path-touch.create',
+      goalId: 'g-touch-replay',
+      path: '/workspace/result.txt',
+      before: { kind: 'missing' },
+    });
+    const update = {
+      type: 'goal.workspace-path-touch.update' as const,
+      goalId: 'g-touch-replay',
+      path: '/workspace/result.txt',
+      toolCallId: 'write-result',
+      after: { kind: 'file' as const, size: 4, digest: 'a'.repeat(64) },
+    };
+
+    goals.restoreWorkspacePathTouch(update);
+    goals.restoreWorkspacePathTouch({
+      ...update,
+      toolCallId: 'write-result-again',
+      after: { kind: 'file', size: 6, digest: 'c'.repeat(64) },
+    });
+    expect(() => {
+      goals.restoreWorkspacePathTouch({
+        ...update,
+        after: { kind: 'file', size: 5, digest: 'b'.repeat(64) },
+      });
+    }).toThrow('Conflicting workspace touch update');
+    expect(() => {
+      goals.restoreWorkspacePathTouch(update);
+    }).not.toThrow();
   });
 
   it('projects restored goal status changes into replay records', () => {

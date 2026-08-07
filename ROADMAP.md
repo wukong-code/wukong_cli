@@ -8,8 +8,9 @@
 0.1.0 Trusted Local Loop：交付一条可控、可恢复、可解释的单 Loop，补齐可编辑
 Preflight、可信 no-check、provider-call/token 上限、dirty workspace 文件归因、
 STOPPED_BY_USER、provider outcome、最小 Gate completeness/freshness、安装升级和
-跨平台验证；不再用完整多层 coverage schema 或 direct-shell content attestation
-阻塞 RC。产品继续 Free + BYOK；隔离 worktree / Safe
+跨平台验证。实现侧 RC P0 已在开发 checkout 完成本地自动化；当前尚未进入 RC，仍需
+当前候选的六平台 CI、公开资产验收、opt-in cohort 与 14 天稳定窗口。不再用完整多层
+coverage schema 或 direct-shell content attestation 阻塞 RC。产品继续 Free + BYOK；隔离 worktree / Safe
 Promote 实验已经取消，当前没有付费计划、Checkout 或 entitlement。
 
 当前版本真相源：
@@ -20,7 +21,7 @@ Promote 实验已经取消，当前没有付费计划、Checkout 或 entitlement
 - [0.0.21 Loop Evidence Integrity](docs/design/0.0.21-loop-evidence-integrity.md)
 - [0.0.21 Release Notes](docs/releases/0.0.21.md)
 - [0.0.22 Release Notes](docs/releases/0.0.22.md)
-- [0.1.0 Trusted Local Loop（部分实施，尚未达到 RC）](docs/design/0.1.0-trusted-local-loop.md)
+- [0.1.0 Trusted Local Loop（实现侧 P0 已自动化，尚未进入 RC）](docs/design/0.1.0-trusted-local-loop.md)
 - [TODO.md](TODO.md)：本仓库执行层任务清单，按本 ROADMAP 的版本拆解
 - `wukong_web/TODO.md`：官网与托管产品 TODO，位于 sibling web 仓库中
 
@@ -150,14 +151,14 @@ Wukong 当前只提供完整的本地 BYOK Loop。0.1.0 的目标是把它做成
 
 ### 下一版本与后续候选
 
-0.1.0 功能设计已经重新完成，当前正在做发布前稳定化，已有部分实现但尚未达到
-RC 或发布。旧设计中依赖 isolated
+0.1.0 功能设计与实现侧 RC P0 已完成本地自动化，当前正在做候选与发布前验证，尚未
+进入 RC 或发布。旧设计中依赖 isolated
 worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继续
 作为实现依据或对外承诺：
 
 | 版本 | 状态与目标 | 发布门槛 |
 |---|---|---|
-| `0.1.0` | **部分实施，尚未达到 RC。** 可控、可恢复、可解释的 Trusted Local Loop：可编辑 Preflight、可信 no-check、调用/token 上限、三态 Gate verdict 与 STOPPED_BY_USER、文件归因、恢复兼容、最小 completeness/freshness、五来源 Resume、六平台安装升级和 public truth；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移 | RC admission P0 先清零；随后 25 名 opt-in 全分母，20 名无实时指导完成 install/upgrade + provider smoke + executable Preflight，15 名首次真实 PASS 且全部获得 14 天窗口，7 名主动完成第二个不同 Goal PASS；false PASS、原状态丢失、越界写入、静默重复 provider request 与隐私冲突为 0；公开资产通过 stage-verify-publish-exact、公开 URL provenance 和 fresh install/upgrade 验证；授权案例只阻断集中宣传 |
+| `0.1.0` | **实现侧 P0 已自动化，尚未进入 RC。** 可控、可恢复、可解释的 Trusted Local Loop：可编辑 Preflight、可信 no-check、调用/token 上限、三态 Gate verdict 与 STOPPED_BY_USER、文件归因、恢复兼容、最小 completeness/freshness、五来源 Resume、六平台安装升级和 public truth；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移 | 当前候选先跑完六平台 CI 并确认 P0/release-blocking P1 为 0；随后 25 名 opt-in 全分母，20 名无实时指导完成 install/upgrade + provider smoke + executable Preflight，15 名首次真实 PASS 且全部获得 14 天窗口，7 名主动完成第二个不同 Goal PASS；false PASS、原状态丢失、越界写入、静默重复 provider request 与隐私冲突为 0；公开资产通过 stage-verify-publish-exact、公开 URL provenance 和 fresh install/upgrade 验证；授权案例只阻断集中宣传 |
 | `0.2.0` | Pro Reliable Autonomy：保留为待重新评审的可靠自治与商业验证候选；不能继承已经取消的 Promote、lease、fencing 或 Final Gate 设计 | 0.1.0 发布并稳定观察至少 30 天；先验证重复多任务监督需求，再单独批准技术方案、Pilot 权益和收费门槛 |
 
 当前顺序是：0.0.22 → 0.1.0-rc.1 → 真实项目与 opt-in cohort → 0.1.0。
@@ -572,7 +573,7 @@ telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
 - 0.0.20 先把有/无 Skill 的所有新 reviewer attempt 统一到 broker trust + run-scoped BYOK provider consent，再可选接入已有 Verification Skill 的 strict qualitative criteria；不执行 Skill command，也不新增顶层命令。
 - 0.0.21 只做 repeated-risk evidence identity 修复与六平台一致发布；不增加新的执行架构。
 - 0.0.22 只做 provider catalog resilience 与 CLI clarity 维护发布；不增加新的执行架构。
-- 0.1.0 规格已收敛：只稳定可控、可恢复、可解释的单 Loop，补齐可编辑 Preflight、可信 no-check、provider-call/token 上限、文件归因、provider outcome、最小 Gate completeness/freshness、兼容恢复、五来源 Resume、六平台安装升级和 stage-verify-publish-exact；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移。RC 期间不加大功能，并要求全分母 opt-in cohort、P0/release-blocking P1 清零和 14 天稳定门槛。
+- 0.1.0 规格已收敛：只稳定可控、可恢复、可解释的单 Loop；可编辑 Preflight、可信 no-check、provider-call/token 上限、文件归因、provider outcome、最小 Gate completeness/freshness、兼容恢复、五来源 Resume 与发布 workflow 已完成本地自动化。下一步是六平台当前候选和 stage-verify-publish-exact 实际验收；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移。RC 期间不加大功能，并要求全分母 opt-in cohort、P0/release-blocking P1 清零和 14 天稳定门槛。
 - 0.2.0 是未批准且待重新评审的 Reliable Autonomy 候选；不能继承已取消的 Promote/lease/fencing 设计，在 0.1.0 真实验证前不开工、不公开 Checkout。
 - 公告与更新通道分离：公告 JSON 由 Web 静态文件维护，失败不阻塞 CLI。
 - `/report` 和 Hosted Report/上传路径保持删除；本地 Gate 结果只在已有显式保存能力下留档。

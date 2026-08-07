@@ -22,6 +22,7 @@ import type {
   ProofAggregateRecorded,
   ReviewSubjectManifestRecordedV1,
   ReviewerResultRecordedV1,
+  WorkspacePathState,
 } from '../goal';
 import type { ToolStoreUpdate } from '../../tools/store';
 import type { CompactionBeginData, CompactionResult } from '../compaction';
@@ -130,6 +131,18 @@ export interface AgentRecordEvents {
     actor?: GoalActor;
     loopResult?: LoopResult;
     providerCalls?: { writer: number; reviewer: number };
+    providerRetries?: { writer: number; reviewer: number };
+  };
+  'goal.workspace-path-touch.create': {
+    goalId: string;
+    path: string;
+    before: WorkspacePathState;
+  };
+  'goal.workspace-path-touch.update': {
+    goalId: string;
+    path: string;
+    toolCallId: string;
+    after: WorkspacePathState;
   };
   'goal.contract.create': {
     goalId: string;

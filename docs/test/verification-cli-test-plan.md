@@ -1,10 +1,54 @@
 # Verification CLI 自动化测试计划
 
-> 日期: 2026-07-14
-> 范围: 现有 verification v1 兼容回归，以及 Loop-first 状态机、fresh reviewer、本地 lifecycle 和角色集成
-> 状态: v1 与 0.0.12 v2 主流程已实现；0.0.12 的 Guest/Free quota contract 已在 0.0.17 移除，当前以本地 BYOK lifecycle 回归为准
+> 日期: 2026-08-06
+> 范围: verification v1 兼容回归、Loop-first 状态机、0.1.0 Trusted Local Loop、native 候选与发布合同
+> 状态: 0.0.22 是已发布基线；0.1.0 实现侧 RC P0 已通过本地自动化，当前尚未进入 RC、未发布
 
-## 0. 0.0.12 v2 发布测试门槛
+## 0. 0.1.0 当前自动化证据
+
+2026-08-06 开发 checkout 的已验证结果：
+
+- 全量：704 个 test files 通过、8 个跳过；9497 tests 通过、49 个跳过、1 个 todo；
+- 质量：`pnpm lint`、`pnpm typecheck`、`pnpm build`、`pnpm sherif`、
+  `pnpm lint:pkg` 全部通过；
+- 重点回归：Preflight/runtime、no-check/completeness、terminal/workspace attribution、
+  恢复/兼容、真实项目/provider error matrix 共 235 个 targeted tests 通过；
+- 兼容：immutable 0.0.22 fixture 与 0.0.21 records 覆盖 config、provider、session、
+  Goal、contract、criteria、attempt/terminal 和 active run；
+- 项目：Node、Python、Rust、Go、monorepo 真实工具链 fixture 通过；
+- Resume：Codex、Claude Code、Cursor、Kimi Code、Grok 的敏感字段、损坏格式、
+  symlink escape、workspace mismatch、外部路径和空结果 fixture 通过；
+- Provider：valid、invalid key、model not found、rate limit、timeout、outcome unknown
+  矩阵通过；
+- Native：macOS ARM64 release-profile ZIP 的 SHA、provider、Resume、Loop smoke 在
+  确定性 catalog snapshot 下通过；六平台 workflow 与 archive 合同静态测试通过。
+
+这些结果证明当前源码的实现与自动化，不证明 `0.1.0-rc.1` 或正式版已经发布。
+以下证据仍未形成：
+
+1. 当前候选在 GitHub Actions 的六平台实机结果；
+2. 公开 URL 的 12 个 assets/SHA、provenance、fresh install 与 0.0.22 → 0.1.0 upgrade；
+3. 至少一个 Windows 实际 repo 的完整 blocker → fix → rerun → PASS；
+4. 25/20/15/7 opt-in cohort 与所有首次 PASS 用户的完整 14 天稳定窗口。
+
+本次 live `models.dev` catalog 生成因网络超时未形成结论；不能把它记录为代码通过或
+失败。release-profile 使用确定性 snapshot 的构建和 ZIP smoke 已单独通过。
+
+### 0.1.0 本地必跑命令
+
+```bash
+pnpm test
+pnpm lint
+pnpm typecheck
+pnpm build
+pnpm sherif
+pnpm lint:pkg
+```
+
+正式 RC 还必须由 release workflow 生成候选，在六个平台执行同一 native smoke，之后
+从公开候选 URL 回读并验证 exact bytes；本地 macOS smoke 不能替代这些步骤。
+
+## 1. 历史 0.0.12 v2 发布测试门槛
 
 当前自动化落点：
 
@@ -60,7 +104,7 @@
 - v1 `verify-pass`、`scan-clean`、`judge-pass` 的持久化 Goal 能迁移并恢复。
 - v1 公开 flags 全部保留或输出明确 warning，不能静默忽略。
 
-## 1. 测试目标
+## 2. Verification 核心测试目标
 
 P0 测试必须证明：
 
@@ -73,7 +117,7 @@ P0 测试必须证明：
 7. TUI `/verify`、`/scan`、`/guard` 能渲染结果或状态。
 8. `wukong_verify` agent tool 能返回 structured summary，并在失败时提醒 agent 不要声明完成。
 
-## 2. 当前自动化测试
+## 3. Verification 核心自动化测试
 
 | 层级 | 文件 | 覆盖 |
 |---|---|---|
@@ -89,7 +133,7 @@ P0 测试必须证明：
 | App unit | `apps/wukong/test/tui/commands/verification.test.ts` | `/verify`、`/scan`、`/guard status` handlers |
 | Agent unit | `packages/agent-core/test/tools/wukong-verify.test.ts` | `wukong_verify` schema、execution、failed verification guidance |
 
-## 3. 必跑命令
+## 4. Verification 核心必跑命令
 
 ```bash
 pnpm --filter @wukong/verification run typecheck
@@ -102,7 +146,7 @@ pnpm --filter @wukong/wukong exec vitest run test/tui/commands/verification.test
 pnpm --filter @wukong/agent-core exec vitest run test/tools/wukong-verify.test.ts
 ```
 
-## 4. CLI smoke
+## 5. CLI smoke
 
 使用真实 entrypoint 验证命令可启动：
 
@@ -134,14 +178,14 @@ tsx --tsconfig apps/wukong/tsconfig.dev.json \
 
 预期 exit code 为 `1`，并输出 `Blocked high-risk command`。
 
-## 5. 后续测试 TODO
+## 6. 后续测试 TODO
 
 1. ~~增加真实 git repo fixture，覆盖 staged + unstaged diff 混合场景。~~ 已完成（2026-07-08，`git.test.ts` + `scan.test.ts` 混合场景）。
 2. ~~增加 Windows shell command parsing 测试。~~ 已完成（2026-07-08，`policy.test.ts`；同时修复 `policy.ts` 的 basename 支持 `\` 分隔符与 `.exe/.cmd/.bat` 后缀）。
 3. 如果 P1 实现 shell hook 安装，必须增加 profile 幂等写入和 disable 安全测试。
 4. runner 层 stdout/stderr 截断（`MAX_CAPTURE_CHARS`）行为测试。
 
-## 6. v1 P0.5 回归清单（按实施顺序：`/proof` → `/judge` → goal gate → `/loop`）
+## 7. v1 P0.5 回归清单（按实施顺序：`/proof` → `/judge` → goal gate → `/loop`）
 
 这些能力已经在 v1 实现。以下测试在 v2 重写期间仍需保留或迁移，不能因为实现替换而丢失原有 gate/loop 回归覆盖：
 

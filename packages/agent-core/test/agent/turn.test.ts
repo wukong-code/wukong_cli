@@ -1543,6 +1543,10 @@ describe('Agent turn flow', () => {
     const ctx = testAgent({ ...oauthOptions, generate, log: logger });
     ctx.configure();
     await ctx.rpc.setModel({ model: 'wukong' });
+    await ctx.agent.goal.createGoal({
+      objective: 'Track provider retries accurately',
+      writerProviderCallLimit: 3,
+    });
     ctx.newEvents();
 
     await ctx.rpc.prompt({ input: [{ type: 'text', text: 'hello' }] });
@@ -1570,6 +1574,11 @@ describe('Agent turn flow', () => {
     expect(payloads[0]).toMatchObject({ turnStep: '0.1' });
     expect(payloads[0]).not.toHaveProperty('attempt');
     expect(payloads[1]).toMatchObject({ turnStep: '0.1', attempt: '2/3' });
+    expect(ctx.agent.goal.getGoal().goal?.providerUsage).toMatchObject({
+      writerCalls: 2,
+      writerRetries: 1,
+      remainingWriterCalls: 1,
+    });
   });
 
   it('force-refreshes OAuth credentials on video upload 401 and falls back to login_required when replay 401', async () => {

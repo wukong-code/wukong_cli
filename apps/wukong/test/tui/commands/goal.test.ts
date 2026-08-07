@@ -193,6 +193,7 @@ const ENTER = '\r';
 const ESCAPE = '\u001B';
 const UP = '\u001B[A';
 const DOWN = '\u001B[B';
+const RIGHT = '\u001B[C';
 
 function fakeSnapshot() {
   return {
@@ -358,6 +359,7 @@ function makeHost(
   const session = {
     id: 'session-1',
     setPermission: vi.fn(async () => {}),
+    setModel: vi.fn(async () => {}),
     createGoal: vi.fn(async () => fakeSnapshot()),
     getGoal: vi.fn(async (): Promise<{ goal: ReturnType<typeof fakeSnapshot> | null }> => ({
       goal: null,
@@ -373,6 +375,10 @@ function makeHost(
     state: {
       appState: {
         model: overrides.model ?? 'wukong-model',
+        availableModels: {
+          'wukong-model': { provider: 'openai', model: 'test' },
+          'writer-model': { provider: 'openai', model: 'writer-test' },
+        },
         permissionMode: overrides.permissionMode ?? 'auto',
         streamingPhase: overrides.streaming ? 'streaming' : 'idle',
         isCompacting: false,
@@ -388,6 +394,7 @@ function makeHost(
         defaultModel: 'wukong-model',
         models: {
           'wukong-model': { provider: 'openai', model: 'test' },
+          'writer-model': { provider: 'openai', model: 'writer-test' },
         },
         providers: {
           openai: { type: 'openai', apiKey: 'test' },
@@ -1276,6 +1283,54 @@ describe('handleLoopSlashCommand', () => {
     expect(session.createGoal).toHaveBeenCalledWith(expect.objectContaining({
       maxIterations: 12,
     }));
+  });
+
+  it('edits the writer model in Preflight but switches only after final approval', async () => {
+    const { host, session } = makeHost();
+
+    await handleLoopSlashCommand(host, 'fix tests');
+    const preflight = mountedPicker(host);
+    preflight.handleInput(DOWN);
+    preflight.handleInput(ENTER);
+
+    const editor = latestMountedPicker(host);
+    editor.handleInput('\t');
+    for (let index = 0; index < 'wukong-model'.length; index += 1) {
+      editor.handleInput(RIGHT);
+    }
+    for (let index = 0; index < 'wukong-model'.length; index += 1) {
+      editor.handleInput('\u007F');
+    }
+    for (const character of 'writer-model') editor.handleInput(character);
+    for (let index = 0; index < 5; index += 1) editor.handleInput('\t');
+    editor.handleInput(ENTER);
+
+    await vi.waitFor(() => {
+      expect(loopPreflightMocks.run).toHaveBeenLastCalledWith(
+        expect.objectContaining({ model: 'writer-model' }),
+      );
+    });
+    expect(session.setModel).not.toHaveBeenCalled();
+    expect(session.createGoal).not.toHaveBeenCalled();
+
+    const revisedPreflight = latestMountedPicker(host);
+    revisedPreflight.handleInput(DOWN);
+    revisedPreflight.handleInput(DOWN);
+    revisedPreflight.handleInput(DOWN);
+    revisedPreflight.handleInput(ENTER);
+    await vi.waitFor(() => {
+      expect((host.mountEditorReplacement as ReturnType<typeof vi.fn>).mock.calls.length)
+        .toBeGreaterThan(3);
+    });
+    latestMountedPicker(host).handleInput(ENTER);
+
+    await vi.waitFor(() => {
+      expect(session.createGoal).toHaveBeenCalled();
+    });
+    expect(session.setModel).toHaveBeenCalledWith('writer-model');
+    expect(host.setAppState).toHaveBeenCalledWith({ model: 'writer-model' });
+    expect(session.setModel.mock.invocationCallOrder[0])
+      .toBeLessThan(session.createGoal.mock.invocationCallOrder[0]!);
   });
 
   it('does not create a local lifecycle record when Loop preflight is blocked', async () => {

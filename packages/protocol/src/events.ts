@@ -172,7 +172,14 @@ export interface LoopResultFinding {
 export interface LoopResultChangedFile {
   readonly path: string;
   readonly status: string;
-  readonly attribution?: 'introduced_by_loop' | 'pre_existing_or_modified';
+  readonly attribution?:
+    | 'introduced_by_loop'
+    | 'modified_by_loop'
+    | 'deleted_by_loop'
+    | 'pre_existing_or_modified'
+    | 'unknown';
+  readonly preExisting?: boolean;
+  readonly touchedByLoop?: boolean;
 }
 
 export interface LoopResultEvidence {
@@ -558,6 +565,8 @@ export interface GoalSnapshot {
   readonly providerUsage?: {
     readonly writerCalls: number;
     readonly reviewerCalls: number;
+    readonly writerRetries: number;
+    readonly reviewerRetries: number;
     readonly writerCallLimit: number | null;
     readonly reviewerCallLimit: number | null;
     readonly remainingWriterCalls: number | null;
@@ -1261,7 +1270,15 @@ export const loopResultFindingSchema = z.object({
 export const loopResultChangedFileSchema = z.object({
   path: z.string(),
   status: z.string(),
-  attribution: z.enum(['introduced_by_loop', 'pre_existing_or_modified']).optional(),
+  attribution: z.enum([
+    'introduced_by_loop',
+    'modified_by_loop',
+    'deleted_by_loop',
+    'pre_existing_or_modified',
+    'unknown',
+  ]).optional(),
+  preExisting: z.boolean().optional(),
+  touchedByLoop: z.boolean().optional(),
 }) satisfies z.ZodType<LoopResultChangedFile>;
 
 export const loopResultEvidenceSchema = z.object({
@@ -1650,6 +1667,8 @@ export const goalSnapshotSchema = z.object({
   providerUsage: z.object({
     writerCalls: z.number().int().nonnegative(),
     reviewerCalls: z.number().int().nonnegative(),
+    writerRetries: z.number().int().nonnegative().default(0),
+    reviewerRetries: z.number().int().nonnegative().default(0),
     writerCallLimit: z.number().int().positive().nullable(),
     reviewerCallLimit: z.number().int().positive().nullable(),
     remainingWriterCalls: z.number().int().nonnegative().nullable(),

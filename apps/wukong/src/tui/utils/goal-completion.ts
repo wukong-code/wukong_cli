@@ -143,7 +143,7 @@ export function buildLoopResultPresentation(
     ? 'none recorded'
     : `${String(changedFiles.length)} file(s): ${changedFiles
         .slice(0, 5)
-        .map((file) => `${file.status} ${file.path}${formatFileAttribution(file.attribution)}`)
+        .map((file) => `${file.status} ${file.path}${formatFileAttribution(file)}`)
         .join(', ')}${changedFiles.length > 5 ? ', …' : ''}`;
   const blockers = result.blockers.slice(0, 3).map((blocker, index) => ({
     label: `Blocker ${String(index + 1)}`,
@@ -163,38 +163,92 @@ export function buildLoopResultPresentation(
     checks: evidence.verification === 'not_run'
       ? 'not run'
       : `${String(passedChecks)}/${String(result.checks.length)} passed`,
-    evidence: `verification ${evidence.verification}; reviewer ${evidence.reviewer}`,
+    evidence: formatLoopEvidence(evidence),
     blockerCount: result.blockers.length,
     blockers,
     additionalBlockerCount: Math.max(0, result.blockers.length - blockers.length),
-    unverified: evidence.verification === 'not_run'
-      ? 'No verification evidence was recorded.'
-      : 'Nothing beyond the recorded checks and reviewer evidence.',
+    unverified: formatUnverifiedEvidence(evidence),
     ...(continuationMode === undefined ? {} : { continuationMode }),
     next,
   };
 }
 
+function formatLoopEvidence(evidence: NonNullable<LoopResult['evidence']>): string {
+  const missing = evidence.missingProducers ?? [];
+  return [
+    ...(evidence.completeness === undefined
+      ? []
+      : [`completeness ${evidence.completeness}`]),
+    ...(evidence.fresh === undefined ? [] : [`fresh ${evidence.fresh ? 'yes' : 'no'}`]),
+    `verification ${evidence.verification}`,
+    `reviewer ${evidence.reviewer}`,
+    ...(missing.length === 0 ? [] : [`missing ${missing.join(', ')}`]),
+  ].join('; ');
+}
+
+function formatUnverifiedEvidence(evidence: NonNullable<LoopResult['evidence']>): string {
+  const missing = evidence.missingProducers ?? [];
+  if (missing.length > 0) return `Missing Gate producers: ${missing.join(', ')}.`;
+  return evidence.verification === 'not_run'
+    ? 'No verification evidence was recorded.'
+    : 'Nothing beyond the recorded checks and reviewer evidence.';
+}
+
 function formatFileAttribution(
-  attribution: NonNullable<LoopResult['changedFiles']>[number]['attribution'],
+  file: NonNullable<LoopResult['changedFiles']>[number],
 ): string {
-  if (attribution === 'introduced_by_loop') return ' [introduced by Loop]';
-  if (attribution === 'pre_existing_or_modified') return ' [pre-existing or modified]';
+  if (file.attribution === 'introduced_by_loop') return ' [introduced by Loop]';
+  if (file.attribution === 'modified_by_loop') {
+    return file.preExisting === true
+      ? ' [pre-existing; modified by Loop]'
+      : ' [modified by Loop]';
+  }
+  if (file.attribution === 'deleted_by_loop') {
+    return file.preExisting === true
+      ? ' [pre-existing; deleted by Loop]'
+      : ' [deleted by Loop]';
+  }
+  if (file.attribution === 'pre_existing_or_modified') {
+    return file.preExisting === true
+      ? ' [pre-existing; Loop touch unknown]'
+      : ' [pre-existing or modified]';
+  }
   return ' [attribution unavailable]';
 }
 
 function formatLoopUsage(stats: LoopResultStats | undefined): string {
-  if (stats === undefined) return 'Writer calls unknown · Reviewer calls unknown · Tokens unknown';
+  if (stats === undefined) {
+    return 'Writer calls unknown · Reviewer calls unknown · Retries unknown · Tokens unknown';
+  }
   const usage = stats.providerUsage;
   const writer = usage === undefined
     ? 'unknown'
-    : `${String(usage.writerCalls)}${usage.writerCallLimit === null ? ' (uncapped)' : `/${String(usage.writerCallLimit)}`}`;
+    : formatCallBudget(
+        usage.writerCalls,
+        usage.writerCallLimit,
+        usage.remainingWriterCalls,
+      );
   const reviewer = usage === undefined
     ? 'unknown'
-    : `${String(usage.reviewerCalls)}${usage.reviewerCallLimit === null ? ' (uncapped)' : `/${String(usage.reviewerCallLimit)}`}`;
+    : formatCallBudget(
+        usage.reviewerCalls,
+        usage.reviewerCallLimit,
+        usage.remainingReviewerCalls,
+      );
+  const retries = usage === undefined
+    ? 'unknown'
+    : String((usage.writerRetries ?? 0) + (usage.reviewerRetries ?? 0));
   const tokenBudget = stats.budget?.tokenBudget;
-  const tokens = `${formatTokens(stats.tokensUsed)}${tokenBudget === undefined || tokenBudget === null ? ' (uncapped)' : `/${formatTokens(tokenBudget)}`}`;
-  return `Writer calls ${writer} · Reviewer calls ${reviewer} · Tokens ${tokens}`;
+  const tokens = `${formatTokens(stats.tokensUsed)}${tokenBudget === undefined || tokenBudget === null
+    ? ' (uncapped)'
+    : `/${formatTokens(tokenBudget)} (${formatTokens(stats.budget?.remainingTokens ?? 0)} remaining)`}`;
+  return `Writer calls ${writer} · Reviewer calls ${reviewer} · Retries ${retries} · Tokens ${tokens}`;
+}
+
+function formatCallBudget(used: number, limit: number | null, remaining: number | null): string {
+  return limit === null
+    ? `${String(used)} (uncapped)`
+    : `${String(used)}/${String(limit)} (${String(remaining ?? 0)} remaining)`;
 }
 
 function formatElapsed(ms: number): string {

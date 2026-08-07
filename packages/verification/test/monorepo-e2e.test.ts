@@ -63,6 +63,33 @@ describe('real monorepo proof E2E', () => {
     expect(result.blockers).toEqual([]);
   });
 
+  it('keeps check order and terminal reason stable across three fresh proof runs', { timeout: 15_000 }, async () => {
+    const cwd = await makeTempRepo('wukong-repeatable-proof-e2e-');
+    await writeJson(join(cwd, 'package.json'), {
+      scripts: {
+        lint: 'node -e "process.exit(0)"',
+        test: 'node -e "process.exit(0)"',
+      },
+    });
+    await writeRepoFile(cwd, 'src/index.ts', 'export const stable = true;\n');
+    await gitAdd(cwd);
+
+    const results = [];
+    for (let run = 0; run < 3; run += 1) {
+      results.push(await runProof({ cwd, writeReport: false }));
+    }
+
+    expect(results.map((result) => ({
+      status: result.status,
+      reasonCode: result.reasonCode,
+      commands: result.verification.selectedCommands,
+    }))).toEqual(Array.from({ length: 3 }, () => ({
+      status: 'passed',
+      reasonCode: 'passed',
+      commands: ['npm run lint', 'npm run test'],
+    })));
+  });
+
   it.skipIf(!toolAvailable('cargo'))(
     'discovers and executes a real Rust project test',
     { timeout: 30_000 },

@@ -66,6 +66,8 @@ describe('buildGoalCompletionMessage', () => {
       providerUsage: {
         writerCalls: 3,
         reviewerCalls: 2,
+        writerRetries: 1,
+        reviewerRetries: 1,
         writerCallLimit: 12,
         reviewerCallLimit: 4,
         remainingWriterCalls: 9,
@@ -95,7 +97,77 @@ describe('buildGoalCompletionMessage', () => {
     }));
 
     expect(text).toContain(
-      'Usage       Writer calls 3/12 · Reviewer calls 2/4 · Tokens 12.5k/50.0k',
+      'Usage       Writer calls 3/12 (9 remaining) · Reviewer calls 2/4 (2 remaining) · Retries 2 · Tokens 12.5k/50.0k (37.5k remaining)',
+    );
+  });
+
+  it('separates pre-existing, modified, introduced, deleted, and unknown paths', () => {
+    const text = buildGoalCompletionMessage(snapshot({
+      loopResult: {
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'checks_failed',
+        summary: 'Checks failed.',
+        iterations: 2,
+        checks: [],
+        blockers: [],
+        changedFiles: [
+          {
+            path: 'src/dirty.ts', status: 'M', attribution: 'pre_existing_or_modified',
+            preExisting: true,
+          },
+          {
+            path: 'src/modified.ts', status: 'M', attribution: 'modified_by_loop',
+            preExisting: true, touchedByLoop: true,
+          },
+          {
+            path: 'src/new.ts', status: '??', attribution: 'introduced_by_loop',
+            preExisting: false, touchedByLoop: true,
+          },
+          {
+            path: 'src/deleted.ts', status: 'D', attribution: 'deleted_by_loop',
+            preExisting: false, touchedByLoop: true,
+          },
+          { path: 'src/unknown.ts', status: 'M', attribution: 'unknown' },
+        ],
+      },
+    }));
+
+    expect(text).toContain('M src/dirty.ts [pre-existing; Loop touch unknown]');
+    expect(text).toContain('M src/modified.ts [pre-existing; modified by Loop]');
+    expect(text).toContain('?? src/new.ts [introduced by Loop]');
+    expect(text).toContain('D src/deleted.ts [deleted by Loop]');
+    expect(text).toContain('M src/unknown.ts [attribution unavailable]');
+  });
+
+  it('shows Gate completeness, freshness, and missing producers', () => {
+    const text = buildGoalCompletionMessage(snapshot({
+      status: 'blocked',
+      loopResult: {
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'reviewer_invalid',
+        summary: 'Reviewer output was invalid.',
+        iterations: 1,
+        checks: [],
+        blockers: [],
+        evidence: {
+          verification: 'fresh',
+          reviewer: 'not_run',
+          completeness: 'partial',
+          fresh: false,
+          expectedProducers: ['required-checks', 'fresh-reviewer', 'workspace-freshness'],
+          observedProducers: ['required-checks'],
+          missingProducers: ['fresh-reviewer', 'workspace-freshness'],
+        },
+      },
+    }));
+
+    expect(text).toContain(
+      'Evidence    completeness partial; fresh no; verification fresh; reviewer not_run; missing fresh-reviewer, workspace-freshness',
+    );
+    expect(text).toContain(
+      'Unverified  Missing Gate producers: fresh-reviewer, workspace-freshness.',
     );
   });
 

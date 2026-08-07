@@ -18,9 +18,12 @@ unreleased `0.1.0` stabilization work. The user-flow notes below describe the
 development checkout; they do not mean that `0.1.0-rc.1` has been published.
 
 The 0.1.0 target is deliberately narrow: one controllable, recoverable, and
-explainable local Loop. Before RC it must add enforceable provider-call/token
-limits, a trustworthy no-check decision, pre-existing-versus-Wukong file
-attribution, complete terminal usage/next actions, and upgrade/recovery proof.
+explainable local Loop. The development checkout now implements enforceable
+provider-call/token limits, a versioned no-check decision,
+pre-existing-versus-Wukong file attribution, terminal usage/next actions, and
+automated compatibility/release smoke coverage. This is implementation
+evidence, not an RC or release: six-platform candidate CI, public-asset
+verification, the opt-in cohort, and the 14-day stability window remain open.
 Full multi-layer coverage schemas, direct-shell content/PATH attestation, and a
 provider pricing database are deferred rather than release blockers.
 
@@ -95,25 +98,31 @@ wukong loop "add input validation to the signup form" --dry-run
 
 ### From input to disposition
 
-Before a Loop starts, one TUI Preflight summary shows the exact Goal, Done when,
-Must not rules, selected project checks and review criteria, Writer/Reviewer,
-sanitized Provider origin, pre-existing Git changes, permission mode, outbound
-input limits, approval order, result handling, and iteration limit. It also
-states that no separate provider-call or token cap is currently enforced.
+Before a Loop starts, one editable TUI Preflight summary shows the exact Goal,
+Done when, Must not rules, selected project checks or versioned no-check
+decision, Writer/Reviewer, sanitized Provider origin, pre-existing Git changes,
+permission mode, outbound input limits, approval order, result handling,
+iteration limit, provider-call ceilings, and optional token budget.
 Headless dry-run prints the same runtime facts and the exact flags needed to
 start. Security decisions remain separate approvals for local read, provider
 transmission, permission, and project-check execution. When there are risks,
 the default is to edit, inspect, or cancel; dangerous Continue is last.
-Starting with no executable checks does not create a shortcut to `PASS`.
+Cancellation creates no run and makes no provider call. A versioned no-check
+decision may cover eligible documentation/configuration work, but source
+changes without required checks fail closed as `NEEDS_WORK/checks_missing`.
 
 During execution, watch the current writer iteration, elapsed time, active tool
-or activity, and any real provider, permission, or check blocker. TUI
+or activity, calls/tokens/retries/remaining budget, and any real provider,
+permission, or check blocker. TUI
 `WRITE`/`CHECK`/`REVIEW` labels are activity hints; headless output currently
 reports writer iterations and running tools, and an internal reviewer is not
 always exposed as a distinct `REVIEW` phase. Model prose saying “done” is not a
 verified result.
 
-At the end, act on the deterministic terminal summary:
+At the end, act on the deterministic terminal summary. It separates decisive
+evidence, pre-existing changes, files introduced/modified/deleted by the Loop,
+unknown attribution, checks, calls/tokens/retries/remaining budget, the primary
+blocker, and the safe Next action:
 
 - `PASS`: checks and the read-only reviewer passed. Inspect `git status --short`,
   `git diff`, and `/loop status` or the review feedback for non-blocking

@@ -196,11 +196,23 @@ export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRA
     } else {
       lines.push(row(
         'Writer calls',
-        value(formatCallUsage(providerUsage.writerCalls, providerUsage.writerCallLimit)),
+        value(formatCallUsage(
+          providerUsage.writerCalls,
+          providerUsage.writerCallLimit,
+          providerUsage.remainingWriterCalls,
+        )),
       ));
       lines.push(row(
         'Reviewer calls',
-        value(formatCallUsage(providerUsage.reviewerCalls, providerUsage.reviewerCallLimit)),
+        value(formatCallUsage(
+          providerUsage.reviewerCalls,
+          providerUsage.reviewerCallLimit,
+          providerUsage.remainingReviewerCalls,
+        )),
+      ));
+      lines.push(row(
+        'Retries',
+        value(String((providerUsage.writerRetries ?? 0) + (providerUsage.reviewerRetries ?? 0))),
       ));
     }
     if (goal.budget.tokenBudget !== null) {
@@ -328,8 +340,10 @@ export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRA
   return lines;
 }
 
-function formatCallUsage(used: number, limit: number | null): string {
-  return limit === null ? `${String(used)} (uncapped)` : `${String(used)}/${String(limit)}`;
+function formatCallUsage(used: number, limit: number | null, remaining: number | null): string {
+  return limit === null
+    ? `${String(used)} (uncapped)`
+    : `${String(used)}/${String(limit)} · ${String(remaining ?? 0)} remaining`;
 }
 
 /** The configured hard stop(s), or null when the goal is unbounded. */

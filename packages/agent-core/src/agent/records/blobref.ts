@@ -78,6 +78,8 @@ export class BlobStore {
       case "goal.review.record":
       case "goal.strategy.record":
       case "goal.update":
+      case "goal.workspace-path-touch.create":
+      case "goal.workspace-path-touch.update":
       case "loop.builtin-risk-scan-result.create":
       case "loop.continuation.create":
       case "loop.evidence-snapshot.create":
@@ -155,6 +157,8 @@ export class BlobStore {
       case "goal.review.record":
       case "goal.strategy.record":
       case "goal.update":
+      case "goal.workspace-path-touch.create":
+      case "goal.workspace-path-touch.update":
       case "loop.builtin-risk-scan-result.create":
       case "loop.continuation.create":
       case "loop.evidence-snapshot.create":

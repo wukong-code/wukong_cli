@@ -1119,6 +1119,8 @@ describe('WukongTUI startup', () => {
     ['codex', 'Codex'],
     ['claude', 'Claude Code'],
     ['cursor', 'Cursor'],
+    ['kimi', 'Kimi Code'],
+    ['grok', 'Grok'],
   ] as const)(
     'continues a %s suggestion through edited Loop objective to terminal PASS',
     async (source, sourceLabel) => {
@@ -1196,6 +1198,7 @@ describe('WukongTUI startup', () => {
       expect(driver.state.editor.getText()).toBe(
         `/loop Continue the ${sourceLabel} task: Finish the pending implementation`,
       );
+      expect(createGoal).not.toHaveBeenCalled();
       const editedObjective = `Finish the ${sourceLabel} task and pass the project gate`;
       driver.state.editor.setText(`/loop ${editedObjective}`);
       tui.handleUserInput(driver.state.editor.getText());

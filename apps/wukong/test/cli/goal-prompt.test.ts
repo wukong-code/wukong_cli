@@ -144,6 +144,8 @@ describe('Loop result contract', () => {
       providerUsage: {
         writerCalls: 3,
         reviewerCalls: 2,
+        writerRetries: 1,
+        reviewerRetries: 1,
         writerCallLimit: 12,
         reviewerCallLimit: 4,
         remainingWriterCalls: 9,
@@ -182,7 +184,64 @@ describe('Loop result contract', () => {
       remainingTokens: 37_500,
     });
     expect(formatLoopResultText(result)).toContain(
-      'Usage      Writer calls 3/12 · Reviewer calls 2/4 · Tokens 12500/50000',
+      'Usage      Writer calls 3/12 (9 remaining) · Reviewer calls 2/4 (2 remaining) · Retries 2 · Tokens 12500/50000 (37500 remaining)',
+    );
+  });
+
+  it('shows Gate completeness, freshness, and missing producers in headless results', () => {
+    const result = loopSummaryJson({
+      status: 'blocked',
+      terminalReason: 'loop:NEEDS_WORK:reviewer_invalid:Reviewer output was invalid.',
+      loopRunId: 'run-evidence',
+      loopTerminal: {
+        schemaVersion: 1,
+        runId: 'run-evidence',
+        contractId: 'contract-evidence',
+        status: 'NEEDS_WORK',
+        reasonCode: 'reviewer_invalid',
+        continuationPolicy: {
+          mode: 'same-contract',
+          automaticRetry: false,
+          requiresPreflightRevalidation: true,
+        },
+        blockerKeys: [],
+        terminalDigest: 'sha256:terminal-evidence',
+        createdAt: 1,
+      },
+      iteration: 1,
+      wallClockMs: 10,
+      tokensUsed: 20,
+      budget: { tokenBudget: null, remainingTokens: null },
+      loopResult: {
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'reviewer_invalid',
+        summary: 'Reviewer output was invalid.',
+        iterations: 1,
+        checks: [],
+        blockers: [],
+        evidence: {
+          verification: 'fresh',
+          reviewer: 'not_run',
+          completeness: 'partial',
+          fresh: false,
+          expectedProducers: ['required-checks', 'fresh-reviewer', 'workspace-freshness'],
+          observedProducers: ['required-checks'],
+          missingProducers: ['fresh-reviewer', 'workspace-freshness'],
+        },
+      },
+    } as any);
+
+    expect(result.evidence).toMatchObject({
+      completeness: 'partial',
+      fresh: false,
+      missingProducers: ['fresh-reviewer', 'workspace-freshness'],
+    });
+    expect(formatLoopResultText(result)).toContain(
+      'Evidence   completeness partial; fresh no; verification fresh; reviewer not_run; missing fresh-reviewer, workspace-freshness',
+    );
+    expect(formatLoopResultText(result)).toContain(
+      'Unverified Missing Gate producers: fresh-reviewer, workspace-freshness.',
     );
   });
 
@@ -200,8 +259,19 @@ describe('Loop result contract', () => {
       nextAction: 'Fix checks.',
       checks: [],
       changedFiles: [
-        { path: 'src/new.ts', status: '??', attribution: 'introduced_by_loop' },
-        { path: 'src/existing.ts', status: 'M', attribution: 'pre_existing_or_modified' },
+        {
+          path: 'src/new.ts', status: '??', attribution: 'introduced_by_loop',
+          preExisting: false, touchedByLoop: true,
+        },
+        {
+          path: 'src/existing.ts', status: 'M', attribution: 'modified_by_loop',
+          preExisting: true, touchedByLoop: true,
+        },
+        {
+          path: 'src/deleted.ts', status: 'D', attribution: 'deleted_by_loop',
+          preExisting: false, touchedByLoop: true,
+        },
+        { path: 'src/unknown.ts', status: 'M', attribution: 'unknown' },
       ],
       evidence: { verification: 'not_run', reviewer: 'not_run' },
       durationMs: 1,
@@ -213,7 +283,9 @@ describe('Loop result contract', () => {
     });
 
     expect(text).toContain('?? src/new.ts [introduced by Loop]');
-    expect(text).toContain('M src/existing.ts [pre-existing or modified]');
+    expect(text).toContain('M src/existing.ts [pre-existing; modified by Loop]');
+    expect(text).toContain('D src/deleted.ts [deleted by Loop]');
+    expect(text).toContain('M src/unknown.ts [attribution unavailable]');
   });
 
   it('maps max iterations to NEEDS_WORK and exit 1', () => {

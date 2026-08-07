@@ -126,6 +126,10 @@ function restoreAgentRecord(agent: Agent, input: AgentRecord): void {
     case 'goal.update':
       agent.goal.restoreUpdate(input);
       return;
+    case 'goal.workspace-path-touch.create':
+    case 'goal.workspace-path-touch.update':
+      agent.goal.restoreWorkspacePathTouch(input);
+      return;
     case 'goal.contract.create':
       agent.goal.restoreContractCreate(input);
       return;

@@ -34,6 +34,7 @@ jobs:
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
           fetch-depth: 0
+          persist-credentials: false
 
       - name: Validate tag, package, and release notes
         id: contract
@@ -101,6 +102,7 @@ jobs:
         with:
           ref: ${{ needs.validate-source.outputs.release_tag }}
           path: source
+          persist-credentials: false
 
       - name: Checkout public distribution truth
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -109,6 +111,7 @@ jobs:
           ref: main
           path: distribution
           token: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+          persist-credentials: false
 
       - name: Checkout website installer mirror
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -117,6 +120,7 @@ jobs:
           ref: main
           path: website
           token: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+          persist-credentials: false
 
       - name: Download all six staged builds
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
@@ -155,13 +159,13 @@ jobs:
           set -euo pipefail
           if gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" >/dev/null 2>&1; then
             IS_DRAFT="$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isDraft --jq .isDraft)"
-            if [[ "$IS_DRAFT" != "true" ]]; then
-              echo "::error::Refusing to overwrite an existing public release: $RELEASE_TAG"
-              exit 1
+            if [[ "$IS_DRAFT" = "true" ]]; then
+              gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" \
+                --title "Wukong Code ${RELEASE_TAG}" \
+                --notes-file source/release-notes.md
+            else
+              echo "Reusing existing non-draft release $RELEASE_TAG for a failed-smoke retry."
             fi
-            gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" \
-              --title "Wukong Code ${RELEASE_TAG}" \
-              --notes-file source/release-notes.md
           else
             gh release create "$RELEASE_TAG" --repo "$RELEASE_REPO" \
               --draft \
@@ -188,9 +192,164 @@ jobs:
             cmp "$FILE" "remote-draft/$(basename "$FILE")"
           done
 
-      - name: Publish verified draft
+      - name: Publish verified release without changing latest
         shell: bash
         run: |
           set -euo pipefail
-          gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" --draft=false --latest
+          gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" --draft=false --latest=false
           test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isDraft --jq .isDraft)" = "false"
+
+      - name: Re-download and verify public release assets
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir public-release
+          gh release download "$RELEASE_TAG" --repo "$RELEASE_REPO" --dir public-release
+          test "$(find public-release -maxdepth 1 -type f | wc -l | tr -d ' ')" = "13"
+          for FILE in source/release-assets/*; do
+            cmp "$FILE" "public-release/$(basename "$FILE")"
+          done
+          for FILE in public-release/*.zip; do
+            gh attestation verify "$FILE" \
+              --repo "$GITHUB_REPOSITORY" \
+              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/publish-binary.yml" \
+              --source-digest "$SOURCE_SHA"
+          done
+
+  public-native-smoke:
+    name: Public native smoke (${{ matrix.target }})
+    needs:
+      - validate-source
+      - finalize-release
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: ubuntu-24.04
+            target: linux-x64
+          - os: ubuntu-24.04-arm
+            target: linux-arm64
+          - os: macos-15-intel
+            target: darwin-x64
+          - os: macos-latest
+            target: darwin-arm64
+          - os: windows-latest
+            target: win32-x64
+          - os: windows-11-arm
+            target: win32-arm64
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_REPO: mutnpc/wukong-code
+      RELEASE_TAG: ${{ needs.validate-source.outputs.release_tag }}
+      VERSION: ${{ needs.validate-source.outputs.version }}
+      WUKONG_CODE_BUILD_TARGET: ${{ matrix.target }}
+    steps:
+      - name: Checkout exact smoke implementation
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.validate-source.outputs.release_tag }}
+          path: source
+          persist-credentials: false
+
+      - name: Download and checksum public native archive
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/public-native"
+          ARCHIVE="wukong-${{ matrix.target }}.zip"
+          gh release download "$RELEASE_TAG" --repo "$RELEASE_REPO" \
+            --pattern "$ARCHIVE" --pattern "$ARCHIVE.sha256" \
+            --dir "$RUNNER_TEMP/public-native"
+          node source/apps/wukong/scripts/native/verify-archive.mjs \
+            "$RUNNER_TEMP/public-native/$ARCHIVE" \
+            "$RUNNER_TEMP/public-native/$ARCHIVE.sha256"
+
+      - name: Functional smoke public native archive
+        shell: bash
+        env:
+          WUKONG_CODE_NATIVE_SMOKE_ARCHIVE: ${{ runner.temp }}/public-native/wukong-${{ matrix.target }}.zip
+          WUKONG_CODE_EXPECT_BUILT_IN_CATALOG: '1'
+        run: node source/apps/wukong/scripts/native/smoke.mjs
+
+      - name: Direct upgrade from v0.0.22 without losing the old binary on failure
+        if: runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          INSTALL_DIR="$RUNNER_TEMP/wukong-upgrade/bin"
+          WUKONG_VERSION=v0.0.22 WUKONG_INSTALL_DIR="$INSTALL_DIR" sh source/install.sh
+          "$INSTALL_DIR/wukong" --version | grep -F '0.0.22'
+          WUKONG_VERSION="$RELEASE_TAG" WUKONG_INSTALL_DIR="$INSTALL_DIR" sh source/install.sh
+          "$INSTALL_DIR/wukong" --version | grep -F "$VERSION"
+
+      - name: Direct Windows upgrade from v0.0.22 after process exit
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $upgradeRoot = Join-Path $env:RUNNER_TEMP 'wukong-upgrade'
+          $oldAssets = Join-Path $upgradeRoot 'v0.0.22-assets'
+          $installDir = Join-Path $upgradeRoot 'bin'
+          $candidateDir = Join-Path $upgradeRoot 'candidate'
+          $stateDir = Join-Path $upgradeRoot 'state'
+          New-Item -ItemType Directory -Force -Path $oldAssets, $installDir, $candidateDir, $stateDir | Out-Null
+
+          $oldArchiveName = "wukong-$env:WUKONG_CODE_BUILD_TARGET.zip"
+          gh release download v0.0.22 --repo $env:RELEASE_REPO `
+            --pattern $oldArchiveName --pattern "$oldArchiveName.sha256" `
+            --dir $oldAssets
+          $oldArchive = Join-Path $oldAssets $oldArchiveName
+          node source/apps/wukong/scripts/native/verify-archive.mjs `
+            $oldArchive "$oldArchive.sha256"
+          Expand-Archive -LiteralPath $oldArchive -DestinationPath $installDir -Force
+
+          $env:WUKONG_CODE_HOME = $stateDir
+          $env:WUKONG_CODE_NO_AUTO_UPDATE = '1'
+          $env:WUKONG_CODE_CATALOG_OFFLINE = '1'
+          $env:WUKONG_TELEMETRY = '0'
+          $installedExe = Join-Path $installDir 'wukong.exe'
+          & $installedExe --version | Select-String -SimpleMatch '0.0.22'
+          & $installedExe provider list --json | Out-Null
+          if (-not (Test-Path -LiteralPath (Join-Path $stateDir 'config.toml'))) {
+            throw 'v0.0.22 did not create the user config before upgrade'
+          }
+
+          $candidateArchive = Join-Path $env:RUNNER_TEMP "public-native/$oldArchiveName"
+          Expand-Archive -LiteralPath $candidateArchive -DestinationPath $candidateDir -Force
+          $candidateExe = Join-Path $candidateDir 'wukong.exe'
+          & $candidateExe --version | Select-String -SimpleMatch $env:VERSION
+
+          # The old process has exited before replacement. Keep a same-directory
+          # backup until the installed candidate starts and reads the same home.
+          $backupExe = Join-Path $installDir 'wukong-v0.0.22.exe'
+          Move-Item -LiteralPath $installedExe -Destination $backupExe
+          try {
+            Copy-Item -LiteralPath $candidateExe -Destination $installedExe
+            & $installedExe --version | Select-String -SimpleMatch $env:VERSION
+            & $installedExe provider list --json | Out-Null
+            Remove-Item -LiteralPath $backupExe
+          } catch {
+            Remove-Item -LiteralPath $installedExe -ErrorAction SilentlyContinue
+            Move-Item -LiteralPath $backupExe -Destination $installedExe
+            throw
+          }
+
+  promote-latest:
+    name: Promote verified release to latest
+    needs:
+      - validate-source
+      - public-native-smoke
+    runs-on: ubuntu-latest
+    env:
+      GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+      RELEASE_REPO: mutnpc/wukong-code
+      RELEASE_TAG: ${{ needs.validate-source.outputs.release_tag }}
+    steps:
+      - name: Promote only after all public native smoke jobs pass
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" --latest
+          test "$(gh release view --repo "$RELEASE_REPO" --json tagName --jq .tagName)" = "$RELEASE_TAG"

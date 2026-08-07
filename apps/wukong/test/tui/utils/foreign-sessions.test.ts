@@ -192,6 +192,107 @@ describe('discoverForeignSessionRows', () => {
     });
   });
 
+  it('never projects Kimi system, auth, terminal, or memtrace records as user requests', async () => {
+    const sessionDir = join(home, '.kimi-code/sessions/kimi-safe');
+    const history = join(home, '.kimi-code/user-history/kimi-safe.jsonl');
+    await Promise.all([
+      mkdir(sessionDir, { recursive: true }),
+      mkdir(join(history, '..'), { recursive: true }),
+    ]);
+    await writeFile(
+      join(home, '.kimi-code/session_index.jsonl'),
+      JSON.stringify({ sessionId: 'kimi-safe', sessionDir, workDir }),
+    );
+    await writeFile(join(sessionDir, 'state.json'), JSON.stringify({ title: 'Safe Kimi task' }));
+    await writeFile(history, [
+      JSON.stringify({ type: 'user', content: 'Finish the safe user request' }),
+      JSON.stringify({ type: 'system', content: 'hidden system prompt' }),
+      JSON.stringify({ type: 'auth', content: 'secret bearer token' }),
+      JSON.stringify({ type: 'terminal', content: 'raw terminal output' }),
+      JSON.stringify({ type: 'memtrace', content: 'hidden memory trace' }),
+    ].join('\n'));
+
+    const rows = await discoverForeignSessionRows({ source: 'kimi', homeDir: home, workDir });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.last_prompt).toBe('Finish the safe user request');
+    const projected = JSON.stringify(rows[0]);
+    expect(projected).not.toContain('hidden system prompt');
+    expect(projected).not.toContain('secret bearer token');
+    expect(projected).not.toContain('raw terminal output');
+    expect(projected).not.toContain('hidden memory trace');
+  });
+
+  it('projects only allowlisted user text blocks across foreign transcript formats', async () => {
+    const codex = join(home, '.codex/sessions/2026/07/18/rollout-safe.jsonl');
+    const claude = join(home, '.claude/projects/project/claude-safe.jsonl');
+    const cursor = join(
+      home,
+      '.cursor/projects/tmp-wukong-resume-project/agent-transcripts/cursor-safe/cursor-safe.jsonl',
+    );
+    const grokDir = join(home, '.grok/sessions/2026-07-22/grok-safe');
+    await Promise.all([
+      mkdir(join(codex, '..'), { recursive: true }),
+      mkdir(join(claude, '..'), { recursive: true }),
+      mkdir(join(cursor, '..'), { recursive: true }),
+      mkdir(grokDir, { recursive: true }),
+    ]);
+    await writeFile(codex, [
+      JSON.stringify({ type: 'session_meta', payload: { id: 'codex-safe', cwd: workDir } }),
+      JSON.stringify({
+        type: 'response_item',
+        payload: {
+          type: 'message',
+          role: 'user',
+          content: [
+            { type: 'input_text', text: 'Safe Codex request' },
+            { type: 'system', text: 'hidden Codex system text' },
+          ],
+        },
+      }),
+    ].join('\n'));
+    await writeFile(claude, JSON.stringify({
+      type: 'user',
+      sessionId: 'claude-safe',
+      cwd: workDir,
+      message: {
+        content: [
+          { type: 'text', text: 'Safe Claude request' },
+          { type: 'tool_result', content: 'hidden Claude terminal output' },
+        ],
+      },
+    }));
+    await writeFile(cursor, JSON.stringify({
+      role: 'user',
+      message: {
+        content: [
+          { type: 'text', text: 'Safe Cursor request' },
+          { type: 'memtrace', text: 'hidden Cursor memory trace' },
+        ],
+      },
+    }));
+    await writeFile(join(grokDir, 'summary.json'), JSON.stringify({
+      chat_format_version: 1,
+      generated_title: 'Safe Grok task',
+      info: { id: 'grok-safe', cwd: workDir },
+    }));
+    await writeFile(join(grokDir, 'chat_history.jsonl'), JSON.stringify({
+      type: 'user',
+      content: [
+        { type: 'text', text: 'Safe Grok request' },
+        { type: 'auth', content: 'hidden Grok credential' },
+      ],
+    }));
+
+    const rows = await discoverForeignSessionRows({ homeDir: home, workDir });
+    expect(rows.find((row) => row.source === 'codex')?.last_prompt).toBe('Safe Codex request');
+    expect(rows.find((row) => row.source === 'claude')?.last_prompt).toBe('Safe Claude request');
+    expect(rows.find((row) => row.source === 'cursor')?.last_prompt).toBe('Safe Cursor request');
+    expect(rows.find((row) => row.source === 'grok')?.last_prompt).toBe('Safe Grok request');
+    const projected = JSON.stringify(rows);
+    expect(projected).not.toMatch(/hidden .*?(system|terminal|memory|credential)/iu);
+  });
+
   it('discovers only supported Grok chat history formats', async () => {
     const validDir = join(home, '.grok/sessions/2026-07-22/grok-id');
     const unsupportedDir = join(home, '.grok/sessions/2026-07-22/grok-v2');
@@ -286,6 +387,77 @@ describe('discoverForeignSessionRows', () => {
     expect(rows[0]?.external?.id).toBe('valid');
   });
 
+  it('returns no sessions for damaged records across all five sources', async () => {
+    const paths = [
+      join(home, '.codex/sessions/2026/07/18/rollout-damaged.jsonl'),
+      join(home, '.claude/projects/project/damaged.jsonl'),
+      join(
+        home,
+        '.cursor/projects/tmp-wukong-resume-project/agent-transcripts/damaged/damaged.jsonl',
+      ),
+      join(home, '.kimi-code/session_index.jsonl'),
+      join(home, '.grok/sessions/2026-07-22/damaged/summary.json'),
+    ];
+    await Promise.all(paths.map(async (path) => {
+      await mkdir(join(path, '..'), { recursive: true });
+      await writeFile(path, 'not json');
+    }));
+
+    await expect(discoverForeignSessionRows({ homeDir: home, workDir }))
+      .resolves.toEqual([]);
+  });
+
+  it('filters workspace mismatches across all five sources', async () => {
+    const otherWorkDir = '/tmp/another-resume-project';
+    const codex = join(home, '.codex/sessions/2026/07/18/rollout-other.jsonl');
+    const claude = join(home, '.claude/projects/project/other.jsonl');
+    const cursor = join(
+      home,
+      '.cursor/projects/tmp-another-resume-project/agent-transcripts/other/other.jsonl',
+    );
+    const kimiDir = join(home, '.kimi-code/sessions/other');
+    const grokDir = join(home, '.grok/sessions/2026-07-22/other');
+    await Promise.all([
+      mkdir(join(codex, '..'), { recursive: true }),
+      mkdir(join(claude, '..'), { recursive: true }),
+      mkdir(join(cursor, '..'), { recursive: true }),
+      mkdir(kimiDir, { recursive: true }),
+      mkdir(grokDir, { recursive: true }),
+    ]);
+    await writeFile(codex, JSON.stringify({
+      type: 'session_meta', payload: { id: 'codex-other', cwd: otherWorkDir },
+    }));
+    await writeFile(claude, JSON.stringify({
+      type: 'user', sessionId: 'claude-other', cwd: otherWorkDir,
+      message: { content: 'Other Claude task' },
+    }));
+    await writeFile(cursor, JSON.stringify({
+      role: 'user', message: { content: 'Other Cursor task' },
+    }));
+    await writeFile(join(home, '.kimi-code/session_index.jsonl'), JSON.stringify({
+      sessionId: 'kimi-other', sessionDir: kimiDir, workDir: otherWorkDir,
+    }));
+    await writeFile(join(kimiDir, 'state.json'), JSON.stringify({ lastPrompt: 'Other Kimi task' }));
+    await writeFile(join(grokDir, 'summary.json'), JSON.stringify({
+      chat_format_version: 1,
+      info: { id: 'grok-other', cwd: otherWorkDir },
+    }));
+    await writeFile(join(grokDir, 'chat_history.jsonl'), JSON.stringify({
+      type: 'user', content: 'Other Grok task',
+    }));
+
+    await expect(discoverForeignSessionRows({ homeDir: home, workDir }))
+      .resolves.toEqual([]);
+  });
+
+  it.each(['codex', 'claude', 'cursor', 'kimi', 'grok'] as const)(
+    'returns an empty result when %s has no local sessions',
+    async (source) => {
+      await expect(discoverForeignSessionRows({ source, homeDir: home, workDir }))
+        .resolves.toEqual([]);
+    },
+  );
+
   it('rejects a transcript symlink that escapes the known source root', async () => {
     const outside = join(home, 'outside.jsonl');
     const linked = join(home, '.codex/sessions/2026/07/18/rollout-linked.jsonl');
@@ -300,6 +472,30 @@ describe('discoverForeignSessionRows', () => {
 
     expect(rows).toEqual([]);
   });
+
+  it.each(['claude', 'cursor'] as const)(
+    'rejects a %s transcript symlink that escapes its source root',
+    async (source) => {
+      const outside = join(home, `${source}-outside.jsonl`);
+      const linked = source === 'claude'
+        ? join(home, '.claude/projects/project/linked.jsonl')
+        : join(
+            home,
+            '.cursor/projects/tmp-wukong-resume-project/agent-transcripts/linked/linked.jsonl',
+          );
+      await mkdir(join(linked, '..'), { recursive: true });
+      await writeFile(outside, source === 'claude'
+        ? JSON.stringify({
+            type: 'user', sessionId: 'escaped', cwd: workDir,
+            message: { content: 'Escaped Claude request' },
+          })
+        : JSON.stringify({ role: 'user', message: { content: 'Escaped Cursor request' } }));
+      await symlink(outside, linked);
+
+      await expect(discoverForeignSessionRows({ source, homeDir: home, workDir }))
+        .resolves.toEqual([]);
+    },
+  );
 
   it('uses the last request from a large transcript without loading the whole file', async () => {
     const codex = join(home, '.codex/sessions/2026/07/18/rollout-large.jsonl');

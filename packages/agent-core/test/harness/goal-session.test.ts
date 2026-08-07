@@ -1,8 +1,13 @@
-import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'pathe';
 
-import { APIConnectionError, APIStatusError, type ProviderConfig } from '@wukong/kosong';
+import {
+  APIConnectionError,
+  APIStatusError,
+  APITimeoutError,
+  type ProviderConfig,
+} from '@wukong/kosong';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { ProviderManager } from '../../src/session/provider-manager';
@@ -105,6 +110,67 @@ async function setupSession(
 }
 
 describe('goal session end-to-end', () => {
+  it('blocks a second direct write when an external process changed the same path', async () => {
+    const sessionDir = await makeTempDir();
+    const target = join(sessionDir, 'shared.ts');
+    await writeFile(target, 'baseline\n');
+    const events: Array<Record<string, unknown>> = [];
+    const responses = createScriptedGenerate();
+    let generateCalls = 0;
+    const generate: NonNullable<AgentOptions['generate']> = async (...args) => {
+      generateCalls += 1;
+      if (generateCalls === 2) await writeFile(target, 'external edit\n');
+      return responses.generate(...args);
+    };
+    const { session, agent } = await setupSession(
+      sessionDir,
+      events,
+      ['Write'],
+      generate,
+    );
+    const api = new SessionAPIImpl(session);
+    await api.createGoal({
+      agentId: 'main',
+      objective: 'edit without losing concurrent user work',
+      stopCondition: 'proof-pass',
+      workspaceChangeBaseline: { files: [] },
+    });
+
+    responses.mockNextResponse({
+      type: 'function',
+      id: 'write-1',
+      name: 'Write',
+      arguments: JSON.stringify({ path: target, content: 'loop edit\n' }),
+    });
+    responses.mockNextResponse({
+      type: 'function',
+      id: 'write-2',
+      name: 'Write',
+      arguments: JSON.stringify({ path: target, content: 'would overwrite external work\n' }),
+    });
+    responses.mockNextResponse({
+      type: 'text',
+      text: 'I stopped because the workspace changed externally.',
+    });
+
+    agent.turn.prompt([{ type: 'text', text: 'Start the safe edit.' }]);
+    await agent.turn.waitForCurrentTurn();
+    await session.flushMetadata();
+
+    expect(await readFile(target, 'utf-8')).toBe('external edit\n');
+    expect((await api.getGoal({ agentId: 'main' })).goal).toMatchObject({
+      status: 'blocked',
+      loopResult: {
+        status: 'NEEDS_WORK',
+        reasonCode: 'workspace_changed_externally',
+      },
+    });
+    const records = await readWireRecords(sessionDir);
+    expect(records.filter((record) => record['type'] === 'goal.workspace-path-touch.create')).toHaveLength(1);
+    expect(records.filter((record) => record['type'] === 'goal.workspace-path-touch.update')).toHaveLength(1);
+    expect(JSON.stringify(agent.context.history)).toContain('changed outside this Loop');
+  });
+
   it('drives a goal across sequential turns until the model marks it complete', async () => {
     const sessionDir = await makeTempDir();
     const events: Array<Record<string, unknown>> = [];
@@ -610,6 +676,44 @@ describe('goal session end-to-end', () => {
     const goal = (await api.getGoal({ agentId: 'main' })).goal;
     expect(goal?.status).toBe('paused');
     expect(goal?.terminalReason).toBe('Paused after provider authentication error: Unauthorized');
+  });
+
+  it('pauses the goal with an explicit provider API reason when the model is not found', async () => {
+    const sessionDir = await makeTempDir();
+    const events: Array<Record<string, unknown>> = [];
+    const { session, agent } = await setupSession(sessionDir, events, ['GetGoal'], async () => {
+      throw new APIStatusError(404, 'Model native-smoke-model was not found', 'req-404-model');
+    });
+    const api = new SessionAPIImpl(session);
+    await api.createGoal({ agentId: 'main', objective: 'work' });
+
+    agent.turn.prompt([{ type: 'text', text: 'work' }]);
+    await agent.turn.waitForCurrentTurn();
+
+    const goal = (await api.getGoal({ agentId: 'main' })).goal;
+    expect(goal?.status).toBe('paused');
+    expect(goal?.terminalReason).toBe(
+      'Paused after provider API error: Model native-smoke-model was not found',
+    );
+  });
+
+  it('pauses the goal with an explicit provider connection reason on timeout', async () => {
+    const sessionDir = await makeTempDir();
+    const events: Array<Record<string, unknown>> = [];
+    const { session, agent } = await setupSession(sessionDir, events, ['GetGoal'], async () => {
+      throw new APITimeoutError('request timed out after 30s');
+    });
+    const api = new SessionAPIImpl(session);
+    await api.createGoal({ agentId: 'main', objective: 'work' });
+
+    agent.turn.prompt([{ type: 'text', text: 'work' }]);
+    await agent.turn.waitForCurrentTurn();
+
+    const goal = (await api.getGoal({ agentId: 'main' })).goal;
+    expect(goal?.status).toBe('paused');
+    expect(goal?.terminalReason).toBe(
+      'Paused after provider connection error: request timed out after 30s',
+    );
   });
 
   it('pauses the goal on model configuration errors', async () => {

@@ -46,6 +46,7 @@ import {
   FinishLineReviewComponent,
   type FinishLineReviewChoice,
 } from '../components/dialogs/finish-line-review';
+import { LoopRuntimeEditorComponent } from '../components/dialogs/loop-runtime-editor';
 import {
   VerificationCriteriaSelectorComponent,
   type VerificationCriteriaChoice,
@@ -817,6 +818,7 @@ export type ParsedLoopCommand =
       readonly stopCondition: 'proof-pass';
       readonly maxIterations: number;
       readonly minIntervalMs?: number;
+      readonly writerModel?: string;
       readonly reviewModel?: string;
       readonly writerProviderCallLimit?: number;
       readonly reviewerProviderCallLimit?: number;
@@ -1019,17 +1021,22 @@ async function openFinishLineReview(
   verificationSkills: readonly VerificationCriteriaChoice[] = [],
   verificationCatalogDigest?: string,
 ): Promise<void> {
+  const writerModel = parsed.writerModel ?? host.state.appState.model;
+  if (host.state.appState.availableModels[writerModel] === undefined) {
+    host.showError(`Writer model alias "${writerModel}" is not configured.`);
+    return;
+  }
   const config = await host.harness.getConfig();
   const reviewProvider = resolveLoopReviewProvider(
     config,
-    parsed.reviewModel ?? host.state.appState.model,
+    parsed.reviewModel ?? writerModel,
   );
   const result = await runLoopPreflight({
     objective: draft.objective,
     completionCriterion: draft.completionCriterion,
     constraints: draft.constraints,
     discoveredCheckDecision,
-    model: host.state.appState.model,
+    model: writerModel,
     workspace: host.state.appState.workDir ?? process.cwd(),
     mode: 'tui-proposal',
     verificationSkills,
@@ -1059,8 +1066,8 @@ function showFinishLineReview(
         preflight,
         parsed.maxIterations,
         {
-          writerModel: host.state.appState.model,
-          reviewerModel: parsed.reviewModel ?? host.state.appState.model,
+          writerModel: parsed.writerModel ?? host.state.appState.model,
+          reviewerModel: parsed.reviewModel ?? parsed.writerModel ?? host.state.appState.model,
           permission: host.state.appState.permissionMode,
           writerProviderCallLimit: parsed.writerProviderCallLimit,
           reviewerProviderCallLimit: parsed.reviewerProviderCallLimit,
@@ -1280,37 +1287,27 @@ function showAdvancedLoopSettings(
   preflight: LoopPreflightReady,
   discoveredCheckDecision: DiscoveredCheckDecision,
 ): void {
-  const limits = [...new Set([parsed.maxIterations, 5, 10, 20])].toSorted((a, b) => a - b);
   host.mountEditorReplacement(
-    new ChoicePickerComponent({
-      title: 'Loop run limit',
-      hint: '↑↓ navigate · Enter apply · Esc back',
-      notice: [
-        `Reviewer      ${parsed.reviewModel ?? 'fresh reviewer using the active model'}`,
-        `Permission    ${host.state.appState.permissionMode}`,
-        `Every         ${parsed.minIntervalMs === undefined ? 'after each writer attempt' : `${String(parsed.minIntervalMs)} ms`}`,
-        'Provider calls have no separate cap configured for this run.',
-        'Token usage has no separate cap configured for this run.',
-        'Cancel the preflight if an iteration limit alone is not acceptable.',
-        'Use /loop flags to change reviewer model or interval.',
-      ].join('\n'),
-      options: limits.map((limit) => ({
-        value: String(limit),
-        label: `${String(limit)} maximum iterations${limit === parsed.maxIterations ? ' (current)' : ''}`,
-        description: 'Per-run limit; continuing a terminal run starts a new bounded run.',
-      })),
-      onSelect: (value) => {
-        const maxIterations = Number.parseInt(value, 10);
-        showFinishLineReview(
+    new LoopRuntimeEditorComponent({
+      maxIterations: parsed.maxIterations,
+      writerModel: parsed.writerModel ?? host.state.appState.model,
+      writerProviderCallLimit: parsed.writerProviderCallLimit,
+      reviewerProviderCallLimit: parsed.reviewerProviderCallLimit,
+      tokenBudget: parsed.tokenBudget,
+      reviewModel: parsed.reviewModel,
+      minIntervalMs: parsed.minIntervalMs,
+    }, (result) => {
+      if (result.kind === 'submit') {
+        void openFinishLineReview(
           host,
-          { ...parsed, maxIterations },
+          { ...parsed, ...result.draft },
           draft,
           rawArgs,
-          preflight,
           discoveredCheckDecision,
+          selectedCriteriaChoices(preflight),
+          preflight.verificationCatalog.catalogDigest,
         );
-      },
-      onCancel: () => {
+      } else {
         showFinishLineReview(
           host,
           parsed,
@@ -1319,7 +1316,7 @@ function showAdvancedLoopSettings(
           preflight,
           discoveredCheckDecision,
         );
-      },
+      }
     }),
   );
 }
@@ -1563,6 +1560,15 @@ async function startConfirmedLoop(
 ): Promise<void> {
   let run: Awaited<ReturnType<typeof beginLoopRun>> | undefined;
   let finalized: LoopPreflightReady | undefined;
+  const previousWriterModel = host.state.appState.model;
+  const writerModel = parsed.writerModel ?? previousWriterModel;
+  let writerModelChanged = false;
+  const restoreWriterModel = async (): Promise<void> => {
+    if (!writerModelChanged) return;
+    await host.requireSession().setModel(previousWriterModel);
+    host.setAppState({ model: previousWriterModel });
+    writerModelChanged = false;
+  };
   await createGoal(
     host,
     {
@@ -1587,7 +1593,7 @@ async function startConfirmedLoop(
           completionCriterion: draft.completionCriterion,
           constraints: draft.constraints,
           discoveredCheckDecision,
-          model: host.state.appState.model,
+          model: writerModel,
           workspace: host.state.appState.workDir ?? process.cwd(),
           mode: 'tui-confirmed',
           acknowledgeWarningSetDigest:
@@ -1607,16 +1613,29 @@ async function startConfirmedLoop(
             initialPreflight.reviewSubjectConsentProposal.consentProposalDigest,
           reviewProvider: resolveLoopReviewProvider(
             config,
-            parsed.reviewModel ?? host.state.appState.model,
+            parsed.reviewModel ?? writerModel,
           ),
           getActiveGoal: async () => (await host.requireSession().getGoal()).goal,
         });
         if (!result.ready) {
           host.showError(formatLoopPreflightBlocked(result));
+          await restoreWriterModel();
           return false;
         }
         const trustGrant = await ensureTuiWorkspaceTrust(host, result.proposal);
-        if (trustGrant === false) return false;
+        if (trustGrant === false) {
+          return false;
+        }
+        if (writerModel !== host.state.appState.model) {
+          try {
+            await host.requireSession().setModel(writerModel);
+          } catch (error) {
+            host.showError(`Failed to switch writer model: ${formatErrorMessage(error)}`);
+            return false;
+          }
+          host.setAppState({ model: writerModel });
+          writerModelChanged = true;
+        }
         const trustedProposal = trustGrant === undefined
           || result.proposal.workspaceTrust === undefined
           ? result.proposal
@@ -1658,6 +1677,7 @@ async function startConfirmedLoop(
       },
       onCreateError: async () => {
         if (run !== undefined) await stopLoopRun(run, 0);
+        await restoreWriterModel();
       },
       sendInput: () => {
         host.sendNormalUserInput(draft.objective);

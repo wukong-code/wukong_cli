@@ -5,8 +5,10 @@
 > 本开发 checkout：未发布的 `0.1.0` 稳定化工作，不是 `0.1.0-rc.1`
 
 0.1.0 的唯一当前设计是[可控、可恢复、可解释的 Trusted Local Loop](design/0.1.0-trusted-local-loop.md)：
-RC 前只补齐 Preflight 成本上限、no-check、文件归因、终态、恢复兼容和最小 Gate
-completeness/freshness；完整多层 coverage schema 与 direct-shell attestation 后移。
+Preflight 成本上限、no-check、文件归因、终态、恢复兼容和最小 Gate
+completeness/freshness 已在开发 checkout 实现并通过本地自动化；当前仍需六平台候选
+CI、公开资产、opt-in cohort 和 14 天稳定窗口，不能据此称为 RC 或正式版。完整多层
+coverage schema 与 direct-shell attestation 后移。
 
 Wukong Code 的主流程是 **Goal → Write → Check → Review → Fix**。下方“已发布”
 只描述 `0.0.22`；标成“开发 checkout”的命令和行为只有从当前源码构建时才可用，

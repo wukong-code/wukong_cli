@@ -556,9 +556,13 @@ async function runGoalGate(
         signal,
       );
       if (proof.status === 'blocked') {
+        const runtimeFailure = proof.reasonCode === 'check_unavailable'
+          || proof.reasonCode === 'check_timed_out';
         return {
           ...reviewed,
           passed: false,
+          terminal: runtimeFailure ? true : reviewed.terminal,
+          terminalStatus: runtimeFailure ? 'ERROR' : reviewed.terminalStatus,
           reason: proof.recommendation,
           reasonCode: proof.reasonCode,
           blockers: proof.blockers,

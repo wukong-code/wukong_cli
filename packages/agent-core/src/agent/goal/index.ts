@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 
 import {
   canonicalDigest,
@@ -29,6 +29,11 @@ import {
 } from '@wukong/verification';
 import { ErrorCodes, WukongError } from '#/errors';
 import type { Agent } from '..';
+import type {
+  ExecutableToolResult,
+  PrepareToolExecutionResult,
+  ToolAccesses,
+} from '../../loop';
 import type { AgentRecordOf } from '../records/types';
 import {
   type TelemetryProperties,
@@ -168,7 +173,14 @@ export interface LoopResultFinding {
 export interface LoopResultChangedFile {
   readonly path: string;
   readonly status: string;
-  readonly attribution?: 'introduced_by_loop' | 'pre_existing_or_modified';
+  readonly attribution?:
+    | 'introduced_by_loop'
+    | 'modified_by_loop'
+    | 'deleted_by_loop'
+    | 'pre_existing_or_modified'
+    | 'unknown';
+  readonly preExisting?: boolean;
+  readonly touchedByLoop?: boolean;
 }
 
 export interface WorkspaceChangeBaseline {
@@ -176,6 +188,21 @@ export interface WorkspaceChangeBaseline {
     readonly path: string;
     readonly status: string;
   }[];
+}
+
+export interface WorkspacePathState {
+  readonly kind: 'missing' | 'file' | 'directory' | 'other' | 'unreadable';
+  readonly size?: number;
+  readonly digest?: string;
+  readonly error?: string;
+}
+
+export interface WorkspacePathTouch {
+  readonly path: string;
+  readonly before: WorkspacePathState;
+  readonly lastObserved: WorkspacePathState;
+  readonly lastToolCallId?: string;
+  readonly observedWrites: ReadonlyMap<string, WorkspacePathState>;
 }
 
 export interface LoopResultEvidence {
@@ -807,7 +834,12 @@ interface GoalState {
     writer: number;
     reviewer: number;
   };
+  providerRetries: {
+    writer: number;
+    reviewer: number;
+  };
   workspaceChangeBaseline?: WorkspaceChangeBaseline;
+  workspacePathTouches: Map<string, WorkspacePathTouch>;
   /** Accumulated active-pursuit time from completed `active` intervals. */
   wallClockMs: number;
   /**
@@ -942,6 +974,8 @@ export type LoopProviderCallRole = 'writer' | 'reviewer';
 export interface LoopProviderUsageReport {
   readonly writerCalls: number;
   readonly reviewerCalls: number;
+  readonly writerRetries: number;
+  readonly reviewerRetries: number;
   readonly writerCallLimit: number | null;
   readonly reviewerCallLimit: number | null;
   readonly remainingWriterCalls: number | null;
@@ -994,6 +1028,7 @@ export interface ResumeGoalInput extends GoalReasonInput {
 export class GoalMode {
   private state: GoalState | undefined;
   private resumeInFlight?: Promise<GoalSnapshot>;
+  private readonly pendingWorkspaceWrites = new Map<string, readonly string[]>();
 
   constructor(private readonly agent: Agent) {
   }
@@ -1059,7 +1094,9 @@ export class GoalMode {
         reviewer: record.reviewerProviderCallLimit,
       },
       providerCalls: { writer: 0, reviewer: 0 },
+      providerRetries: { writer: 0, reviewer: 0 },
       workspaceChangeBaseline: record.workspaceChangeBaseline,
+      workspacePathTouches: new Map(),
       wallClockMs: 0,
       budgetLimits: record.tokenBudget === undefined
         ? {}
@@ -1073,6 +1110,7 @@ export class GoalMode {
       reviewHistory: [],
       strategyHistory: [],
     };
+    this.pendingWorkspaceWrites.clear();
     this.state = state;
     this.agent.replayBuilder.push({
       type: 'goal_updated',
@@ -1094,6 +1132,7 @@ export class GoalMode {
     if (record.turnsUsed !== undefined) state.turnsUsed = record.turnsUsed;
     if (record.tokensUsed !== undefined) state.tokensUsed = record.tokensUsed;
     if (record.providerCalls !== undefined) state.providerCalls = record.providerCalls;
+    if (record.providerRetries !== undefined) state.providerRetries = record.providerRetries;
     if (record.iteration !== undefined) state.iteration = record.iteration;
     if (record.wallClockMs !== undefined) {
       state.wallClockMs = record.wallClockMs;
@@ -1163,12 +1202,59 @@ export class GoalMode {
     state.strategyHistory.push(normalizeStrategyAttempt(record.attempt));
   }
 
+  restoreWorkspacePathTouch(
+    record:
+      | AgentRecordOf<'goal.workspace-path-touch.create'>
+      | AgentRecordOf<'goal.workspace-path-touch.update'>,
+  ): void {
+    const state = this.state;
+    if (state === undefined || state.goalId !== record.goalId) return;
+    const key = workspacePathKey(record.path, agentPathClass(this.agent));
+    const existing = state.workspacePathTouches.get(key);
+    if (record.type === 'goal.workspace-path-touch.create') {
+      if (existing !== undefined) {
+        if (
+          existing.path === record.path
+          && workspacePathStateEqual(existing.before, record.before)
+        ) return;
+        throw new Error(`Conflicting first-touch record for ${record.path}`);
+      }
+      state.workspacePathTouches.set(key, {
+        path: record.path,
+        before: record.before,
+        lastObserved: record.before,
+        observedWrites: new Map(),
+      });
+      return;
+    }
+    if (existing === undefined) {
+      throw new Error(`Workspace touch update has no first-touch record for ${record.path}`);
+    }
+    const priorObservation = existing.observedWrites.get(record.toolCallId);
+    if (priorObservation !== undefined) {
+      if (workspacePathStateEqual(priorObservation, record.after)) return;
+      throw new Error(`Conflicting workspace touch update for ${record.path}`);
+    }
+    const observedWrites = new Map([
+      ...existing.observedWrites,
+      [record.toolCallId, record.after] as const,
+    ]);
+    state.workspacePathTouches.set(key, {
+      ...existing,
+      lastObserved: record.after,
+      lastToolCallId: record.toolCallId,
+      observedWrites,
+    });
+  }
+
   restoreClear(_record: AgentRecordOf<'goal.clear'>): void {
+    this.pendingWorkspaceWrites.clear();
     this.state = undefined;
   }
 
   restoreForked(_record: AgentRecordOf<'forked'>): void {
     const hadGoal = this.state !== undefined;
+    this.pendingWorkspaceWrites.clear();
     this.state = undefined;
     if (!hadGoal) return;
     this.agent.context.appendSystemReminder(GOAL_FORK_CLEARED_REMINDER, {
@@ -1290,7 +1376,9 @@ export class GoalMode {
         reviewer: input.reviewerProviderCallLimit,
       },
       providerCalls: { writer: 0, reviewer: 0 },
+      providerRetries: { writer: 0, reviewer: 0 },
       workspaceChangeBaseline: input.workspaceChangeBaseline,
+      workspacePathTouches: new Map(),
       wallClockMs: 0,
       wallClockResumedAt: Date.now(),
       budgetLimits: input.tokenBudget === undefined
@@ -1305,6 +1393,8 @@ export class GoalMode {
       reviewHistory: [],
       strategyHistory: [],
     };
+
+    this.pendingWorkspaceWrites.clear();
 
     this.persistState(state);
     this.agent.records.logRecord({
@@ -2798,7 +2888,10 @@ export class GoalMode {
     return this.toSnapshot(state);
   }
 
-  async reserveProviderCall(role: LoopProviderCallRole): Promise<GoalSnapshot | null> {
+  async reserveProviderCall(
+    role: LoopProviderCallRole,
+    input: { readonly retry?: boolean } = {},
+  ): Promise<GoalSnapshot | null> {
     const state = this.state;
     if (state === undefined || state.status !== 'active') return null;
     if (state.stopCondition === undefined && state.providerCallLimits[role] === undefined) {
@@ -2813,8 +2906,17 @@ export class GoalMode {
       ...state.providerCalls,
       [role]: used + 1,
     };
+    if (input.retry === true) {
+      state.providerRetries = {
+        ...state.providerRetries,
+        [role]: state.providerRetries[role] + 1,
+      };
+    }
     this.persistState(state, { silent: true });
-    this.appendGoalUpdate({ providerCalls: state.providerCalls });
+    this.appendGoalUpdate({
+      providerCalls: state.providerCalls,
+      ...(input.retry === true ? { providerRetries: state.providerRetries } : {}),
+    });
     return this.toSnapshot(state);
   }
 
@@ -2840,9 +2942,164 @@ export class GoalMode {
     return this.toSnapshot(state);
   }
 
+  /**
+   * Freeze the current state of direct file writes immediately before the
+   * permission-approved tool executes. A later write to the same path is
+   * allowed only when the bytes still match the state recorded after Wukong's
+   * previous successful write. Bash/MCP descendants are intentionally not
+   * guessed here; their final attribution remains unknown.
+   */
+  async beforeWorkspaceWrite(
+    toolCallId: string,
+    accesses: ToolAccesses,
+  ): Promise<PrepareToolExecutionResult | undefined> {
+    const state = this.state;
+    if (
+      state === undefined
+      || state.status !== 'active'
+      || state.stopCondition === undefined
+    ) return undefined;
+
+    const workspaceRoot = loopWorkspaceRoot(state.loopContract, this.agent.config.cwd);
+    const pathClass = agentPathClass(this.agent);
+    const writePaths = directWorkspaceWritePaths(accesses, workspaceRoot, pathClass);
+    if (writePaths.length === 0) return undefined;
+
+    const pendingPaths = new Set([...this.pendingWorkspaceWrites.values()].flat());
+    for (const path of writePaths) {
+      const key = workspacePathKey(path, pathClass);
+      if (pendingPaths.has(key)) {
+        return this.blockWorkspaceWrite(
+          path,
+          'another Wukong write to this path is still pending',
+        );
+      }
+
+      const observed = await captureWorkspacePathState(this.agent, path);
+      if (observed.kind === 'unreadable') {
+        return this.blockWorkspaceWrite(
+          path,
+          `its pre-write state could not be read (${observed.error ?? 'unknown error'})`,
+          'ERROR',
+          'workspace_state_unreadable',
+        );
+      }
+
+      const existing = state.workspacePathTouches.get(key);
+      if (existing === undefined) {
+        const touch: WorkspacePathTouch = {
+          path,
+          before: observed,
+          lastObserved: observed,
+          observedWrites: new Map(),
+        };
+        state.workspacePathTouches.set(key, touch);
+        this.agent.records.logRecord({
+          type: 'goal.workspace-path-touch.create',
+          goalId: state.goalId,
+          path,
+          before: observed,
+        });
+      } else if (!workspacePathStateEqual(existing.lastObserved, observed)) {
+        return this.blockWorkspaceWrite(
+          path,
+          'it changed outside this Loop after Wukong last observed it',
+        );
+      }
+    }
+
+    this.pendingWorkspaceWrites.set(
+      toolCallId,
+      writePaths.map((path) => workspacePathKey(path, pathClass)),
+    );
+    return undefined;
+  }
+
+  /** Record the actual post-write digest only after the direct tool succeeds. */
+  async afterWorkspaceWrite(
+    toolCallId: string,
+    result: ExecutableToolResult,
+  ): Promise<void> {
+    const pending = this.pendingWorkspaceWrites.get(toolCallId);
+    if (pending === undefined) return;
+    this.pendingWorkspaceWrites.delete(toolCallId);
+    if (result.isError === true) return;
+
+    const state = this.state;
+    if (state === undefined) return;
+    for (const key of pending) {
+      const existing = state.workspacePathTouches.get(key);
+      if (existing === undefined) continue;
+      const after = await captureWorkspacePathState(this.agent, existing.path);
+      if (after.kind === 'unreadable') continue;
+      const observedWrites = new Map([
+        ...existing.observedWrites,
+        [toolCallId, after] as const,
+      ]);
+      state.workspacePathTouches.set(key, {
+        ...existing,
+        lastObserved: after,
+        lastToolCallId: toolCallId,
+        observedWrites,
+      });
+      this.agent.records.logRecord({
+        type: 'goal.workspace-path-touch.update',
+        goalId: state.goalId,
+        path: existing.path,
+        toolCallId,
+        after,
+      });
+    }
+  }
+
+  private async blockWorkspaceWrite(
+    path: string,
+    detail: string,
+    status: LoopResult['status'] = 'NEEDS_WORK',
+    reasonCode = 'workspace_changed_externally',
+  ): Promise<PrepareToolExecutionResult> {
+    const summary = `Wukong stopped before overwriting ${path} because ${detail}.`;
+    this.recordLoopResult({
+      schemaVersion: 2,
+      status,
+      reasonCode,
+      summary,
+      checks: [],
+      blockers: [{
+        id: `${reasonCode}:${createHash('sha256').update(path).digest('hex').slice(0, 16)}`,
+        kind: 'workspace',
+        summary,
+        file: path,
+        evidence: 'The current path state no longer matches the last durable Wukong observation.',
+        nextAction: 'Review the external change, then explicitly resume or revise the Loop before writing this path again.',
+      }],
+      evidence: { verification: 'not_run', reviewer: 'not_run' },
+    });
+    await this.markBlocked(
+      { reason: `loop:${status}:${reasonCode}:${summary}` },
+      'system',
+    );
+    return {
+      block: true,
+      reason: `${summary} Review the file and explicitly resume or revise the Loop.`,
+    };
+  }
+
   recordLoopResult(result: Omit<LoopResult, 'iterations'>): LoopResult | null {
     const state = this.state;
     if (state === undefined) return null;
+    if (
+      result.status === 'PASS'
+      && (
+        result.evidence?.completeness !== 'complete'
+        || result.evidence.fresh !== true
+      )
+    ) {
+      throw new WukongError(
+        ErrorCodes.REQUEST_INVALID,
+        'A PASS Loop result requires complete and fresh Gate evidence.',
+      );
+    }
     const loopResult: LoopResult = {
       ...result,
       ...(result.changedFiles === undefined
@@ -2851,6 +3108,9 @@ export class GoalMode {
             changedFiles: attributeChangedFiles(
               result.changedFiles,
               state.workspaceChangeBaseline,
+              state.workspacePathTouches,
+              loopWorkspaceRoot(state.loopContract, this.agent.config.cwd),
+              agentPathClass(this.agent),
             ),
           }),
       iterations: state.iteration,
@@ -2869,6 +3129,7 @@ export class GoalMode {
   ): void {
     const state = this.state;
     if (state === undefined) return; // idempotent
+    this.pendingWorkspaceWrites.clear();
     this.persistState(undefined, { silent: opts.emit === false });
     this.agent.records.logRecord({ type: 'goal.clear' });
     if (opts.track !== false) {
@@ -3488,6 +3749,8 @@ function providerUsageReport(state: GoalState): LoopProviderUsageReport {
   return {
     writerCalls: state.providerCalls.writer,
     reviewerCalls: state.providerCalls.reviewer,
+    writerRetries: state.providerRetries.writer,
+    reviewerRetries: state.providerRetries.reviewer,
     writerCallLimit,
     reviewerCallLimit,
     remainingWriterCalls: writerCallLimit === null
@@ -3502,15 +3765,138 @@ function providerUsageReport(state: GoalState): LoopProviderUsageReport {
 function attributeChangedFiles(
   files: readonly LoopResultChangedFile[],
   baseline: WorkspaceChangeBaseline | undefined,
+  touches: ReadonlyMap<string, WorkspacePathTouch>,
+  workspaceRoot: string,
+  pathClass: 'posix' | 'win32',
 ): readonly LoopResultChangedFile[] {
-  if (baseline === undefined) return files;
-  const preExisting = new Set(baseline.files.map((file) => file.path));
-  return files.map((file) => ({
-    ...file,
-    attribution: preExisting.has(file.path)
-      ? 'pre_existing_or_modified'
-      : 'introduced_by_loop',
-  }));
+  const preExisting = new Set(
+    (baseline?.files ?? []).map((file) => workspaceRelativePathKey(file.path, pathClass)),
+  );
+  return files.map((file) => {
+    const relativeKey = workspaceRelativePathKey(file.path, pathClass);
+    const preExistingState = baseline === undefined
+      ? undefined
+      : preExisting.has(relativeKey);
+    const touch = touches.get(workspacePathKey(`${workspaceRoot}/${file.path}`, pathClass));
+    const touchedByLoop = touch !== undefined
+      && touch.observedWrites.size > 0
+      && !workspacePathStateEqual(touch.before, touch.lastObserved);
+    const attribution: LoopResultChangedFile['attribution'] = touchedByLoop
+      ? touch.before.kind === 'missing' && touch.lastObserved.kind !== 'missing'
+        ? 'introduced_by_loop'
+        : touch.before.kind !== 'missing' && touch.lastObserved.kind === 'missing'
+          ? 'deleted_by_loop'
+          : 'modified_by_loop'
+      : preExistingState === true
+        ? 'pre_existing_or_modified'
+        : 'unknown';
+    return {
+      ...file,
+      attribution,
+      ...(preExistingState === undefined ? {} : { preExisting: preExistingState }),
+      ...(touchedByLoop ? { touchedByLoop: true } : {}),
+    };
+  });
+}
+
+function loopWorkspaceRoot(contract: LoopContract | undefined, fallback: string): string {
+  return contract?.schemaVersion === 2 || contract?.schemaVersion === 3
+    ? contract.workspaceIdentity.canonicalRealpath
+    : fallback;
+}
+
+function directWorkspaceWritePaths(
+  accesses: ToolAccesses,
+  workspaceRoot: string,
+  pathClass: 'posix' | 'win32',
+): readonly string[] {
+  const root = workspacePathKey(workspaceRoot, pathClass);
+  const paths = new Map<string, string>();
+  for (const access of accesses) {
+    if (
+      access.kind !== 'file'
+      || (access.operation !== 'write' && access.operation !== 'readwrite')
+      || access.recursive === true
+    ) continue;
+    const key = workspacePathKey(access.path, pathClass);
+    const prefix = root.endsWith('/') ? root : `${root}/`;
+    if (key !== root && !key.startsWith(prefix)) continue;
+    paths.set(key, access.path);
+  }
+  return [...paths.values()];
+}
+
+function workspacePathKey(path: string, pathClass: 'posix' | 'win32'): string {
+  const normalized = path.replaceAll('\\', '/').replaceAll(/\/{2,}/gu, '/');
+  const withoutTrailingSlash = normalized.length > 1 && normalized.endsWith('/')
+    ? normalized.slice(0, -1)
+    : normalized;
+  return pathClass === 'win32' ? withoutTrailingSlash.toLowerCase() : withoutTrailingSlash;
+}
+
+function agentPathClass(agent: Agent): 'posix' | 'win32' {
+  const kaos = (agent as unknown as {
+    readonly kaos?: { readonly pathClass?: () => 'posix' | 'win32' };
+  }).kaos;
+  return kaos?.pathClass?.()
+    ?? (/^[A-Za-z]:[\\/]/u.test(agent.config.cwd) ? 'win32' : 'posix');
+}
+
+function workspaceRelativePathKey(path: string, pathClass: 'posix' | 'win32'): string {
+  const normalized = workspacePathKey(path, pathClass);
+  return normalized.startsWith('./') ? normalized.slice(2) : normalized;
+}
+
+function workspacePathStateEqual(left: WorkspacePathState, right: WorkspacePathState): boolean {
+  return left.kind === right.kind
+    && left.size === right.size
+    && left.digest === right.digest;
+}
+
+async function captureWorkspacePathState(agent: Agent, path: string): Promise<WorkspacePathState> {
+  let before;
+  try {
+    before = await agent.kaos.stat(path, { followSymlinks: true });
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT') return { kind: 'missing' };
+    return { kind: 'unreadable', error: errorMessage(error) };
+  }
+
+  const type = before.stMode & 0o170000;
+  if (type === 0o040000) return { kind: 'directory', size: before.stSize };
+  if (type !== 0o100000) return { kind: 'other', size: before.stSize };
+
+  try {
+    const bytes = await agent.kaos.readBytes(path);
+    const after = await agent.kaos.stat(path, { followSymlinks: true });
+    if (
+      before.stDev !== after.stDev
+      || before.stIno !== after.stIno
+      || before.stSize !== after.stSize
+      || before.stMtime !== after.stMtime
+      || bytes.byteLength !== after.stSize
+    ) {
+      return { kind: 'unreadable', error: 'path changed while Wukong was hashing it' };
+    }
+    return {
+      kind: 'file',
+      size: bytes.byteLength,
+      digest: createHash('sha256').update(bytes).digest('hex'),
+    };
+  } catch (error) {
+    if (errorCode(error) === 'ENOENT') return { kind: 'missing' };
+    return { kind: 'unreadable', error: errorMessage(error) };
+  }
+}
+
+function errorCode(error: unknown): string | undefined {
+  return typeof error === 'object' && error !== null && 'code' in error
+    ? String((error as { readonly code?: unknown }).code)
+    : undefined;
+}
+
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : String(error);
 }
 
 function budgetTelemetryProperties(limits: GoalBudgetLimits): TelemetryProperties {

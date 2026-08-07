@@ -64,6 +64,8 @@ describe('buildGoalReportLines', () => {
       providerUsage: {
         writerCalls: 3,
         reviewerCalls: 2,
+        writerRetries: 1,
+        reviewerRetries: 1,
         writerCallLimit: 12,
         reviewerCallLimit: 4,
         remainingWriterCalls: 9,
@@ -87,6 +89,8 @@ describe('buildGoalReportLines', () => {
     expect(out).toContain('3/12');
     expect(out).toContain('Reviewer calls');
     expect(out).toContain('2/4');
+    expect(out).toContain('Retries');
+    expect(out).toContain('2');
     expect(out).toContain('Token budget');
     expect(out).toContain('37.5k remaining of 50.0k');
     expect(out).not.toContain('Review usage');
@@ -170,6 +174,15 @@ describe('buildGoalReportLines', () => {
         summary: 'Iteration ceiling reached.',
         iterations: 4,
         checks: [],
+        evidence: {
+          verification: 'fresh',
+          reviewer: 'not_run',
+          completeness: 'partial',
+          fresh: false,
+          expectedProducers: ['required-checks', 'fresh-reviewer', 'workspace-freshness'],
+          observedProducers: ['required-checks'],
+          missingProducers: ['fresh-reviewer', 'workspace-freshness'],
+        },
         blockers: [
           { id: 'one', kind: 'check', summary: 'First blocker.', nextAction: 'Fix first.' },
           { id: 'two', kind: 'review', summary: 'Second blocker.', nextAction: 'Fix second.' },
@@ -181,6 +194,9 @@ describe('buildGoalReportLines', () => {
 
     expect(out).toContain('Outcome    NEEDS_WORK');
     expect(out).toContain('Reason     Iteration ceiling reached.');
+    expect(out).toContain(
+      'Evidence   completeness partial; fresh no; verification fresh; reviewer not_run; missing fresh-reviewer, workspace-freshness',
+    );
     expect(out).toContain('Blockers   4');
     expect(out).toContain('Blocker 1  First blocker.');
     expect(out).toContain('Fix        Fix first.');

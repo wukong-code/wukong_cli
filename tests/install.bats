@@ -98,6 +98,61 @@ teardown() {
     [ -x "$CUSTOM_DIR/wukong" ]
 }
 
+@test "upgrades an existing 0.0.22 binary through same-directory staging" {
+    INSTALL_DIR="$HOME/.wukong/bin"
+    mkdir -p "$INSTALL_DIR"
+    printf '%s\n' '#!/bin/sh' 'echo 0.0.22' > "$INSTALL_DIR/wukong"
+    chmod +x "$INSTALL_DIR/wukong"
+
+    WUKONG_VERSION=v0.1.0 run ./install.sh
+
+    [ "$status" -eq 0 ]
+    [[ "$output" == *"releases/download/v0.1.0/wukong-darwin-x64.zip"* ]]
+    run "$INSTALL_DIR/wukong"
+    [ "$status" -eq 0 ]
+    [ "$output" = "wukong stub" ]
+    run find "$INSTALL_DIR" -maxdepth 1 -name '.wukong.update.*' -print
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
+@test "checksum failure preserves an existing 0.0.22 binary" {
+    INSTALL_DIR="$HOME/.wukong/bin"
+    mkdir -p "$INSTALL_DIR"
+    printf '%s\n' '#!/bin/sh' 'echo 0.0.22' > "$INSTALL_DIR/wukong"
+    chmod +x "$INSTALL_DIR/wukong"
+
+    cat > "$MOCK_BIN/curl" <<EOF
+#!/bin/sh
+OUTPUT=""
+URL=""
+while [ \$# -gt 0 ]; do
+    case "\$1" in
+        -o) shift; OUTPUT="\$1" ;;
+        -*) ;;
+        *) URL="\$1" ;;
+    esac
+    shift
+done
+if echo "\$URL" | grep -q "\\.sha256\$"; then
+    echo "0000000000000000000000000000000000000000000000000000000000000000  artifact.zip" > "\$OUTPUT"
+else
+    cp "$FAKE_RELEASE_DIR/artifact.zip" "\$OUTPUT"
+fi
+EOF
+    chmod +x "$MOCK_BIN/curl"
+
+    WUKONG_VERSION=v0.1.0 run ./install.sh
+
+    [ "$status" -eq 1 ]
+    run "$INSTALL_DIR/wukong"
+    [ "$status" -eq 0 ]
+    [ "$output" = "0.0.22" ]
+    run find "$INSTALL_DIR" -maxdepth 1 -name '.wukong.update.*' -print
+    [ "$status" -eq 0 ]
+    [ -z "$output" ]
+}
+
 @test "fails on unsupported platform" {
     cat > "$MOCK_BIN/uname" <<'EOF'
 #!/bin/sh

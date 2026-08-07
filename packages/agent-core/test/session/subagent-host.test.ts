@@ -41,6 +41,46 @@ afterEach(async () => {
 });
 
 describe('SessionSubagentHost', () => {
+  it('charges an internal fresh-reviewer provider retry to the parent Loop', async () => {
+    const parent = testAgent();
+    parent.configure();
+    await parent.agent.goal.createGoal({
+      objective: 'Count reviewer retries',
+      stopCondition: 'proof-pass',
+      reviewerProviderCallLimit: 3,
+    });
+
+    const summary = 'Fresh reviewer completed the independent evidence review. '.repeat(5);
+    let generateCalls = 0;
+    const child = testAgent({
+      generate: async (_provider, _system, _tools, _history, callbacks) => {
+        generateCalls += 1;
+        if (generateCalls === 1) throw new APIStatusError(503, 'Service unavailable');
+        await callbacks?.onMessagePart?.({ type: 'text', text: summary });
+        return textResult(summary);
+      },
+    });
+    child.configure();
+    const host = new SessionSubagentHost(fakeSession(parent.agent, child.agent), 'main');
+
+    const handle = await host.spawn({
+      profileName: 'fresh-reviewer',
+      parentToolCallId: 'review',
+      prompt: 'Review the bounded evidence',
+      description: 'Fresh review',
+      runInBackground: false,
+      signal,
+      providerCallRole: 'reviewer',
+    });
+
+    await expect(handle.completion).resolves.toMatchObject({ result: summary.trim() });
+    expect(parent.agent.goal.getGoal().goal?.providerUsage).toMatchObject({
+      reviewerCalls: 2,
+      reviewerRetries: 1,
+      remainingReviewerCalls: 1,
+    });
+  });
+
   it('charges reviewer requests to the parent Loop and blocks spawn/retry before overspend', async () => {
     const parent = testAgent();
     parent.configure();

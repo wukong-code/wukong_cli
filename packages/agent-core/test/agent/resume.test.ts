@@ -43,6 +43,67 @@ describe('Agent resume', () => {
     expect(persistence.records.filter((record) => record.type === 'metadata')).toHaveLength(1);
   });
 
+  it.each(['0.0.21', '0.0.22'])(
+    'reads a historical %s PASS result without fabricating 0.1.0 evidence',
+    async (appVersion) => {
+      const historicalResult = {
+        schemaVersion: 2 as const,
+        status: 'PASS' as const,
+        reasonCode: 'passed',
+        summary: 'Historical release recorded PASS.',
+        checks: [{
+          command: 'pnpm test',
+          status: 'passed' as const,
+          exitCode: 0,
+          durationMs: 100,
+        }],
+        blockers: [],
+        iterations: 2,
+      };
+      const persistence = new RecordingAgentPersistence([
+        {
+          type: 'metadata',
+          protocol_version: '1.4',
+          created_at: 1,
+          app_version: appVersion,
+        } as unknown as AgentRecord,
+        {
+          type: 'goal.create',
+          goalId: `historical-${appVersion}`,
+          objective: 'Preserve the historical outcome',
+          completionCriterion: 'The old checks pass',
+          stopCondition: 'proof-pass',
+          maxIterations: 3,
+        },
+        {
+          type: 'goal.update',
+          iteration: 2,
+          loopResult: historicalResult,
+        },
+        {
+          type: 'goal.update',
+          status: 'complete',
+          reason: 'Historical PASS',
+          actor: 'model',
+        },
+      ]);
+      const ctx = testAgent({ persistence });
+
+      await ctx.agent.resume();
+
+      const completion = ctx.agent.replayBuilder.buildResult().find(
+        (entry) => entry.type === 'goal_updated' && entry.change?.kind === 'completion',
+      );
+      expect(completion).toMatchObject({
+        snapshot: { loopResult: historicalResult },
+      });
+      expect(completion?.type === 'goal_updated'
+        ? completion.snapshot?.loopResult?.evidence
+        : undefined).toBeUndefined();
+      expect(persistence.appended.some((record) => record.type.startsWith('loop.'))).toBe(false);
+    },
+  );
+
   it('replays persisted records without restarting turns, compactions, plan turns, or tools', async () => {
     const persistence = new RecordingAgentPersistence(resumeHistory());
     const execWithEnv = vi.fn().mockRejectedValue(new Error('Bash should not execute on resume'));
