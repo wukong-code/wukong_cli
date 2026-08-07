@@ -434,6 +434,7 @@ async function runGoalGate(
         };
       }
       const frozen = frozenGateView(contract);
+      agent.goal.emitLoopPhase('check');
       {
         const precheck = await validateFrozenGatePlan(cwd, frozen);
         if (!precheck.ok) {
@@ -542,6 +543,7 @@ async function runGoalGate(
           };
         }
       }
+      agent.goal.emitLoopPhase('review', gateReviewRuntime.attemptId);
       const reviewed = await runFreshReviewer(
         agent,
         objective,

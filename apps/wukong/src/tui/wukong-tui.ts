@@ -208,13 +208,6 @@ function sameStringArrays(a: readonly string[], b: readonly string[]): boolean {
   return a.length === b.length && a.every((value, index) => value === b[index]);
 }
 
-function loopToolPhase(toolNames: readonly string[]): LoopPhaseState['phase'] {
-  if (toolNames.some((name) => /judge|review/i.test(name))) return 'judging';
-  if (toolNames.some((name) => /proof/i.test(name))) return 'proofing';
-  if (toolNames.some((name) => /verify|scan|updategoal/i.test(name))) return 'verifying';
-  return 'writing';
-}
-
 type MutableCreateSessionOptions = {
   -readonly [P in keyof CreateSessionOptions]: CreateSessionOptions[P];
 };
@@ -2402,12 +2395,27 @@ export class WukongTUI {
         ?? { phase: 'waiting' as const, iteration: 0, elapsedMs: 0, hidden: false };
       if (chrome.uiMode === 'blocked' || base.phase === 'paused') return base;
 
-      const activeTools = this.streamingUI.getActiveToolNames();
-      if (this.state.livePane.mode === 'tool' || activeTools.length > 0) {
-        const phase = loopToolPhase(activeTools);
+      const stable = this.state.appState.loopExecutionPhase;
+      const stablePhase = stable?.goalId === this.state.appState.goal?.goalId
+        && stable.runId === this.state.appState.goal?.loopRunId
+        ? stable.phase
+        : undefined;
+      if (stablePhase === 'check' || stablePhase === 'review') {
         return {
           ...base,
-          phase,
+          phase: stablePhase === 'check' ? 'verifying' : 'judging',
+          iteration: stable?.iteration ?? base.iteration,
+          activity: stablePhase === 'check'
+            ? 'Running frozen Gate checks'
+            : 'Fresh reviewer is evaluating evidence',
+        };
+      }
+
+      const activeTools = this.streamingUI.getActiveToolNames();
+      if (this.state.livePane.mode === 'tool' || activeTools.length > 0) {
+        return {
+          ...base,
+          phase: 'writing',
           activity: activeTools.length === 0
             ? 'Running tool'
             : `Running ${activeTools.join(', ')}`,

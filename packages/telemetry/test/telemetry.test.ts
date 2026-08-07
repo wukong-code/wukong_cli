@@ -22,6 +22,7 @@ import {
   USER_ID_PREFIX,
   applyServerPrefix,
   buildPayload,
+  clearTelemetryDiskQueue,
 } from '../src/transport';
 import type { EnrichedTelemetryEvent, TelemetryEvent, TelemetryTransport } from '../src/types';
 
@@ -202,6 +203,36 @@ describe('TelemetryClient', () => {
     expect(event?.timestamp).toBeGreaterThanOrEqual(before);
     expect(event?.timestamp).toBeLessThanOrEqual(Date.now() / 1000);
     expect(event?.properties).toEqual({});
+  });
+
+  it('drops model identity and hashes derived from tool arguments', async () => {
+    const client = new TelemetryClient();
+    const transport = new RecordingTransport();
+    client.attachSink(makeSink(transport));
+
+    client.track('privacy_boundary', {
+      model: 'private-model-alias',
+      alias: 'private-alias',
+      args_hash: 'deadbeef',
+      outcome: 'success',
+    });
+    await client.flush();
+
+    expect(transport.sent[0]?.[0]?.properties).toEqual({ outcome: 'success' });
+  });
+});
+
+describe('telemetry opt-out cleanup', () => {
+  it('removes only failed telemetry queue files', async () => {
+    const homeDir = await tempHome();
+    const telemetryDir = join(homeDir, 'telemetry');
+    mkdirSync(telemetryDir, { recursive: true });
+    writeFileSync(join(telemetryDir, 'failed_deadbeef.jsonl'), '{}\n');
+    writeFileSync(join(telemetryDir, 'keep.txt'), 'keep');
+
+    clearTelemetryDiskQueue(homeDir);
+
+    expect(readdirSync(telemetryDir)).toEqual(['keep.txt']);
   });
 });
 

@@ -21,6 +21,7 @@ Wukong Code 的主流程是 **Goal → Write → Check → Review → Fix**。�
 - [0.1.0 Trusted Local Loop（未发布）](design/0.1.0-trusted-local-loop.md)
 - [0.0.21 Loop Evidence Integrity](design/0.0.21-loop-evidence-integrity.md)
 - [CLI 更新与公告](operations/updates-and-announcements.md)
+- [CLI telemetry 字段、endpoint、retention 与 opt-out](operations/cli-telemetry.md)
 - [自动化测试计划](test/verification-cli-test-plan.md)
 
 ## 已发布的核心能力

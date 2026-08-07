@@ -72,7 +72,7 @@
 - [x] Node、Python、Rust、Go 和 monorepo 的真实工具链 fixture 覆盖 blocker → fix → full rerun → PASS，以及 docs/config no-check、dirty workspace 和 tool missing（2026-08-06）
 - [ ] 至少一个 Windows 实际 repo 完成同一 blocker → fix → full rerun → PASS 用户流程
 - [x] provider 覆盖 valid、invalid key、model not found、rate limit、timeout 和 outcome unknown；首次成功可归因 install/provider/Preflight/Loop/Gate/stop（2026-08-06）
-- [ ] API compatibility、migration/log-security、frontend/design、monorepo package criteria 完成 deterministic、with/without、adversarial 和重复稳定 eval
+- [x] API compatibility、migration/log-security、frontend/design、monorepo package criteria 完成 deterministic trigger/non-trigger、adversarial path、package-root 与重复稳定 eval；本地 Gate/criteria 矩阵连续 3 次 43/43，CI 在 macOS/Linux/Windows 重复同一矩阵（2026-08-07）
 - [ ] Codex、Claude Code、Cursor、Kimi Code、Grok 各完成 picker → editable Goal → Preflight → Loop → terminal/recovery smoke
 - [ ] 首次用户不读内部文档也能理解 Finish Line、workspace 权限、provider-visible input、Gate verdict、STOPPED_BY_USER、文件归因、budget 和 next action
 - [x] targeted/full test、typecheck、lint、build、sherif、package lint 与本地 native installer/ZIP validator 通过（2026-08-06）
@@ -89,10 +89,10 @@
 
 ### P1：值得做但不阻塞 rc.1
 
-- [ ] 把当前 tool/streaming 推导的 activity hints 升级为 TUI/headless 共用的稳定 phase event
-- [ ] 优化 Goal panel、footer、Preflight 和终态信息密度，不做大规模 TUI 重设计
-- [ ] 扩展更多真实 repo、Resume/adversarial fixture、性能基线和 onboarding 文案
-- [ ] 审计并公开现有 optional CLI telemetry 的 exact fields、endpoint、retention 和 opt-out；不新增 event/backend，也不用 telemetry 推断 cohort
+- [x] 把当前 tool/streaming 推导的 activity hints 升级为 TUI/headless 共用的稳定 WRITE/CHECK/REVIEW phase event（2026-08-07）
+- [x] 收口 Goal panel、footer、Preflight 和终态信息密度：目标/Finish Line、phase、checks/review、usage、workspace attribution、blocker 与 Next 分层显示，不做大规模 TUI 重设计（2026-08-07）
+- [x] 扩展 Node/Python/Rust/Go/monorepo fixture、五来源 Resume/adversarial/大 transcript 边界和 onboarding 用户流程文案（2026-08-07；真实 Windows repo 与外部用户理解仍按上方 RC 验证项验收）
+- [x] 审计并公开现有 optional CLI telemetry 的 fields、endpoint、本地 retention 和 opt-out；补充 model/alias/tool-argument hash 负向过滤与 opt-out queue cleanup；远端 retention 未定义已明确作为 operator policy gap，不用 telemetry 推断 cohort（2026-08-07）
 - [ ] 有真实 threat evidence 后再评审完整 direct-shell content/PATH attestation、多层 coverage schema 或公开 evidence interchange
 
 ### 明确后移或不做
@@ -759,4 +759,4 @@
 
 ---
 
-**最后更新**: 2026-08-06（0.0.22 已发布；0.1.0 实现侧 RC P0 已完成本地自动化，尚未进入 RC）
+**最后更新**: 2026-08-07（0.0.22 已发布；0.1.0 实现侧 RC P0/P1 已收口，候选与真实用户证据尚未完成）

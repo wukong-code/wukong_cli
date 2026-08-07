@@ -245,7 +245,7 @@ EOF
 
     run ./install.sh
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Installing Wukong CLI for win32-x64"* ]]
+    [[ "$output" == *"Installing Wukong Code latest for win32-x64"* ]]
     [ -x "$HOME/.wukong/bin/wukong.exe" ]
 }
 
@@ -261,6 +261,6 @@ EOF
 
     run ./install.sh
     [ "$status" -eq 0 ]
-    [[ "$output" == *"Installing Wukong CLI for win32-arm64"* ]]
+    [[ "$output" == *"Installing Wukong Code latest for win32-arm64"* ]]
     [ -x "$HOME/.wukong/bin/wukong.exe" ]
 }

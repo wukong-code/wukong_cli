@@ -14,6 +14,11 @@ export interface TelemetryShutdownOptions {
 }
 
 const MAX_QUEUE_SIZE = 1000;
+const SENSITIVE_PROPERTY_KEYS = new Set([
+  'alias',
+  'args_hash',
+  'model',
+]);
 
 interface PendingTelemetryEvent extends TelemetryEvent {
   readonly contextOverrides?: {
@@ -267,7 +272,7 @@ function toTelemetryEvent(event: PendingTelemetryEvent): TelemetryEvent {
 function sanitizeProperties(input: TelemetryProperties): TelemetryProperties {
   const out: TelemetryProperties = {};
   for (const [key, value] of Object.entries(input)) {
-    if (isTelemetryPrimitive(value)) {
+    if (!SENSITIVE_PROPERTY_KEYS.has(key) && isTelemetryPrimitive(value)) {
       out[key] = value;
     }
   }

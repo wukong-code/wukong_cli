@@ -19,6 +19,25 @@ export const USER_ID_PREFIX = 'kfc_device_id_';
 export const DISK_EVENT_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000;
 export const RETRY_BACKOFFS_MS = [1_000, 4_000, 16_000] as const;
 
+/** Remove only Wukong's bounded failed-event queue when a user opts out. */
+export function clearTelemetryDiskQueue(homeDir: string): void {
+  const dir = join(homeDir, 'telemetry');
+  let entries: string[];
+  try {
+    entries = readdirSync(dir);
+  } catch {
+    return;
+  }
+  for (const entry of entries) {
+    if (!entry.startsWith('failed_') || !entry.endsWith('.jsonl')) continue;
+    try {
+      unlinkSync(join(dir, entry));
+    } catch {
+      // Best effort: opting out must not make CLI startup fail.
+    }
+  }
+}
+
 export interface AsyncTransportOptions {
   readonly homeDir: string;
   readonly deviceId: string;

@@ -2937,9 +2937,29 @@ export class GoalMode {
     if (state === undefined || state.status !== 'active') return null;
     state.iteration += 1;
     state.loopChainIterations += 1;
+    this.emitLoopPhase('write');
     this.persistState(state);
     this.appendGoalUpdate({ iteration: state.iteration });
     return this.toSnapshot(state);
+  }
+
+  emitLoopPhase(phase: 'write' | 'check' | 'review', attemptId?: string): void {
+    const state = this.state;
+    const runId = state?.currentLoopRun?.runId;
+    if (
+      state === undefined
+      || state.status !== 'active'
+      || state.stopCondition !== 'proof-pass'
+      || runId === undefined
+    ) return;
+    this.agent.emitEvent({
+      type: 'loop.phase.changed',
+      phase,
+      goalId: state.goalId,
+      runId,
+      iteration: state.iteration,
+      ...(attemptId === undefined ? {} : { attemptId }),
+    });
   }
 
   /**

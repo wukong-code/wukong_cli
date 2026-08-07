@@ -101,6 +101,7 @@ function makeHost(options: { createGoalRejects?: boolean } = {}) {
     showError: vi.fn(),
     showStatus: vi.fn(),
     showNotice: vi.fn(),
+    updateLoopPhase: vi.fn(),
     track: vi.fn(),
     mountEditorReplacement: vi.fn(),
     restoreEditor: vi.fn(),
@@ -180,6 +181,38 @@ describe('SessionEventHandler goal queue promotion', () => {
     vi.mocked(readGoalQueue).mockClear();
     vi.mocked(removeGoalQueueItem).mockClear();
     vi.mocked(restoreGoalQueueItem).mockClear();
+  });
+
+  it('stores the runtime-owned Loop phase for chrome rendering', () => {
+    const { host } = makeHost();
+    const handler = new SessionEventHandler(host);
+
+    handler.handleEvent({
+      type: 'loop.phase.changed',
+      sessionId: 's1',
+      agentId: 'main',
+      phase: 'review',
+      goalId: 'goal-1',
+      runId: 'run-1',
+      iteration: 2,
+      attemptId: 'attempt-1',
+    }, vi.fn());
+
+    expect(host.state.appState.loopExecutionPhase).toMatchObject({
+      phase: 'review',
+      goalId: 'goal-1',
+      iteration: 2,
+    });
+    expect(host.updateLoopPhase).toHaveBeenCalled();
+
+    handler.handleEvent({
+      type: 'goal.updated',
+      sessionId: 's1',
+      agentId: 'main',
+      snapshot: fakeGoalSnapshot('Resumed goal', 'active'),
+      change: { kind: 'lifecycle', status: 'active' },
+    }, vi.fn());
+    expect(host.state.appState.loopExecutionPhase).toBeNull();
   });
 
   it('starts the next queued goal after the completion turn ends', async () => {

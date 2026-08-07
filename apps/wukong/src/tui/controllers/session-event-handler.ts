@@ -13,6 +13,7 @@ import type {
   Event,
   GoalChange,
   GoalUpdatedEvent,
+  LoopPhaseChangedEvent,
   HookResultEvent,
   Session,
   SessionMetaUpdatedEvent,
@@ -276,6 +277,7 @@ export class SessionEventHandler {
       case 'agent.status.updated': this.handleStatusUpdate(event); break;
       case 'session.meta.updated': this.handleSessionMetaChanged(event); break;
       case 'goal.updated': this.handleGoalUpdated(event); break;
+      case 'loop.phase.changed': this.handleLoopPhaseChanged(event); break;
       case 'skill.activated': this.handleSkillActivated(event); break;
       case 'error': this.handleSessionError(event); break;
       case 'warning': this.handleSessionWarning(event); break;
@@ -739,7 +741,13 @@ export class SessionEventHandler {
     if (event.snapshot !== null && this.ordinaryTurnFacts !== undefined) {
       this.ordinaryTurnFacts.hadGoal = true;
     }
-    this.host.setAppState({ goal: event.snapshot });
+    this.host.setAppState({
+      goal: event.snapshot,
+      ...(event.snapshot === null
+        || (event.change?.kind === 'lifecycle' && event.change.status === 'active')
+        ? { loopExecutionPhase: null }
+        : {}),
+    });
     if (
       event.snapshot?.stopCondition === 'proof-pass'
       && event.snapshot.iteration >= 1
@@ -827,6 +835,11 @@ export class SessionEventHandler {
       state.transcriptContainer.addChild(marker);
       state.ui.requestRender();
     }
+  }
+
+  private handleLoopPhaseChanged(event: LoopPhaseChangedEvent): void {
+    this.host.setAppState({ loopExecutionPhase: event });
+    this.host.updateLoopPhase();
   }
 
   private trackLoopTerminal(

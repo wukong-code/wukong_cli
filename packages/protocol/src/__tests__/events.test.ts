@@ -9,6 +9,7 @@ import {
   assistantDeltaEventSchema,
   eventSchema,
   goalSnapshotSchema,
+  loopPhaseChangedEventSchema,
   toolCallStartedEventSchema,
 } from '../events';
 import type { Event } from '../events';
@@ -80,6 +81,22 @@ describe('events / display re-exports', () => {
         display: { kind: 'command', command: 'pwd', language: 'bash' },
       }).success,
     ).toBe(true);
+
+    expect(loopPhaseChangedEventSchema.parse({
+      type: 'loop.phase.changed',
+      phase: 'check',
+      goalId: 'goal_1',
+      runId: 'run_1',
+      iteration: 2,
+      attemptId: 'attempt_1',
+    })).toEqual({
+      type: 'loop.phase.changed',
+      phase: 'check',
+      goalId: 'goal_1',
+      runId: 'run_1',
+      iteration: 2,
+      attemptId: 'attempt_1',
+    });
   });
 
   it.each(['verify-pass', 'scan-clean', 'judge-pass'] as const)(

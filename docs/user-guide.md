@@ -1,9 +1,13 @@
 # Wukong Code 用户指南
 
 > 适用范围: 当前 `wukong_cli` 开发分支；已发布 binary 基线为 `v0.0.22`
-> 更新时间: 2026-08-06
+> 更新时间: 2026-08-07
 > 定位: 给 Wukong 一个目标，通过 Goal → Write → Check → Review → Fix 循环直到没有 blocking finding。
 > 版本边界: 本文中的开发分支行为尚未构成 `0.1.0-rc.1` 发布。0.1.0 只稳定可控、可恢复、可解释的单 Loop；可执行 provider-call/token 上限、可信 no-check、完整文件归因和兼容/发布自动化已在当前 checkout 实现。六平台当前候选、公开资产、opt-in cohort 和 14 天稳定性证据仍未完成。完整多层 coverage schema、direct-shell content/PATH attestation 和价格数据库已后移。当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
+
+CLI telemetry 的现有 wire fields、唯一 endpoint、本地 7 天失败队列和 opt-out 方式见
+[CLI telemetry contract](operations/cli-telemetry.md)。远端 retention 当前没有公开、
+可验证的 contract，因此不能用这条数据流证明 0.1.0 cohort。
 
 ## 安装正式版
 
@@ -198,9 +202,10 @@ Guest 试用或月度次数，也不请求 Wukong quota 服务。默认单次最
    存在的 checks 会得到 `NEEDS_WORK/checks_missing`，不能得到 `PASS`。
 3. **执行中**：关注 writer iteration、累计耗时、当前 tool/activity、
    calls/tokens/retries/remaining budget 和真实 blocker。
-   TUI 的 `WRITE` / `CHECK` / `REVIEW` 只是活动提示；headless 当前只明确报告 writer
-   iteration 与 running tool，内部 reviewer 不一定单独显示为 `REVIEW`。相同输出或
-   blocker 不再无限重复；达到无进展条件会提前停止。
+   TUI 与 headless 现在读取同一个 runtime phase event：`WRITE` 代表 Writer 正在修改或
+   推进目标，`CHECK` 代表 frozen Gate checks 正在执行，`REVIEW` 代表 fresh reviewer
+   正在读取 bounded evidence；tool 名只作为 activity detail，不再决定 Gate phase。
+   相同输出或 blocker 不再无限重复；达到无进展条件会提前停止。
 4. **得到结果**：终态摘要由本地运行记录生成，而不是相信模型的结束文案。它应
    显示可获得的 Gate 状态、writer iteration、Gate attempt、耗时、workspace、checks、
    evidence、主要 blocker 与确定性的 Next。calls/tokens/retries/remaining 以及

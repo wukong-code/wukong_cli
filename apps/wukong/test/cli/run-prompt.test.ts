@@ -1405,6 +1405,13 @@ describe('runPrompt', () => {
       mocks.session.prompt.mockImplementationOnce(async () => {
         for (const handler of mocks.eventHandlers) {
           handler(mocks.mainEvent({ type: 'turn.started', turnId: 10, origin: { kind: 'user' } }));
+          handler(mocks.mainEvent({
+            type: 'loop.phase.changed',
+            phase: 'write',
+            goalId: 'goal-loop-1',
+            runId: 'core-run-loop-1',
+            iteration: 1,
+          }));
           handler(mocks.mainEvent({ type: 'turn.ended', turnId: 10, reason: 'completed' }));
           handler(mocks.mainEvent({
             type: 'goal.updated',
@@ -1431,6 +1438,7 @@ describe('runPrompt', () => {
       }));
       expect(mocks.beginLoopRun).toHaveBeenCalledTimes(1);
       expect(mocks.completeLoopRun).toHaveBeenCalledTimes(1);
+      expect(stderr.text()).toContain('Phase WRITE · iteration 1');
     });
 
     it('records runtime failures as Loop ERROR instead of completed NEEDS_WORK', async () => {

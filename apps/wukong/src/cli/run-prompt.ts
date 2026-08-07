@@ -884,6 +884,7 @@ function runPromptTurn(
   let steps = 0;
   let providerOutcomeUnknown: PromptProviderOutcomeUnknown | undefined;
   let lastGoalIteration = 0;
+  let stableLoopPhaseObserved = false;
   const toolNames = new Set<string>();
   const commands = new Set<string>();
   const turnStartedAt = Date.now();
@@ -930,13 +931,28 @@ function runPromptTurn(
         }
         return;
       }
+      if (
+        event.type === 'loop.phase.changed'
+        && goalId !== undefined
+        && event.agentId === PROMPT_MAIN_AGENT_ID
+        && event.goalId === goalId
+      ) {
+        stableLoopPhaseObserved = true;
+        lastGoalIteration = Math.max(lastGoalIteration, event.iteration);
+        outputWriter.writeProgress(
+          `${formatElapsed(Date.now() - turnStartedAt)} Phase ${event.phase.toUpperCase()} · iteration ${String(event.iteration)}`,
+        );
+        return;
+      }
       if (event.type === 'goal.updated' && goalId !== undefined && event.agentId === PROMPT_MAIN_AGENT_ID) {
         const iteration = event.snapshot?.iteration ?? 0;
         if (iteration > lastGoalIteration) {
           lastGoalIteration = iteration;
-          outputWriter.writeProgress(
-            `${formatElapsed(Date.now() - turnStartedAt)} Writer iteration ${String(iteration)}`,
-          );
+          if (!stableLoopPhaseObserved) {
+            outputWriter.writeProgress(
+              `${formatElapsed(Date.now() - turnStartedAt)} Writer iteration ${String(iteration)}`,
+            );
+          }
         }
         if (
           (event.snapshot !== null && event.snapshot.goalId === goalId && event.snapshot.status !== 'active')
@@ -1035,6 +1051,7 @@ function runPromptTurn(
         case 'compaction.started':
         case 'cron.fired':
         case 'goal.updated':
+        case 'loop.phase.changed':
         case 'mcp.server.status':
         case 'session.meta.updated':
         case 'skill.activated':

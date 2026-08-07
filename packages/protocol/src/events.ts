@@ -806,6 +806,21 @@ export interface GoalUpdatedEvent {
   readonly change?: GoalChange;
 }
 
+export type LoopExecutionPhase = 'write' | 'check' | 'review';
+
+/**
+ * Stable, runtime-owned Loop phase signal shared by interactive and headless
+ * clients. This is intentionally independent from tool names and model text.
+ */
+export interface LoopPhaseChangedEvent {
+  readonly type: 'loop.phase.changed';
+  readonly phase: LoopExecutionPhase;
+  readonly goalId: string;
+  readonly runId: string;
+  readonly iteration: number;
+  readonly attemptId?: string;
+}
+
 export interface SkillActivatedEvent {
   readonly type: 'skill.activated';
   readonly activationId: string;
@@ -1075,6 +1090,7 @@ export type AgentEvent =
   | ConfigChangedEvent
   | ModelCatalogChangedEvent
   | GoalUpdatedEvent
+  | LoopPhaseChangedEvent
   | SkillActivatedEvent
   | TurnStartedEvent
   | TurnEndedEvent
@@ -1917,6 +1933,15 @@ export const goalUpdatedEventSchema = z.object({
   change: goalChangeSchema.optional(),
 }) satisfies z.ZodType<GoalUpdatedEvent>;
 
+export const loopPhaseChangedEventSchema = z.object({
+  type: z.literal('loop.phase.changed'),
+  phase: z.enum(['write', 'check', 'review']),
+  goalId: z.string().min(1),
+  runId: z.string().min(1),
+  iteration: z.number().int().nonnegative(),
+  attemptId: z.string().min(1).optional(),
+}) satisfies z.ZodType<LoopPhaseChangedEvent>;
+
 export const skillActivatedEventSchema = z.object({
   type: z.literal('skill.activated'),
   activationId: z.string(),
@@ -2179,6 +2204,7 @@ export const agentEventSchema = z.discriminatedUnion('type', [
   sessionStatusChangedEventSchema,
   modelCatalogChangedEventSchema,
   goalUpdatedEventSchema,
+  loopPhaseChangedEventSchema,
   skillActivatedEventSchema,
   turnStartedEventSchema,
   turnEndedEventSchema,
@@ -2239,6 +2265,7 @@ export const VOLATILE_EVENT_TYPES = [
   'shell.output',
   'shell.started',
   'agent.status.updated',
+  'loop.phase.changed',
 ] as const satisfies readonly AgentEvent['type'][];
 
 export type VolatileEventType = (typeof VOLATILE_EVENT_TYPES)[number];

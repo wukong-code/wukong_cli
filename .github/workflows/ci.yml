@@ -97,8 +97,6 @@ jobs:
 
   test-windows:
     runs-on: windows-latest
-    # Temporarily disabled while Windows tests are being stabilized.
-    if: false
 
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
@@ -140,6 +138,13 @@ jobs:
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm exec vitest run packages/verification/test/criteria.test.ts packages/verification/test/review-subject.test.ts apps/wukong/test/cli/reference-verification-skills.test.ts packages/agent-core/test/tools/goal-gate.test.ts --testTimeout=30000
+      - name: Repeat deterministic criteria and Gate matrix to three total runs
+        shell: bash
+        run: |
+          for run in 2 3; do
+            echo "stability run ${run}/3"
+            pnpm exec vitest run packages/verification/test/criteria.test.ts packages/agent-core/test/tools/goal-gate.test.ts --testTimeout=30000
+          done
 
   lint:
     runs-on: ubuntu-latest

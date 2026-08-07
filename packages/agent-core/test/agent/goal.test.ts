@@ -35,7 +35,13 @@ interface TelemetryRecord {
 function makeGoalMode(options: { readonly kaos?: Kaos; readonly cwd?: string } = {}) {
   const records: AgentRecord[] = [];
   const replay: AgentReplayRecord[] = [];
-  const events: Array<{ readonly type: string; readonly snapshot?: GoalSnapshot | null; readonly change?: GoalChange }> = [];
+  const events: Array<{
+    readonly type: string;
+    readonly snapshot?: GoalSnapshot | null;
+    readonly change?: GoalChange;
+    readonly phase?: string;
+    readonly iteration?: number;
+  }> = [];
   const telemetry: TelemetryRecord[] = [];
   const reminders: Array<{ readonly content: string; readonly origin: unknown }> = [];
   const agent = {
@@ -44,7 +50,7 @@ function makeGoalMode(options: { readonly kaos?: Kaos; readonly cwd?: string } =
         records.push(record);
       },
     },
-    emitEvent: (event: { readonly type: string; readonly snapshot?: GoalSnapshot | null; readonly change?: GoalChange }) => {
+    emitEvent: (event: typeof events[number]) => {
       events.push(event);
     },
     telemetry: {
@@ -698,6 +704,50 @@ describe('GoalMode lifecycle', () => {
     expect(completion).toMatchObject({ kind: 'completion', status: 'complete', reason: 'done' });
     expect(goals.getGoal().goal).toBeNull();
     expect(events.at(-1)?.snapshot).toBeNull();
+  });
+
+  it('emits WRITE from Loop runtime state instead of client-side inference', async () => {
+    const { goals, events } = makeGoalMode();
+    const finishLine = await buildFinishLine({
+      cwd: process.cwd(),
+      objective: 'finish the loop',
+      completionCriterion: 'selected checks pass',
+      constraints: [],
+      explicitChecks: ['node -e "process.exit(0)"'],
+      includeDiscoveredChecks: false,
+      providerId: 'anthropic',
+      providerEndpoint: 'https://api.anthropic.com',
+      providerModel: 'reviewer-model',
+    });
+    expect(finishLine.ok).toBe(true);
+    if (!finishLine.ok) return;
+    await goals.createGoal({
+      objective: finishLine.proposal.objective,
+      completionCriterion: finishLine.proposal.completionCriterion,
+      stopCondition: 'proof-pass',
+      loopContract: {
+        ...finishLine.proposal,
+        schemaVersion: 2,
+        finishLineReview: {
+          ...finishLine.proposal.finishLineReview,
+          acknowledgedWarningIds: finishLine.proposal.finishLineReview.warnings.map(
+            (warning) => warning.id,
+          ),
+        },
+        reviewSettings: makeReviewSettings(
+          finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+        ),
+        source: 'user',
+      },
+    });
+
+    await goals.incrementIteration();
+
+    expect(events).toContainEqual(expect.objectContaining({
+      type: 'loop.phase.changed',
+      phase: 'write',
+      iteration: 1,
+    }));
   });
 
   it('keeps blocked goals resumable', async () => {

@@ -63,6 +63,14 @@ export interface AppState {
   sessionTitle: string | null;
   /** Current goal snapshot for the footer badge; null/undefined when no active goal. */
   goal?: GoalSnapshot | null;
+  /** Runtime-owned Loop phase; never inferred from tool names or model prose. */
+  loopExecutionPhase?: {
+    readonly phase: 'write' | 'check' | 'review';
+    readonly goalId: string;
+    readonly runId: string;
+    readonly iteration: number;
+    readonly attemptId?: string;
+  } | null;
   /** Derived UI mode for loop-driven chrome layout. */
   uiMode?: UIMode;
   /** Last verify result used by the footer conclusion track. */

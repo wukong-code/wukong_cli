@@ -138,7 +138,8 @@ describe('events — volatile classification', () => {
     ]) {
       expect(isVolatileEventType(type)).toBe(true);
     }
-    expect(VOLATILE_EVENT_TYPES).toHaveLength(7);
+    expect(VOLATILE_EVENT_TYPES).toHaveLength(8);
+    expect(VOLATILE_EVENT_TYPES).toContain('loop.phase.changed');
   });
 
   it('keeps timeline-bearing events durable', () => {

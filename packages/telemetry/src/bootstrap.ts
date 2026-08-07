@@ -1,6 +1,6 @@
 import { getDefaultTelemetryClient } from './client';
 import { EventSink } from './sink';
-import { AsyncTransport } from './transport';
+import { AsyncTransport, clearTelemetryDiskQueue } from './transport';
 
 export const TELEMETRY_DISABLE_ENV = 'WUKONG_DISABLE_TELEMETRY';
 export const TELEMETRY_ENABLE_ENV = 'WUKONG_TELEMETRY';
@@ -39,6 +39,7 @@ export function initializeTelemetry(options: TelemetryBootstrapOptions): void {
   const client = getDefaultTelemetryClient();
   if (!shouldEnableTelemetry({ enabled: options.enabled })) {
     client.disable();
+    clearTelemetryDiskQueue(options.homeDir);
     return;
   }
 

@@ -65,12 +65,14 @@ function ctx<Input>(args: Input, inputSignal: AbortSignal = signal) {
 function makeStore(): {
   readonly goals: GoalMode;
   readonly records: AgentRecord[];
+  readonly events: Array<{ readonly type: string; readonly phase?: string }>;
 } {
   const records: AgentRecord[] = [];
+  const events: Array<{ readonly type: string; readonly phase?: string }> = [];
   const agent = {
     type: 'main',
     records: { logRecord: (record: AgentRecord) => records.push(record) },
-    emitEvent: () => {},
+    emitEvent: (event: { readonly type: string; readonly phase?: string }) => events.push(event),
     telemetry: { track: () => {} },
     context: { appendSystemReminder: () => {} },
     config: {
@@ -79,7 +81,7 @@ function makeStore(): {
     },
     permission: { mode: 'manual' },
   } as unknown as Agent;
-  return { goals: new GoalMode(agent), records };
+  return { goals: new GoalMode(agent), records, events };
 }
 
 function makeAgent(
@@ -536,7 +538,7 @@ describe('UpdateGoalTool 0.0.20 verification gate', () => {
   });
 
   it('runs one isolated fresh reviewer and completes a brokered V2 Loop', async () => {
-    const { goals, records } = makeStore();
+    const { goals, records, events } = makeStore();
     await createBrokeredGoal(goals);
     const spawn = vi.fn(async (input: { readonly prompt: string }) => ({
       completion: Promise.resolve({ result: freshVerdictFromPrompt(input.prompt, 'PASS') }),
@@ -550,6 +552,12 @@ describe('UpdateGoalTool 0.0.20 verification gate', () => {
     expect(result.stopTurn).toBe(true);
     expect(goals.getGoal().goal).toBeNull();
     expect(spawn).toHaveBeenCalledOnce();
+    expect(events.filter((event) => event.type === 'loop.phase.changed'))
+      .toEqual([
+        expect.objectContaining({ phase: 'write' }),
+        expect.objectContaining({ phase: 'check' }),
+        expect.objectContaining({ phase: 'review' }),
+      ]);
     expect(spawn).toHaveBeenCalledWith(expect.objectContaining({
       profileName: 'fresh-reviewer',
       isolated: true,
