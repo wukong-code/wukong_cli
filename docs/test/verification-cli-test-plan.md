@@ -27,7 +27,7 @@
 以下证据仍未形成：
 
 1. 当前候选在 GitHub Actions 的六平台实机结果；
-2. 公开 URL 的 12 个 assets/SHA、provenance、fresh install 与 0.0.22 → 0.1.0 upgrade；
+2. 公开 URL 的 6 ZIP + 6 SHA + provenance（13 个 assets）、fresh install 与 0.0.22 → 0.1.0 upgrade；
 3. 至少一个 Windows 实际 repo 的完整 blocker → fix → rerun → PASS；
 4. 25/20/15/7 opt-in cohort 与所有首次 PASS 用户的完整 14 天稳定窗口。
 

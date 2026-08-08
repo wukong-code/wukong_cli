@@ -65,7 +65,7 @@
 - [x] 用当前候选实际完成六平台 fresh install、0.0.22 → 0.1.0 upgrade 与旧状态恢复（2026-08-08；公开 RC 六平台 smoke run `31244648831`）
 - [x] release workflow 全部 checkout 使用 `persist-credentials: false` 和最小权限；保持 full-SHA Actions、staging ZIP smoke、明确记录 macOS 未做 Developer ID 签名或 Apple 公证、OIDC attestation、draft byte verification 和 publish-no-rebuild（2026-08-06，workflow 合同与静态测试）
 - [x] 沿用 `release-provenance.json` 证明 source tag/full SHA、workflow run、六个平台和 asset SHA；从公开 URL 回读 name/size/SHA/attestation 并完成 fresh install/upgrade，失败不改变 latest（2026-08-08；immutable prerelease `v0.1.0-rc.1`，独立公开回读 run `31244905074`，stable latest 仍为 `v0.0.22`）
-- [ ] installer、manifest、tag、12 个 assets/SHA、README、docs、Web、Today、Changelog 和 What's Changed 使用同一 release identity；验证 rollback 不破坏用户状态
+- [ ] installer、manifest、tag、6 ZIP + 6 SHA + provenance（13 个 assets）、README、docs、Web、Today、Changelog 和 What's Changed 使用同一 release identity；验证 rollback 不破坏用户状态
 
 ### RC 期间验证：真实项目、Provider 与用户理解
 
@@ -85,7 +85,7 @@
 - [ ] 已有 API Key 时 fresh install 到 executable Preflight 中位数 ≤5 分钟、P90 ≤15 分钟；到达 terminal 的用户至少 80% 能解释结果、evidence、保留改动和 next action
 - [ ] P0/release-blocking P1、false PASS、pre-existing state loss、workspace 外写入、静默重复 provider request、privacy/consent violation 和不可恢复状态为 0；严重事件重算 14 天 RC
 - [ ] 3 个脱敏授权案例只作为正式宣传/launch gate，不阻塞 binary correctness
-- [ ] 公开版本、12 assets/SHA、installer、manifest、release notes、Web 和 provenance 从公开 URL 验收一致
+- [ ] 公开版本、6 ZIP + 6 SHA + provenance（13 个 assets）、installer、manifest、release notes 和 Web 从公开 URL 验收一致
 
 ### P1：值得做但不阻塞 rc.1
 
