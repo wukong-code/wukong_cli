@@ -76,7 +76,7 @@
 - [ ] Codex、Claude Code、Cursor、Kimi Code、Grok 各完成 picker → editable Goal → Preflight → Loop → terminal/recovery smoke
 - [ ] 首次用户不读内部文档也能理解 Finish Line、workspace 权限、provider-visible input、Gate verdict、STOPPED_BY_USER、文件归因、budget 和 next action
 - [x] targeted/full test、typecheck、lint、build、sherif、package lint 与本地 native installer/ZIP validator 通过（2026-08-06）
-- [ ] 当前候选在 clean checkout 连续三次保持 check order、terminal 和 reason code，并完成 docs/installer 全量候选验收
+- [x] 当前候选在 clean checkout 连续三次保持 check order、terminal 和 reason code，并完成 docs/installer 全量候选验收（2026-08-08；exact-source CI runs `31241684998`、`31245877736`、`31245881849`；公开资产/installer 回读 `31244905074`）
 
 ### 正式 0.1.0 发布门槛
 
