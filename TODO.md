@@ -60,11 +60,11 @@
 - [x] 五来源覆盖隐藏敏感字段、损坏格式、symlink escape、workspace mismatch、外部路径和空结果 fixture（2026-08-06）
 - [x] exact Gate command 绑定 cwd/workspace、resolved direct shell 和 approval；0.1.0 不实现完整 shell binary content/PATH/descendant attestation（2026-08-06）
 - [x] 统一 Gate runner/Bash timeout、cancel 和 process-tree cleanup，并为 Windows quoting、空格、Unicode、timeout、cancel 和 contract restore 建立 workflow/自动化合同（2026-08-06）
-- [ ] 用当前候选实际跑完 Windows 和其余五个平台的 CI，不以 workflow 静态测试代替实机结果
+- [x] 用当前候选实际跑完 Windows 和其余五个平台的 CI，不以 workflow 静态测试代替实机结果（2026-08-08；candidate run `31241717713`、public smoke run `31244648831`）
 - [x] 六平台 native bundle 的 version、provider、Resume、基本 Loop、stop/recovery、checksum 与 0.0.22 → 0.1.0 状态恢复已进入 workflow/ZIP smoke；本地 macOS ARM64 release-profile ZIP 已通过（2026-08-06）
-- [ ] 用当前候选实际完成六平台 fresh install、0.0.22 → 0.1.0 upgrade 与旧状态恢复
+- [x] 用当前候选实际完成六平台 fresh install、0.0.22 → 0.1.0 upgrade 与旧状态恢复（2026-08-08；公开 RC 六平台 smoke run `31244648831`）
 - [x] release workflow 全部 checkout 使用 `persist-credentials: false` 和最小权限；保持 full-SHA Actions、staging ZIP smoke、明确记录 macOS 未做 Developer ID 签名或 Apple 公证、OIDC attestation、draft byte verification 和 publish-no-rebuild（2026-08-06，workflow 合同与静态测试）
-- [ ] 沿用 `release-provenance.json` 证明 source tag/full SHA、workflow run、六个平台和 asset SHA；从公开 URL 回读 name/size/SHA/attestation 并完成 fresh install/upgrade，失败不改变 latest
+- [x] 沿用 `release-provenance.json` 证明 source tag/full SHA、workflow run、六个平台和 asset SHA；从公开 URL 回读 name/size/SHA/attestation 并完成 fresh install/upgrade，失败不改变 latest（2026-08-08；immutable prerelease `v0.1.0-rc.1`，独立公开回读 run `31244905074`，stable latest 仍为 `v0.0.22`）
 - [ ] installer、manifest、tag、12 个 assets/SHA、README、docs、Web、Today、Changelog 和 What's Changed 使用同一 release identity；验证 rollback 不破坏用户状态
 
 ### RC 期间验证：真实项目、Provider 与用户理解
@@ -759,4 +759,4 @@
 
 ---
 
-**最后更新**: 2026-08-07（0.0.22 已发布；0.1.0 实现侧 RC P0/P1 已收口，候选与真实用户证据尚未完成）
+**最后更新**: 2026-08-08（stable `0.0.22`；immutable `0.1.0-rc.1` 已公开并通过六平台资产、安装、升级、恢复与公开回读验收；真实 Windows repo、五来源真实 Resume、首次用户、cohort 与 14 天证据仍未完成）

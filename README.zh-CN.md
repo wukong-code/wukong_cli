@@ -12,15 +12,17 @@ Wukong Code 是围绕一个主流程构建的终端 AI coding agent：
 
 ## 当前版本：v0.0.22
 
-`v0.0.22` 是已发布的 binary。当前源码 checkout 还可能包含未发布的 `0.1.0`
-稳定化改动。下方用户流程描述开发分支，不表示 `0.1.0-rc.1` 已经发布。
+`v0.0.22` 是默认 installer 选择的 stable binary。opt-in
+[`v0.1.0-rc.1`](https://github.com/mutnpc/wukong-code/releases/tag/v0.1.0-rc.1)
+也已公开；它是 immutable prerelease，不会替换 stable latest。
 
-0.1.0 已收敛为一条可控、可恢复、可解释的本地单 Loop。当前开发 checkout 已实现
-可执行的 provider-call/token 上限、versioned no-check decision、既有改动与 Wukong
-改动归因、完整终态 usage/next action，以及兼容/发布自动化 smoke。这些只是实现证据，
-不表示已经进入 RC：六平台候选 CI、公开资产验收、opt-in cohort 和 14 天稳定窗口仍待
-完成。完整多层 coverage schema、direct-shell content/PATH attestation 和 provider
-价格数据库后移，不再阻塞版本。
+0.1.0 已收敛为一条可控、可恢复、可解释的本地单 Loop。当前候选已实现可执行的
+provider-call/token 上限、versioned no-check decision、既有改动与 Wukong 改动归因、
+完整终态 usage/next action，以及兼容/发布自动化 smoke。六平台候选构建、
+公开资产、固定版本安装、`0.0.22` 升级、状态恢复、checksum、provenance 和 attestation
+已经通过。真实来源流程、opt-in cohort 和完整 14 天稳定窗口仍阻止 stable `0.1.0`。
+完整多层 coverage schema、direct-shell content/PATH attestation 和 provider 价格数据库
+后移，不再阻塞版本。
 
 `0.0.22` 在 primary remote catalog 不可用时仍可回退到 models.dev，并澄清 CLI 的
 session 与权限控制：

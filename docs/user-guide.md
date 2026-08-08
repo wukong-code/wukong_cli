@@ -1,9 +1,9 @@
 # Wukong Code 用户指南
 
-> 适用范围: 当前 `wukong_cli` 开发分支；已发布 binary 基线为 `v0.0.22`
-> 更新时间: 2026-08-07
+> 适用范围: 当前 `wukong_cli`；stable binary 为 `v0.0.22`，opt-in prerelease 为 `v0.1.0-rc.1`
+> 更新时间: 2026-08-08
 > 定位: 给 Wukong 一个目标，通过 Goal → Write → Check → Review → Fix 循环直到没有 blocking finding。
-> 版本边界: 本文中的开发分支行为尚未构成 `0.1.0-rc.1` 发布。0.1.0 只稳定可控、可恢复、可解释的单 Loop；可执行 provider-call/token 上限、可信 no-check、完整文件归因和兼容/发布自动化已在当前 checkout 实现。六平台当前候选、公开资产、opt-in cohort 和 14 天稳定性证据仍未完成。完整多层 coverage schema、direct-shell content/PATH attestation 和价格数据库已后移。当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
+> 版本边界: immutable `0.1.0-rc.1` 已公开并通过六平台资产、固定版本安装、升级/恢复与公开回读；它不是 stable latest。真实来源流程、opt-in cohort 和 14 天稳定性证据仍未完成。完整多层 coverage schema、direct-shell content/PATH attestation 和价格数据库已后移。当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
 
 CLI telemetry 的现有 wire fields、唯一 endpoint、本地 7 天失败队列和 opt-out 方式见
 [CLI telemetry contract](operations/cli-telemetry.md)。远端 retention 当前没有公开、
@@ -105,9 +105,8 @@ Provider 目录默认先后读取：
 release-profile 缺陷没有嵌入该 snapshot。因此两个网络目录都不可用时，不能承诺
 公开 `v0.0.22` binary 的 `/provider` 或未指定 `--url` 的
 `wukong provider catalog` 仍可离线工作；应按明确错误恢复网络或提供可用 catalog。
-当前未发布的 0.1.0 release workflow 已嵌入 snapshot 并在 ZIP 中执行 provider smoke；
-本次 macOS ARM64 release-profile ZIP 使用确定性 snapshot 已通过。它仍需六平台候选 CI，
-也不会改变已发布 `v0.0.22` 的缺陷。
+`0.1.0-rc.1` release workflow 已嵌入同一确定性 snapshot，并在六平台 ZIP 中完成
+provider smoke；这不会改变已发布 `v0.0.22` 的缺陷。
 
 可通过环境变量替换首选目录：
 

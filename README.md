@@ -13,23 +13,20 @@ findings against the same goal.
 
 ## Current release: v0.0.22
 
-`v0.0.22` is the published binary. This source checkout may also contain
-unreleased `0.1.0` stabilization work. The user-flow notes below describe the
-development checkout; they do not mean that `0.1.0-rc.1` has been published.
-
-The source package identity is now `0.1.0-rc.1` for candidate verification.
-The stable `latest` installer must remain on `v0.0.22` until the immutable
-public prerelease, six-platform smoke, and release-channel checks complete. Use the
-fixed-version instructions in the RC notes only after its public release URL
-is available.
+`v0.0.22` remains the stable binary selected by the default installer.
+[`v0.1.0-rc.1`](https://github.com/mutnpc/wukong-code/releases/tag/v0.1.0-rc.1)
+is now available as an explicit opt-in prerelease; it is immutable and is not
+selected by stable `latest`.
 
 The 0.1.0 target is deliberately narrow: one controllable, recoverable, and
 explainable local Loop. The development checkout now implements enforceable
 provider-call/token limits, a versioned no-check decision,
 pre-existing-versus-Wukong file attribution, terminal usage/next actions, and
-automated compatibility/release smoke coverage. This is implementation
-evidence, not an RC or release: six-platform candidate CI, public-asset
-verification, the opt-in cohort, and the 14-day stability window remain open.
+automated compatibility/release smoke coverage. Its six-platform candidate
+build, public assets, pinned fresh installs, `0.0.22` upgrades, state recovery,
+checksums, provenance, and attestations have passed. The opt-in cohort, real
+user flows, and the full 14-day stability window remain open before stable
+`0.1.0`.
 Full multi-layer coverage schemas, direct-shell content/PATH attestation, and a
 provider pricing database are deferred rather than release blockers.
 
