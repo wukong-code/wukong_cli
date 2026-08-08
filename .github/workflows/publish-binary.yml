@@ -332,9 +332,9 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
-            "repos/${RELEASE_REPO}/immutable-releases" --jq .enabled)" = "true"
           if [[ "$IS_PRERELEASE" = "true" ]]; then
+            test "$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+              "repos/${RELEASE_REPO}/immutable-releases" --jq .enabled)" = "true"
             if [[ "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isDraft --jq .isDraft)" = "true" ]]; then
               gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" --draft=false --latest=false
             fi

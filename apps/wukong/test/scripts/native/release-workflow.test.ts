@@ -427,7 +427,10 @@ describe('native release workflow contract', () => {
     expect(candidateVerification).not.toContain('gh attestation verify');
 
     const promote = source.slice(promoteIndex, anonymousVerifyIndex);
-    expect(promote).toContain('repos/${RELEASE_REPO}/immutable-releases');
+    expect(source).toContain('immutable_policy_verified:');
+    expect(source).toContain('IMMUTABLE_POLICY_VERIFIED: ${{ inputs.immutable_policy_verified }}');
+    expect(source).toContain('if [[ "$IMMUTABLE_POLICY_VERIFIED" != "true" ]]');
+    expect(promote).not.toContain('repos/${RELEASE_REPO}/immutable-releases');
     expect(promote).toContain('CURRENT_LATEST_TAG="$(gh release view');
     expect(promote).toContain('https://wukong.today/latest?');
     expect(promote).toContain('releases/tag/${CURRENT_LATEST_TAG}');
