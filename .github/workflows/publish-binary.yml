@@ -57,7 +57,10 @@ jobs:
         id: contract
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-          GH_TOKEN: ${{ github.token }}
+          # The source-repository installation token cannot read sibling
+          # repositories. This step resolves the public distribution and
+          # website identities, so use the explicitly scoped cross-repo token.
+          GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
           RELEASE_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
           RELEASE_REPO: mutnpc/wukong-code
           WEBSITE_REPO: mutnpc/wukong_web

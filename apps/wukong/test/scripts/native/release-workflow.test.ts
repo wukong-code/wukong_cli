@@ -264,6 +264,22 @@ describe('native release workflow contract', () => {
     );
   });
 
+  it('uses the scoped cross-repository token while resolving public release identities', async () => {
+    const source = await workflow('.github/workflows/publish-binary.yml');
+    const validateIndex = source.indexOf('Validate tag, package, and release notes');
+    const nativeIndex = source.indexOf('native-artifacts:');
+    const validate = source.slice(validateIndex, nativeIndex);
+
+    expect(validateIndex).toBeGreaterThan(0);
+    expect(nativeIndex).toBeGreaterThan(validateIndex);
+    expect(validate).toContain(
+      'GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}',
+    );
+    expect(validate).not.toContain('GH_TOKEN: ${{ github.token }}');
+    expect(validate).toContain('gh release view --repo "$RELEASE_REPO"');
+    expect(validate).toContain('repos/${WEBSITE_REPO}/commits/${WEBSITE_REF}');
+  });
+
   it('publishes only prereleases as immutable and leaves stable assets in a mutable draft', async () => {
     const source = await workflow('.github/workflows/publish-binary.yml');
     const uploadIndex = source.indexOf('gh release upload "$RELEASE_TAG"');
