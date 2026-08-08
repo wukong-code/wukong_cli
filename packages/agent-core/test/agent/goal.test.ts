@@ -715,9 +715,6 @@ describe('GoalMode lifecycle', () => {
       constraints: [],
       explicitChecks: ['node -e "process.exit(0)"'],
       includeDiscoveredChecks: false,
-      providerId: 'anthropic',
-      providerEndpoint: 'https://api.anthropic.com',
-      providerModel: 'reviewer-model',
     });
     expect(finishLine.ok).toBe(true);
     if (!finishLine.ok) return;

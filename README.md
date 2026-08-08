@@ -17,6 +17,12 @@ findings against the same goal.
 unreleased `0.1.0` stabilization work. The user-flow notes below describe the
 development checkout; they do not mean that `0.1.0-rc.1` has been published.
 
+The source package identity is now `0.1.0-rc.1` for candidate verification.
+The stable `latest` installer must remain on `v0.0.22` until the immutable
+public prerelease, six-platform smoke, and release-channel checks complete. Use the
+fixed-version instructions in the RC notes only after its public release URL
+is available.
+
 The 0.1.0 target is deliberately narrow: one controllable, recoverable, and
 explainable local Loop. The development checkout now implements enforceable
 provider-call/token limits, a versioned no-check decision,

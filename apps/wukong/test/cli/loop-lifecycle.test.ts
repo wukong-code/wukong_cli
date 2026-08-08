@@ -95,7 +95,13 @@ describe('local Loop lifecycle', () => {
       state: 'terminal',
     });
     const recordPath = join(home, 'usage', 'loop-runs', `${run.runId}.json`);
-    expect((await stat(recordPath)).mode & 0o777).toBe(0o600);
+    const recordStat = await stat(recordPath);
+    expect(recordStat.isFile()).toBe(true);
+    // Win32 reports synthetic POSIX mode bits, so this assertion cannot
+    // evaluate its ACLs. File identity and content remain covered above.
+    if (process.platform !== 'win32') {
+      expect(recordStat.mode & 0o777).toBe(0o600);
+    }
   });
 
   it('records user cancellation separately from the Loop outcome', async () => {

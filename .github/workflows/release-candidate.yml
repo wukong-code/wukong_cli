@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       source_ref:
-        description: 'Git ref or SHA to validate without publishing'
+        description: 'Git ref or SHA resolved once to an exact commit without publishing'
         required: true
         default: 'main'
         type: string

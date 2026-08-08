@@ -273,7 +273,12 @@ async function discoverCursor(
     const transcriptDir = dirname(sourcePath);
     if (basename(sourcePath, '.jsonl') !== basename(transcriptDir)) return undefined;
     const projectDir = basename(dirname(dirname(transcriptDir)));
-    if (wantedProject !== undefined && projectDir !== wantedProject) return undefined;
+    if (
+      wantedProject !== undefined
+      && !sameCursorProjectSlug(projectDir, wantedProject)
+    ) {
+      return undefined;
+    }
     const resolvedWorkDir = workDir ?? (await decodeCursorProject(projectDir));
     if (resolvedWorkDir === undefined) return undefined;
     return {
@@ -526,11 +531,25 @@ async function lastJsonObjects(
 }
 
 function sameOptionalWorkDir(candidate: string, requested: string | undefined): boolean {
-  return requested === undefined || resolve(candidate) === resolve(requested);
+  if (requested === undefined) return true;
+  const resolvedCandidate = resolve(candidate);
+  const resolvedRequested = resolve(requested);
+  return process.platform === 'win32'
+    ? resolvedCandidate.toLowerCase() === resolvedRequested.toLowerCase()
+    : resolvedCandidate === resolvedRequested;
 }
 
 function encodeCursorProject(workDir: string): string {
-  return resolve(workDir).replace(/^\/+/, '').replaceAll('/', '-');
+  const normalized = resolve(workDir).replaceAll('\\', '/');
+  const withoutRoot = normalized
+    .replace(/^([A-Za-z]):\/+/, '$1/')
+    .replace(/^\/+/, '');
+  return withoutRoot.replaceAll('/', '-');
+}
+
+function sameCursorProjectSlug(candidate: string, expected: string): boolean {
+  if (process.platform !== 'win32') return candidate === expected;
+  return candidate.toLowerCase() === expected.toLowerCase();
 }
 
 /**
@@ -565,6 +584,10 @@ async function decodeCursorProject(encoded: string): Promise<string | undefined>
     return undefined;
   };
 
+  const drive = parts[0];
+  if (process.platform === 'win32' && drive !== undefined && /^[A-Za-z]$/u.test(drive)) {
+    return visit(`${drive.toUpperCase()}:/`, 1);
+  }
   return visit('/', 0);
 }
 

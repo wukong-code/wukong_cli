@@ -1,3 +1,5 @@
+import { resolve } from 'node:path';
+
 import { describe, it, expect, vi } from 'vitest';
 import { Command } from 'commander';
 
@@ -66,7 +68,10 @@ describe('handleDoctor', () => {
     });
     await handleDoctor(deps, { target: 'config', path: 'wukong.toml' });
 
-    expect(deps.validateConfigToml).toHaveBeenCalledWith('', '/workspace/wukong.toml');
+    expect(deps.validateConfigToml).toHaveBeenCalledWith(
+      '',
+      resolve('/workspace', 'wukong.toml'),
+    );
   });
 
   it('validates only tui.toml when target is tui', async () => {

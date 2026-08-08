@@ -1,4 +1,4 @@
-import { mkdirSync, mkdtempSync, realpathSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -79,12 +79,17 @@ describe('runPluginNodeEntry', () => {
     await runPluginNodeEntry(entry, ['--arg1', 'value']);
 
     expect(globalThis.__pluginRan).toBe(true);
-    expect(globalThis.__pluginRunTestArgv).toEqual([
-      process.argv[0],
-      realpathSync(entry),
-      '--arg1',
-      'value',
-    ]);
+    const rewrittenArgv = globalThis.__pluginRunTestArgv;
+    expect(rewrittenArgv?.[0]).toBe(process.argv[0]);
+    // Async and sync realpath can disagree on Win32 8.3 versus long spelling.
+    // Device/inode identity proves argv still names the exact entry file.
+    const argvEntryStat = statSync(rewrittenArgv?.[1] ?? '');
+    const expectedEntryStat = statSync(entry);
+    expect({ dev: argvEntryStat.dev, ino: argvEntryStat.ino }).toEqual({
+      dev: expectedEntryStat.dev,
+      ino: expectedEntryStat.ino,
+    });
+    expect(rewrittenArgv?.slice(2)).toEqual(['--arg1', 'value']);
   });
 
   it('resolves symlinks before checking containment', async () => {

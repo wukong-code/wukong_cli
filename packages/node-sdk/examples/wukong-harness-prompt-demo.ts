@@ -101,6 +101,7 @@ function handleEvent(
     case 'agent.status.updated':
     case 'cron.fired':
     case 'goal.updated':
+    case 'loop.phase.changed':
     case 'session.meta.updated':
     case 'skill.activated':
     case 'turn.step.started':

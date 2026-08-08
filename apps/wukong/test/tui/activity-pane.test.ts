@@ -1,5 +1,7 @@
 import { describe, expect, it, vi } from 'vitest';
 
+import type { GoalSnapshot } from '@wukong/wukong-sdk';
+
 import { ActivityPaneComponent } from '#/tui/components/panes/activity-pane';
 import { WukongTUI, type WukongTUIStartupInput, type TUIState } from '#/tui/wukong-tui';
 
@@ -49,7 +51,43 @@ function makeDriverWithTerminalProgress(): {
   return { driver, state: driver.state, setProgress };
 }
 
+function activeGoal(): GoalSnapshot {
+  return {
+    goalId: 'goal-1',
+    objective: 'Ship the release',
+    status: 'active',
+    iteration: 1,
+    turnsUsed: 0,
+    tokensUsed: 0,
+    wallClockMs: 0,
+    budget: {
+      turnBudget: null,
+      tokenBudget: null,
+      wallClockBudgetMs: null,
+      remainingTokens: null,
+      remainingTurns: null,
+      remainingWallClockMs: null,
+      tokenBudgetReached: false,
+      turnBudgetReached: false,
+      wallClockBudgetReached: false,
+      overBudget: false,
+    },
+  };
+}
+
 describe('updateLoopPhase terminal progress', () => {
+  it('treats an absent runtime phase as absent during goal-state transitions', () => {
+    const { driver, state } = makeDriverWithTerminalProgress();
+    state.chromeState.setGoal(activeGoal());
+    state.appState.goal = undefined;
+    state.appState.loopExecutionPhase = undefined;
+
+    expect(() => {
+      driver.updateLoopPhase();
+    }).not.toThrow();
+    expect(strip(state.loopPhase.render(80).join(''))).toContain('WAIT');
+  });
+
   it('toggles terminal progress when the loop phase enters and leaves work mode', () => {
     vi.useFakeTimers();
     try {

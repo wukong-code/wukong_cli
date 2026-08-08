@@ -114,7 +114,7 @@ jobs:
       # Windows runners are slower and run the whole suite (including
       # in-process e2e tests) under more contention, so the default 5s test
       # timeout causes flaky failures. Give it more headroom.
-      - run: pnpm run test -- --testTimeout=30000
+      - run: pnpm exec vitest run --testTimeout=30000
 
   verification-criteria-cross-platform:
     name: Verification criteria (${{ matrix.os }})

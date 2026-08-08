@@ -133,7 +133,7 @@ describe('discoverForeignSessionRows', () => {
 
   it('recovers an existing Cursor workspace path when listing all sessions', async () => {
     const cursorWorkDir = join(home, 'workspace-with-dash');
-    const encoded = cursorWorkDir.replace(/^\/+/, '').replaceAll('/', '-');
+    const encoded = cursorProjectSlug(cursorWorkDir);
     const cursor = join(
       home,
       `.cursor/projects/${encoded}/agent-transcripts/cursor-all/cursor-all.jsonl`,
@@ -147,7 +147,29 @@ describe('discoverForeignSessionRows', () => {
     const rows = await discoverForeignSessionRows({ source: 'cursor', homeDir: home });
 
     expect(rows).toHaveLength(1);
-    expect(rows[0]?.work_dir).toBe(cursorWorkDir);
+    expect(await realpath(rows[0]?.work_dir ?? '')).toBe(await realpath(cursorWorkDir));
+  });
+
+  it('matches a Windows drive workspace against Cursor project slugs', async () => {
+    const windowsWorkDir = 'C:\\Users\\tester\\workspace-with-dash';
+    const cursor = join(
+      home,
+      '.cursor/projects/C-Users-tester-workspace-with-dash/agent-transcripts/cursor-win/cursor-win.jsonl',
+    );
+    await mkdir(join(cursor, '..'), { recursive: true });
+    await writeFile(
+      cursor,
+      JSON.stringify({ role: 'user', message: { content: 'Resume Windows' } }),
+    );
+
+    const rows = await discoverForeignSessionRows({
+      source: 'cursor',
+      homeDir: home,
+      workDir: windowsWorkDir,
+    });
+
+    expect(rows).toHaveLength(1);
+    expect(rows[0]?.work_dir).toBe(windowsWorkDir);
   });
 
   it('hides Cursor transcripts whose encoded workspace cannot be resolved safely', async () => {
@@ -520,3 +542,11 @@ describe('discoverForeignSessionRows', () => {
     expect(rows[0]?.last_prompt).toBe('Newest unfinished request');
   });
 });
+
+function cursorProjectSlug(workDir: string): string {
+  return workDir
+    .replaceAll('\\', '/')
+    .replace(/^([A-Za-z]):\/+/, '$1/')
+    .replace(/^\/+/, '')
+    .replaceAll('/', '-');
+}

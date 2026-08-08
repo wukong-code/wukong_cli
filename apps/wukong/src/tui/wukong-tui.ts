@@ -2396,7 +2396,9 @@ export class WukongTUI {
       if (chrome.uiMode === 'blocked' || base.phase === 'paused') return base;
 
       const stable = this.state.appState.loopExecutionPhase;
-      const stablePhase = stable?.goalId === this.state.appState.goal?.goalId
+      const stablePhase = stable !== null
+        && stable !== undefined
+        && stable.goalId === this.state.appState.goal?.goalId
         && stable.runId === this.state.appState.goal?.loopRunId
         ? stable.phase
         : undefined;

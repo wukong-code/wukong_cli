@@ -44,17 +44,17 @@ describe('real monorepo proof E2E', () => {
 
     const blocked = await runProof({ cwd, writeReport: false });
     expect(blocked.status).toBe('blocked');
-    expect(blocked.blockers[0]?.command).toBe("npm --prefix 'packages/api' run test");
+    expect(blocked.blockers[0]?.command).toBe(workspaceNpmCommand('packages/api', 'test'));
 
     await writeRepoFile(cwd, 'packages/api/src/ready.json', '{"ready":true}\n');
     const result = await runProof({ cwd, writeReport: false });
 
     expect(result.status).toBe('passed');
     expect(result.verification.selectedCommands).toEqual([
-      "npm --prefix 'packages/api' run lint",
-      "npm --prefix 'packages/web' run typecheck",
-      "npm --prefix 'packages/api' run test",
-      "npm --prefix 'packages/web' run test",
+      workspaceNpmCommand('packages/api', 'lint'),
+      workspaceNpmCommand('packages/web', 'typecheck'),
+      workspaceNpmCommand('packages/api', 'test'),
+      workspaceNpmCommand('packages/web', 'test'),
     ]);
     expect(result.verification.commandResults).toHaveLength(4);
     expect(result.verification.commandResults.every((item) => item.status === 'passed')).toBe(true);
@@ -92,7 +92,7 @@ describe('real monorepo proof E2E', () => {
 
   it.skipIf(!toolAvailable('cargo'))(
     'discovers and executes a real Rust project test',
-    { timeout: 30_000 },
+    { timeout: realToolE2eTimeout() },
     async () => {
       const cwd = await makeTempRepo('wukong-rust-e2e-');
       await writeRepoFile(
@@ -178,7 +178,7 @@ describe('real monorepo proof E2E', () => {
 
   it.skipIf(!toolAvailable('go'))(
     'discovers and executes a real Go project test',
-    { timeout: 30_000 },
+    { timeout: realToolE2eTimeout() },
     async () => {
       const cwd = await makeTempRepo('wukong-go-e2e-');
       await writeRepoFile(cwd, 'go.mod', 'module example.test/wukongfixture\n\ngo 1.24\n');
@@ -219,8 +219,8 @@ describe('real monorepo proof E2E', () => {
     expect(result.reasonCode).toBe('check_failed');
     expect(result.blockers[0]).toMatchObject({
       kind: 'check',
-      command: "npm --prefix 'packages/api' run test",
-      nextAction: "Run npm --prefix 'packages/api' run test and fix the reported failure.",
+      command: workspaceNpmCommand('packages/api', 'test'),
+      nextAction: `Run ${workspaceNpmCommand('packages/api', 'test')} and fix the reported failure.`,
     });
     expect(result.blockers[0]?.evidence).toContain('nested failure');
   });
@@ -263,4 +263,13 @@ describe('real monorepo proof E2E', () => {
 function toolAvailable(command: string): boolean {
   const args = command === 'go' ? ['version'] : ['--version'];
   return spawnSync(command, args, { stdio: 'ignore' }).status === 0;
+}
+
+function workspaceNpmCommand(path: string, script: string): string {
+  const quote = process.platform === 'win32' ? '"' : "'";
+  return `npm --prefix ${quote}${path}${quote} run ${script}`;
+}
+
+function realToolE2eTimeout(): number {
+  return process.platform === 'win32' ? 60_000 : 30_000;
 }

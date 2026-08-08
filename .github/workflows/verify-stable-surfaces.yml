@@ -1,0 +1,298 @@
+name: Verify stable production surfaces
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Exact stable tag; dispatch this workflow with the same --ref tag'
+        required: true
+        type: string
+      source_sha:
+        description: 'Exact 40-character commit in mutnpc/wukong_cli'
+        required: true
+        type: string
+      promotion_run_id:
+        description: 'Successful Promote stable release workflow run ID'
+        required: true
+        type: string
+      distribution_sha:
+        description: 'Exact deployed stable truth commit in mutnpc/wukong-code'
+        required: true
+        type: string
+      website_sha:
+        description: 'Exact deployed stable Website commit in mutnpc/wukong_web'
+        required: true
+        type: string
+
+concurrency:
+  group: verify-stable-surfaces-${{ inputs.release_tag }}
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  contents: read
+
+jobs:
+  verify-stable-surfaces:
+    name: Verify deployed Website and Docs stable truth
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      PROMOTION_RUN_ID: ${{ inputs.promotion_run_id }}
+      DISTRIBUTION_SHA: ${{ inputs.distribution_sha }}
+      WEBSITE_SHA: ${{ inputs.website_sha }}
+      SOURCE_REPO: mutnpc/wukong_cli
+      RELEASE_REPO: mutnpc/wukong-code
+      WEBSITE_REPO: mutnpc/wukong_web
+    steps:
+      - name: Checkout exact private source tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 0
+          path: source
+          persist-credentials: false
+
+      - name: Validate stable identity and successful asset promotion
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Surface verification requires an exact stable tag: $RELEASE_TAG"
+            exit 1
+          fi
+          for SHA in "$SOURCE_SHA" "$DISTRIBUTION_SHA" "$WEBSITE_SHA"; do
+            if [[ ! "$SHA" =~ ^[a-f0-9]{40}$ ]]; then
+              echo '::error::Surface verification requires exact lowercase 40-character SHAs.'
+              exit 1
+            fi
+          done
+          if [[ ! "$PROMOTION_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo '::error::promotion_run_id must be a numeric GitHub Actions run ID.'
+            exit 1
+          fi
+
+          test "$GITHUB_SHA" = "$SOURCE_SHA"
+          test "$GITHUB_REF_NAME" = "$RELEASE_TAG"
+          test "$(git -C source rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git -C source rev-list -n 1 "$RELEASE_TAG")" = "$SOURCE_SHA"
+
+          RUN_JSON="$(gh api "repos/${SOURCE_REPO}/actions/runs/${PROMOTION_RUN_ID}")"
+          test "$(jq -r .repository.full_name <<<"$RUN_JSON")" = "$SOURCE_REPO"
+          RUN_PATH="$(jq -r .path <<<"$RUN_JSON")"
+          if [[ "$RUN_PATH" != ".github/workflows/promote-stable.yml" \
+            && "$RUN_PATH" != .github/workflows/promote-stable.yml@* ]]; then
+            echo "::error::Run ${PROMOTION_RUN_ID} did not execute promote-stable.yml."
+            exit 1
+          fi
+          test "$(jq -r .status <<<"$RUN_JSON")" = "completed"
+          test "$(jq -r .conclusion <<<"$RUN_JSON")" = "success"
+          test "$(jq -r .head_sha <<<"$RUN_JSON")" = "$SOURCE_SHA"
+          test "$(jq -r .head_branch <<<"$RUN_JSON")" = "$RELEASE_TAG"
+
+          JOBS="$(gh api --paginate "repos/${SOURCE_REPO}/actions/runs/${PROMOTION_RUN_ID}/jobs" \
+            --jq '.jobs[] | [.name, .conclusion] | @tsv')"
+          grep -Fx "$(printf 'Publish immutable stable assets and verify installation\tsuccess')" \
+            <<<"$JOBS" >/dev/null
+
+      - name: Checkout exact deployed distribution truth
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: mutnpc/wukong-code
+          ref: ${{ inputs.distribution_sha }}
+          path: distribution
+          token: ${{ github.token }}
+          persist-credentials: false
+
+      - name: Checkout exact deployed Website truth
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: mutnpc/wukong_web
+          ref: ${{ inputs.website_sha }}
+          path: website
+          token: ${{ github.token }}
+          persist-credentials: false
+
+      - name: Validate all three source repositories and installer identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          test "$(git -C source rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git -C distribution rev-parse HEAD)" = "$DISTRIBUTION_SHA"
+          test "$(git -C website rev-parse HEAD)" = "$WEBSITE_SHA"
+          test "$(node -p "require('./source/package.json').version")" = "$VERSION"
+          test "$(node -p "require('./source/apps/wukong/package.json').version")" = "$VERSION"
+          test "$(node -p "require('./source/docs/package.json').version")" = "$VERSION"
+          test ! -e source/.changeset/pre.json
+          test -s "source/docs/releases/${VERSION}.md"
+          (cd distribution && node scripts/validate-release-truth.mjs "$VERSION")
+          (cd website && node scripts/validate-release-surface.mjs)
+          test "$(tr -d '\r\n' < website/public/latest)" = "$VERSION"
+          sh -n source/install.sh
+          sh -n distribution/install.sh
+          sh -n website/public/install.sh
+          cmp source/install.sh distribution/install.sh
+          cmp distribution/install.sh website/public/install.sh
+
+      - name: Revalidate immutable latest release and provenance
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          RELEASE_JSON="$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" \
+            --json tagName,isDraft,isPrerelease,isImmutable,assets)"
+          test "$(jq -r .tagName <<<"$RELEASE_JSON")" = "$RELEASE_TAG"
+          test "$(jq -r .isDraft <<<"$RELEASE_JSON")" = "false"
+          test "$(jq -r .isPrerelease <<<"$RELEASE_JSON")" = "false"
+          test "$(jq -r .isImmutable <<<"$RELEASE_JSON")" = "true"
+          test "$(jq '.assets | length' <<<"$RELEASE_JSON")" = "13"
+          test "$(gh release view --repo "$RELEASE_REPO" --json tagName --jq .tagName)" = "$RELEASE_TAG"
+          test "$(gh api "repos/${RELEASE_REPO}/commits/${RELEASE_TAG}" --jq .sha)" = "$DISTRIBUTION_SHA"
+
+          mkdir -p release-evidence
+          curl -fsSL --retry 3 --retry-all-errors --connect-timeout 10 --max-time 60 \
+            "https://github.com/${RELEASE_REPO}/releases/download/${RELEASE_TAG}/release-provenance.json" \
+            -o release-evidence/release-provenance.json
+          jq -e \
+            --arg releaseTag "$RELEASE_TAG" \
+            --arg version "$VERSION" \
+            --arg sourceRepo "$SOURCE_REPO" \
+            --arg sourceSha "$SOURCE_SHA" \
+            --arg distributionRepo "$RELEASE_REPO" \
+            --arg distributionSha "$DISTRIBUTION_SHA" \
+            --arg websiteRepo "$WEBSITE_REPO" \
+            --arg websiteSha "$WEBSITE_SHA" \
+            '.releaseTag == $releaseTag
+              and .version == $version
+              and .sourceRepository == $sourceRepo
+              and .sourceSha == $sourceSha
+              and (.workflowRun | startswith("https://github.com/" + $sourceRepo + "/actions/runs/"))
+              and .publicTruth.distributionRepository == $distributionRepo
+              and .publicTruth.distributionSha == $distributionSha
+              and .publicTruth.websiteRepository == $websiteRepo
+              and .publicTruth.websiteSha == $websiteSha
+              and (.artifacts | length) == 6
+              and all(.artifacts[]; .build.macosSignedAndNotarized == false)' \
+            release-evidence/release-provenance.json >/dev/null
+
+      - name: Wait for exact stable Website and Docs production truth
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          READY=false
+          mkdir -p production
+
+          for ATTEMPT in $(seq 1 30); do
+            CACHE_BUST="${WEBSITE_SHA}-${ATTEMPT}"
+            if (
+              set -euo pipefail
+              CURL=(curl -fsSL --retry 2 --retry-all-errors --connect-timeout 10 --max-time 30 \
+                -H 'Cache-Control: no-cache')
+
+              "${CURL[@]}" "https://wukong.today/latest?verification=${CACHE_BUST}" \
+                -o production/latest
+              test "$(tr -d '\r\n' < production/latest)" = "$VERSION"
+
+              "${CURL[@]}" "https://wukong.today/latest.json?verification=${CACHE_BUST}" \
+                -o production/latest.json
+              jq -e --arg version "$VERSION" '.version == $version' \
+                production/latest.json >/dev/null
+
+              "${CURL[@]}" "https://wukong.today/_release.json?verification=${CACHE_BUST}" \
+                -o production/website-release.json
+              jq -e \
+                --arg version "$VERSION" \
+                --arg repository "$WEBSITE_REPO" \
+                --arg commitSha "$WEBSITE_SHA" \
+                '.version == $version
+                  and .repository == $repository
+                  and .commitSha == $commitSha' \
+                production/website-release.json >/dev/null
+
+              "${CURL[@]}" "https://wukong.today/?verification=${CACHE_BUST}" \
+                -o production/home.html
+              grep -F "VERSION: v${VERSION}" production/home.html >/dev/null
+              grep -F "${VERSION} · CURRENT_RELEASE" production/home.html >/dev/null
+
+              "${CURL[@]}" "https://wukong.today/download?verification=${CACHE_BUST}" \
+                -o production/download.html
+              grep -F "v${VERSION}" production/download.html >/dev/null
+              grep -F "/releases/download/${RELEASE_TAG}/" production/download.html >/dev/null
+
+              "${CURL[@]}" "https://wukong.today/today?verification=${CACHE_BUST}" \
+                -o production/today.html
+              grep -F "/today/${VERSION}" production/today.html >/dev/null
+              grep -F "v${VERSION}" production/today.html >/dev/null
+
+              "${CURL[@]}" "https://wukong.today/changelog?verification=${CACHE_BUST}" \
+                -o production/changelog.html
+              grep -F "v<!-- -->${VERSION}" production/changelog.html >/dev/null
+
+              "${CURL[@]}" \
+                "https://wukong.today/cli/announcements.json?verification=${CACHE_BUST}" \
+                -o production/announcements.json
+              jq -e --arg version "$VERSION" --arg tag "$RELEASE_TAG" \
+                '.announcements[0]
+                  | .enabled == true
+                    and (.id | endswith("-" + $version))
+                    and .title == ("WUKONG CODE " + $version)
+                    and (.message | contains($tag))
+                    and (.action.label | contains($tag))' \
+                production/announcements.json >/dev/null
+
+              "${CURL[@]}" "https://wukong.today/install.sh?verification=${CACHE_BUST}" \
+                -o production/install.sh
+              cmp website/public/install.sh production/install.sh
+
+              "${CURL[@]}" \
+                "https://docs.wukong.today/?verification=${DISTRIBUTION_SHA}-${ATTEMPT}" \
+                -o production/docs-home.html
+              grep -F "Install v${VERSION}" production/docs-home.html >/dev/null
+              grep -F "releases/tag/${RELEASE_TAG}" production/docs-home.html >/dev/null
+
+              "${CURL[@]}" \
+                "https://docs.wukong.today/_release.json?verification=${DISTRIBUTION_SHA}-${ATTEMPT}" \
+                -o production/docs-release.json
+              jq -e \
+                --arg version "$VERSION" \
+                --arg repository "$RELEASE_REPO" \
+                --arg commitSha "$DISTRIBUTION_SHA" \
+                '.version == $version
+                  and .repository == $repository
+                  and .commitSha == $commitSha' \
+                production/docs-release.json >/dev/null
+
+              "${CURL[@]}" \
+                "https://docs.wukong.today/getting-started/?verification=${DISTRIBUTION_SHA}-${ATTEMPT}" \
+                -o production/docs-getting-started.html
+              grep -F "Wukong Code v${VERSION}" production/docs-getting-started.html >/dev/null
+            ); then
+              READY=true
+              break
+            fi
+
+            echo "Production stable surfaces are not aligned yet (attempt ${ATTEMPT}/30)."
+            sleep 20
+          done
+
+          if [[ "$READY" != "true" ]]; then
+            echo '::error::Stable assets are public, but Website or Docs production truth did not converge.'
+            exit 1
+          fi
+
+      - name: Record completed two-stage stable release
+        shell: bash
+        run: |
+          {
+            echo '## Stable release complete'
+            echo
+            echo "Immutable assets, canonical install, Website, and Docs are aligned for \`${RELEASE_TAG}\`."
+          } >> "$GITHUB_STEP_SUMMARY"

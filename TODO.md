@@ -63,7 +63,7 @@
 - [ ] 用当前候选实际跑完 Windows 和其余五个平台的 CI，不以 workflow 静态测试代替实机结果
 - [x] 六平台 native bundle 的 version、provider、Resume、基本 Loop、stop/recovery、checksum 与 0.0.22 → 0.1.0 状态恢复已进入 workflow/ZIP smoke；本地 macOS ARM64 release-profile ZIP 已通过（2026-08-06）
 - [ ] 用当前候选实际完成六平台 fresh install、0.0.22 → 0.1.0 upgrade 与旧状态恢复
-- [x] release workflow 全部 checkout 使用 `persist-credentials: false` 和最小权限；保持 full-SHA Actions、staging ZIP smoke、macOS signing/notarization、OIDC attestation、draft byte verification 和 publish-no-rebuild（2026-08-06，workflow 合同与静态测试）
+- [x] release workflow 全部 checkout 使用 `persist-credentials: false` 和最小权限；保持 full-SHA Actions、staging ZIP smoke、明确记录 macOS 未做 Developer ID 签名或 Apple 公证、OIDC attestation、draft byte verification 和 publish-no-rebuild（2026-08-06，workflow 合同与静态测试）
 - [ ] 沿用 `release-provenance.json` 证明 source tag/full SHA、workflow run、六个平台和 asset SHA；从公开 URL 回读 name/size/SHA/attestation 并完成 fresh install/upgrade，失败不改变 latest
 - [ ] installer、manifest、tag、12 个 assets/SHA、README、docs、Web、Today、Changelog 和 What's Changed 使用同一 release identity；验证 rollback 不破坏用户状态
 

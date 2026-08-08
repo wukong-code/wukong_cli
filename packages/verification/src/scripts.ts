@@ -229,12 +229,13 @@ async function readPackageJson(path: string): Promise<PackageJson> {
   return JSON.parse(await readFile(path, 'utf8')) as PackageJson;
 }
 
-function workspaceCommand(
+export function workspaceCommand(
   packageManager: 'pnpm' | 'npm' | 'yarn' | 'bun',
   workspacePath: string,
   scriptName: string,
+  platform: NodeJS.Platform = process.platform,
 ): string {
-  const path = shellQuote(workspacePath);
+  const path = shellQuote(normalizeLocatorPath(workspacePath), platform);
   switch (packageManager) {
     case 'pnpm':
       return `pnpm --dir ${path} run ${scriptName}`;
@@ -247,7 +248,8 @@ function workspaceCommand(
   }
 }
 
-function shellQuote(value: string): string {
+function shellQuote(value: string, platform: NodeJS.Platform): string {
+  if (platform === 'win32') return `"${value.replaceAll('"', '""')}"`;
   return `'${value.replaceAll("'", "'\\''")}'`;
 }
 

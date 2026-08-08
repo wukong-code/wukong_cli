@@ -1,13 +1,22 @@
 import { createHash } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import {
+  createWriteStream,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from 'node:fs';
 import { mkdtemp, readFile, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { inflateRawSync } from 'node:zlib';
+import { pipeline } from 'node:stream/promises';
 
 import { afterEach, describe, expect, it } from 'vitest';
+import { ZipFile } from 'yazl';
 
 import { appRoot } from '../../../scripts/native/paths.mjs';
 import { verifyArchiveChecksum } from '../../../scripts/native/verify-archive.mjs';
@@ -15,8 +24,11 @@ import { verifyArchiveChecksum } from '../../../scripts/native/verify-archive.mj
 const execFileAsync = promisify(execFile);
 const packageScript = resolve(appRoot, 'scripts/native/package.mjs');
 const manifestScript = resolve(appRoot, 'scripts/native/produce-manifest.mjs');
+const releaseMetadataScript = resolve(appRoot, 'scripts/native/write-release-metadata.mjs');
+const releaseStagingScript = resolve(appRoot, 'scripts/native/verify-release-staging.mjs');
 const artifactsDir = resolve(appRoot, 'dist-native/artifacts');
 const target = 'test-zip-artifact';
+const catalogTarget = 'test-release-catalog-metadata';
 const executableName = process.platform === 'win32' ? 'wukong.exe' : 'wukong';
 const fakeBinary = resolve(appRoot, 'dist-native/bin', target, executableName);
 
@@ -90,11 +102,19 @@ function findEndOfCentralDirectory(zip: Buffer): number {
   throw new Error('end of central directory not found');
 }
 
+async function writeSingleEntryZip(path: string, name: string): Promise<void> {
+  const zip = new ZipFile();
+  zip.addBuffer(Buffer.from(`binary for ${name}\n`), name, { mode: 0o100755 });
+  zip.end();
+  await pipeline(zip.outputStream, createWriteStream(path));
+}
+
 describe('native release artifacts', () => {
   afterEach(() => {
     rmSync(resolve(appRoot, 'dist-native/bin', target), { recursive: true, force: true });
     rmSync(resolve(artifactsDir, `wukong-${target}.zip`), { force: true });
     rmSync(resolve(artifactsDir, `wukong-${target}.zip.sha256`), { force: true });
+    rmSync(resolve(artifactsDir, `wukong-${catalogTarget}.build.json`), { force: true });
   });
 
   it('packages the native binary as a zip archive and checksums the archive', async () => {
@@ -167,4 +187,168 @@ describe('native release artifacts', () => {
       'does not exactly match',
     );
   });
+
+  it('records and verifies the exact built-in catalog in release metadata', async () => {
+    const releaseDir = await mkdtemp(join(tmpdir(), 'wukong-release-catalog-'));
+    const catalogPath = join(releaseDir, 'catalog.json');
+    const catalogMetadataPath = join(releaseDir, 'catalog-metadata.json');
+    const catalogBytes = Buffer.from('{"openai":{"id":"openai"}}');
+    const catalogMetadata = {
+      schemaVersion: 1,
+      requestedUrl: 'https://models.dev/api.json',
+      sourceUrl: 'https://models.dev/api.json',
+      etag: '"catalog-v1"',
+      lastModified: null,
+      sha256: sha256(catalogBytes),
+      bytes: catalogBytes.length,
+    };
+    await writeFile(catalogPath, catalogBytes);
+    await writeFile(catalogMetadataPath, `${JSON.stringify(catalogMetadata)}\n`);
+
+    await execFileAsync(
+      process.execPath,
+      [releaseMetadataScript, catalogTarget, 'a'.repeat(40), 'release', 'false'],
+      {
+        cwd: appRoot,
+        env: {
+          ...process.env,
+          WUKONG_CODE_BUILT_IN_CATALOG_FILE: catalogPath,
+          WUKONG_CODE_BUILT_IN_CATALOG_METADATA_FILE: catalogMetadataPath,
+        },
+      },
+    );
+
+    const metadata = JSON.parse(
+      await readFile(resolve(artifactsDir, `wukong-${catalogTarget}.build.json`), 'utf-8'),
+    ) as { builtInCatalog: typeof catalogMetadata };
+    expect(metadata.builtInCatalog).toEqual(catalogMetadata);
+  });
+
+  it.skipIf(process.platform === 'win32')(
+    'verifies one catalog and three-repository identity across an rc staging set',
+    async () => {
+      const stagingDir = await mkdtemp(join(tmpdir(), 'wukong-rc-staging-'));
+      const outputDir = await mkdtemp(join(tmpdir(), 'wukong-rc-assets-'));
+      const sourceSha = 'a'.repeat(40);
+      const distributionSha = 'b'.repeat(40);
+      const websiteSha = 'c'.repeat(40);
+      const builtInCatalog = {
+        schemaVersion: 1,
+        requestedUrl: 'https://models.dev/api.json',
+        sourceUrl: 'https://models.dev/api.json',
+        etag: '"catalog-v1"',
+        lastModified: null,
+        sha256: 'd'.repeat(64),
+        bytes: 42,
+      };
+      const targets = [
+        'linux-x64',
+        'linux-arm64',
+        'darwin-x64',
+        'darwin-arm64',
+        'win32-x64',
+        'win32-arm64',
+      ];
+
+      for (const releaseTarget of targets) {
+        const archiveName = `wukong-${releaseTarget}.zip`;
+        const archivePath = join(stagingDir, archiveName);
+        await writeSingleEntryZip(
+          archivePath,
+          releaseTarget.startsWith('win32-') ? 'wukong.exe' : 'wukong',
+        );
+        await writeFile(
+          `${archivePath}.sha256`,
+          `${sha256(await readFile(archivePath))}  ${archiveName}\n`,
+        );
+        await writeFile(
+          join(stagingDir, `wukong-${releaseTarget}.build.json`),
+          `${JSON.stringify({
+            schemaVersion: 1,
+            target: releaseTarget,
+            version: '0.1.0-rc.1',
+            sourceRepository: 'mutnpc/wukong_cli',
+            sourceSha,
+            profile: 'release',
+            macosSignedAndNotarized: false,
+            builtInCatalog,
+          })}\n`,
+        );
+      }
+
+      await execFileAsync(
+        process.execPath,
+        [
+          releaseStagingScript,
+          stagingDir,
+          'v0.1.0-rc.1',
+          sourceSha,
+          outputDir,
+          'false',
+        ],
+        {
+          cwd: appRoot,
+          env: {
+            ...process.env,
+            WUKONG_RELEASE_DISTRIBUTION_SHA: distributionSha,
+            WUKONG_RELEASE_WEBSITE_SHA: websiteSha,
+          },
+        },
+      );
+
+      const provenance = JSON.parse(
+        await readFile(join(outputDir, 'release-provenance.json'), 'utf-8'),
+      ) as {
+        releaseTag: string;
+        builtInCatalog: typeof builtInCatalog;
+        publicTruth: {
+          distributionSha: string;
+          websiteSha: string;
+        };
+        artifacts: Array<{
+          build: { macosSignedAndNotarized: boolean };
+        }>;
+      };
+      expect(provenance.releaseTag).toBe('v0.1.0-rc.1');
+      expect(provenance.builtInCatalog).toEqual(builtInCatalog);
+      expect(provenance.publicTruth).toMatchObject({ distributionSha, websiteSha });
+      expect(provenance.artifacts).toHaveLength(6);
+      expect(
+        provenance.artifacts.every(
+          (artifact) => !artifact.build.macosSignedAndNotarized,
+        ),
+      ).toBe(true);
+
+      const wrongRepositoryMetadataPath = join(stagingDir, 'wukong-linux-x64.build.json');
+      const wrongRepositoryMetadata = JSON.parse(
+        await readFile(wrongRepositoryMetadataPath, 'utf-8'),
+      ) as Record<string, unknown>;
+      wrongRepositoryMetadata['sourceRepository'] = 'attacker/fork';
+      await writeFile(
+        wrongRepositoryMetadataPath,
+        `${JSON.stringify(wrongRepositoryMetadata)}\n`,
+      );
+      await expect(
+        execFileAsync(
+          process.execPath,
+          [
+            releaseStagingScript,
+            stagingDir,
+            'v0.1.0-rc.1',
+            sourceSha,
+            outputDir,
+            'false',
+          ],
+          {
+            cwd: appRoot,
+            env: {
+              ...process.env,
+              WUKONG_RELEASE_DISTRIBUTION_SHA: distributionSha,
+              WUKONG_RELEASE_WEBSITE_SHA: websiteSha,
+            },
+          },
+        ),
+      ).rejects.toThrow(/Build metadata does not match the release contract/u);
+    },
+  );
 });

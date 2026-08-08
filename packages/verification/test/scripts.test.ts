@@ -2,7 +2,7 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { selectVerificationCommands } from '../src/scripts';
+import { selectVerificationCommands, workspaceCommand } from '../src/scripts';
 import { makeTempDir, writeJson, writeRepoFile } from './helpers';
 
 describe('selectVerificationCommands', () => {
@@ -87,20 +87,36 @@ describe('selectVerificationCommands', () => {
 
     const selected = await selectVerificationCommands({ cwd });
 
+    const quote = process.platform === 'win32' ? '"' : "'";
     expect(selected).toEqual([
       {
-        command: "pnpm --dir 'apps/web' run lint",
+        command: `pnpm --dir ${quote}apps/web${quote} run lint`,
         source: 'workspace-script',
         sourceLocator: 'apps/web/package.json#scripts.lint',
         definition: 'eslint .',
       },
       {
-        command: "pnpm --dir 'packages/api' run test",
+        command: `pnpm --dir ${quote}packages/api${quote} run test`,
         source: 'workspace-script',
         sourceLocator: 'packages/api/package.json#scripts.test',
         definition: 'vitest run',
       },
     ]);
+  });
+
+  it('normalizes workspace paths and uses quoting accepted by each platform shell', () => {
+    expect(workspaceCommand('pnpm', 'apps/web', 'lint', 'linux')).toBe(
+      "pnpm --dir 'apps/web' run lint",
+    );
+    expect(workspaceCommand('npm', 'packages/api', 'test', 'darwin')).toBe(
+      "npm --prefix 'packages/api' run test",
+    );
+    expect(workspaceCommand('pnpm', 'apps\\web', 'lint', 'win32')).toBe(
+      'pnpm --dir "apps/web" run lint',
+    );
+    expect(workspaceCommand('npm', 'packages\\api', 'test', 'win32')).toBe(
+      'npm --prefix "packages/api" run test',
+    );
   });
 
   it('uses project-authorized checks before inferred package scripts', async () => {

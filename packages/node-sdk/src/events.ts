@@ -15,6 +15,7 @@ export type {
   AgentStatusUpdatedEvent,
   SessionMetaUpdatedEvent,
   GoalUpdatedEvent,
+  LoopPhaseChangedEvent,
   SkillActivatedEvent,
   ErrorEvent,
   WarningEvent,

@@ -1,6 +1,6 @@
 import { createHash } from 'node:crypto';
 import { homedir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 
@@ -26,7 +26,9 @@ afterEach(() => {
 
 describe('getDataDir', () => {
   it('returns ~/.wukong when WUKONG_CODE_HOME is not set', () => {
-    expect(getDataDir()).toBe(join(homedir(), '.wukong'));
+    // The shared SDK uses slash-normalized `pathe` output while Node emits
+    // native separators. Compare filesystem identity instead of serialization.
+    expect(resolve(getDataDir())).toBe(resolve(join(homedir(), '.wukong')));
   });
 
   it('returns WUKONG_CODE_HOME when set', () => {

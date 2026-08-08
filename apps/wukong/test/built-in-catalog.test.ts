@@ -1,3 +1,5 @@
+import { createHash } from 'node:crypto';
+
 import { describe, expect, it, vi } from 'vitest';
 
 import {
@@ -9,6 +11,7 @@ import { DEFAULT_CATALOG_URL } from '@wukong/wukong-sdk';
 import {
   BUILT_IN_PROVIDER_IDS,
   buildBuiltInCatalog,
+  fetchCatalog,
 } from '../scripts/update-catalog.mjs';
 
 const builtInCatalogJson = JSON.stringify({
@@ -200,6 +203,30 @@ describe('release built-in catalog', () => {
           },
         },
       },
+    });
+  });
+
+  it('records the exact bytes and HTTP identity of a release catalog snapshot', async () => {
+    const response = Response.json(
+      { openai: { id: 'openai', models: { model: { id: 'model' } } } },
+      { headers: { etag: '"catalog-v1"', 'last-modified': 'Sat, 08 Aug 2026 00:00:00 GMT' } },
+    );
+    const fetchImpl = vi.fn(async () => response);
+
+    const result = await fetchCatalog('https://models.example.test/api.json', fetchImpl);
+
+    expect(fetchImpl).toHaveBeenCalledWith(
+      'https://models.example.test/api.json',
+      { headers: { Accept: 'application/json' } },
+    );
+    expect(result.metadata).toEqual({
+      schemaVersion: 1,
+      requestedUrl: 'https://models.example.test/api.json',
+      sourceUrl: 'https://models.example.test/api.json',
+      etag: '"catalog-v1"',
+      lastModified: 'Sat, 08 Aug 2026 00:00:00 GMT',
+      sha256: createHash('sha256').update(result.json).digest('hex'),
+      bytes: Buffer.byteLength(result.json),
     });
   });
 });

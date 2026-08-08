@@ -2,7 +2,8 @@
 
 > 当前发布版本：`0.0.22`
 >
-> 本开发 checkout：未发布的 `0.1.0` 稳定化工作，不是 `0.1.0-rc.1`
+> 本开发 checkout：候选源码身份为 `0.1.0-rc.1`；在公开 prerelease URL 与
+> 六平台 smoke 通过前仍未发布，默认 installer 必须继续指向 `0.0.22`
 
 0.1.0 的唯一当前设计是[可控、可恢复、可解释的 Trusted Local Loop](design/0.1.0-trusted-local-loop.md)：
 Preflight 成本上限、no-check、文件归因、终态、恢复兼容和最小 Gate
@@ -18,6 +19,7 @@ Wukong Code 的主流程是 **Goal → Write → Check → Review → Fix**。�
 
 - [用户指南](user-guide.md)
 - [0.0.22 发布说明](releases/0.0.22.md)
+- [0.1.0-rc.1 候选说明（固定版本安装，公开后才可使用）](releases/0.1.0-rc.1.md)
 - [0.1.0 Trusted Local Loop（未发布）](design/0.1.0-trusted-local-loop.md)
 - [0.0.21 Loop Evidence Integrity](design/0.0.21-loop-evidence-integrity.md)
 - [CLI 更新与公告](operations/updates-and-announcements.md)

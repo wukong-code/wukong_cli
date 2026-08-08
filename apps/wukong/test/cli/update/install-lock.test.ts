@@ -1,4 +1,4 @@
-import { chmodSync, mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 
@@ -65,15 +65,12 @@ describe('update install lock', () => {
   });
 
   it('propagates non-EEXIST filesystem errors', async () => {
-    const filePath = getUpdateInstallLockFile();
-    const parent = dirname(filePath);
-    mkdirSync(parent, { recursive: true });
-    chmodSync(parent, 0o555);
+    // chmod(0555) does not make a directory unwritable on Win32. An invalid
+    // path byte deterministically exercises propagation on every platform.
+    const invalidFilePath = join(dir, 'updates', '\0install.lock');
 
-    try {
-      await expect(tryAcquireUpdateInstallLock({ version: '0.5.0' })).rejects.toThrow();
-    } finally {
-      chmodSync(parent, 0o755);
-    }
+    await expect(
+      tryAcquireUpdateInstallLock({ version: '0.5.0' }, invalidFilePath),
+    ).rejects.toMatchObject({ code: 'ERR_INVALID_ARG_VALUE' });
   });
 });

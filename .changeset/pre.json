@@ -1,0 +1,29 @@
+{
+  "mode": "pre",
+  "tag": "rc",
+  "initialVersions": {
+    "@wukong/vis": "0.1.2",
+    "@wukong/vis-server": "0.1.2",
+    "@wukong/vis-web": "0.1.2",
+    "@wukong.today/code": "0.0.22",
+    "@wukong/wukong-web": "0.1.3",
+    "@wukong/docs": "0.0.22",
+    "@wukong/acp-adapter": "0.3.2",
+    "@wukong/agent-core": "0.14.3",
+    "@wukong/build-support": "0.0.0",
+    "@wukong/kaos": "0.1.7",
+    "@wukong/kosong": "0.5.1",
+    "@wukong/migration-legacy": "0.1.15",
+    "@wukong/wukong-sdk": "0.10.2",
+    "@wukong/wukong-oauth": "0.2.3",
+    "@wukong/protocol": "0.3.1",
+    "@wukong/server": "0.2.3",
+    "@wukong/server-e2e": "0.1.1",
+    "@wukong/wukong-telemetry": "0.1.1",
+    "@wukong/verification": "0.1.1",
+    "wukong-migration-legacy": "0.0.0"
+  },
+  "changesets": [
+    "trusted-local-loop"
+  ]
+}

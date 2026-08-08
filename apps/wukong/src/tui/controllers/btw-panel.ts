@@ -140,6 +140,7 @@ export class BtwPanelController {
       case "event.workspace.deleted":
       case "event.workspace.updated":
       case "goal.updated":
+      case "loop.phase.changed":
       case "mcp.server.status":
       case "prompt.submitted":
       case "session.meta.updated":

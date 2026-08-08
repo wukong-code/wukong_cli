@@ -52,7 +52,13 @@ describe('workspace trust store', () => {
     const grant = await grantWorkspaceTrust(identity, 'remembered-local', { homeDir, now: 100 });
     const path = join(homeDir, 'security', 'trusted-workspaces.json');
 
-    expect((await stat(path)).mode & 0o777).toBe(0o600);
+    const trustStat = await stat(path);
+    expect(trustStat.isFile()).toBe(true);
+    // Win32 reports synthetic POSIX mode bits, so this assertion cannot
+    // evaluate its ACLs. File identity and secret-free content remain covered.
+    if (process.platform !== 'win32') {
+      expect(trustStat.mode & 0o777).toBe(0o600);
+    }
     expect(await readFile(path, 'utf8')).not.toContain('API_KEY');
     await expect(revokeWorkspaceTrust(grant.trustGrantId, { homeDir, now: 200 }))
       .resolves.toBe(true);

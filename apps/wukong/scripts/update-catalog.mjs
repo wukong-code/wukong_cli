@@ -8,11 +8,14 @@
  * placeholder so the generated catalog is not committed.
  */
 
+import { createHash } from "node:crypto";
 import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 
 const scriptDir = import.meta.dirname;
-const outFile = resolveOutputFile(process.argv.slice(2));
+const args = process.argv.slice(2);
+const outFile = resolveOutputFile(args);
+const metadataOutFile = resolveOptionalOutputFile(args, "--metadata-out");
 const modelsUrl = process.env.MODELS_DEV_URL || "https://models.dev/api.json";
 
 export const BUILT_IN_PROVIDER_IDS = new Set([
@@ -49,6 +52,16 @@ function resolveOutputFile(args) {
     return resolve(process.cwd(), value);
   }
   return resolve(scriptDir, "../dist/built-in-catalog.json");
+}
+
+function resolveOptionalOutputFile(args, option) {
+  const index = args.indexOf(option);
+  if (index === -1) return undefined;
+  const value = args[index + 1];
+  if (value === undefined || value.length === 0) {
+    throw new Error(`Missing value for ${option}`);
+  }
+  return resolve(process.cwd(), value);
 }
 
 export function stripModel(model) {
@@ -94,18 +107,34 @@ export function buildBuiltInCatalog(raw, providerIds = BUILT_IN_PROVIDER_IDS) {
   return stripped;
 }
 
-async function fetchCatalog(url) {
-  const res = await fetch(url, { headers: { Accept: "application/json" } });
+export async function fetchCatalog(url, fetchImpl = fetch) {
+  const res = await fetchImpl(url, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const raw = await res.json();
-  return JSON.stringify(buildBuiltInCatalog(raw));
+  const json = JSON.stringify(buildBuiltInCatalog(raw));
+  return {
+    json,
+    metadata: {
+      schemaVersion: 1,
+      requestedUrl: url,
+      sourceUrl: res.url || url,
+      etag: res.headers.get("etag"),
+      lastModified: res.headers.get("last-modified"),
+      sha256: createHash("sha256").update(json).digest("hex"),
+      bytes: Buffer.byteLength(json),
+    },
+  };
 }
 
 async function main() {
   console.log(`Fetching ${modelsUrl} ...`);
-  const json = await fetchCatalog(modelsUrl);
+  const { json, metadata } = await fetchCatalog(modelsUrl);
   mkdirSync(dirname(outFile), { recursive: true });
   writeFileSync(outFile, json, "utf-8");
+  if (metadataOutFile !== undefined) {
+    mkdirSync(dirname(metadataOutFile), { recursive: true });
+    writeFileSync(metadataOutFile, `${JSON.stringify(metadata, null, 2)}\n`, "utf-8");
+  }
   console.log(`Wrote ${outFile} (${(json.length / 1024).toFixed(0)} KB JSON)`);
 }
 

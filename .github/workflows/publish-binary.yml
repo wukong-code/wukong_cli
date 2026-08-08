@@ -3,16 +3,29 @@ name: Publish binary release
 on:
   push:
     tags:
-      - 'v*'
+      # Public prereleases can resolve current stable public truth safely.
+      # Stable releases require staged, non-production public SHAs and must use
+      # workflow_dispatch from the exact tag ref.
+      - 'v*-*'
   workflow_dispatch:
     inputs:
       release_tag:
-        description: 'Existing semver tag to build and publish, for example v0.0.22'
+        description: 'Existing semver tag; dispatch with --ref set to this same tag'
         required: true
+        type: string
+      distribution_sha:
+        description: 'Stable only: exact staged wukong-code SHA (must not be production yet)'
+        required: false
+        type: string
+      website_sha:
+        description: 'Stable only: exact staged wukong_web SHA (must not be production yet)'
+        required: false
         type: string
 
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
+  # Public release jobs share the same stable `latest` pointer. Serialize every
+  # tag so a prerelease and a stable release cannot race that pointer.
+  group: publish-binary-release
   cancel-in-progress: false
 
 permissions:
@@ -28,6 +41,10 @@ jobs:
       release_tag: ${{ steps.contract.outputs.release_tag }}
       version: ${{ steps.contract.outputs.version }}
       source_sha: ${{ steps.contract.outputs.source_sha }}
+      is_prerelease: ${{ steps.contract.outputs.is_prerelease }}
+      previous_latest_tag: ${{ steps.contract.outputs.previous_latest_tag }}
+      distribution_sha: ${{ steps.contract.outputs.distribution_sha }}
+      website_sha: ${{ steps.contract.outputs.website_sha }}
     steps:
       - name: Checkout exact release tag
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -40,15 +57,20 @@ jobs:
         id: contract
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-          PUBLIC_RELEASE_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+          RELEASE_REPO: mutnpc/wukong-code
+          WEBSITE_REPO: mutnpc/wukong_web
+          DISTRIBUTION_SHA_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_sha || '' }}
+          WEBSITE_SHA_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.website_sha || '' }}
         shell: bash
         run: |
           set -euo pipefail
-          if [[ ! "$RELEASE_TAG" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.-]+)?$ ]]; then
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)(-[0-9A-Za-z-]+(\.[0-9A-Za-z-]+)*)?$ ]]; then
             echo "::error::Release tag must be v-prefixed semver: $RELEASE_TAG"
             exit 1
           fi
-          if [[ -z "$PUBLIC_RELEASE_TOKEN" ]]; then
+          if [[ -z "$RELEASE_TOKEN" ]]; then
             echo '::error::WUKONG_PUBLIC_RELEASE_TOKEN is required to stage and publish the distribution release.'
             exit 1
           fi
@@ -57,15 +79,42 @@ jobs:
           ROOT_VERSION="$(node -p "require('./package.json').version")"
           SOURCE_SHA="$(git rev-parse HEAD)"
           TAG_SHA="$(git rev-list -n 1 "$RELEASE_TAG")"
+          if [[ "$VERSION" == *-* ]]; then
+            IS_PRERELEASE=true
+          else
+            IS_PRERELEASE=false
+          fi
+          PREVIOUS_LATEST_TAG="$(gh release view --repo "$RELEASE_REPO" --json tagName --jq .tagName)"
 
           test "$SOURCE_SHA" = "$TAG_SHA"
+          test "$GITHUB_SHA" = "$SOURCE_SHA"
+          test "$GITHUB_REF_NAME" = "$RELEASE_TAG"
           test "$PACKAGE_VERSION" = "$VERSION"
           test "$ROOT_VERSION" = "$VERSION"
           test -s "docs/releases/${VERSION}.md"
 
+          if [[ "$IS_PRERELEASE" = "false" ]]; then
+            if [[ ! "$DISTRIBUTION_SHA_INPUT" =~ ^[a-f0-9]{40}$ \
+              || ! "$WEBSITE_SHA_INPUT" =~ ^[a-f0-9]{40}$ ]]; then
+              echo '::error::Stable publication requires exact staged distribution_sha and website_sha inputs.'
+              exit 1
+            fi
+          fi
+
+          DISTRIBUTION_REF="${DISTRIBUTION_SHA_INPUT:-main}"
+          WEBSITE_REF="${WEBSITE_SHA_INPUT:-main}"
+          DISTRIBUTION_SHA="$(gh api "repos/${RELEASE_REPO}/commits/${DISTRIBUTION_REF}" --jq .sha)"
+          WEBSITE_SHA="$(gh api "repos/${WEBSITE_REPO}/commits/${WEBSITE_REF}" --jq .sha)"
+          test "$DISTRIBUTION_SHA_INPUT" = "" || test "$DISTRIBUTION_SHA" = "$DISTRIBUTION_SHA_INPUT"
+          test "$WEBSITE_SHA_INPUT" = "" || test "$WEBSITE_SHA" = "$WEBSITE_SHA_INPUT"
+
           echo "release_tag=$RELEASE_TAG" >> "$GITHUB_OUTPUT"
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
           echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+          echo "is_prerelease=$IS_PRERELEASE" >> "$GITHUB_OUTPUT"
+          echo "previous_latest_tag=$PREVIOUS_LATEST_TAG" >> "$GITHUB_OUTPUT"
+          echo "distribution_sha=$DISTRIBUTION_SHA" >> "$GITHUB_OUTPUT"
+          echo "website_sha=$WEBSITE_SHA" >> "$GITHUB_OUTPUT"
 
   native-artifacts:
     name: Build staged native binaries
@@ -75,14 +124,11 @@ jobs:
       upload-artifact-prefix: wukong-native-release
       retention-days: 3
       release-artifact: true
-      sign-macos: true
+      # 0.1.0 does not use Developer ID signing or Apple notarization. Native
+      # packaging may still apply the ad-hoc Mach-O signature required for SEA;
+      # release identity comes from SHA-256, attestations, and immutability.
+      sign-macos: false
       source-ref: ${{ needs.validate-source.outputs.release_tag }}
-    secrets:
-      APPLE_CERTIFICATE_P12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
-      APPLE_CERTIFICATE_PASSWORD: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
-      APPLE_NOTARIZATION_KEY_P8: ${{ secrets.APPLE_NOTARIZATION_KEY_P8 }}
-      APPLE_NOTARIZATION_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_KEY_ID }}
-      APPLE_NOTARIZATION_ISSUER_ID: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
 
   finalize-release:
     name: Verify staging, create draft, then publish
@@ -91,11 +137,12 @@ jobs:
       - native-artifacts
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
       RELEASE_REPO: mutnpc/wukong-code
+      WEBSITE_REPO: mutnpc/wukong_web
       RELEASE_TAG: ${{ needs.validate-source.outputs.release_tag }}
       VERSION: ${{ needs.validate-source.outputs.version }}
       SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
+      IS_PRERELEASE: ${{ needs.validate-source.outputs.is_prerelease }}
     steps:
       - name: Checkout exact source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -108,18 +155,18 @@ jobs:
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: mutnpc/wukong-code
-          ref: main
+          ref: ${{ needs.validate-source.outputs.distribution_sha }}
           path: distribution
-          token: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+          token: ${{ github.token }}
           persist-credentials: false
 
       - name: Checkout website installer mirror
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
           repository: mutnpc/wukong_web
-          ref: main
+          ref: ${{ needs.validate-source.outputs.website_sha }}
           path: website
-          token: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+          token: ${{ github.token }}
           persist-credentials: false
 
       - name: Download all six staged builds
@@ -130,18 +177,29 @@ jobs:
           merge-multiple: true
 
       - name: Block publishing when public truth is not aligned
+        id: public-truth
+        env:
+          EXPECTED_DISTRIBUTION_SHA: ${{ needs.validate-source.outputs.distribution_sha }}
+          EXPECTED_WEBSITE_SHA: ${{ needs.validate-source.outputs.website_sha }}
         shell: bash
         run: |
           set -euo pipefail
           node distribution/scripts/validate-release-truth.mjs "$VERSION"
           cmp source/install.sh distribution/install.sh
           cmp distribution/install.sh website/public/install.sh
+          test "$(git -C distribution rev-parse HEAD)" = "$EXPECTED_DISTRIBUTION_SHA"
+          test "$(git -C website rev-parse HEAD)" = "$EXPECTED_WEBSITE_SHA"
+          echo "distribution_sha=$(git -C distribution rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "website_sha=$(git -C website rev-parse HEAD)" >> "$GITHUB_OUTPUT"
 
       - name: Verify exact staged assets and generate provenance
         working-directory: source
+        env:
+          WUKONG_RELEASE_DISTRIBUTION_SHA: ${{ steps.public-truth.outputs.distribution_sha }}
+          WUKONG_RELEASE_WEBSITE_SHA: ${{ steps.public-truth.outputs.website_sha }}
         run: |
           node apps/wukong/scripts/native/verify-release-staging.mjs \
-            staging "$RELEASE_TAG" "$SOURCE_SHA" release-assets
+            staging "$RELEASE_TAG" "$SOURCE_SHA" release-assets false
 
       - name: Attest staged release ZIP files
         uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
@@ -153,15 +211,86 @@ jobs:
         shell: bash
         run: cp "docs/releases/${VERSION}.md" release-notes.md
 
-      - name: Create or verify private draft release
+      - name: Require staged public commits and old production before stable draft mutation
+        if: needs.validate-source.outputs.is_prerelease == 'false'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          DISTRIBUTION_SHA: ${{ needs.validate-source.outputs.distribution_sha }}
+          WEBSITE_SHA: ${{ needs.validate-source.outputs.website_sha }}
         shell: bash
         run: |
           set -euo pipefail
+          CURRENT_LATEST_TAG="$(gh release view --repo "$RELEASE_REPO" --json tagName --jq .tagName)"
+          test "$CURRENT_LATEST_TAG" = "${{ needs.validate-source.outputs.previous_latest_tag }}"
+          test "$CURRENT_LATEST_TAG" != "$RELEASE_TAG"
+          CURRENT_VERSION="${CURRENT_LATEST_TAG#v}"
+          node source/apps/wukong/scripts/native/assert-stable-promotion.mjs \
+            "$RELEASE_TAG" "$CURRENT_LATEST_TAG"
+
+          DISTRIBUTION_MAIN_BEFORE="$(gh api "repos/${RELEASE_REPO}/commits/main" --jq .sha)"
+          WEBSITE_MAIN_BEFORE="$(gh api "repos/${WEBSITE_REPO}/commits/main" --jq .sha)"
+          test "$(gh api \
+            "repos/${RELEASE_REPO}/compare/${DISTRIBUTION_MAIN_BEFORE}...${DISTRIBUTION_SHA}" \
+            --jq .status)" = "ahead"
+          test "$(gh api \
+            "repos/${WEBSITE_REPO}/compare/${WEBSITE_MAIN_BEFORE}...${WEBSITE_SHA}" \
+            --jq .status)" = "ahead"
+
+          curl -fsSL --retry 2 --retry-all-errors --connect-timeout 10 --max-time 30 \
+            "https://wukong.today/latest?draft-gate=${SOURCE_SHA}" -o current-latest
+          test "$(tr -d '\r\n' < current-latest)" = "$CURRENT_VERSION"
+          curl -fsSL --retry 2 --retry-all-errors --connect-timeout 10 --max-time 30 \
+            "https://wukong.today/_release.json?draft-gate=${SOURCE_SHA}" \
+            -o current-website-release.json
+          jq -e \
+            --arg version "$CURRENT_VERSION" \
+            --arg repository "$WEBSITE_REPO" \
+            --arg commitSha "$WEBSITE_MAIN_BEFORE" \
+            '.version == $version
+              and .repository == $repository
+              and .commitSha == $commitSha' \
+            current-website-release.json >/dev/null
+          curl -fsSL --retry 2 --retry-all-errors --connect-timeout 10 --max-time 30 \
+            "https://docs.wukong.today/_release.json?draft-gate=${SOURCE_SHA}" \
+            -o current-docs-release.json
+          jq -e \
+            --arg version "$CURRENT_VERSION" \
+            --arg repository "$RELEASE_REPO" \
+            --arg commitSha "$DISTRIBUTION_MAIN_BEFORE" \
+            '.version == $version
+              and .repository == $repository
+              and .commitSha == $commitSha' \
+            current-docs-release.json >/dev/null
+
+          DISTRIBUTION_MAIN_AFTER="$(gh api "repos/${RELEASE_REPO}/commits/main" --jq .sha)"
+          WEBSITE_MAIN_AFTER="$(gh api "repos/${WEBSITE_REPO}/commits/main" --jq .sha)"
+          test "$DISTRIBUTION_MAIN_AFTER" = "$DISTRIBUTION_MAIN_BEFORE"
+          test "$WEBSITE_MAIN_AFTER" = "$WEBSITE_MAIN_BEFORE"
+
+      - name: Create or verify private draft release
+        shell: bash
+        env:
+          GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+          DISTRIBUTION_SHA: ${{ steps.public-truth.outputs.distribution_sha }}
+        run: |
+          set -euo pipefail
+          PRERELEASE_ARGS=(--prerelease=false)
+          if [[ "$IS_PRERELEASE" = "true" ]]; then
+            PRERELEASE_ARGS=(--prerelease)
+          fi
+
           if gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" >/dev/null 2>&1; then
+            TAG_TARGET_SHA="$(gh api "repos/${RELEASE_REPO}/commits/${RELEASE_TAG}" --jq .sha)"
+            if [[ "$TAG_TARGET_SHA" != "$DISTRIBUTION_SHA" ]]; then
+              echo "::error::Public release tag points to $TAG_TARGET_SHA, expected distribution $DISTRIBUTION_SHA."
+              exit 1
+            fi
             IS_DRAFT="$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isDraft --jq .isDraft)"
             if [[ "$IS_DRAFT" = "true" ]]; then
               gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" \
                 --title "Wukong Code ${RELEASE_TAG}" \
+                --latest=false \
+                "${PRERELEASE_ARGS[@]}" \
                 --notes-file source/release-notes.md
             else
               echo "Reusing existing non-draft release $RELEASE_TAG for a failed-smoke retry."
@@ -169,8 +298,19 @@ jobs:
           else
             gh release create "$RELEASE_TAG" --repo "$RELEASE_REPO" \
               --draft \
+              --latest=false \
+              --target "$DISTRIBUTION_SHA" \
               --title "Wukong Code ${RELEASE_TAG}" \
+              "${PRERELEASE_ARGS[@]}" \
               --notes-file source/release-notes.md
+          fi
+
+          test "$(gh api "repos/${RELEASE_REPO}/commits/${RELEASE_TAG}" --jq .sha)" = "$DISTRIBUTION_SHA"
+
+          ACTUAL_PRERELEASE="$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isPrerelease --jq .isPrerelease)"
+          if [[ "$ACTUAL_PRERELEASE" != "$IS_PRERELEASE" ]]; then
+            echo "::error::Release channel mismatch: expected prerelease=$IS_PRERELEASE, got $ACTUAL_PRERELEASE."
+            exit 1
           fi
 
           ASSET_COUNT="$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json assets --jq '.assets | length')"
@@ -182,6 +322,8 @@ jobs:
           fi
 
       - name: Download and byte-verify every draft asset
+        env:
+          GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -192,14 +334,36 @@ jobs:
             cmp "$FILE" "remote-draft/$(basename "$FILE")"
           done
 
-      - name: Publish verified release without changing latest
+      - name: Publish immutable prerelease or keep stable assets in draft
+        env:
+          GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" --draft=false --latest=false
-          test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isDraft --jq .isDraft)" = "false"
+          test "$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${RELEASE_REPO}/immutable-releases" --jq .enabled)" = "true"
+          if [[ "$IS_PRERELEASE" = "true" ]]; then
+            if [[ "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isDraft --jq .isDraft)" = "true" ]]; then
+              gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" --draft=false --latest=false
+            fi
+            test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isDraft --jq .isDraft)" = "false"
+            test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isPrerelease --jq .isPrerelease)" = "true"
+            test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isImmutable --jq .isImmutable)" = "true"
+            exit 0
+          fi
 
-      - name: Re-download and verify public release assets
+          # Immutable releases can only change their title and notes after
+          # publication. A stable release therefore remains a mutable draft
+          # until promote-stable.yml validates the exact staged Website and
+          # Docs commits, then atomically publishes it as latest. Those exact
+          # public commits deploy only after the assets are anonymously usable.
+          test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isDraft --jq .isDraft)" = "true"
+          test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isPrerelease --jq .isPrerelease)" = "false"
+          test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isImmutable --jq .isImmutable)" = "false"
+
+      - name: Re-download and verify published or draft release assets
+        env:
+          GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -209,6 +373,13 @@ jobs:
           for FILE in source/release-assets/*; do
             cmp "$FILE" "public-release/$(basename "$FILE")"
           done
+
+      - name: Verify build attestations for every release ZIP
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
           for FILE in public-release/*.zip; do
             gh attestation verify "$FILE" \
               --repo "$GITHUB_REPOSITORY" \
@@ -217,7 +388,7 @@ jobs:
           done
 
   public-native-smoke:
-    name: Public native smoke (${{ matrix.target }})
+    name: Release archive smoke (${{ matrix.target }})
     needs:
       - validate-source
       - finalize-release
@@ -239,10 +410,10 @@ jobs:
           - os: windows-11-arm
             target: win32-arm64
     env:
-      GH_TOKEN: ${{ github.token }}
       RELEASE_REPO: mutnpc/wukong-code
       RELEASE_TAG: ${{ needs.validate-source.outputs.release_tag }}
       VERSION: ${{ needs.validate-source.outputs.version }}
+      IS_PRERELEASE: ${{ needs.validate-source.outputs.is_prerelease }}
       WUKONG_CODE_BUILD_TARGET: ${{ matrix.target }}
     steps:
       - name: Checkout exact smoke implementation
@@ -252,7 +423,26 @@ jobs:
           path: source
           persist-credentials: false
 
-      - name: Download and checksum public native archive
+      - name: Download and checksum anonymous prerelease archive
+        if: needs.validate-source.outputs.is_prerelease == 'true'
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/public-native"
+          ARCHIVE="wukong-${{ matrix.target }}.zip"
+          BASE_URL="https://github.com/${RELEASE_REPO}/releases/download/${RELEASE_TAG}"
+          curl -fsSL --retry 3 --retry-all-errors \
+            "${BASE_URL}/${ARCHIVE}" -o "$RUNNER_TEMP/public-native/$ARCHIVE"
+          curl -fsSL --retry 3 --retry-all-errors \
+            "${BASE_URL}/${ARCHIVE}.sha256" -o "$RUNNER_TEMP/public-native/$ARCHIVE.sha256"
+          node source/apps/wukong/scripts/native/verify-archive.mjs \
+            "$RUNNER_TEMP/public-native/$ARCHIVE" \
+            "$RUNNER_TEMP/public-native/$ARCHIVE.sha256"
+
+      - name: Download and checksum authenticated stable draft archive
+        if: needs.validate-source.outputs.is_prerelease == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
@@ -272,16 +462,122 @@ jobs:
           WUKONG_CODE_EXPECT_BUILT_IN_CATALOG: '1'
         run: node source/apps/wukong/scripts/native/smoke.mjs
 
+      - name: Fresh install candidate through the canonical installer
+        if: needs.validate-source.outputs.is_prerelease == 'true' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          INSTALLER="$RUNNER_TEMP/wukong-public-install.sh"
+          INSTALL_DIR="$RUNNER_TEMP/wukong-fresh/bin"
+          STATE_DIR="$RUNNER_TEMP/wukong-fresh/state"
+          curl -fsSL https://wukong.today/install.sh -o "$INSTALLER"
+          cmp "$INSTALLER" source/install.sh
+          WUKONG_VERSION="$RELEASE_TAG" WUKONG_INSTALL_DIR="$INSTALL_DIR" sh "$INSTALLER"
+          WUKONG_CODE_HOME="$STATE_DIR" \
+            WUKONG_CODE_NO_AUTO_UPDATE=1 \
+            WUKONG_CODE_CATALOG_OFFLINE=1 \
+            WUKONG_TELEMETRY=0 \
+            "$INSTALL_DIR/wukong" --version | grep -F "$VERSION"
+          WUKONG_CODE_HOME="$STATE_DIR" \
+            WUKONG_CODE_NO_AUTO_UPDATE=1 \
+            WUKONG_CODE_CATALOG_OFFLINE=1 \
+            WUKONG_TELEMETRY=0 \
+            "$INSTALL_DIR/wukong" provider list --json >/dev/null
+          test -s "$STATE_DIR/config.toml"
+
+      - name: Fresh install Windows candidate from the public archive
+        if: needs.validate-source.outputs.is_prerelease == 'true' && runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $PSNativeCommandUseErrorActionPreference = $true
+          $installDir = Join-Path $env:RUNNER_TEMP 'wukong-fresh/bin'
+          $stateDir = Join-Path $env:RUNNER_TEMP 'wukong-fresh/state'
+          New-Item -ItemType Directory -Force -Path $installDir, $stateDir | Out-Null
+          Expand-Archive `
+            -LiteralPath (Join-Path $env:RUNNER_TEMP "public-native/wukong-$env:WUKONG_CODE_BUILD_TARGET.zip") `
+            -DestinationPath $installDir -Force
+          $env:WUKONG_CODE_HOME = $stateDir
+          $env:WUKONG_CODE_NO_AUTO_UPDATE = '1'
+          $env:WUKONG_CODE_CATALOG_OFFLINE = '1'
+          $env:WUKONG_TELEMETRY = '0'
+          $installedExe = Join-Path $installDir 'wukong.exe'
+          if (-not ((& $installedExe --version) | Select-String -Quiet -SimpleMatch $env:VERSION)) {
+            throw "Fresh Windows candidate did not report $env:VERSION"
+          }
+          & $installedExe provider list --json | Out-Null
+          if (-not (Test-Path -LiteralPath (Join-Path $stateDir 'config.toml'))) {
+            throw 'Fresh Windows candidate did not create the user config'
+          }
+
       - name: Direct upgrade from v0.0.22 without losing the old binary on failure
-        if: runner.os != 'Windows'
+        if: needs.validate-source.outputs.is_prerelease == 'true' && runner.os != 'Windows'
         shell: bash
         run: |
           set -euo pipefail
           INSTALL_DIR="$RUNNER_TEMP/wukong-upgrade/bin"
+          STATE_DIR="$RUNNER_TEMP/wukong-upgrade/state"
+          export WUKONG_CODE_HOME="$STATE_DIR"
+          export WUKONG_CODE_NO_AUTO_UPDATE=1
+          export WUKONG_CODE_CATALOG_OFFLINE=1
+          export WUKONG_TELEMETRY=0
           WUKONG_VERSION=v0.0.22 WUKONG_INSTALL_DIR="$INSTALL_DIR" sh source/install.sh
           "$INSTALL_DIR/wukong" --version | grep -F '0.0.22'
+          "$INSTALL_DIR/wukong" provider list --json >/dev/null
+          test -s "$STATE_DIR/config.toml"
+          cp "$STATE_DIR/config.toml" "$RUNNER_TEMP/config-before-upgrade.toml"
           WUKONG_VERSION="$RELEASE_TAG" WUKONG_INSTALL_DIR="$INSTALL_DIR" sh source/install.sh
           "$INSTALL_DIR/wukong" --version | grep -F "$VERSION"
+          "$INSTALL_DIR/wukong" provider list --json >/dev/null
+          cmp "$RUNNER_TEMP/config-before-upgrade.toml" "$STATE_DIR/config.toml"
+
+      - name: Replace v0.0.22 with the authenticated stable draft archive
+        if: needs.validate-source.outputs.is_prerelease == 'false' && runner.os != 'Windows'
+        shell: bash
+        run: |
+          set -euo pipefail
+          ARCHIVE="$RUNNER_TEMP/public-native/wukong-${{ matrix.target }}.zip"
+          CANDIDATE_DIR="$RUNNER_TEMP/wukong-stable-draft/candidate"
+          FRESH_STATE_DIR="$RUNNER_TEMP/wukong-stable-draft/fresh-state"
+          INSTALL_DIR="$RUNNER_TEMP/wukong-stable-draft/upgrade/bin"
+          STATE_DIR="$RUNNER_TEMP/wukong-stable-draft/upgrade/state"
+          mkdir -p "$CANDIDATE_DIR" "$FRESH_STATE_DIR"
+          unzip -q "$ARCHIVE" -d "$CANDIDATE_DIR"
+          chmod +x "$CANDIDATE_DIR/wukong"
+
+          WUKONG_CODE_HOME="$FRESH_STATE_DIR" \
+            WUKONG_CODE_NO_AUTO_UPDATE=1 \
+            WUKONG_CODE_CATALOG_OFFLINE=1 \
+            WUKONG_TELEMETRY=0 \
+            "$CANDIDATE_DIR/wukong" --version | grep -F "$VERSION"
+          WUKONG_CODE_HOME="$FRESH_STATE_DIR" \
+            WUKONG_CODE_NO_AUTO_UPDATE=1 \
+            WUKONG_CODE_CATALOG_OFFLINE=1 \
+            WUKONG_TELEMETRY=0 \
+            "$CANDIDATE_DIR/wukong" provider list --json >/dev/null
+          test -s "$FRESH_STATE_DIR/config.toml"
+
+          export WUKONG_CODE_HOME="$STATE_DIR"
+          export WUKONG_CODE_NO_AUTO_UPDATE=1
+          export WUKONG_CODE_CATALOG_OFFLINE=1
+          export WUKONG_TELEMETRY=0
+          WUKONG_VERSION=v0.0.22 WUKONG_INSTALL_DIR="$INSTALL_DIR" sh source/install.sh
+          "$INSTALL_DIR/wukong" --version | grep -F '0.0.22'
+          "$INSTALL_DIR/wukong" provider list --json >/dev/null
+          test -s "$STATE_DIR/config.toml"
+          cp "$STATE_DIR/config.toml" "$RUNNER_TEMP/config-before-stable-draft.toml"
+
+          mv "$INSTALL_DIR/wukong" "$INSTALL_DIR/wukong-v0.0.22"
+          cp "$CANDIDATE_DIR/wukong" "$INSTALL_DIR/wukong.next"
+          chmod +x "$INSTALL_DIR/wukong.next"
+          mv "$INSTALL_DIR/wukong.next" "$INSTALL_DIR/wukong"
+          if ! "$INSTALL_DIR/wukong" --version | grep -F "$VERSION" \
+            || ! "$INSTALL_DIR/wukong" provider list --json >/dev/null; then
+            mv "$INSTALL_DIR/wukong-v0.0.22" "$INSTALL_DIR/wukong"
+            exit 1
+          fi
+          rm "$INSTALL_DIR/wukong-v0.0.22"
+          cmp "$RUNNER_TEMP/config-before-stable-draft.toml" "$STATE_DIR/config.toml"
 
       - name: Direct Windows upgrade from v0.0.22 after process exit
         if: runner.os == 'Windows'
@@ -297,9 +593,11 @@ jobs:
           New-Item -ItemType Directory -Force -Path $oldAssets, $installDir, $candidateDir, $stateDir | Out-Null
 
           $oldArchiveName = "wukong-$env:WUKONG_CODE_BUILD_TARGET.zip"
-          gh release download v0.0.22 --repo $env:RELEASE_REPO `
-            --pattern $oldArchiveName --pattern "$oldArchiveName.sha256" `
-            --dir $oldAssets
+          $oldReleaseBase = "https://github.com/$env:RELEASE_REPO/releases/download/v0.0.22"
+          Invoke-WebRequest -Uri "$oldReleaseBase/$oldArchiveName" `
+            -OutFile (Join-Path $oldAssets $oldArchiveName)
+          Invoke-WebRequest -Uri "$oldReleaseBase/$oldArchiveName.sha256" `
+            -OutFile (Join-Path $oldAssets "$oldArchiveName.sha256")
           $oldArchive = Join-Path $oldAssets $oldArchiveName
           node source/apps/wukong/scripts/native/verify-archive.mjs `
             $oldArchive "$oldArchive.sha256"
@@ -310,16 +608,22 @@ jobs:
           $env:WUKONG_CODE_CATALOG_OFFLINE = '1'
           $env:WUKONG_TELEMETRY = '0'
           $installedExe = Join-Path $installDir 'wukong.exe'
-          & $installedExe --version | Select-String -SimpleMatch '0.0.22'
+          if (-not ((& $installedExe --version) | Select-String -Quiet -SimpleMatch '0.0.22')) {
+            throw 'Installed baseline did not report 0.0.22'
+          }
           & $installedExe provider list --json | Out-Null
           if (-not (Test-Path -LiteralPath (Join-Path $stateDir 'config.toml'))) {
             throw 'v0.0.22 did not create the user config before upgrade'
           }
+          $configBefore = Join-Path $upgradeRoot 'config-before-upgrade.toml'
+          Copy-Item -LiteralPath (Join-Path $stateDir 'config.toml') -Destination $configBefore
 
           $candidateArchive = Join-Path $env:RUNNER_TEMP "public-native/$oldArchiveName"
           Expand-Archive -LiteralPath $candidateArchive -DestinationPath $candidateDir -Force
           $candidateExe = Join-Path $candidateDir 'wukong.exe'
-          & $candidateExe --version | Select-String -SimpleMatch $env:VERSION
+          if (-not ((& $candidateExe --version) | Select-String -Quiet -SimpleMatch $env:VERSION)) {
+            throw "Stable candidate did not report $env:VERSION"
+          }
 
           # The old process has exited before replacement. Keep a same-directory
           # backup until the installed candidate starts and reads the same home.
@@ -327,8 +631,14 @@ jobs:
           Move-Item -LiteralPath $installedExe -Destination $backupExe
           try {
             Copy-Item -LiteralPath $candidateExe -Destination $installedExe
-            & $installedExe --version | Select-String -SimpleMatch $env:VERSION
+            if (-not ((& $installedExe --version) | Select-String -Quiet -SimpleMatch $env:VERSION)) {
+              throw "Replaced Windows binary did not report $env:VERSION"
+            }
             & $installedExe provider list --json | Out-Null
+            if ((Get-FileHash -LiteralPath (Join-Path $stateDir 'config.toml')).Hash `
+              -ne (Get-FileHash -LiteralPath $configBefore).Hash) {
+              throw 'Candidate changed the existing v0.0.22 config during replacement smoke'
+            }
             Remove-Item -LiteralPath $backupExe
           } catch {
             Remove-Item -LiteralPath $installedExe -ErrorAction SilentlyContinue
@@ -336,20 +646,36 @@ jobs:
             throw
           }
 
-  promote-latest:
-    name: Promote verified release to latest
+  finalize-release-channel:
+    name: Preserve latest pending production promotion
     needs:
       - validate-source
       - public-native-smoke
     runs-on: ubuntu-latest
     env:
-      GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
       RELEASE_REPO: mutnpc/wukong-code
       RELEASE_TAG: ${{ needs.validate-source.outputs.release_tag }}
+      IS_PRERELEASE: ${{ needs.validate-source.outputs.is_prerelease }}
+      PREVIOUS_LATEST_TAG: ${{ needs.validate-source.outputs.previous_latest_tag }}
     steps:
-      - name: Promote only after all public native smoke jobs pass
+      - name: Keep prerelease public and stable draft off latest
+        env:
+          GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
         shell: bash
         run: |
           set -euo pipefail
-          gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" --latest
-          test "$(gh release view --repo "$RELEASE_REPO" --json tagName --jq .tagName)" = "$RELEASE_TAG"
+          if [[ "$IS_PRERELEASE" = "true" ]]; then
+            test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isDraft --jq .isDraft)" = "false"
+            test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isPrerelease --jq .isPrerelease)" = "true"
+            test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isImmutable --jq .isImmutable)" = "true"
+          else
+            test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isDraft --jq .isDraft)" = "true"
+            test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isPrerelease --jq .isPrerelease)" = "false"
+            test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isImmutable --jq .isImmutable)" = "false"
+          fi
+
+          # Immutable public prereleases and mutable stable drafts both leave
+          # the current stable pointer untouched. promote-stable.yml makes the
+          # first stable publication and latest selection one atomic mutation.
+          test "$(gh release view --repo "$RELEASE_REPO" --json tagName --jq .tagName)" = "$PREVIOUS_LATEST_TAG"
+          test "$(gh release view --repo "$RELEASE_REPO" --json tagName --jq .tagName)" != "$RELEASE_TAG"

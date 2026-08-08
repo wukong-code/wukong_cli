@@ -1,0 +1,355 @@
+name: Promote stable release
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Exact stable tag; dispatch this workflow with the same --ref tag'
+        required: true
+        type: string
+      source_sha:
+        description: 'Exact 40-character commit in mutnpc/wukong_cli'
+        required: true
+        type: string
+      publish_run_id:
+        description: 'Successful Publish binary release workflow run ID'
+        required: true
+        type: string
+      distribution_sha:
+        description: 'Exact 40-character stable truth commit in mutnpc/wukong-code'
+        required: true
+        type: string
+      website_sha:
+        description: 'Exact 40-character stable Website commit in mutnpc/wukong_web'
+        required: true
+        type: string
+
+# Serialize the final latest-pointer mutation with every binary publication.
+concurrency:
+  group: publish-binary-release
+  cancel-in-progress: false
+
+permissions:
+  actions: read
+  attestations: read
+  contents: read
+
+jobs:
+  promote-stable:
+    name: Publish immutable stable assets and verify installation
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      RELEASE_TAG: ${{ inputs.release_tag }}
+      SOURCE_SHA: ${{ inputs.source_sha }}
+      PUBLISH_RUN_ID: ${{ inputs.publish_run_id }}
+      DISTRIBUTION_SHA: ${{ inputs.distribution_sha }}
+      WEBSITE_SHA: ${{ inputs.website_sha }}
+      SOURCE_REPO: mutnpc/wukong_cli
+      RELEASE_REPO: mutnpc/wukong-code
+      WEBSITE_REPO: mutnpc/wukong_web
+    steps:
+      - name: Checkout exact private source tag
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.release_tag }}
+          fetch-depth: 0
+          path: source
+          persist-credentials: false
+
+      - name: Validate stable inputs, private tag, and successful publish run
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          if [[ ! "$RELEASE_TAG" =~ ^v(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$ ]]; then
+            echo "::error::Promotion requires an exact stable v-prefixed SemVer tag: $RELEASE_TAG"
+            exit 1
+          fi
+          for SHA in "$SOURCE_SHA" "$DISTRIBUTION_SHA" "$WEBSITE_SHA"; do
+            if [[ ! "$SHA" =~ ^[a-f0-9]{40}$ ]]; then
+              echo "::error::Promotion requires exact lowercase 40-character SHAs."
+              exit 1
+            fi
+          done
+          if [[ ! "$PUBLISH_RUN_ID" =~ ^[1-9][0-9]*$ ]]; then
+            echo "::error::publish_run_id must be a numeric GitHub Actions run ID."
+            exit 1
+          fi
+
+          test "$(git -C source rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git -C source rev-list -n 1 "$RELEASE_TAG")" = "$SOURCE_SHA"
+          test "$GITHUB_SHA" = "$SOURCE_SHA"
+          test "$GITHUB_REF_NAME" = "$RELEASE_TAG"
+
+          RUN_JSON="$(gh api "repos/${SOURCE_REPO}/actions/runs/${PUBLISH_RUN_ID}")"
+          test "$(jq -r .repository.full_name <<<"$RUN_JSON")" = "$SOURCE_REPO"
+          RUN_PATH="$(jq -r .path <<<"$RUN_JSON")"
+          if [[ "$RUN_PATH" != ".github/workflows/publish-binary.yml" \
+            && "$RUN_PATH" != .github/workflows/publish-binary.yml@* ]]; then
+            echo "::error::Run ${PUBLISH_RUN_ID} did not execute publish-binary.yml."
+            exit 1
+          fi
+          test "$(jq -r .status <<<"$RUN_JSON")" = "completed"
+          test "$(jq -r .conclusion <<<"$RUN_JSON")" = "success"
+          test "$(jq -r .head_sha <<<"$RUN_JSON")" = "$SOURCE_SHA"
+          test "$(jq -r .head_branch <<<"$RUN_JSON")" = "$RELEASE_TAG"
+
+          JOBS="$(gh api --paginate "repos/${SOURCE_REPO}/actions/runs/${PUBLISH_RUN_ID}/jobs" \
+            --jq '.jobs[] | [.name, .conclusion] | @tsv')"
+          for TARGET in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64; do
+            EXPECTED="$(printf 'Release archive smoke (%s)\tsuccess' "$TARGET")"
+            grep -Fx "$EXPECTED" <<<"$JOBS" >/dev/null
+          done
+          grep -Fx "$(printf 'Preserve latest pending production promotion\tsuccess')" \
+            <<<"$JOBS" >/dev/null
+
+      - name: Checkout exact public distribution truth
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: mutnpc/wukong-code
+          ref: ${{ inputs.distribution_sha }}
+          path: distribution
+          token: ${{ github.token }}
+          persist-credentials: false
+
+      - name: Checkout exact Website truth
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          repository: mutnpc/wukong_web
+          ref: ${{ inputs.website_sha }}
+          path: website
+          token: ${{ github.token }}
+          persist-credentials: false
+
+      - name: Validate all three source repositories and installer identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+
+          test "$(git -C source rev-parse HEAD)" = "$SOURCE_SHA"
+          test "$(git -C distribution rev-parse HEAD)" = "$DISTRIBUTION_SHA"
+          test "$(git -C website rev-parse HEAD)" = "$WEBSITE_SHA"
+
+          test "$(node -p "require('./source/package.json').version")" = "$VERSION"
+          test "$(node -p "require('./source/apps/wukong/package.json').version")" = "$VERSION"
+          test "$(node -p "require('./source/docs/package.json').version")" = "$VERSION"
+          test ! -e source/.changeset/pre.json
+          test -s "source/docs/releases/${VERSION}.md"
+          grep -F "# Wukong Code ${VERSION}" "source/docs/releases/${VERSION}.md" >/dev/null
+
+          (cd distribution && node scripts/validate-release-truth.mjs "$VERSION")
+          (cd website && node scripts/validate-release-surface.mjs)
+          test "$(tr -d '\r\n' < website/public/latest)" = "$VERSION"
+
+          sh -n source/install.sh
+          sh -n distribution/install.sh
+          sh -n website/public/install.sh
+          cmp source/install.sh distribution/install.sh
+          cmp distribution/install.sh website/public/install.sh
+
+      - name: Validate stable candidate, assets, tag, and provenance
+        env:
+          GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          RELEASE_JSON="$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" \
+            --json tagName,isDraft,isPrerelease,isImmutable,assets)"
+
+          test "$(jq -r .tagName <<<"$RELEASE_JSON")" = "$RELEASE_TAG"
+          test "$(jq -r .isPrerelease <<<"$RELEASE_JSON")" = "false"
+          test "$(jq '.assets | length' <<<"$RELEASE_JSON")" = "13"
+          test "$(gh api "repos/${RELEASE_REPO}/commits/${RELEASE_TAG}" --jq .sha)" = "$DISTRIBUTION_SHA"
+
+          IS_DRAFT="$(jq -r .isDraft <<<"$RELEASE_JSON")"
+          IS_IMMUTABLE="$(jq -r .isImmutable <<<"$RELEASE_JSON")"
+          CURRENT_LATEST_TAG="$(gh release view --repo "$RELEASE_REPO" --json tagName --jq .tagName)"
+          if [[ "$IS_DRAFT" = "true" && "$IS_IMMUTABLE" = "false" ]]; then
+            test "$CURRENT_LATEST_TAG" != "$RELEASE_TAG"
+            node source/apps/wukong/scripts/native/assert-stable-promotion.mjs \
+              "$RELEASE_TAG" "$CURRENT_LATEST_TAG"
+          elif [[ "$IS_DRAFT" = "false" && "$IS_IMMUTABLE" = "true" ]]; then
+            # A retry after the irreversible publish is valid only when this
+            # exact release already owns latest. The anonymous smoke below can
+            # then be rerun without mutating the immutable release.
+            test "$CURRENT_LATEST_TAG" = "$RELEASE_TAG"
+          else
+            echo "::error::Stable candidate is neither the mutable draft nor the immutable latest release."
+            exit 1
+          fi
+
+          for TARGET in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64; do
+            for SUFFIX in .zip .zip.sha256; do
+              ASSET="wukong-${TARGET}${SUFFIX}"
+              jq -e --arg asset "$ASSET" \
+                '[.assets[].name] | index($asset) != null' <<<"$RELEASE_JSON" >/dev/null
+            done
+          done
+          jq -e '[.assets[].name] | index("release-provenance.json") != null' \
+            <<<"$RELEASE_JSON" >/dev/null
+
+          mkdir -p draft-release
+          gh release download "$RELEASE_TAG" --repo "$RELEASE_REPO" --dir draft-release
+          test "$(find draft-release -maxdepth 1 -type f | wc -l | tr -d ' ')" = "13"
+          PROVENANCE=draft-release/release-provenance.json
+          jq -e \
+            --arg releaseTag "$RELEASE_TAG" \
+            --arg version "$VERSION" \
+            --arg sourceRepo "$SOURCE_REPO" \
+            --arg sourceSha "$SOURCE_SHA" \
+            --arg runUrl "https://github.com/${SOURCE_REPO}/actions/runs/${PUBLISH_RUN_ID}" \
+            --arg distributionRepo "$RELEASE_REPO" \
+            --arg distributionSha "$DISTRIBUTION_SHA" \
+            --arg websiteRepo "$WEBSITE_REPO" \
+            --arg websiteSha "$WEBSITE_SHA" \
+            '.releaseTag == $releaseTag
+              and .version == $version
+              and .sourceRepository == $sourceRepo
+              and .sourceSha == $sourceSha
+              and .workflowRun == $runUrl
+              and .publicTruth.distributionRepository == $distributionRepo
+              and .publicTruth.distributionSha == $distributionSha
+              and .publicTruth.websiteRepository == $websiteRepo
+              and .publicTruth.websiteSha == $websiteSha
+              and (.artifacts | length) == 6
+              and all(.artifacts[]; .build.macosSignedAndNotarized == false)' \
+            "$PROVENANCE" >/dev/null
+
+      - name: Verify candidate bytes and attestations before immutable publication
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          PROVENANCE=draft-release/release-provenance.json
+          for TARGET in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64; do
+            ARCHIVE="wukong-${TARGET}.zip"
+            node source/apps/wukong/scripts/native/verify-archive.mjs \
+              "draft-release/${ARCHIVE}" "draft-release/${ARCHIVE}.sha256"
+            ACTUAL_SHA256="$(sha256sum "draft-release/${ARCHIVE}" | awk '{print $1}')"
+            jq -e \
+              --arg target "$TARGET" \
+              --arg filename "$ARCHIVE" \
+              --arg sha256 "$ACTUAL_SHA256" \
+              '[.artifacts[]
+                | select(.target == $target
+                  and .filename == $filename
+                  and .sha256 == $sha256)]
+                | length == 1' \
+              "$PROVENANCE" >/dev/null
+            gh attestation verify "draft-release/${ARCHIVE}" \
+              --repo "$SOURCE_REPO" \
+              --signer-workflow "$SOURCE_REPO/.github/workflows/publish-binary.yml" \
+              --source-digest "$SOURCE_SHA"
+          done
+
+      - name: Publish verified stable draft as immutable latest
+        env:
+          GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
+            "repos/${RELEASE_REPO}/immutable-releases" --jq .enabled)" = "true"
+          test "$(gh api "repos/${RELEASE_REPO}/commits/${RELEASE_TAG}" --jq .sha)" = "$DISTRIBUTION_SHA"
+
+          RELEASE_STATE_JSON="$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" \
+            --json isDraft,isPrerelease,isImmutable)"
+          IS_DRAFT="$(jq -r .isDraft <<<"$RELEASE_STATE_JSON")"
+          IS_PRERELEASE="$(jq -r .isPrerelease <<<"$RELEASE_STATE_JSON")"
+          IS_IMMUTABLE="$(jq -r .isImmutable <<<"$RELEASE_STATE_JSON")"
+          CURRENT_LATEST_TAG="$(gh release view --repo "$RELEASE_REPO" --json tagName --jq .tagName)"
+          if [[ "$IS_DRAFT" = "true" && "$IS_PRERELEASE" = "false" \
+            && "$IS_IMMUTABLE" = "false" ]]; then
+            test "$CURRENT_LATEST_TAG" != "$RELEASE_TAG"
+            CURRENT_VERSION="${CURRENT_LATEST_TAG#v}"
+            node source/apps/wukong/scripts/native/assert-stable-promotion.mjs \
+              "$RELEASE_TAG" "$CURRENT_LATEST_TAG"
+            LIVE_VERSION="$(curl -fsSL --retry 2 --retry-all-errors --max-time 30 \
+              "https://wukong.today/latest?promotion=${SOURCE_SHA}-prepublish" | tr -d '\r\n')"
+            test "$LIVE_VERSION" = "$CURRENT_VERSION"
+            curl -fsSL --retry 2 --retry-all-errors --max-time 30 \
+              "https://docs.wukong.today/?promotion=${DISTRIBUTION_SHA}-prepublish" \
+              -o current-docs.html
+            grep -F "releases/tag/${CURRENT_LATEST_TAG}" current-docs.html >/dev/null
+
+            mkdir -p final-draft-release
+            gh release download "$RELEASE_TAG" --repo "$RELEASE_REPO" --dir final-draft-release
+            test "$(find final-draft-release -maxdepth 1 -type f | wc -l | tr -d ' ')" = "13"
+            for DRAFT_FILE in draft-release/*; do
+              cmp "$DRAFT_FILE" "final-draft-release/$(basename "$DRAFT_FILE")"
+            done
+
+            # An immutable published release cannot later change its latest
+            # status. Publish the already-verified draft and choose latest in
+            # the same API mutation, then require GitHub's immutable state.
+            gh release edit "$RELEASE_TAG" --repo "$RELEASE_REPO" --draft=false --latest
+          elif [[ "$IS_DRAFT" = "false" && "$IS_PRERELEASE" = "false" \
+            && "$IS_IMMUTABLE" = "true" && "$CURRENT_LATEST_TAG" = "$RELEASE_TAG" ]]; then
+            echo "${RELEASE_TAG} is already immutable latest; rerunning anonymous release smoke."
+          else
+            echo "::error::Refusing to mutate or smoke an unexpected stable release state."
+            exit 1
+          fi
+
+          test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isDraft --jq .isDraft)" = "false"
+          test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isPrerelease --jq .isPrerelease)" = "false"
+          test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isImmutable --jq .isImmutable)" = "true"
+          test "$(gh release view --repo "$RELEASE_REPO" --json tagName --jq .tagName)" = "$RELEASE_TAG"
+
+      - name: Anonymously re-download and verify promoted assets and installer
+        shell: bash
+        run: |
+          set -euo pipefail
+          VERSION="${RELEASE_TAG#v}"
+          BASE_URL="https://github.com/${RELEASE_REPO}/releases/download/${RELEASE_TAG}"
+          mkdir -p public-release
+
+          for DRAFT_FILE in draft-release/*; do
+            ASSET="$(basename "$DRAFT_FILE")"
+            curl -fsSL --retry 5 --retry-all-errors --connect-timeout 10 --max-time 60 \
+              "${BASE_URL}/${ASSET}" -o "public-release/${ASSET}"
+            cmp "$DRAFT_FILE" "public-release/${ASSET}"
+          done
+          test "$(find public-release -maxdepth 1 -type f | wc -l | tr -d ' ')" = "13"
+
+          for TARGET in linux-x64 linux-arm64 darwin-x64 darwin-arm64 win32-x64 win32-arm64; do
+            node source/apps/wukong/scripts/native/verify-archive.mjs \
+              "public-release/wukong-${TARGET}.zip" \
+              "public-release/wukong-${TARGET}.zip.sha256"
+          done
+
+          curl -fsSL --retry 5 --retry-all-errors --connect-timeout 10 --max-time 60 \
+            "https://wukong.today/install.sh?promotion=${WEBSITE_SHA}-public" \
+            -o public-release/install.sh
+          cmp source/install.sh public-release/install.sh
+
+          INSTALL_DIR="$RUNNER_TEMP/wukong-promoted/bin"
+          STATE_DIR="$RUNNER_TEMP/wukong-promoted/state"
+          WUKONG_VERSION="$RELEASE_TAG" WUKONG_INSTALL_DIR="$INSTALL_DIR" \
+            sh public-release/install.sh
+          WUKONG_CODE_HOME="$STATE_DIR" \
+            WUKONG_CODE_NO_AUTO_UPDATE=1 \
+            WUKONG_CODE_CATALOG_OFFLINE=1 \
+            WUKONG_TELEMETRY=0 \
+            "$INSTALL_DIR/wukong" --version | grep -F "$VERSION"
+          WUKONG_CODE_HOME="$STATE_DIR" \
+            WUKONG_CODE_NO_AUTO_UPDATE=1 \
+            WUKONG_CODE_CATALOG_OFFLINE=1 \
+            WUKONG_TELEMETRY=0 \
+            "$INSTALL_DIR/wukong" provider list --json >/dev/null
+          test -s "$STATE_DIR/config.toml"
+
+      - name: Record the required production-surface follow-up
+        shell: bash
+        run: |
+          {
+            echo '## Stable asset promotion passed'
+            echo
+            echo "Immutable assets and pinned install passed for \`${RELEASE_TAG}\`."
+            echo 'Stable release completion still requires the separate Verify stable production surfaces workflow after the exact Website and Docs commits are deployed.'
+          } >> "$GITHUB_STEP_SUMMARY"

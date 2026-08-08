@@ -47,6 +47,8 @@ jobs:
   validate-release-contract:
     name: Validate native release inputs
     runs-on: ubuntu-latest
+    outputs:
+      source_sha: ${{ steps.source.outputs.source_sha }}
     env:
       SIGN_MACOS: ${{ inputs.sign-macos }}
       RELEASE_ARTIFACT: ${{ inputs.release-artifact }}
@@ -56,6 +58,24 @@ jobs:
       APPLE_NOTARIZATION_KEY_ID: ${{ secrets.APPLE_NOTARIZATION_KEY_ID }}
       APPLE_NOTARIZATION_ISSUER_ID: ${{ secrets.APPLE_NOTARIZATION_ISSUER_ID }}
     steps:
+      - name: Resolve the requested source once
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ inputs.source-ref != '' && inputs.source-ref || github.sha }}
+          persist-credentials: false
+
+      - name: Record the exact source commit
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          SOURCE_SHA="$(git rev-parse HEAD)"
+          if [[ ! "$SOURCE_SHA" =~ ^[a-f0-9]{40}$ ]]; then
+            echo "::error::Native builds require one exact 40-character source commit."
+            exit 1
+          fi
+          echo "source_sha=$SOURCE_SHA" >> "$GITHUB_OUTPUT"
+
       - name: Fail closed when signing inputs are incomplete
         shell: bash
         run: |
@@ -79,9 +99,52 @@ jobs:
             fi
           done
 
+  prepare-release-catalog:
+    name: Prepare one release catalog snapshot
+    needs: validate-release-contract
+    if: inputs.release-artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.validate-release-contract.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+
+      - name: Generate one exact catalog for all six builds
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/wukong-release-catalog"
+          node apps/wukong/scripts/update-catalog.mjs \
+            --out "$RUNNER_TEMP/wukong-release-catalog/catalog.json" \
+            --metadata-out "$RUNNER_TEMP/wukong-release-catalog/catalog-metadata.json"
+
+      - name: Upload exact release catalog
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: wukong-release-catalog
+          retention-days: ${{ inputs.retention-days }}
+          path: |
+            ${{ runner.temp }}/wukong-release-catalog/catalog.json
+            ${{ runner.temp }}/wukong-release-catalog/catalog-metadata.json
+          if-no-files-found: error
+
   native-bundle:
     name: Native bundle (${{ matrix.target }})
-    needs: validate-release-contract
+    needs:
+      - validate-release-contract
+      - prepare-release-catalog
+    if: >-
+      ${{ always()
+          && needs.validate-release-contract.result == 'success'
+          && (needs.prepare-release-catalog.result == 'success'
+              || needs.prepare-release-catalog.result == 'skipped') }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -107,7 +170,7 @@ jobs:
       - name: Checkout exact source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          ref: ${{ inputs.source-ref != '' && inputs.source-ref || github.ref }}
+          ref: ${{ needs.validate-release-contract.outputs.source_sha }}
           persist-credentials: false
 
       - name: Setup pnpm
@@ -143,15 +206,24 @@ jobs:
           certificate-p12: ${{ secrets.APPLE_CERTIFICATE_P12 }}
           certificate-password: ${{ secrets.APPLE_CERTIFICATE_PASSWORD }}
 
-      - name: Generate built-in provider catalog
+      - name: Download exact shared provider catalog
+        if: inputs.release-artifact
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          name: wukong-release-catalog
+          path: ${{ runner.temp }}/wukong-release-catalog
+
+      - name: Bind exact shared provider catalog
         if: inputs.release-artifact
         shell: bash
         run: |
           set -euo pipefail
-          CATALOG_FILE="$RUNNER_TEMP/wukong-built-in-catalog.json"
-          node apps/wukong/scripts/update-catalog.mjs --out "$CATALOG_FILE"
+          CATALOG_FILE="$RUNNER_TEMP/wukong-release-catalog/catalog.json"
+          CATALOG_METADATA_FILE="$RUNNER_TEMP/wukong-release-catalog/catalog-metadata.json"
           test -s "$CATALOG_FILE"
+          test -s "$CATALOG_METADATA_FILE"
           echo "WUKONG_CODE_BUILT_IN_CATALOG_FILE=$CATALOG_FILE" >> "$GITHUB_ENV"
+          echo "WUKONG_CODE_BUILT_IN_CATALOG_METADATA_FILE=$CATALOG_METADATA_FILE" >> "$GITHUB_ENV"
 
       - name: Build Wukong web assets
         shell: bash
@@ -222,3 +294,39 @@ jobs:
             apps/wukong/dist-native/artifacts/wukong-${{ matrix.target }}.zip.sha256
             apps/wukong/dist-native/artifacts/wukong-${{ matrix.target }}.build.json
           if-no-files-found: error
+
+  verify-release-identity:
+    name: Verify one six-platform release identity
+    needs:
+      - validate-release-contract
+      - native-bundle
+    if: inputs.release-artifact
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout the exact verified source
+        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          ref: ${{ needs.validate-release-contract.outputs.source_sha }}
+          persist-credentials: false
+
+      - name: Download all six staged targets
+        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        with:
+          pattern: ${{ inputs.upload-artifact-prefix }}-*
+          path: ${{ runner.temp }}/wukong-native-staging
+          merge-multiple: true
+
+      - name: Verify source, version, catalog, checksums, archives, and signing state
+        shell: bash
+        env:
+          SOURCE_SHA: ${{ needs.validate-release-contract.outputs.source_sha }}
+          EXPECT_MACOS_SIGNING: ${{ inputs.sign-macos }}
+        run: |
+          set -euo pipefail
+          VERSION="$(node -p "require('./apps/wukong/package.json').version")"
+          node apps/wukong/scripts/native/verify-release-staging.mjs \
+            "$RUNNER_TEMP/wukong-native-staging" \
+            "v$VERSION" \
+            "$SOURCE_SHA" \
+            "$RUNNER_TEMP/wukong-native-verified" \
+            "$EXPECT_MACOS_SIGNING"

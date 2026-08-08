@@ -15,6 +15,7 @@ export type {
   ErrorEvent,
   Event,
   GoalUpdatedEvent,
+  LoopPhaseChangedEvent,
   HookResultEvent,
   McpOAuthAuthorizationUrlUpdateData,
   McpServerStatusEvent,

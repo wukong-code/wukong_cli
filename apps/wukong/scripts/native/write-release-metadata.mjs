@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
@@ -31,6 +32,7 @@ if (macosSignedAndNotarized === 'true' && profile !== 'release') {
 const packageJson = JSON.parse(await readFile(resolve(appRoot, 'package.json'), 'utf-8'));
 const artifactsDir = nativeArtifactsDir();
 const metadataPath = resolve(artifactsDir, `wukong-${target}.build.json`);
+const builtInCatalog = await readBuiltInCatalogMetadata(profile);
 const metadata = {
   schemaVersion: 1,
   target,
@@ -39,8 +41,34 @@ const metadata = {
   sourceSha,
   profile,
   macosSignedAndNotarized: macosSignedAndNotarized === 'true',
+  builtInCatalog,
 };
 
 await mkdir(artifactsDir, { recursive: true });
 await writeFile(metadataPath, `${JSON.stringify(metadata, null, 2)}\n`);
 console.log(`Wrote build metadata: ${metadataPath}`);
+
+async function readBuiltInCatalogMetadata(buildProfile) {
+  if (buildProfile !== 'release') return undefined;
+
+  const catalogPath = process.env['WUKONG_CODE_BUILT_IN_CATALOG_FILE'];
+  const catalogMetadataPath = process.env['WUKONG_CODE_BUILT_IN_CATALOG_METADATA_FILE'];
+  if (!catalogPath || !catalogMetadataPath) {
+    throw new Error('Release metadata requires the exact built-in catalog and metadata files.');
+  }
+
+  const catalogBytes = await readFile(catalogPath);
+  const catalogMetadata = JSON.parse(await readFile(catalogMetadataPath, 'utf-8'));
+  const actualSha256 = createHash('sha256').update(catalogBytes).digest('hex');
+  if (
+    catalogMetadata.schemaVersion !== 1
+    || typeof catalogMetadata.requestedUrl !== 'string'
+    || typeof catalogMetadata.sourceUrl !== 'string'
+    || !/^[a-f0-9]{64}$/.test(catalogMetadata.sha256 ?? '')
+    || catalogMetadata.sha256 !== actualSha256
+    || catalogMetadata.bytes !== catalogBytes.length
+  ) {
+    throw new Error('Built-in catalog metadata does not match the exact catalog bytes.');
+  }
+  return catalogMetadata;
+}

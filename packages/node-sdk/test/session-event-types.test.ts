@@ -1,6 +1,12 @@
 import { describe, expectTypeOf, it } from 'vitest';
 
-import type { ApprovalRequest, ApprovalResponse, Event, QuestionRequest } from '#/index';
+import type {
+  ApprovalRequest,
+  ApprovalResponse,
+  Event,
+  LoopPhaseChangedEvent,
+  QuestionRequest,
+} from '#/index';
 
 type EventByType<T extends Event['type']> = Extract<Event, { readonly type: T }>;
 
@@ -41,6 +47,11 @@ describe('Event public types', () => {
     expectTypeOf<EventByType<'cron.fired'>['origin']['kind']>().toEqualTypeOf<'cron_job'>();
   });
 
+  it('exports the runtime-owned loop phase event', () => {
+    expectTypeOf<LoopPhaseChangedEvent['phase']>().toEqualTypeOf<'write' | 'check' | 'review'>();
+    expectTypeOf<LoopPhaseChangedEvent['runId']>().toEqualTypeOf<string>();
+  });
+
   it('exposes approval and question reverse-RPC requests', () => {
     expectTypeOf<ApprovalRequest['turnId']>().toEqualTypeOf<number | undefined>();
     expectTypeOf<ApprovalRequest['toolName']>().toEqualTypeOf<string>();
@@ -64,6 +75,7 @@ describe('Event public types', () => {
         case 'event.config.changed':
         case 'event.model_catalog.changed':
         case 'goal.updated':
+        case 'loop.phase.changed':
         case 'skill.activated':
         case 'error':
         case 'warning':

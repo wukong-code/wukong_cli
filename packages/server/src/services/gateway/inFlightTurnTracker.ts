@@ -126,6 +126,7 @@ export class InFlightTurnTracker {
       case "event.workspace.updated":
       case "goal.updated":
       case "hook.result":
+      case "loop.phase.changed":
       case "mcp.server.status":
       case "prompt.submitted":
       case "session.meta.updated":
