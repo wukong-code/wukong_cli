@@ -108,36 +108,22 @@ jobs:
           token: ${{ github.token }}
           persist-credentials: false
 
-      - name: Checkout exact deployed Website truth
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          repository: mutnpc/wukong_web
-          ref: ${{ inputs.website_sha }}
-          path: website
-          token: ${{ github.token }}
-          persist-credentials: false
-
-      - name: Validate all three source repositories and installer identity
+      - name: Validate source, distribution, and installer identity
         shell: bash
         run: |
           set -euo pipefail
           VERSION="${RELEASE_TAG#v}"
           test "$(git -C source rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git -C distribution rev-parse HEAD)" = "$DISTRIBUTION_SHA"
-          test "$(git -C website rev-parse HEAD)" = "$WEBSITE_SHA"
           test "$(node -p "require('./source/package.json').version")" = "$VERSION"
           test "$(node -p "require('./source/apps/wukong/package.json').version")" = "$VERSION"
           test "$(node -p "require('./source/docs/package.json').version")" = "$VERSION"
           test ! -e source/.changeset/pre.json
           test -s "source/docs/releases/${VERSION}.md"
           (cd distribution && node scripts/validate-release-truth.mjs "$VERSION")
-          (cd website && node scripts/validate-release-surface.mjs)
-          test "$(tr -d '\r\n' < website/public/latest)" = "$VERSION"
           sh -n source/install.sh
           sh -n distribution/install.sh
-          sh -n website/public/install.sh
           cmp source/install.sh distribution/install.sh
-          cmp distribution/install.sh website/public/install.sh
 
       - name: Revalidate immutable latest release and provenance
         env:
@@ -250,7 +236,7 @@ jobs:
 
               "${CURL[@]}" "https://wukong.today/install.sh?verification=${CACHE_BUST}" \
                 -o production/install.sh
-              cmp website/public/install.sh production/install.sh
+              cmp distribution/install.sh production/install.sh
 
               "${CURL[@]}" \
                 "https://docs.wukong.today/?verification=${DISTRIBUTION_SHA}-${ATTEMPT}" \

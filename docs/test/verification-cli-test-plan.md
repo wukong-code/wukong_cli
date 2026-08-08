@@ -2,7 +2,7 @@
 
 > 日期: 2026-08-06
 > 范围: verification v1 兼容回归、Loop-first 状态机、0.1.0 Trusted Local Loop、native 候选与发布合同
-> 状态: 0.0.22 是已发布基线；0.1.0 实现侧 RC P0 已通过本地自动化，当前尚未进入 RC、未发布
+> 状态: 0.0.22 是升级基线；0.1.0-rc.1 已公开并通过六平台验收；0.1.0 stable 发布中
 
 ## 0. 0.1.0 当前自动化证据
 
@@ -23,13 +23,11 @@
 - Native：macOS ARM64 release-profile ZIP 的 SHA、provider、Resume、Loop smoke 在
   确定性 catalog snapshot 下通过；六平台 workflow 与 archive 合同静态测试通过。
 
-这些结果证明当前源码的实现与自动化，不证明 `0.1.0-rc.1` 或正式版已经发布。
-以下证据仍未形成：
+这些结果证明当前源码的实现与自动化；RC 的公开资产证据已经由独立 workflow 形成。
+以下真实使用证据仍未形成，但不再作为固定 14 天 binary 发布门槛：
 
-1. 当前候选在 GitHub Actions 的六平台实机结果；
-2. 公开 URL 的 6 ZIP + 6 SHA + provenance（13 个 assets）、fresh install 与 0.0.22 → 0.1.0 upgrade；
-3. 至少一个 Windows 实际 repo 的完整 blocker → fix → rerun → PASS；
-4. 25/20/15/7 opt-in cohort 与所有首次 PASS 用户的完整 14 天稳定窗口。
+1. 至少一个 Windows 实际 repo 的完整 blocker → fix → rerun → PASS；
+2. 25/20/15/7 opt-in cohort、首次用户理解与重复使用。
 
 本次 live `models.dev` catalog 生成因网络超时未形成结论；不能把它记录为代码通过或
 失败。release-profile 使用确定性 snapshot 的构建和 ZIP smoke 已单独通过。
@@ -45,8 +43,8 @@ pnpm sherif
 pnpm lint:pkg
 ```
 
-正式 RC 还必须由 release workflow 生成候选，在六个平台执行同一 native smoke，之后
-从公开候选 URL 回读并验证 exact bytes；本地 macOS smoke 不能替代这些步骤。
+stable 仍必须由 release workflow 在六个平台执行同一 native smoke，之后从公开
+`v0.1.0` URL 回读并验证 exact bytes；本地 macOS smoke 不能替代这些步骤。
 
 ## 1. 历史 0.0.12 v2 发布测试门槛
 

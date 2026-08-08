@@ -1,5 +1,11 @@
 # @wukong.today/code
 
+## 0.1.0
+
+### Minor Changes
+
+- [`9ff7b42`](https://github.com/mutnpc/wukong_cli/commit/9ff7b4216debc6b1692dac2c94aeeb09493a4adc) Thanks [@xxg1413](https://github.com/xxg1413)! - Add a controllable Trusted Local Loop with editable preflight, enforceable usage limits, evidence-complete Gate outcomes, file attribution, and safe recovery. Run `wukong loop "<goal>" --dry-run` to review the contract.
+
 ## 0.1.0-rc.1
 
 ### Minor Changes

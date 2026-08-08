@@ -1,6 +1,6 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.22 已发布，下一计划版本直接进入 0.1.0 Trusted Local Loop。0.1.0 实现侧 RC P0 已完成本地自动化，当前仍未进入 RC、未发布；不包含隔离 worktree / Safe Promote。0.2.0 尚未批准开工。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；0.0.22 是升级基线，immutable `0.1.0-rc.1` 已通过六平台公开验收，当前直接发布 stable `0.1.0`。真实用户 cohort 改为发布后产品学习，不设置固定 14 天等待门槛；不包含隔离 worktree / Safe Promote。0.2.0 尚未批准开工。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
@@ -21,7 +21,7 @@
 - [x] 六平台 Release 的 12 个 ZIP/SHA 资产、官网 manifest/installer 与公开
   版本 surface 同步；macOS ARM64 checksum/binary smoke 通过（2026-07-31）
 
-## ⏳ 0.1.0 — Trusted Local Loop（实现侧 P0 已自动化，尚未进入 RC）
+## ⏳ 0.1.0 — Trusted Local Loop（stable 发布中）
 
 > 方案：[docs/design/0.1.0-trusted-local-loop.md](docs/design/0.1.0-trusted-local-loop.md)。
 > 本版只交付可控、可恢复、可解释的 Free local-first BYOK 单 Loop。完整多层
@@ -63,8 +63,8 @@
 - [x] 用当前候选实际跑完 Windows 和其余五个平台的 CI，不以 workflow 静态测试代替实机结果（2026-08-08；candidate run `31241717713`、public smoke run `31244648831`）
 - [x] 六平台 native bundle 的 version、provider、Resume、基本 Loop、stop/recovery、checksum 与 0.0.22 → 0.1.0 状态恢复已进入 workflow/ZIP smoke；本地 macOS ARM64 release-profile ZIP 已通过（2026-08-06）
 - [x] 用当前候选实际完成六平台 fresh install、0.0.22 → 0.1.0 upgrade 与旧状态恢复（2026-08-08；公开 RC 六平台 smoke run `31244648831`）
-- [x] release workflow 全部 checkout 使用 `persist-credentials: false` 和最小权限；保持 full-SHA Actions、staging ZIP smoke、明确记录 macOS 未做 Developer ID 签名或 Apple 公证、OIDC attestation、draft byte verification 和 publish-no-rebuild（2026-08-06，workflow 合同与静态测试）
-- [x] 沿用 `release-provenance.json` 证明 source tag/full SHA、workflow run、六个平台和 asset SHA；从公开 URL 回读 name/size/SHA/attestation 并完成 fresh install/upgrade，失败不改变 latest（2026-08-08；immutable prerelease `v0.1.0-rc.1`，独立公开回读 run `31244905074`，stable latest 仍为 `v0.0.22`）
+- [x] release workflow 全部 checkout 使用 `persist-credentials: false` 和最小权限；保持 full-SHA Actions、staging ZIP smoke、明确记录 macOS 未做 Developer ID 签名或 Apple 公证、draft byte verification 和 publish-no-rebuild（2026-08-08；按发布决策不要求 GitHub artifact attestation）
+- [x] 沿用 `release-provenance.json` 证明 source tag/full SHA、workflow run、六个平台和 asset SHA；从公开 URL 回读 name/size/SHA 并完成 fresh install/upgrade，失败不改变 latest（2026-08-08；immutable prerelease `v0.1.0-rc.1`，独立公开回读 run `31244905074`，stable latest 仍为 `v0.0.22`）
 - [ ] installer、manifest、tag、6 ZIP + 6 SHA + provenance（13 个 assets）、README、docs、Web、Today、Changelog 和 What's Changed 使用同一 release identity；验证 rollback 不破坏用户状态
 
 ### RC 期间验证：真实项目、Provider 与用户理解
@@ -78,14 +78,18 @@
 - [x] targeted/full test、typecheck、lint、build、sherif、package lint 与本地 native installer/ZIP validator 通过（2026-08-06）
 - [x] 当前候选在 clean checkout 连续三次保持 check order、terminal 和 reason code，并完成 docs/installer 全量候选验收（2026-08-08；exact-source CI runs `31241684998`、`31245877736`、`31245881849`；公开资产/installer 回读 `31244905074`）
 
-### 正式 0.1.0 发布门槛
+### 发布后真实用户与产品验证（不阻塞 0.1.0 binary）
 
-- [ ] 25 名 opt-in 全部进入分母；20 名无实时指导完成 install/upgrade + provider smoke + executable Preflight；15 名首次真实 PASS 且都获得完整 14 天窗口；7 名在第 1–14 天主动完成第二个不同 Goal PASS
+- [ ] 25 名 opt-in 全部进入分母；20 名无实时指导完成 install/upgrade + provider smoke + executable Preflight；15 名首次真实 PASS；7 名主动完成第二个不同 Goal PASS（2026-08-08 决策：发布后继续收集，不设固定 14 天等待门槛）
 - [x] 私有 cohort ledger 只记录最小时间、exit stage/reason、理解、repeat、cost/latency 接受度和反馈引用；不记录源码、路径、Goal、prompt、transcript、evidence 或 credential；仓库外 fail-closed ledger、聚合 gate audit 与 purge 工具已在 `wukong_web` 实现并通过自动化，并已为 `v0.1.0-rc.1` 初始化空 ledger（2026-08-08；没有伪造用户或 Gate 证据）
 - [ ] stable 发布满 90 天后实际删除 participant-level cohort 记录，并用 purge audit 验证只保留不含个人数据的发布级汇总
 - [ ] 已有 API Key 时 fresh install 到 executable Preflight 中位数 ≤5 分钟、P90 ≤15 分钟；到达 terminal 的用户至少 80% 能解释结果、evidence、保留改动和 next action
-- [ ] P0/release-blocking P1、false PASS、pre-existing state loss、workspace 外写入、静默重复 provider request、privacy/consent violation 和不可恢复状态为 0；严重事件重算 14 天 RC
+- [ ] 发布后持续监测 false PASS、pre-existing state loss、workspace 外写入、静默重复 provider request、privacy/consent violation 和不可恢复状态；严重事件单独发补丁，不重算固定等待窗口
 - [ ] 3 个脱敏授权案例只作为正式宣传/launch gate，不阻塞 binary correctness
+
+### 正式 0.1.0 技术发布门槛
+
+- [x] 当前已知 P0 与 release-blocking P1 为 0；RC 六平台构建、公开资产、固定安装、0.0.22 升级、恢复、checksum 与 provenance 已通过（2026-08-08）
 - [ ] 公开版本、6 ZIP + 6 SHA + provenance（13 个 assets）、installer、manifest、release notes 和 Web 从公开 URL 验收一致
 
 ### P1：值得做但不阻塞 rc.1
@@ -760,4 +764,4 @@
 
 ---
 
-**最后更新**: 2026-08-08（stable `0.0.22`；immutable `0.1.0-rc.1` 已公开并通过六平台资产、安装、升级、恢复与公开回读验收；真实 Windows repo、五来源真实 Resume、首次用户、cohort 与 14 天证据仍未完成）
+**最后更新**: 2026-08-08（stable `0.1.0` 发布中；immutable `0.1.0-rc.1` 已通过六平台资产、安装、升级、恢复与公开回读验收；真实 Windows repo、五来源真实 Resume、首次用户与 cohort 转为发布后验证，不设固定 14 天发布门槛）

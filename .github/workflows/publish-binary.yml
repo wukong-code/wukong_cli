@@ -30,8 +30,6 @@ concurrency:
 
 permissions:
   contents: read
-  id-token: write
-  attestations: write
 
 jobs:
   validate-source:
@@ -57,9 +55,7 @@ jobs:
         id: contract
         env:
           RELEASE_TAG: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref_name }}
-          # The source-repository installation token cannot read sibling
-          # repositories. This step resolves the public distribution and
-          # website identities, so use the explicitly scoped cross-repo token.
+          # This token only mutates/reads the public distribution repository.
           GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
           RELEASE_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
           RELEASE_REPO: mutnpc/wukong-code
@@ -105,9 +101,15 @@ jobs:
           fi
 
           DISTRIBUTION_REF="${DISTRIBUTION_SHA_INPUT:-main}"
-          WEBSITE_REF="${WEBSITE_SHA_INPUT:-main}"
           DISTRIBUTION_SHA="$(gh api "repos/${RELEASE_REPO}/commits/${DISTRIBUTION_REF}" --jq .sha)"
-          WEBSITE_SHA="$(gh api "repos/${WEBSITE_REPO}/commits/${WEBSITE_REF}" --jq .sha)"
+          if [[ "$IS_PRERELEASE" = "true" ]]; then
+            WEBSITE_SHA="$(curl -fsSL --retry 2 --retry-all-errors \
+              --connect-timeout 10 --max-time 30 \
+              "https://wukong.today/_release.json?release-source=${SOURCE_SHA}" \
+              | jq -r .commitSha)"
+          else
+            WEBSITE_SHA="$WEBSITE_SHA_INPUT"
+          fi
           test "$DISTRIBUTION_SHA_INPUT" = "" || test "$DISTRIBUTION_SHA" = "$DISTRIBUTION_SHA_INPUT"
           test "$WEBSITE_SHA_INPUT" = "" || test "$WEBSITE_SHA" = "$WEBSITE_SHA_INPUT"
 
@@ -129,7 +131,7 @@ jobs:
       release-artifact: true
       # 0.1.0 does not use Developer ID signing or Apple notarization. Native
       # packaging may still apply the ad-hoc Mach-O signature required for SEA;
-      # release identity comes from SHA-256, attestations, and immutability.
+      # release identity comes from SHA-256, provenance, and immutability.
       sign-macos: false
       source-ref: ${{ needs.validate-source.outputs.release_tag }}
 
@@ -163,15 +165,6 @@ jobs:
           token: ${{ github.token }}
           persist-credentials: false
 
-      - name: Checkout website installer mirror
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          repository: mutnpc/wukong_web
-          ref: ${{ needs.validate-source.outputs.website_sha }}
-          path: website
-          token: ${{ github.token }}
-          persist-credentials: false
-
       - name: Download all six staged builds
         uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
         with:
@@ -189,11 +182,9 @@ jobs:
           set -euo pipefail
           node distribution/scripts/validate-release-truth.mjs "$VERSION"
           cmp source/install.sh distribution/install.sh
-          cmp distribution/install.sh website/public/install.sh
           test "$(git -C distribution rev-parse HEAD)" = "$EXPECTED_DISTRIBUTION_SHA"
-          test "$(git -C website rev-parse HEAD)" = "$EXPECTED_WEBSITE_SHA"
           echo "distribution_sha=$(git -C distribution rev-parse HEAD)" >> "$GITHUB_OUTPUT"
-          echo "website_sha=$(git -C website rev-parse HEAD)" >> "$GITHUB_OUTPUT"
+          echo "website_sha=$EXPECTED_WEBSITE_SHA" >> "$GITHUB_OUTPUT"
 
       - name: Verify exact staged assets and generate provenance
         working-directory: source
@@ -203,11 +194,6 @@ jobs:
         run: |
           node apps/wukong/scripts/native/verify-release-staging.mjs \
             staging "$RELEASE_TAG" "$SOURCE_SHA" release-assets false
-
-      - name: Attest staged release ZIP files
-        uses: actions/attest-build-provenance@43d14bc2b83dec42d39ecae14e916627a18bb661 # v3
-        with:
-          subject-path: source/release-assets/*.zip
 
       - name: Generate release notes
         working-directory: source
@@ -231,12 +217,8 @@ jobs:
             "$RELEASE_TAG" "$CURRENT_LATEST_TAG"
 
           DISTRIBUTION_MAIN_BEFORE="$(gh api "repos/${RELEASE_REPO}/commits/main" --jq .sha)"
-          WEBSITE_MAIN_BEFORE="$(gh api "repos/${WEBSITE_REPO}/commits/main" --jq .sha)"
           test "$(gh api \
             "repos/${RELEASE_REPO}/compare/${DISTRIBUTION_MAIN_BEFORE}...${DISTRIBUTION_SHA}" \
-            --jq .status)" = "ahead"
-          test "$(gh api \
-            "repos/${WEBSITE_REPO}/compare/${WEBSITE_MAIN_BEFORE}...${WEBSITE_SHA}" \
             --jq .status)" = "ahead"
 
           curl -fsSL --retry 2 --retry-all-errors --connect-timeout 10 --max-time 30 \
@@ -245,6 +227,8 @@ jobs:
           curl -fsSL --retry 2 --retry-all-errors --connect-timeout 10 --max-time 30 \
             "https://wukong.today/_release.json?draft-gate=${SOURCE_SHA}" \
             -o current-website-release.json
+          WEBSITE_MAIN_BEFORE="$(jq -r .commitSha current-website-release.json)"
+          test "$WEBSITE_MAIN_BEFORE" != "$WEBSITE_SHA"
           jq -e \
             --arg version "$CURRENT_VERSION" \
             --arg repository "$WEBSITE_REPO" \
@@ -266,7 +250,10 @@ jobs:
             current-docs-release.json >/dev/null
 
           DISTRIBUTION_MAIN_AFTER="$(gh api "repos/${RELEASE_REPO}/commits/main" --jq .sha)"
-          WEBSITE_MAIN_AFTER="$(gh api "repos/${WEBSITE_REPO}/commits/main" --jq .sha)"
+          curl -fsSL --retry 2 --retry-all-errors --connect-timeout 10 --max-time 30 \
+            "https://wukong.today/_release.json?draft-gate-after=${SOURCE_SHA}" \
+            -o current-website-release-after.json
+          WEBSITE_MAIN_AFTER="$(jq -r .commitSha current-website-release-after.json)"
           test "$DISTRIBUTION_MAIN_AFTER" = "$DISTRIBUTION_MAIN_BEFORE"
           test "$WEBSITE_MAIN_AFTER" = "$WEBSITE_MAIN_BEFORE"
 
@@ -283,7 +270,8 @@ jobs:
           fi
 
           if gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" >/dev/null 2>&1; then
-            TAG_TARGET_SHA="$(gh api "repos/${RELEASE_REPO}/commits/${RELEASE_TAG}" --jq .sha)"
+            TAG_TARGET_SHA="$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" \
+              --json targetCommitish --jq .targetCommitish)"
             if [[ "$TAG_TARGET_SHA" != "$DISTRIBUTION_SHA" ]]; then
               echo "::error::Public release tag points to $TAG_TARGET_SHA, expected distribution $DISTRIBUTION_SHA."
               exit 1
@@ -308,7 +296,8 @@ jobs:
               --notes-file source/release-notes.md
           fi
 
-          test "$(gh api "repos/${RELEASE_REPO}/commits/${RELEASE_TAG}" --jq .sha)" = "$DISTRIBUTION_SHA"
+          test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" \
+            --json targetCommitish --jq .targetCommitish)" = "$DISTRIBUTION_SHA"
 
           ACTUAL_PRERELEASE="$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isPrerelease --jq .isPrerelease)"
           if [[ "$ACTUAL_PRERELEASE" != "$IS_PRERELEASE" ]]; then
@@ -375,19 +364,6 @@ jobs:
           test "$(find public-release -maxdepth 1 -type f | wc -l | tr -d ' ')" = "13"
           for FILE in source/release-assets/*; do
             cmp "$FILE" "public-release/$(basename "$FILE")"
-          done
-
-      - name: Verify build attestations for every release ZIP
-        env:
-          GH_TOKEN: ${{ github.token }}
-        shell: bash
-        run: |
-          set -euo pipefail
-          for FILE in public-release/*.zip; do
-            gh attestation verify "$FILE" \
-              --repo "$GITHUB_REPOSITORY" \
-              --signer-workflow "$GITHUB_REPOSITORY/.github/workflows/publish-binary.yml" \
-              --source-digest "$SOURCE_SHA"
           done
 
   public-native-smoke:

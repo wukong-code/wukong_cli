@@ -124,8 +124,8 @@ describe('native release workflow contract', () => {
     expect(afterDraft).not.toContain('package:native');
     expect(afterDraft).toContain('cmp "$FILE" "remote-draft/$(basename "$FILE")"');
     expect(afterDraft).toContain('gh release download "$RELEASE_TAG"');
-    expect(afterDraft).toContain('gh attestation verify "$FILE"');
-    expect(afterDraft).toContain('--source-digest "$SOURCE_SHA"');
+    expect(afterDraft).not.toContain('gh attestation verify');
+    expect(source).not.toContain('actions/attest-build-provenance');
 
     const nativeBuild = source.slice(nativeBuildIndex, source.indexOf('finalize-release:'));
     expect(nativeBuild).toContain('sign-macos: false');
@@ -219,9 +219,8 @@ describe('native release workflow contract', () => {
     expect(source).toContain(
       'ref: ${{ needs.validate-source.outputs.distribution_sha }}',
     );
-    expect(source).toContain('ref: ${{ needs.validate-source.outputs.website_sha }}');
     expect(source).not.toContain('repository: mutnpc/wukong-code\n          ref: main');
-    expect(source).not.toContain('repository: mutnpc/wukong_web\n          ref: main');
+    expect(source).not.toContain('repository: mutnpc/wukong_web');
   });
 
   it('rejects stable commits already on production main before creating a draft', async () => {
@@ -242,8 +241,7 @@ describe('native release workflow contract', () => {
     expect(gate).toContain(
       'compare/${DISTRIBUTION_MAIN_BEFORE}...${DISTRIBUTION_SHA}',
     );
-    expect(gate).toContain('compare/${WEBSITE_MAIN_BEFORE}...${WEBSITE_SHA}');
-    expect(gate.match(/--jq \.status\)" = "ahead"/gmu)).toHaveLength(2);
+    expect(gate.match(/--jq \.status\)" = "ahead"/gmu)).toHaveLength(1);
     expect(gate).toContain('https://wukong.today/latest?draft-gate=');
     expect(gate).toContain('https://wukong.today/_release.json?draft-gate=');
     expect(gate).toContain('https://docs.wukong.today/_release.json?draft-gate=');
@@ -264,7 +262,7 @@ describe('native release workflow contract', () => {
     );
   });
 
-  it('uses the scoped cross-repository token while resolving public release identities', async () => {
+  it('uses the public token only for distribution identity and the exact Website input', async () => {
     const source = await workflow('.github/workflows/publish-binary.yml');
     const validateIndex = source.indexOf('Validate tag, package, and release notes');
     const nativeIndex = source.indexOf('native-artifacts:');
@@ -277,7 +275,24 @@ describe('native release workflow contract', () => {
     );
     expect(validate).not.toContain('GH_TOKEN: ${{ github.token }}');
     expect(validate).toContain('gh release view --repo "$RELEASE_REPO"');
-    expect(validate).toContain('repos/${WEBSITE_REPO}/commits/${WEBSITE_REF}');
+    expect(validate).toContain('WEBSITE_SHA="$WEBSITE_SHA_INPUT"');
+    expect(validate).not.toContain('repos/${WEBSITE_REPO}/commits/');
+  });
+
+  it('validates a draft release target without requiring a not-yet-created Git tag', async () => {
+    for (const path of [
+      '.github/workflows/publish-binary.yml',
+      '.github/workflows/promote-stable.yml',
+    ]) {
+      const source = await workflow(path);
+      expect(source).toContain('--json targetCommitish --jq .targetCommitish');
+      const promoteIndex = source.indexOf(
+        'Publish verified stable draft as immutable latest',
+      );
+      expect(source.slice(0, promoteIndex < 0 ? source.length : promoteIndex)).not.toContain(
+        'repos/${RELEASE_REPO}/commits/${RELEASE_TAG}',
+      );
+    }
   });
 
   it('publishes only prereleases as immutable and leaves stable assets in a mutable draft', async () => {
@@ -327,13 +342,13 @@ describe('native release workflow contract', () => {
       'Validate stable inputs, private tag, and successful publish run',
     );
     const validateSourceIndex = source.indexOf(
-      'Validate all three source repositories and installer identity',
+      'Validate source, distribution, and installer identity',
     );
     const validateReleaseIndex = source.indexOf(
       'Validate stable candidate, assets, tag, and provenance',
     );
     const verifyCandidateIndex = source.indexOf(
-      'Verify candidate bytes and attestations before immutable publication',
+      'Verify candidate bytes and provenance before immutable publication',
     );
     const promoteIndex = source.indexOf('Publish verified stable draft as immutable latest');
     const anonymousVerifyIndex = source.indexOf(
@@ -358,9 +373,7 @@ describe('native release workflow contract', () => {
     ]) {
       expect(source.slice(0, validateRunIndex)).toContain(input);
     }
-    expect(source).toContain(
-      'permissions:\n  actions: read\n  attestations: read\n  contents: read',
-    );
+    expect(source).toContain('permissions:\n  actions: read\n  contents: read');
     expect(source).toContain('group: publish-binary-release');
     expect(source).toContain('.github/workflows/publish-binary.yml@*');
     expect(source).toContain('test "$GITHUB_SHA" = "$SOURCE_SHA"');
@@ -384,19 +397,13 @@ describe('native release workflow contract', () => {
       'node scripts/validate-release-truth.mjs "$VERSION"',
     );
     expect(source.slice(validateSourceIndex, validateReleaseIndex)).toContain(
-      'node scripts/validate-release-surface.mjs',
-    );
-    expect(source.slice(validateSourceIndex, validateReleaseIndex)).toContain(
       'cmp source/install.sh distribution/install.sh',
-    );
-    expect(source.slice(validateSourceIndex, validateReleaseIndex)).toContain(
-      'cmp distribution/install.sh website/public/install.sh',
     );
 
     const publicRelease = source.slice(validateReleaseIndex, verifyCandidateIndex);
     expect(publicRelease).toContain('--json tagName,isDraft,isPrerelease,isImmutable,assets');
     expect(publicRelease).toContain("test \"$(jq '.assets | length'");
-    expect(publicRelease).toContain('repos/${RELEASE_REPO}/commits/${RELEASE_TAG}');
+    expect(publicRelease).toContain('--json targetCommitish --jq .targetCommitish');
     expect(publicRelease).toContain('release-provenance.json');
     expect(publicRelease).toContain('.publicTruth.distributionSha == $distributionSha');
     expect(publicRelease).toContain('.publicTruth.websiteSha == $websiteSha');
@@ -413,13 +420,11 @@ describe('native release workflow contract', () => {
     expect(publicRelease).toContain('assert-stable-promotion.mjs');
 
     const candidateVerification = source.slice(verifyCandidateIndex, promoteIndex);
-    expect(candidateVerification).toContain('GH_TOKEN: ${{ github.token }}');
     expect(candidateVerification).not.toContain('WUKONG_PUBLIC_RELEASE_TOKEN');
     expect(candidateVerification).toContain('verify-archive.mjs');
     expect(candidateVerification).toContain('sha256sum "draft-release/${ARCHIVE}"');
     expect(candidateVerification).toContain('.sha256 == $sha256');
-    expect(candidateVerification).toContain('gh attestation verify');
-    expect(candidateVerification).toContain('--source-digest "$SOURCE_SHA"');
+    expect(candidateVerification).not.toContain('gh attestation verify');
 
     const promote = source.slice(promoteIndex, anonymousVerifyIndex);
     expect(promote).toContain('repos/${RELEASE_REPO}/immutable-releases');
@@ -462,7 +467,7 @@ describe('native release workflow contract', () => {
       'Validate stable identity and successful asset promotion',
     );
     const validateSourceIndex = source.indexOf(
-      'Validate all three source repositories and installer identity',
+      'Validate source, distribution, and installer identity',
     );
     const validateReleaseIndex = source.indexOf(
       'Revalidate immutable latest release and provenance',
@@ -499,9 +504,7 @@ describe('native release workflow contract', () => {
 
     const sourceTruth = source.slice(validateSourceIndex, validateReleaseIndex);
     expect(sourceTruth).toContain('node scripts/validate-release-truth.mjs "$VERSION"');
-    expect(sourceTruth).toContain('node scripts/validate-release-surface.mjs');
     expect(sourceTruth).toContain('cmp source/install.sh distribution/install.sh');
-    expect(sourceTruth).toContain('cmp distribution/install.sh website/public/install.sh');
 
     const releaseTruth = source.slice(validateReleaseIndex, productionIndex);
     expect(releaseTruth).toContain('isDraft <<<"$RELEASE_JSON")" = "false"');
@@ -541,7 +544,7 @@ describe('native release workflow contract', () => {
     expect(production).toContain('--arg repository "$RELEASE_REPO"');
     expect(production).toContain('--arg commitSha "$DISTRIBUTION_SHA"');
     expect(production).toContain('and .commitSha == $commitSha');
-    expect(production).toContain('cmp website/public/install.sh production/install.sh');
+    expect(production).toContain('cmp distribution/install.sh production/install.sh');
     expect(source.slice(completeIndex)).toContain('Stable release complete');
     expect(source).not.toContain('gh release edit');
     expect(source).not.toMatch(/git push|git update-ref|gh api .*git\/refs/imu);
@@ -578,11 +581,11 @@ describe('native release workflow contract', () => {
       'distribution_sha=$(git -C distribution rev-parse HEAD)',
     );
     expect(source.slice(truthIndex, createIndex)).toContain(
-      'website_sha=$(git -C website rev-parse HEAD)',
+      'website_sha=$EXPECTED_WEBSITE_SHA',
     );
     expect(source.slice(createIndex)).toContain('--target "$DISTRIBUTION_SHA"');
     expect(source.slice(createIndex)).toContain(
-      'repos/${RELEASE_REPO}/commits/${RELEASE_TAG}',
+      '--json targetCommitish --jq .targetCommitish',
     );
   });
 

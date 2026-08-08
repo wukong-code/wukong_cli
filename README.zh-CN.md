@@ -10,17 +10,19 @@ Wukong Code 是围绕一个主流程构建的终端 AI coding agent：
 给 `/loop` 一个目标，Wukong 会持续修改代码、运行仓库真实检查、从新的只读
 上下文审查结果，并针对同一个目标修复 blocking findings。
 
-## 当前版本：v0.0.22
+## 当前版本：v0.1.0
 
-`v0.0.22` 是默认 installer 选择的 stable binary。opt-in
+`v0.1.0` 是默认 installer 选择的 stable binary。immutable
 [`v0.1.0-rc.1`](https://github.com/mutnpc/wukong-code/releases/tag/v0.1.0-rc.1)
-也已公开；它是 immutable prerelease，不会替换 stable latest。
+继续保留为候选证据快照。
 
 0.1.0 已收敛为一条可控、可恢复、可解释的本地单 Loop。当前候选已实现可执行的
 provider-call/token 上限、versioned no-check decision、既有改动与 Wukong 改动归因、
 完整终态 usage/next action，以及兼容/发布自动化 smoke。六平台候选构建、
-公开资产、固定版本安装、`0.0.22` 升级、状态恢复、checksum、provenance 和 attestation
-已经通过。真实来源流程、opt-in cohort 和完整 14 天稳定窗口仍阻止 stable `0.1.0`。
+公开资产、固定版本安装、`0.0.22` 升级、状态恢复、checksum 和 provenance
+已经通过。stable 发布仍必须通过同一 exact-source、六平台、公开安装、升级、恢复与
+公开版本面验收。真实来源流程和 opt-in cohort 改为发布后的产品学习证据，不再设置
+固定 14 天等待门槛。
 完整多层 coverage schema、direct-shell content/PATH attestation 和 provider 价格数据库
 后移，不再阻塞版本。
 
@@ -34,7 +36,7 @@ session 与权限控制：
 - help 区分 guarded Auto、YOLO、Plan、headless `--yes` 与额外 workspace
   访问。
 
-完整说明见 [v0.0.22 发布说明](docs/releases/0.0.22.md)。
+完整说明见 [v0.1.0 发布说明](docs/releases/0.1.0.md)。
 
 ## Wukong 能做什么
 

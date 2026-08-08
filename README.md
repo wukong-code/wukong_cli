@@ -11,12 +11,11 @@ Give `/loop` a goal. Wukong works on the change, runs the repository's real
 checks, reviews the result from a fresh read-only context, and fixes blocking
 findings against the same goal.
 
-## Current release: v0.0.22
+## Current release: v0.1.0
 
-`v0.0.22` remains the stable binary selected by the default installer.
+`v0.1.0` is the stable binary selected by the default installer. The immutable
 [`v0.1.0-rc.1`](https://github.com/mutnpc/wukong-code/releases/tag/v0.1.0-rc.1)
-is now available as an explicit opt-in prerelease; it is immutable and is not
-selected by stable `latest`.
+prerelease remains available as the candidate evidence snapshot.
 
 The 0.1.0 target is deliberately narrow: one controllable, recoverable, and
 explainable local Loop. The development checkout now implements enforceable
@@ -24,9 +23,10 @@ provider-call/token limits, a versioned no-check decision,
 pre-existing-versus-Wukong file attribution, terminal usage/next actions, and
 automated compatibility/release smoke coverage. Its six-platform candidate
 build, public assets, pinned fresh installs, `0.0.22` upgrades, state recovery,
-checksums, provenance, and attestations have passed. The opt-in cohort, real
-user flows, and the full 14-day stability window remain open before stable
-`0.1.0`.
+checksums and provenance have passed. Stable release is gated by
+the same exact-source, six-platform, public-install, upgrade, recovery, and
+release-surface checks. The opt-in cohort and real-user flows continue after
+release as product-learning evidence; there is no fixed 14-day waiting gate.
 Full multi-layer coverage schemas, direct-shell content/PATH attestation, and a
 provider pricing database are deferred rather than release blockers.
 
@@ -41,7 +41,7 @@ clarifies the CLI's session and permission controls:
 - help distinguishes guarded Auto, YOLO, Plan, headless `--yes`, and added
   workspace access.
 
-See the [v0.0.22 release notes](docs/releases/0.0.22.md).
+See the [v0.1.0 release notes](docs/releases/0.1.0.md).
 
 ## What Wukong does
 

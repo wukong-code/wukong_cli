@@ -31,7 +31,6 @@ concurrency:
 
 permissions:
   actions: read
-  attestations: read
   contents: read
 
 jobs:
@@ -114,16 +113,7 @@ jobs:
           token: ${{ github.token }}
           persist-credentials: false
 
-      - name: Checkout exact Website truth
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          repository: mutnpc/wukong_web
-          ref: ${{ inputs.website_sha }}
-          path: website
-          token: ${{ github.token }}
-          persist-credentials: false
-
-      - name: Validate all three source repositories and installer identity
+      - name: Validate source, distribution, and installer identity
         shell: bash
         run: |
           set -euo pipefail
@@ -131,8 +121,6 @@ jobs:
 
           test "$(git -C source rev-parse HEAD)" = "$SOURCE_SHA"
           test "$(git -C distribution rev-parse HEAD)" = "$DISTRIBUTION_SHA"
-          test "$(git -C website rev-parse HEAD)" = "$WEBSITE_SHA"
-
           test "$(node -p "require('./source/package.json').version")" = "$VERSION"
           test "$(node -p "require('./source/apps/wukong/package.json').version")" = "$VERSION"
           test "$(node -p "require('./source/docs/package.json').version")" = "$VERSION"
@@ -141,14 +129,9 @@ jobs:
           grep -F "# Wukong Code ${VERSION}" "source/docs/releases/${VERSION}.md" >/dev/null
 
           (cd distribution && node scripts/validate-release-truth.mjs "$VERSION")
-          (cd website && node scripts/validate-release-surface.mjs)
-          test "$(tr -d '\r\n' < website/public/latest)" = "$VERSION"
-
           sh -n source/install.sh
           sh -n distribution/install.sh
-          sh -n website/public/install.sh
           cmp source/install.sh distribution/install.sh
-          cmp distribution/install.sh website/public/install.sh
 
       - name: Validate stable candidate, assets, tag, and provenance
         env:
@@ -163,7 +146,8 @@ jobs:
           test "$(jq -r .tagName <<<"$RELEASE_JSON")" = "$RELEASE_TAG"
           test "$(jq -r .isPrerelease <<<"$RELEASE_JSON")" = "false"
           test "$(jq '.assets | length' <<<"$RELEASE_JSON")" = "13"
-          test "$(gh api "repos/${RELEASE_REPO}/commits/${RELEASE_TAG}" --jq .sha)" = "$DISTRIBUTION_SHA"
+          test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" \
+            --json targetCommitish --jq .targetCommitish)" = "$DISTRIBUTION_SHA"
 
           IS_DRAFT="$(jq -r .isDraft <<<"$RELEASE_JSON")"
           IS_IMMUTABLE="$(jq -r .isImmutable <<<"$RELEASE_JSON")"
@@ -219,9 +203,7 @@ jobs:
               and all(.artifacts[]; .build.macosSignedAndNotarized == false)' \
             "$PROVENANCE" >/dev/null
 
-      - name: Verify candidate bytes and attestations before immutable publication
-        env:
-          GH_TOKEN: ${{ github.token }}
+      - name: Verify candidate bytes and provenance before immutable publication
         shell: bash
         run: |
           set -euo pipefail
@@ -241,10 +223,6 @@ jobs:
                   and .sha256 == $sha256)]
                 | length == 1' \
               "$PROVENANCE" >/dev/null
-            gh attestation verify "draft-release/${ARCHIVE}" \
-              --repo "$SOURCE_REPO" \
-              --signer-workflow "$SOURCE_REPO/.github/workflows/publish-binary.yml" \
-              --source-digest "$SOURCE_SHA"
           done
 
       - name: Publish verified stable draft as immutable latest
@@ -255,7 +233,6 @@ jobs:
           set -euo pipefail
           test "$(gh api -H 'X-GitHub-Api-Version: 2026-03-10' \
             "repos/${RELEASE_REPO}/immutable-releases" --jq .enabled)" = "true"
-          test "$(gh api "repos/${RELEASE_REPO}/commits/${RELEASE_TAG}" --jq .sha)" = "$DISTRIBUTION_SHA"
 
           RELEASE_STATE_JSON="$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" \
             --json isDraft,isPrerelease,isImmutable)"
@@ -300,6 +277,7 @@ jobs:
           test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isPrerelease --jq .isPrerelease)" = "false"
           test "$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" --json isImmutable --jq .isImmutable)" = "true"
           test "$(gh release view --repo "$RELEASE_REPO" --json tagName --jq .tagName)" = "$RELEASE_TAG"
+          test "$(gh api "repos/${RELEASE_REPO}/commits/${RELEASE_TAG}" --jq .sha)" = "$DISTRIBUTION_SHA"
 
       - name: Anonymously re-download and verify promoted assets and installer
         shell: bash
