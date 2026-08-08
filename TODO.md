@@ -81,7 +81,7 @@
 ### 正式 0.1.0 发布门槛
 
 - [ ] 25 名 opt-in 全部进入分母；20 名无实时指导完成 install/upgrade + provider smoke + executable Preflight；15 名首次真实 PASS 且都获得完整 14 天窗口；7 名在第 1–14 天主动完成第二个不同 Goal PASS
-- [ ] 私有 cohort ledger 只记录最小时间、exit stage/reason、理解、repeat、cost/latency 接受度和反馈引用；不记录源码、路径、Goal、prompt、transcript、evidence 或 credential，90 天后删除 participant-level 记录
+- [ ] 私有 cohort ledger 只记录最小时间、exit stage/reason、理解、repeat、cost/latency 接受度和反馈引用；不记录源码、路径、Goal、prompt、transcript、evidence 或 credential，90 天后删除 participant-level 记录（仓库外 fail-closed ledger、聚合 gate audit 与 purge 工具已在 `wukong_web` 实现并通过自动化；本项保持未完成，直到真实 cohort 数据在 stable + 90 天后完成删除验收）
 - [ ] 已有 API Key 时 fresh install 到 executable Preflight 中位数 ≤5 分钟、P90 ≤15 分钟；到达 terminal 的用户至少 80% 能解释结果、evidence、保留改动和 next action
 - [ ] P0/release-blocking P1、false PASS、pre-existing state loss、workspace 外写入、静默重复 provider request、privacy/consent violation 和不可恢复状态为 0；严重事件重算 14 天 RC
 - [ ] 3 个脱敏授权案例只作为正式宣传/launch gate，不阻塞 binary correctness
