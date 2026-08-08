@@ -22,7 +22,7 @@ Promote 实验已经取消，当前没有付费计划、Checkout 或 entitlement
 - [0.0.21 Loop Evidence Integrity](docs/design/0.0.21-loop-evidence-integrity.md)
 - [0.0.21 Release Notes](docs/releases/0.0.21.md)
 - [0.0.22 Release Notes](docs/releases/0.0.22.md)
-- [0.1.0 Trusted Local Loop（stable 发布中）](docs/design/0.1.0-trusted-local-loop.md)
+- [0.1.0 Trusted Local Loop（已发布）](docs/design/0.1.0-trusted-local-loop.md)
 - [TODO.md](TODO.md)：本仓库执行层任务清单，按本 ROADMAP 的版本拆解
 - `wukong_web/TODO.md`：官网与托管产品 TODO，位于 sibling web 仓库中
 
@@ -159,7 +159,7 @@ worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继�
 
 | 版本 | 状态与目标 | 发布门槛 |
 |---|---|---|
-| `0.1.0` | **stable 发布中。** 可控、可恢复、可解释的 Trusted Local Loop：可编辑 Preflight、可信 no-check、调用/token 上限、三态 Gate verdict 与 STOPPED_BY_USER、文件归因、恢复兼容、最小 completeness/freshness、五来源 Resume、六平台安装升级和 public truth；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移 | 已知 P0/release-blocking P1 为 0；公开资产通过 stage-verify-publish-exact、六平台公开 URL provenance、fresh install、0.0.22 upgrade、恢复与生产版本面验收。25/20/15/7 cohort、首次用户理解和真实来源流程发布后继续收集，不设置固定 14 天等待；三个授权案例只阻断集中宣传 |
+| `0.1.0` | **已发布。** 可控、可恢复、可解释的 Trusted Local Loop：可编辑 Preflight、可信 no-check、调用/token 上限、三态 Gate verdict 与 STOPPED_BY_USER、文件归因、恢复兼容、最小 completeness/freshness、五来源 Resume、六平台安装升级和 public truth；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移 | immutable stable 资产通过 stage-verify-publish-exact、六平台 draft smoke、公开 URL provenance、固定安装、0.0.22 upgrade、恢复与生产版本面验收。25/20/15/7 cohort、首次用户理解和真实来源流程发布后继续收集，不设置固定 14 天等待；三个授权案例只阻断集中宣传 |
 | `0.2.0` | Pro Reliable Autonomy：保留为待重新评审的可靠自治与商业验证候选；不能继承已经取消的 Promote、lease、fencing 或 Final Gate 设计 | 0.1.0 发布并稳定观察至少 30 天；先验证重复多任务监督需求，再单独批准技术方案、Pilot 权益和收费门槛 |
 
 当前顺序是：0.0.22 → 0.1.0-rc.1 → 0.1.0 → 发布后真实项目与 opt-in cohort。

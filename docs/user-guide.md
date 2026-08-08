@@ -3,7 +3,7 @@
 > 适用范围: 当前 `wukong_cli`；stable binary 为 `v0.1.0`，历史候选为 `v0.1.0-rc.1`
 > 更新时间: 2026-08-08
 > 定位: 给 Wukong 一个目标，通过 Goal → Write → Check → Review → Fix 循环直到没有 blocking finding。
-> 版本边界: immutable `0.1.0-rc.1` 已通过六平台资产、固定版本安装、升级/恢复与公开回读；`0.1.0` stable 对 exact assets 和生产版本面重复验收。真实来源流程与 opt-in cohort 仍未完成，作为发布后产品学习，不设置固定 14 天发布等待门槛。完整多层 coverage schema、direct-shell content/PATH attestation 和价格数据库已后移。当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
+> 版本边界: stable `0.1.0` 已发布，并对 exact assets、安装/升级/恢复和生产版本面完成验收。真实来源流程与 opt-in cohort 仍未完成，作为发布后产品学习，不设置固定 14 天发布等待门槛。完整多层 coverage schema、direct-shell content/PATH attestation 和价格数据库已后移。当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
 
 CLI telemetry 的现有 wire fields、唯一 endpoint、本地 7 天失败队列和 opt-out 方式见
 [CLI telemetry contract](operations/cli-telemetry.md)。远端 retention 当前没有公开、
