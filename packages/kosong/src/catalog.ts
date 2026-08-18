@@ -2,6 +2,16 @@ import type { ModelCapability } from './capability';
 import type { ProviderType } from './providers';
 
 /**
+ * Per-model pricing (models.dev field names), USD per 1M tokens.
+ */
+export interface CatalogModelCost {
+  readonly input?: number;
+  readonly output?: number;
+  readonly cache_read?: number;
+  readonly cache_write?: number;
+}
+
+/**
  * models.dev-style catalog: a public map of provider/model metadata. Callers
  * consume a snapshot of this shape to populate provider + model configuration
  * without hand-writing context windows or capabilities.
@@ -18,6 +28,7 @@ export interface CatalogModelEntry {
     readonly input?: readonly string[];
     readonly output?: readonly string[];
   };
+  readonly cost?: CatalogModelCost;
 }
 
 export interface CatalogProviderEntry {

@@ -1,5 +1,5 @@
 import type { TokenUsage } from '#/usage';
-import { addUsage, emptyUsage, grandTotal, inputTotal } from '#/usage';
+import { addUsage, emptyUsage, estimateUsageCost, grandTotal, inputTotal } from '#/usage';
 import { describe, expect, it } from 'vitest';
 
 describe('emptyUsage', () => {
@@ -74,5 +74,39 @@ describe('addUsage', () => {
     };
     const result = addUsage(usage, emptyUsage());
     expect(result).toEqual(usage);
+  });
+});
+
+describe('estimateUsageCost', () => {
+  it('computes USD from per-1M pricing across all usage fields', () => {
+    const usage: TokenUsage = {
+      inputOther: 1_000_000,
+      output: 500_000,
+      inputCacheRead: 2_000_000,
+      inputCacheCreation: 100_000,
+    };
+    const cost = estimateUsageCost(usage, {
+      input: 3,
+      output: 15,
+      cache_read: 0.3,
+      cache_write: 3.75,
+    });
+    // 1M*3 + 0.5M*15 + 2M*0.3 + 0.1M*3.75 = 3 + 7.5 + 0.6 + 0.375
+    expect(cost).toBeCloseTo(11.475, 10);
+  });
+
+  it('treats missing price fields as zero', () => {
+    const usage: TokenUsage = {
+      inputOther: 1_000_000,
+      output: 1_000_000,
+      inputCacheRead: 1_000_000,
+      inputCacheCreation: 1_000_000,
+    };
+    expect(estimateUsageCost(usage, { input: 2 })).toBeCloseTo(2, 10);
+    expect(estimateUsageCost(usage, {})).toBe(0);
+  });
+
+  it('returns 0 for empty usage', () => {
+    expect(estimateUsageCost(emptyUsage(), { input: 3, output: 15 })).toBe(0);
   });
 });

@@ -1,3 +1,5 @@
+import type { CatalogModelCost } from './catalog';
+
 /**
  * Token usage breakdown for a single LLM generation.
  *
@@ -51,4 +53,18 @@ export function addUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
     inputCacheRead: a.inputCacheRead + b.inputCacheRead,
     inputCacheCreation: a.inputCacheCreation + b.inputCacheCreation,
   };
+}
+
+/**
+ * Estimate the USD cost of a TokenUsage given catalog pricing
+ * (USD per 1M tokens; missing price fields are treated as 0).
+ */
+export function estimateUsageCost(usage: TokenUsage, cost: CatalogModelCost): number {
+  return (
+    (usage.inputOther * (cost.input ?? 0) +
+      usage.output * (cost.output ?? 0) +
+      usage.inputCacheRead * (cost.cache_read ?? 0) +
+      usage.inputCacheCreation * (cost.cache_write ?? 0)) /
+    1_000_000
+  );
 }

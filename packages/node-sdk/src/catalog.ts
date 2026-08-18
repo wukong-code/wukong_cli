@@ -2,16 +2,19 @@ import type { WukongConfig, ModelAlias } from '@wukong/agent-core';
 import {
   catalogBaseUrl,
   catalogProviderModels,
+  estimateUsageCost,
   inferWireType,
   type Catalog,
   type CatalogModel,
+  type CatalogModelCost,
+  type CatalogModelEntry,
   type CatalogProviderEntry,
   type ModelCapability,
   type ProviderType,
 } from '@wukong/kosong';
 
-export { catalogBaseUrl, catalogProviderModels, inferWireType };
-export type { Catalog, CatalogModel, CatalogProviderEntry };
+export { catalogBaseUrl, catalogProviderModels, estimateUsageCost, inferWireType };
+export type { Catalog, CatalogModel, CatalogModelCost, CatalogModelEntry, CatalogProviderEntry };
 
 export const DEFAULT_CATALOG_URL = 'https://models.dev/api.json';
 

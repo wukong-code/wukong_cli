@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 
+import { addUsage, emptyUsage, grandTotal, type TokenUsage } from '@wukong/kosong';
 import {
   canonicalDigest,
   canonicalJson,
@@ -826,6 +827,8 @@ interface GoalState {
   status: GoalStatus;
   turnsUsed: number;
   tokensUsed: number;
+  /** Per-model token usage split, keyed by model alias. */
+  usageByModel: Record<string, TokenUsage>;
   providerCallLimits: {
     writer?: number;
     reviewer?: number;
@@ -904,6 +907,7 @@ export interface GoalSnapshot {
   readonly status: GoalStatus;
   readonly turnsUsed: number;
   readonly tokensUsed: number;
+  readonly usageByModel?: Record<string, TokenUsage>;
   readonly providerUsage?: LoopProviderUsageReport;
   readonly wallClockMs: number;
   readonly budget: GoalBudgetReport;
@@ -1089,6 +1093,7 @@ export class GoalMode {
       status: 'active',
       turnsUsed: 0,
       tokensUsed: 0,
+      usageByModel: {},
       providerCallLimits: {
         writer: record.writerProviderCallLimit,
         reviewer: record.reviewerProviderCallLimit,
@@ -1131,6 +1136,7 @@ export class GoalMode {
     }
     if (record.turnsUsed !== undefined) state.turnsUsed = record.turnsUsed;
     if (record.tokensUsed !== undefined) state.tokensUsed = record.tokensUsed;
+    if (record.usageByModel !== undefined) state.usageByModel = { ...record.usageByModel };
     if (record.providerCalls !== undefined) state.providerCalls = record.providerCalls;
     if (record.providerRetries !== undefined) state.providerRetries = record.providerRetries;
     if (record.iteration !== undefined) state.iteration = record.iteration;
@@ -1371,6 +1377,7 @@ export class GoalMode {
       status: 'active',
       turnsUsed: 0,
       tokensUsed: 0,
+      usageByModel: {},
       providerCallLimits: {
         writer: input.writerProviderCallLimit,
         reviewer: input.reviewerProviderCallLimit,
@@ -2878,13 +2885,14 @@ export class GoalMode {
 
   // --- Accounting & reporting -------------------------------------------
 
-  async recordTokenUsage(tokenDelta: number): Promise<GoalSnapshot | null> {
+  async recordTokenUsage(model: string, usage: TokenUsage): Promise<GoalSnapshot | null> {
     const state = this.state;
     if (state === undefined || state.status !== 'active') return null;
-    const delta = Math.max(0, tokenDelta);
+    const delta = Math.max(0, grandTotal(usage));
     state.tokensUsed += delta;
+    state.usageByModel[model] = addUsage(state.usageByModel[model] ?? emptyUsage(), usage);
     this.persistState(state, { silent: true }); // per-step: no UI update
-    this.appendGoalUpdate({ tokensUsed: state.tokensUsed });
+    this.appendGoalUpdate({ tokensUsed: state.tokensUsed, usageByModel: { ...state.usageByModel } });
     return this.toSnapshot(state);
   }
 
@@ -3304,6 +3312,7 @@ export class GoalMode {
       status: state.status,
       turnsUsed: state.turnsUsed,
       tokensUsed: state.tokensUsed,
+      usageByModel: { ...state.usageByModel },
       providerUsage: providerUsageReport(state),
       wallClockMs: liveWallClockMs(state, Date.now()),
       budget: computeBudgetReport(state, Date.now()),

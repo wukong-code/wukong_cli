@@ -1,11 +1,13 @@
-import type { GoalSnapshot } from '@wukong/wukong-sdk';
+import type { GoalSnapshot, TokenUsage } from '@wukong/wukong-sdk';
 
+import { formatCost, summarizeCost } from '#/utils/cost';
 import { loopNextAction, parseLoopTerminalReason } from '#/utils/loop-result';
 
 interface GoalCompletionStats {
   readonly terminalReason?: string | undefined;
   readonly turnsUsed: number;
   readonly tokensUsed: number;
+  readonly usageByModel?: Record<string, TokenUsage>;
   readonly providerUsage?: GoalSnapshot['providerUsage'];
   readonly budget?: GoalSnapshot['budget'];
   readonly wallClockMs: number;
@@ -19,6 +21,7 @@ type LoopResult = NonNullable<GoalSnapshot['loopResult']>;
 type LoopResultStats = Pick<
   GoalCompletionStats,
   | 'tokensUsed'
+  | 'usageByModel'
   | 'providerUsage'
   | 'budget'
   | 'wallClockMs'
@@ -157,7 +160,7 @@ export function buildLoopResultPresentation(
     gate: stats?.gateAttempts === undefined
       ? 'attempts unavailable'
       : `${String(stats.gateAttempts)} attempt(s)`,
-    time: `${stats === undefined ? 'unknown' : formatElapsed(stats.wallClockMs)} · Writer tokens ${stats === undefined ? 'unknown' : formatTokens(stats.tokensUsed)} · Reviewer tokens unavailable · Cost unavailable`,
+    time: `${stats === undefined ? 'unknown' : formatElapsed(stats.wallClockMs)} · Writer tokens ${stats === undefined ? 'unknown' : formatTokens(stats.tokensUsed)} · Reviewer tokens unavailable · Cost ${formatCost(summarizeCost(stats?.usageByModel))}`,
     usage: formatLoopUsage(stats),
     workspace: changedSummary,
     checks: evidence.verification === 'not_run'

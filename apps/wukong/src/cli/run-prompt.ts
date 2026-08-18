@@ -23,6 +23,7 @@ import { inspectGit, type GitInspection } from '@wukong/verification';
 import { resolve } from 'pathe';
 
 import { CLI_SHUTDOWN_TIMEOUT_MS } from '#/constant/app';
+import { formatCost, summarizeCost } from '#/utils/cost';
 import { durableLoopResultFromGoal } from '#/utils/loop-result';
 
 import type { CLIOptions, PromptOutputFormat } from './options';
@@ -1509,7 +1510,7 @@ function writePromptRunSummary(input: PromptRunSummaryInput): void {
     exit_meaning: input.exitMeaning,
     duration_ms: input.durationMs,
     usage_tokens: tokenCount,
-    cost: null,
+    cost: summarizeCost(input.usage.byModel)?.usd ?? null,
     workspace: {
       dirty_before: input.workspaceBefore.changedFiles.length > 0,
       changed_files: changedFiles,
@@ -1545,7 +1546,7 @@ function writePromptRunSummary(input: PromptRunSummaryInput): void {
     `Outcome    ${input.outcome}`,
     `Exit       ${String(input.exitCode)} — ${input.exitMeaning}`,
     `Activity   ${String(input.facts.steps)} step(s) · ${String(input.facts.toolNames.length)} tool(s) · ${String(input.facts.commands.length)} command(s)`,
-    `Time       ${formatElapsed(input.durationMs)} · Tokens ${tokenCount === null ? 'unknown' : String(tokenCount)} · Cost unavailable`,
+    `Time       ${formatElapsed(input.durationMs)} · Tokens ${tokenCount === null ? 'unknown' : String(tokenCount)} · Cost ${formatCost(summarizeCost(input.usage.byModel))}`,
     `Workspace  ${changedSummary}; ${attribution}`,
     `Checks     ${checks}`,
     'Evidence   no durable Goal/Loop PASS evidence',

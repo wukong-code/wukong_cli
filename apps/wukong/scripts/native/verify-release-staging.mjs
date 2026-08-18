@@ -109,6 +109,8 @@ for (const target of TARGETS) {
     || !/^[a-f0-9]{64}$/.test(metadata.builtInCatalog.sha256 ?? '')
     || !Number.isInteger(metadata.builtInCatalog.bytes)
     || metadata.builtInCatalog.bytes <= 0
+    || !Number.isInteger(metadata.builtInCatalog.pricedModels)
+    || metadata.builtInCatalog.pricedModels <= 0
   ) {
     throw new Error(`Build metadata is missing the exact release catalog: ${basename(metadataPath)}`);
   }

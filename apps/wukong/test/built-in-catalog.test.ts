@@ -174,7 +174,7 @@ describe('release built-in catalog', () => {
     );
   });
 
-  it('drops providers and model fields outside the offline allowlist', () => {
+  it('drops providers and model fields outside the offline allowlist, keeping pricing', () => {
     const result = buildBuiltInCatalog({
       zai: {
         id: 'zai',
@@ -183,7 +183,8 @@ describe('release built-in catalog', () => {
           glm: {
             id: 'glm',
             limit: { context: 1000 },
-            cost: { input: 1 },
+            cost: { input: 1, output: 2 },
+            attachment: 'drop',
           },
         },
       },
@@ -200,6 +201,7 @@ describe('release built-in catalog', () => {
           glm: {
             id: 'glm',
             limit: { context: 1000 },
+            cost: { input: 1, output: 2 },
           },
         },
       },
@@ -208,7 +210,7 @@ describe('release built-in catalog', () => {
 
   it('records the exact bytes and HTTP identity of a release catalog snapshot', async () => {
     const response = Response.json(
-      { openai: { id: 'openai', models: { model: { id: 'model' } } } },
+      { openai: { id: 'openai', models: { model: { id: 'model', cost: { input: 2 } } } } },
       { headers: { etag: '"catalog-v1"', 'last-modified': 'Sat, 08 Aug 2026 00:00:00 GMT' } },
     );
     const fetchImpl = vi.fn(async () => response);
@@ -227,6 +229,7 @@ describe('release built-in catalog', () => {
       lastModified: 'Sat, 08 Aug 2026 00:00:00 GMT',
       sha256: createHash('sha256').update(result.json).digest('hex'),
       bytes: Buffer.byteLength(result.json),
+      pricedModels: 1,
     });
   });
 });

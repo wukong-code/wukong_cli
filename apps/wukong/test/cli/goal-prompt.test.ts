@@ -92,6 +92,14 @@ describe('Loop result contract', () => {
       iteration: 2,
       wallClockMs: 100,
       tokensUsed: 10,
+      usageByModel: {
+        'anthropic/claude': {
+          inputOther: 8,
+          output: 2,
+          inputCacheRead: 0,
+          inputCacheCreation: 0,
+        },
+      },
       gateAttempts: 2,
       loopTerminal: {
         schemaVersion: 1,
@@ -128,7 +136,10 @@ describe('Loop result contract', () => {
       writerIterations: 2,
       gateAttempts: 2,
       blockers: [],
+      usageByModel: snapshot.usageByModel,
     });
+    // Source builds embed no catalog snapshot, so pricing stays unavailable.
+    expect(formatLoopResultText(loopSummaryJson(snapshot))).toContain('Cost unavailable');
     expect(loopExitCode(snapshot)).toBe(LOOP_EXIT_CODES.PASS);
   });
 

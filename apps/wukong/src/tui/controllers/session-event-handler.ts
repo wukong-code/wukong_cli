@@ -28,6 +28,7 @@ import type {
   TurnStepCompletedEvent,
   TurnStepInterruptedEvent,
   TurnStepStartedEvent,
+  TokenUsage,
   WarningEvent,
 } from '@wukong/wukong-sdk';
 
@@ -155,6 +156,7 @@ export class SessionEventHandler {
     readonly tools: Set<string>;
     readonly failedTools: Set<string>;
     tokens: number;
+    usage: TokenUsage | undefined;
     hadGoal: boolean;
   } | undefined;
   private pendingModelBlockedFallback: GoalChange | undefined;
@@ -331,6 +333,7 @@ export class SessionEventHandler {
           tools: new Set(),
           failedTools: new Set(),
           tokens: 0,
+          usage: undefined,
           hadGoal: this.host.state.appState.goal !== null
             && this.host.state.appState.goal !== undefined,
         }
@@ -413,6 +416,8 @@ export class SessionEventHandler {
           failedTools: ordinaryFacts.failedTools.size,
           durationMs: event.durationMs ?? Date.now() - ordinaryFacts.startedAt,
           tokens: ordinaryFacts.tokens > 0 ? ordinaryFacts.tokens : undefined,
+          usage: ordinaryFacts.usage,
+          model: this.host.state.appState.model,
           sessionId: this.host.state.appState.sessionId,
           providerOutcomeUnknown: providerOutcomeUnknownFromTurnDetails(event.error?.details),
         }),
@@ -450,6 +455,14 @@ export class SessionEventHandler {
           + event.usage.inputCacheRead
           + event.usage.inputCacheCreation
           + event.usage.output;
+        this.ordinaryTurnFacts.usage = this.ordinaryTurnFacts.usage === undefined
+          ? { ...event.usage }
+          : {
+              inputOther: this.ordinaryTurnFacts.usage.inputOther + event.usage.inputOther,
+              output: this.ordinaryTurnFacts.usage.output + event.usage.output,
+              inputCacheRead: this.ordinaryTurnFacts.usage.inputCacheRead + event.usage.inputCacheRead,
+              inputCacheCreation: this.ordinaryTurnFacts.usage.inputCacheCreation + event.usage.inputCacheCreation,
+            };
       }
     }
     this.host.streamingUI.flushNow();

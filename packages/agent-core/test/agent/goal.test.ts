@@ -794,14 +794,76 @@ describe('GoalMode accounting and budgets', () => {
     const { goals } = makeGoalMode();
 
     await goals.createGoal({ objective: 'work' });
-    await goals.recordTokenUsage(30);
+    await goals.recordTokenUsage('anthropic/claude', {
+      inputOther: 20,
+      output: 10,
+      inputCacheRead: 0,
+      inputCacheCreation: 0,
+    });
     await goals.incrementTurn();
     expect(goals.getGoal().goal).toMatchObject({ tokensUsed: 30, turnsUsed: 1 });
 
     await goals.pauseGoal();
-    await goals.recordTokenUsage(12);
+    await goals.recordTokenUsage('anthropic/claude', {
+      inputOther: 10,
+      output: 2,
+      inputCacheRead: 0,
+      inputCacheCreation: 0,
+    });
     await goals.incrementTurn();
     expect(goals.getGoal().goal).toMatchObject({ tokensUsed: 30, turnsUsed: 1 });
+  });
+
+  it('accumulates per-model usage while tokensUsed stays the grand total', async () => {
+    const { goals, records } = makeGoalMode();
+
+    await goals.createGoal({ objective: 'work' });
+    await goals.recordTokenUsage('anthropic/claude', {
+      inputOther: 20,
+      output: 10,
+      inputCacheRead: 0,
+      inputCacheCreation: 0,
+    });
+    await goals.recordTokenUsage('openai/gpt', {
+      inputOther: 5,
+      output: 5,
+      inputCacheRead: 100,
+      inputCacheCreation: 0,
+    });
+    await goals.recordTokenUsage('anthropic/claude', {
+      inputOther: 0,
+      output: 2,
+      inputCacheRead: 0,
+      inputCacheCreation: 50,
+    });
+
+    const snapshot = goals.getGoal().goal;
+    expect(snapshot?.tokensUsed).toBe(192);
+    expect(snapshot?.usageByModel).toEqual({
+      'anthropic/claude': {
+        inputOther: 20,
+        output: 12,
+        inputCacheRead: 0,
+        inputCacheCreation: 50,
+      },
+      'openai/gpt': {
+        inputOther: 5,
+        output: 5,
+        inputCacheRead: 100,
+        inputCacheCreation: 0,
+      },
+    });
+    expect(records.filter((record) => record.type === 'goal.update')).toEqual([
+      expect.objectContaining({
+        type: 'goal.update',
+        tokensUsed: 30,
+        usageByModel: expect.objectContaining({
+          'anthropic/claude': expect.objectContaining({ inputOther: 20, output: 10 }),
+        }),
+      }),
+      expect.objectContaining({ type: 'goal.update', tokensUsed: 140 }),
+      expect.objectContaining({ type: 'goal.update', tokensUsed: 192 }),
+    ]);
   });
 
   it('sets budget limits through SetGoalBudget-style updates', async () => {
@@ -1213,7 +1275,12 @@ describe('GoalMode records', () => {
     const { goals, records } = makeGoalMode();
 
     await goals.createGoal({ objective: 'work', completionCriterion: 'tests pass' });
-    await goals.recordTokenUsage(5);
+    await goals.recordTokenUsage('anthropic/claude', {
+      inputOther: 5,
+      output: 0,
+      inputCacheRead: 0,
+      inputCacheCreation: 0,
+    });
     await goals.incrementTurn();
     await goals.setBudgetLimits({ budgetLimits: { turnBudget: 2 } }, 'model');
     await goals.markBlocked({ reason: 'stuck' });
@@ -1259,6 +1326,18 @@ describe('GoalMode records', () => {
       time: Date.parse('2026-01-01T00:00:00.000Z'),
     });
     goals.restoreUpdate({ type: 'goal.update', tokensUsed: 5 });
+    goals.restoreUpdate({
+      type: 'goal.update',
+      tokensUsed: 15,
+      usageByModel: {
+        'anthropic/claude': {
+          inputOther: 10,
+          output: 5,
+          inputCacheRead: 0,
+          inputCacheCreation: 0,
+        },
+      },
+    });
     goals.restoreUpdate({ type: 'goal.update', turnsUsed: 1 });
     goals.restoreUpdate({ type: 'goal.update', budgetLimits: { turnBudget: 2 } });
     goals.restoreUpdate({ type: 'goal.update', status: 'blocked', reason: 'stuck' });
@@ -1268,10 +1347,34 @@ describe('GoalMode records', () => {
       completionCriterion: 'tests pass',
       status: 'blocked',
       terminalReason: 'stuck',
-      tokensUsed: 5,
+      tokensUsed: 15,
       turnsUsed: 1,
+      usageByModel: {
+        'anthropic/claude': {
+          inputOther: 10,
+          output: 5,
+          inputCacheRead: 0,
+          inputCacheCreation: 0,
+        },
+      },
     });
     expect(goals.getGoal().goal?.budget.turnBudget).toBe(2);
+  });
+
+  it('restores old goal.update records without usageByModel', () => {
+    const { goals } = makeGoalMode();
+
+    goals.restoreCreate({
+      type: 'goal.create',
+      goalId: 'g-legacy',
+      objective: 'work',
+      time: Date.parse('2026-01-01T00:00:00.000Z'),
+    });
+    goals.restoreUpdate({ type: 'goal.update', tokensUsed: 5 });
+
+    const snapshot = goals.getGoal().goal;
+    expect(snapshot?.tokensUsed).toBe(5);
+    expect(snapshot?.usageByModel).toEqual({});
   });
 
   it('restores Loop provider-call counters and token ceiling without reopening budget', async () => {

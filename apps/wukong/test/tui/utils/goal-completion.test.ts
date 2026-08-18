@@ -61,6 +61,31 @@ describe('buildGoalCompletionMessage', () => {
     expect(text).not.toContain('loop:PASS');
   });
 
+  it('keeps Cost unavailable when usage has no catalog pricing', () => {
+    const text = buildGoalCompletionMessage(snapshot({
+      usageByModel: {
+        'anthropic/claude': {
+          inputOther: 10_000,
+          output: 2_500,
+          inputCacheRead: 0,
+          inputCacheCreation: 0,
+        },
+      },
+      loopResult: {
+        schemaVersion: 2,
+        status: 'PASS',
+        reasonCode: 'passed',
+        summary: 'Delivery gate passed.',
+        iterations: 2,
+        checks: [],
+        blockers: [],
+      },
+    }));
+
+    // Source builds embed no catalog snapshot, so pricing cannot be resolved.
+    expect(text).toContain('Cost unavailable');
+  });
+
   it('shows exact writer/reviewer calls and remaining token budget', () => {
     const text = buildGoalCompletionMessage(snapshot({
       providerUsage: {

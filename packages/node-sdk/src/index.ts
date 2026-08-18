@@ -23,6 +23,7 @@ export {
   catalogProviderModels,
   CatalogFetchError,
   DEFAULT_CATALOG_URL,
+  estimateUsageCost,
   fetchCatalog,
   inferWireType,
   loadBuiltInCatalog,
@@ -31,6 +32,8 @@ export type {
   ApplyCatalogProviderOptions,
   Catalog,
   CatalogModel,
+  CatalogModelCost,
+  CatalogModelEntry,
   CatalogProviderEntry,
 } from '#/catalog';
 

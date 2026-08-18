@@ -1,6 +1,7 @@
-import type { GoalSnapshot } from '@wukong/wukong-sdk';
+import type { GoalSnapshot, TokenUsage } from '@wukong/wukong-sdk';
 
 import { parseGoalCommand, parseLoopCommand } from '#/tui/commands/index';
+import { formatCost, summarizeCost } from '#/utils/cost';
 import { loopNextAction, loopOutcomeFromGoal, type LoopStatus } from '#/utils/loop-result';
 
 export type { LoopStatus } from '#/utils/loop-result';
@@ -146,6 +147,7 @@ export interface LoopSummary {
   };
   readonly durationMs: number | null;
   readonly tokensUsed: number | null;
+  readonly usageByModel?: Record<string, TokenUsage>;
   readonly providerUsage: GoalSnapshot['providerUsage'] | null;
   readonly tokenBudget: number | null;
   readonly remainingTokens: number | null;
@@ -190,6 +192,7 @@ export function loopSummaryJson(goal: GoalSnapshot | null): LoopSummary {
       },
       durationMs: goal.wallClockMs,
       tokensUsed: goal.tokensUsed,
+      usageByModel: goal.usageByModel,
       providerUsage: goal.providerUsage ?? null,
       tokenBudget: goal.budget?.tokenBudget ?? null,
       remainingTokens: goal.budget?.remainingTokens ?? null,
@@ -214,6 +217,7 @@ export function loopSummaryJson(goal: GoalSnapshot | null): LoopSummary {
     evidence: { verification: 'not_run', reviewer: 'not_run' },
     durationMs: goal?.wallClockMs ?? null,
     tokensUsed: goal?.tokensUsed ?? null,
+    usageByModel: goal?.usageByModel,
     providerUsage: goal?.providerUsage ?? null,
     tokenBudget: goal?.budget?.tokenBudget ?? null,
     remainingTokens: goal?.budget?.remainingTokens ?? null,
@@ -292,7 +296,7 @@ export function formatLoopResultText(result: LoopSummary): string {
     `Reason     ${result.summary}`,
     `Writer     ${String(result.writerIterations)} iteration(s)`,
     `Gate       ${result.gateAttempts === null ? 'attempts unavailable' : `${String(result.gateAttempts)} attempt(s)`}`,
-    `Time       ${formatDuration(result.durationMs)} · Tokens ${result.tokensUsed === null ? 'unknown' : String(result.tokensUsed)} · Cost unavailable`,
+    `Time       ${formatDuration(result.durationMs)} · Tokens ${result.tokensUsed === null ? 'unknown' : String(result.tokensUsed)} · Cost ${formatCost(summarizeCost(result.usageByModel))}`,
     `Usage      ${formatLoopUsage(result)}`,
     `Workspace  ${changed}`,
     `Checks     ${checkSummary}`,

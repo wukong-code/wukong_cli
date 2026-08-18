@@ -58,6 +58,38 @@ describe('ordinary TUI turn summary', () => {
     expect(text).not.toMatch(/^Resume/m);
   });
 
+  it('keeps Cost unavailable when usage or model is missing', () => {
+    const usage = {
+      inputOther: 10_000,
+      output: 2_500,
+      inputCacheRead: 0,
+      inputCacheCreation: 0,
+    };
+    const withoutModel = buildOrdinaryTurnSummary({
+      outcome: 'COMPLETED',
+      reason: 'Done.',
+      steps: 1,
+      tools: 0,
+      failedTools: 0,
+      usage,
+      sessionId: 'ses-4',
+    });
+    expect(withoutModel).toContain('Cost unavailable');
+
+    // Source builds embed no catalog snapshot, so even a priced alias cannot resolve.
+    const withModel = buildOrdinaryTurnSummary({
+      outcome: 'COMPLETED',
+      reason: 'Done.',
+      steps: 1,
+      tools: 0,
+      failedTools: 0,
+      usage,
+      model: 'anthropic/claude',
+      sessionId: 'ses-4',
+    });
+    expect(withModel).toContain('Cost unavailable');
+  });
+
   it('only accepts complete provider outcome identifiers', () => {
     expect(providerOutcomeUnknownFromTurnDetails({
       providerOutcomeUnknown: { requestId: 'req-1', idempotencyKey: 'idem-1' },

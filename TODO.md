@@ -4,6 +4,18 @@
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
+## 🚧 0.1.1 — Cost Visibility（实现完成，待发布）
+
+> 方案: [docs/design/0.1.1-cost-visibility.md](docs/design/0.1.1-cost-visibility.md)。补丁版本，继续 Free、local-first、BYOK；不新增命令、不改变 Gate 语义、不建设价格数据库。
+
+- [x] `CatalogModelEntry` 增加可选 `cost`（models.dev pricing，USD / 1M tokens），发布 snapshot 生成脚本保留该字段（2026-08-18）
+- [x] 新增离线 `estimateUsageCost` 估算与 `summarizeCost`/`formatCost` 显示入口；唯一 pricing source 是 release-embedded snapshot，零网络请求（2026-08-18）
+- [x] Goal token 统计扩展为按 model alias 的 `usageByModel` 拆分；`goal.update` durable record 携带并恢复该字段，旧记录兼容回退 `Cost unavailable`（2026-08-18）
+- [x] 四个摘要面接入成本显示：headless run summary（含 JSON `cost` 字段）、headless Loop summary、TUI 普通回合摘要、TUI Loop 终态卡片；部分覆盖显示 `~$X.XX+`，reviewer token 继续诚实标注 unavailable（2026-08-18）
+- [x] snapshot metadata 增加 `pricedModels` 计数，release staging 验证新增 `pricedModels > 0` 硬门槛（2026-08-18）
+- [x] 相关测试（161 项）、typecheck、lint 通过；snapshot strip 回归测试反转为 `cost` 必须保留（2026-08-18）
+- [ ] 六平台 0.1.1 assets、0.1.0 → 0.1.1 升级与公开安装验收（发布时执行）
+
 ## ✅ 0.0.21 — Loop Evidence Integrity（已发布）
 
 - [x] 同一种 builtin risk 出现在不同文件、行或 evidence 位置时，为每个不同 occurrence 生成稳定 evidence identity；完全相同的重复输入继续去重（2026-07-30）
