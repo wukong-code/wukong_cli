@@ -201,6 +201,7 @@ describe('native release artifacts', () => {
       lastModified: null,
       sha256: sha256(catalogBytes),
       bytes: catalogBytes.length,
+      pricedModels: 1,
     };
     await writeFile(catalogPath, catalogBytes);
     await writeFile(catalogMetadataPath, `${JSON.stringify(catalogMetadata)}\n`);
@@ -240,6 +241,7 @@ describe('native release artifacts', () => {
         lastModified: null,
         sha256: 'd'.repeat(64),
         bytes: 42,
+        pricedModels: 1,
       };
       const targets = [
         'linux-x64',

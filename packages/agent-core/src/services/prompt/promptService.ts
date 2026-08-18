@@ -594,17 +594,17 @@ export class PromptService
 
   /**
    * Seed the per-session shadow from `getConfig` / `getPermission` /
-   * `getPlan` if not yet bootstrapped. Idempotent across submits within a
+   * `getPlanMode` if not yet bootstrapped. Idempotent across submits within a
    * session lifetime; cleared on `ISessionService.onDidClose`.
    *
-   * The three RPCs run in parallel — they share no preconditions.
+   * The four RPCs run in parallel — they share no preconditions.
    */
   private async _ensureAgentStateBootstrapped(sid: string): Promise<void> {
     if (this._agentState.has(sid)) return;
-    const [config, permission, plan, swarmMode] = await Promise.all([
+    const [config, permission, planMode, swarmMode] = await Promise.all([
       this.core.rpc.getConfig({ sessionId: sid, agentId: MAIN_AGENT_ID }),
       this.core.rpc.getPermission({ sessionId: sid, agentId: MAIN_AGENT_ID }),
-      this.core.rpc.getPlan({ sessionId: sid, agentId: MAIN_AGENT_ID }),
+      this.core.rpc.getPlanMode({ sessionId: sid, agentId: MAIN_AGENT_ID }),
       this.core.rpc.getSwarmMode({ sessionId: sid, agentId: MAIN_AGENT_ID }),
     ]);
     const snapshot: AgentStateSnapshot = {};
@@ -615,7 +615,7 @@ export class PromptService
     // protocol to import from agent-core.
     snapshot.thinking = config.thinkingLevel as PromptThinking;
     snapshot.permissionMode = permission.mode;
-    snapshot.planMode = plan !== null;
+    snapshot.planMode = planMode;
     snapshot.swarmMode = swarmMode;
     this._agentState.set(sid, snapshot);
   }

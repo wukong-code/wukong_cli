@@ -19,6 +19,14 @@ const CATALOG: Catalog = {
     models: {
       // No pricing: lookups against this model mark the summary partial.
       gpt: { id: 'gpt' },
+      tiered: {
+        id: 'tiered',
+        cost: {
+          input: 2.5,
+          output: 15,
+          tiers: [{ context: 272_000, input: 5, output: 22.5 }],
+        },
+      },
     },
   },
 };
@@ -78,6 +86,25 @@ describe('summarizeCost', () => {
     expect(summary).toEqual({ usd: 3, partial: true });
   });
 
+  it('ignores zero-usage historical aliases when deciding completeness', () => {
+    const zeroUsage = {
+      inputOther: 0,
+      output: 0,
+      inputCacheRead: 0,
+      inputCacheCreation: 0,
+    };
+    expect(summarizeCost({
+      'anthropic/claude': {
+        inputOther: 1_000_000,
+        output: 0,
+        inputCacheRead: 0,
+        inputCacheCreation: 0,
+      },
+      unknown: zeroUsage,
+    }, CATALOG)).toEqual({ usd: 3, partial: false });
+    expect(summarizeCost({ unknown: zeroUsage }, CATALOG)).toBeUndefined();
+  });
+
   it('returns undefined when no alias matched any pricing', () => {
     expect(summarizeCost({
       'openai/gpt': {
@@ -95,6 +122,58 @@ describe('summarizeCost', () => {
         inputCacheCreation: 0,
       },
     }, undefined)).toBeUndefined();
+  });
+
+  it('does not silently apply base prices when aggregate usage hits tiered models', () => {
+    const tieredUsage = {
+      inputOther: 300_000,
+      output: 10_000,
+      inputCacheRead: 0,
+      inputCacheCreation: 0,
+    };
+    expect(summarizeCost({ 'openai/tiered': tieredUsage }, CATALOG)).toBeUndefined();
+
+    expect(summarizeCost({
+      'openai/tiered': tieredUsage,
+      'anthropic/claude': {
+        inputOther: 1_000_000,
+        output: 0,
+        inputCacheRead: 0,
+        inputCacheCreation: 0,
+      },
+    }, CATALOG)).toEqual({ usd: 3, partial: true });
+  });
+
+  it('marks a subtotal partial when a used token class has no price', () => {
+    expect(summarizeCost({
+      'anthropic/claude': {
+        inputOther: 1_000_000,
+        output: 0,
+        inputCacheRead: 0,
+        inputCacheCreation: 1_000_000,
+      },
+    }, {
+      anthropic: {
+        models: { claude: { cost: { input: 3 } } },
+      },
+    })).toEqual({ usd: 3, partial: true });
+  });
+
+  it('uses configured provider/model identity instead of guessing from alias text', () => {
+    const usage = {
+      inputOther: 1_000_000,
+      output: 0,
+      inputCacheRead: 0,
+      inputCacheCreation: 0,
+    };
+    expect(summarizeCost({ sonnet: usage }, CATALOG, {
+      sonnet: { provider: 'anthropic', model: 'claude' },
+    })).toEqual({ usd: 3, partial: false });
+
+    expect(summarizeCost({ 'anthropic/claude': usage }, CATALOG, {
+      'anthropic/claude': { provider: 'openai', model: 'gpt' },
+    })).toBeUndefined();
+    expect(summarizeCost({ 'anthropic/claude': usage }, CATALOG, {})).toBeUndefined();
   });
 });
 

@@ -1,6 +1,10 @@
 import type { GoalSnapshot, TokenUsage } from '@wukong/wukong-sdk';
 
-import { formatCost, summarizeCost } from '#/utils/cost';
+import {
+  formatCost,
+  summarizeCost,
+  type CostModelAliases,
+} from '#/utils/cost';
 import { loopNextAction, parseLoopTerminalReason } from '#/utils/loop-result';
 
 interface GoalCompletionStats {
@@ -64,12 +68,20 @@ export interface LoopResultPresentation {
  * goal `complete`. It is built from the final snapshot, so the figures
  * (turns / tokens / time) are exact and do not depend on model prose.
  */
-export function buildGoalCompletionMessage(goal: GoalSnapshot): string {
-  return buildGoalCompletionMessageFromStats(goal);
+export function buildGoalCompletionMessage(
+  goal: GoalSnapshot,
+  modelAliases?: CostModelAliases,
+): string {
+  return buildGoalCompletionMessageFromStats(goal, modelAliases);
 }
 
-export function buildGoalCompletionMessageFromStats(goal: GoalCompletionStats): string {
-  if (goal.loopResult !== undefined) return buildLoopResultCard(goal.loopResult, goal);
+export function buildGoalCompletionMessageFromStats(
+  goal: GoalCompletionStats,
+  modelAliases?: CostModelAliases,
+): string {
+  if (goal.loopResult !== undefined) {
+    return buildLoopResultCard(goal.loopResult, goal, modelAliases);
+  }
   const loop = parseLoopTerminalReason(goal.terminalReason);
   const head = loop?.status === 'PASS'
     ? `✓ Loop PASS — ${loop.summary}`
@@ -82,8 +94,9 @@ export function buildGoalCompletionMessageFromStats(goal: GoalCompletionStats): 
 export function buildLoopResultCard(
   result: LoopResult,
   stats?: LoopResultStats,
+  modelAliases?: CostModelAliases,
 ): string {
-  const presentation = buildLoopResultPresentation(result, stats);
+  const presentation = buildLoopResultPresentation(result, stats, modelAliases);
   const blockerLines = presentation.blockers.flatMap((blocker) => [
     `${blocker.label.padEnd(12)}${blocker.summary}`,
     `  Fix       ${blocker.nextAction}`,
@@ -116,6 +129,7 @@ export function buildLoopResultCard(
 export function buildLoopResultPresentation(
   result: LoopResult,
   stats?: LoopResultStats,
+  modelAliases?: CostModelAliases,
 ): LoopResultPresentation {
   const loopTerminal = stats?.loopTerminal;
   const continuationMode = stats !== undefined
@@ -160,7 +174,7 @@ export function buildLoopResultPresentation(
     gate: stats?.gateAttempts === undefined
       ? 'attempts unavailable'
       : `${String(stats.gateAttempts)} attempt(s)`,
-    time: `${stats === undefined ? 'unknown' : formatElapsed(stats.wallClockMs)} · Writer tokens ${stats === undefined ? 'unknown' : formatTokens(stats.tokensUsed)} · Reviewer tokens unavailable · Cost ${formatCost(summarizeCost(stats?.usageByModel))}`,
+    time: `${stats === undefined ? 'unknown' : formatElapsed(stats.wallClockMs)} · Writer tokens ${stats === undefined ? 'unknown' : formatTokens(stats.tokensUsed)} · Reviewer tokens unavailable · Cost ${formatCost(summarizeCost(stats?.usageByModel, undefined, modelAliases))}`,
     usage: formatLoopUsage(stats),
     workspace: changedSummary,
     checks: evidence.verification === 'not_run'

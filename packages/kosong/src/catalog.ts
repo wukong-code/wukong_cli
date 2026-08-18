@@ -9,6 +9,15 @@ export interface CatalogModelCost {
   readonly output?: number;
   readonly cache_read?: number;
   readonly cache_write?: number;
+  /**
+   * Context-dependent price overrides from models.dev. The catalog has used
+   * both keyed and array representations over time, so consumers that do not
+   * retain per-request context must treat any non-empty value as tiered
+   * pricing rather than silently applying the base prices.
+   */
+  readonly tiers?:
+    | readonly Readonly<Record<string, unknown>>[]
+    | Readonly<Record<string, Readonly<Record<string, unknown>>>>;
 }
 
 /**

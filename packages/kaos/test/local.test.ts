@@ -559,6 +559,61 @@ describe('LocalKaos', () => {
       expect(names.has('nested.txt')).toBe(true);
       expect(names.has('sub')).toBe(true);
     });
+
+    it('normalizes adjacent ** segments and returns each public glob match once', async () => {
+      await kaos.mkdir(join(tempDir, 'a', 'b'), { parents: true });
+      await kaos.writeText(join(tempDir, 'a', 'b', 'deep.txt'), 'x');
+
+      const matches: string[] = [];
+      for await (const m of kaos.glob(tempDir, '**/**/**/*.txt')) {
+        matches.push(m);
+      }
+
+      expect(matches).toEqual([toPosix(join(tempDir, 'a', 'b', 'deep.txt'))]);
+    });
+
+    it('treats trailing **/ as a directory-only recursive glob including the base', async () => {
+      await kaos.mkdir(join(tempDir, 'a', 'b'), { parents: true });
+      await kaos.writeText(join(tempDir, 'root.txt'), 'r');
+      await kaos.writeText(join(tempDir, 'a', 'nested.txt'), 'n');
+
+      const matches: string[] = [];
+      for await (const m of kaos.glob(tempDir, '**/')) {
+        matches.push(m);
+      }
+
+      expect(new Set(matches)).toEqual(
+        new Set([
+          tempDir,
+          toPosix(join(tempDir, 'a')),
+          toPosix(join(tempDir, 'a', 'b')),
+        ]),
+      );
+      expect(matches.every((match) => !match.endsWith('.txt'))).toBe(true);
+    });
+
+    it('does not treat a file base as a directory for trailing **/', async () => {
+      const filePath = join(tempDir, 'root.txt');
+      await kaos.writeText(filePath, 'r');
+
+      const matches: string[] = [];
+      for await (const match of kaos.glob(filePath, '**/')) {
+        matches.push(match);
+      }
+
+      expect(matches).toEqual([]);
+    });
+
+    it('normalizes multiple trailing slashes as a directory-only glob', async () => {
+      await kaos.mkdir(join(tempDir, 'sub'));
+
+      const matches: string[] = [];
+      for await (const match of kaos.glob(tempDir, 'sub///')) {
+        matches.push(match);
+      }
+
+      expect(matches).toEqual([toPosix(join(tempDir, 'sub'))]);
+    });
   });
 
   // ── Symlink cycle safety ────────────────────────────────────────────

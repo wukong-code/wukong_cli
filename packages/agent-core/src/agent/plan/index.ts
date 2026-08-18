@@ -55,18 +55,16 @@ export class PlanMode {
     if (emitStatus) this.agent.emitStatusUpdated();
   }
 
-  restoreEnter({ id }: { readonly id?: string }): void {
+  restoreEnter({ id, time }: { readonly id?: string; readonly time?: number }): void {
     this.agent.replayBuilder.push({
       type: 'plan_updated',
       enabled: true,
     });
 
+    const restoredId = id ?? legacyPlanId(time);
     this._isActive = true;
-    // Legacy records may carry no plan id: restore the active mode without a
-    // backing file, so `data()` honestly returns null instead of fabricating
-    // a path like `undefined.md`.
-    this._planId = id ?? null;
-    this._planFilePath = id === undefined ? null : this.planFilePathFor(id);
+    this._planId = restoredId;
+    this._planFilePath = this.planFilePathFor(restoredId);
   }
 
   cancel(id?: string): void {
@@ -142,8 +140,17 @@ export class PlanMode {
   }
 }
 
+function legacyPlanId(time: number | undefined): string {
+  return time === undefined ? 'legacy-restored-plan' : `legacy-restored-plan-${String(time)}`;
+}
+
 function isMissingFileError(error: unknown): boolean {
   if (error === null || typeof error !== 'object') return false;
   const code = (error as { readonly code?: unknown }).code;
-  return code === 'ENOENT';
+  if (code === 'ENOENT') return true;
+
+  // ssh2 uses the SFTP protocol's numeric SSH_FX_NO_SUCH_FILE code. Kaos
+  // preserves that value on its typed error instead of translating it to the
+  // local filesystem's ENOENT string.
+  return error instanceof Error && error.name === 'KaosFileNotFoundError' && code === 2;
 }

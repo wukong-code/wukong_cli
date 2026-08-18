@@ -94,5 +94,5 @@ This is the **Wukong CLI monorepo**: a TypeScript codebase for the local-first t
 ## agent-core Module Boundaries
 
 - `packages/agent-core/src` is split into modules (immediate subdirectories of `src/`, plus sub-modules under `src/agent/`, e.g. `loop`, `session`, `agent/goal`). Cross-module imports must go through the target module's index (module root) — deep-importing another module's internal files is forbidden.
-- Existing violations are grandfathered in `scripts/agent-core-boundaries-baseline.json`; do not add new ones. When you remove a violation, regenerate the baseline.
-- Check locally with `pnpm run lint:boundaries` (runs as part of `pnpm run lint` / CI); regenerate the baseline after intentional changes with `node scripts/check-agent-core-boundaries.mjs --update`.
+- Existing violations are grandfathered in `scripts/agent-core-boundaries-baseline.json`; do not add new ones. When you remove a violation, regenerate the baseline in the same change — stale baseline entries fail the check so removed violations cannot be silently reintroduced.
+- Check locally with `pnpm run lint:boundaries` (runs as part of `pnpm run lint` / CI); after removing violations, shrink the baseline with `node scripts/check-agent-core-boundaries.mjs --update`. The update command refuses to add new violations.

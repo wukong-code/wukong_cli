@@ -159,6 +159,7 @@ function baseAgentState(
     replay,
     permission: { mode: 'manual', rules: [] },
     plan: null,
+    planMode: false,
     swarmMode: false,
     usage: {},
     tools: [],
@@ -290,6 +291,12 @@ function backgroundTask(
 }
 
 describe('WukongTUI resume message replay', () => {
+  it('hydrates active plan mode from resume state when plan data is absent', async () => {
+    const driver = await replayIntoDriver([], { plan: null, planMode: true });
+
+    expect(driver.state.appState.planMode).toBe(true);
+  });
+
   it('does not render legacy goal completion context reminders as transcript messages', async () => {
     const driver = await replayIntoDriver([
       message(

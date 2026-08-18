@@ -114,14 +114,14 @@ interface RpcRecord {
   cancelGoalCalls: unknown[];
   getConfigCalls: number;
   getPermissionCalls: number;
-  getPlanCalls: number;
+  getPlanModeCalls: number;
 }
 
 interface BridgeStubOptions {
-  /** Initial bootstrap values returned by getConfig/getPermission/getPlan. */
+  /** Initial bootstrap values returned by getConfig/getPermission/getPlanMode. */
   config?: { modelAlias?: string; thinkingLevel?: string };
   permission?: { mode: 'manual' | 'yolo' | 'auto' };
-  plan?: null | { id: string; content: string; path: string };
+  planMode?: boolean;
   sessions?: SessionSummary[];
   onPrompt?: (payload: unknown) => void | Promise<void>;
 }
@@ -148,7 +148,7 @@ function makeBridge(
     cancelGoalCalls: [],
     getConfigCalls: 0,
     getPermissionCalls: 0,
-    getPlanCalls: 0,
+    getPlanModeCalls: 0,
   };
   const config = {
     cwd: '/tmp/ws',
@@ -158,7 +158,7 @@ function makeBridge(
     modelAlias: opts.config?.modelAlias ?? 'wukong/k2',
   };
   const permission = { mode: opts.permission?.mode ?? 'manual', rules: [] };
-  const plan = opts.plan === undefined ? null : opts.plan;
+  const planMode = opts.planMode ?? false;
   const sessions = opts.sessions ?? [mkSummary()];
 
   const rpc: Partial<CoreRPC> = {
@@ -188,9 +188,9 @@ function makeBridge(
       record.getPermissionCalls += 1;
       return permission;
     }),
-    getPlan: vi.fn().mockImplementation(async () => {
-      record.getPlanCalls += 1;
-      return plan;
+    getPlanMode: vi.fn().mockImplementation(async () => {
+      record.getPlanModeCalls += 1;
+      return planMode;
     }),
     setModel: vi.fn().mockImplementation(async (payload) => {
       record.setModelCalls.push(payload);
@@ -1047,11 +1047,11 @@ describe('PromptService queue steer', () => {
 // ─────────────────────────────────────────────────────────────────────────────
 
 describe('PromptService stateless controls — bootstrap + shadow', () => {
-  it('bootstraps shadow from getConfig/getPermission/getPlan on first submit', async () => {
+  it('bootstraps shadow from getConfig/getPermission/getPlanMode on first submit', async () => {
     const { bridge, record } = makeBridge({
       config: { modelAlias: 'wukong/k2', thinkingLevel: 'medium' },
       permission: { mode: 'yolo' },
-      plan: { id: 'plan_abc', content: '', path: '/tmp/p' },
+      planMode: true,
     });
     const { bus } = makeBus();
     const impl = newSvc(bridge, bus);
@@ -1067,7 +1067,7 @@ describe('PromptService stateless controls — bootstrap + shadow', () => {
     // Getters fired exactly once each.
     expect(record.getConfigCalls).toBe(1);
     expect(record.getPermissionCalls).toBe(1);
-    expect(record.getPlanCalls).toBe(1);
+    expect(record.getPlanModeCalls).toBe(1);
     expect(record.getSwarmModeCalls).toBe(1);
     // No setters fired because body matched the bootstrap snapshot.
     expect(record.setModelCalls).toEqual([]);
@@ -1101,7 +1101,7 @@ describe('PromptService stateless controls — bootstrap + shadow', () => {
     await impl.submit(SID, mkBody({ content: [{ type: 'text', text: 'again' }] }));
     expect(record.getConfigCalls).toBe(1);
     expect(record.getPermissionCalls).toBe(1);
-    expect(record.getPlanCalls).toBe(1);
+    expect(record.getPlanModeCalls).toBe(1);
   });
 
   it('re-bootstraps after the session closes', async () => {
@@ -1133,7 +1133,7 @@ describe('PromptService stateless controls — bootstrap + shadow', () => {
     await impl.submit(SID, mkBody({ content: [{ type: 'text', text: 'after-close' }] }));
     expect(record.getConfigCalls).toBe(2);
     expect(record.getPermissionCalls).toBe(2);
-    expect(record.getPlanCalls).toBe(2);
+    expect(record.getPlanModeCalls).toBe(2);
   });
 });
 
@@ -1225,7 +1225,7 @@ describe('PromptService stateless controls — diff dispatch', () => {
   });
 
   it('enters plan mode when plan_mode goes false→true', async () => {
-    const { bridge, record } = makeBridge({ plan: null });
+    const { bridge, record } = makeBridge({ planMode: false });
     const { bus } = makeBus();
     const impl = newSvc(bridge, bus);
     await impl.submit(SID, mkBody({ plan_mode: true }));
@@ -1238,7 +1238,7 @@ describe('PromptService stateless controls — diff dispatch', () => {
 
   it('cancels plan mode when plan_mode goes true→false', async () => {
     const { bridge, record } = makeBridge({
-      plan: { id: 'plan_xyz', content: '', path: '/tmp/p' },
+      planMode: true,
     });
     const { bus } = makeBus();
     const impl = newSvc(bridge, bus);
@@ -1368,7 +1368,7 @@ describe('PromptService stateless controls — dispatch log', () => {
     const { bridge } = makeBridge({
       config: { modelAlias: 'wukong/k2', thinkingLevel: 'off' },
       permission: { mode: 'manual' },
-      plan: null,
+      planMode: false,
     });
     const { bus } = makeBus();
     const impl = newSvc(bridge, bus);
@@ -1399,7 +1399,7 @@ describe('PromptService stateless controls — dispatch log', () => {
   });
 
   it('does NOT append entries when a repeat submit matches the shadow', async () => {
-    const { bridge } = makeBridge({ plan: null });
+    const { bridge } = makeBridge({ planMode: false });
     const { bus, triggerSubscribers } = makeBus();
     const impl = newSvc(bridge, bus);
     // First submit toggles plan_mode on -> 1 entry.
@@ -1428,7 +1428,7 @@ describe('PromptService stateless controls — dispatch log', () => {
   });
 
   it('clears the buffer when the session closes (re-bootstrap on next submit)', async () => {
-    const { bridge } = makeBridge({ plan: null });
+    const { bridge } = makeBridge({ planMode: false });
     const { bus } = makeBus();
     const { sessionService, triggerClose } = makeSessionService();
     const impl = new PromptService(bridge, bus, makeAuth(), sessionService, new NoopLogService());
@@ -1442,7 +1442,7 @@ describe('PromptService stateless controls — dispatch log', () => {
     const { bridge, record } = makeBridge({
       config: { modelAlias: 'wukong/k2', thinkingLevel: 'off' },
       permission: { mode: 'manual' },
-      plan: null,
+      planMode: false,
     });
     const { bus } = makeBus();
     const impl = newSvc(bridge, bus);
@@ -1454,7 +1454,7 @@ describe('PromptService stateless controls — dispatch log', () => {
     const { bridge, record } = makeBridge({
       config: { modelAlias: 'wukong/k2', thinkingLevel: 'off' },
       permission: { mode: 'manual' },
-      plan: null,
+      planMode: false,
     });
     const { bus, triggerSubscribers } = makeBus();
     const impl = newSvc(bridge, bus);
@@ -1495,7 +1495,7 @@ describe('PromptService stateless controls — dispatch log', () => {
     const { bridge, record } = makeBridge({
       config: { modelAlias: 'wukong/k2', thinkingLevel: 'off' },
       permission: { mode: 'manual' },
-      plan: null,
+      planMode: false,
     });
     const { bus, triggerSubscribers } = makeBus();
     const impl = newSvc(bridge, bus);
@@ -1525,7 +1525,7 @@ describe('PromptService stateless controls — dispatch log', () => {
     const { bridge, record } = makeBridge({
       config: { modelAlias: 'wukong/k2', thinkingLevel: 'off' },
       permission: { mode: 'manual' },
-      plan: null,
+      planMode: false,
     });
     const { bus } = makeBus();
     const impl = newSvc(bridge, bus);
@@ -1545,7 +1545,7 @@ describe('PromptService stateless controls — dispatch log', () => {
     const { bridge, record } = makeBridge({
       config: { modelAlias: 'wukong/k2', thinkingLevel: 'off' },
       permission: { mode: 'manual' },
-      plan: null,
+      planMode: false,
     });
     const { bus } = makeBus();
     const impl = newSvc(bridge, bus);
@@ -1571,7 +1571,7 @@ describe('PromptService stateful session — content-only path', () => {
     // Bootstrap getters never ran (no body control to diff against).
     expect(record.getConfigCalls).toBe(0);
     expect(record.getPermissionCalls).toBe(0);
-    expect(record.getPlanCalls).toBe(0);
+    expect(record.getPlanModeCalls).toBe(0);
     expect(record.getSwarmModeCalls).toBe(0);
     // No setters fired either.
     expect(record.setModelCalls).toEqual([]);

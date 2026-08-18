@@ -103,8 +103,7 @@ export class WriteTool implements BuiltinTool<WriteInput> {
         output: `${mode === 'append' ? 'Appended' : 'Wrote'} ${String(bytesWritten)} bytes to ${args.path}`,
       };
     } catch (error) {
-      const code = (error as { code?: unknown } | null)?.code;
-      if (code === 'ENOENT') {
+      if (isMissingFileError(error)) {
         return {
           isError: true,
           output: `Failed to write ${args.path}: parent directory does not exist.`,
@@ -139,7 +138,7 @@ export class WriteTool implements BuiltinTool<WriteInput> {
     try {
       stat = await this.kaos.stat(parent);
     } catch (error) {
-      if ((error as NodeJS.ErrnoException).code === 'ENOENT') {
+      if (isMissingFileError(error)) {
         try {
           await this.kaos.mkdir(parent, { parents: true, existOk: true });
           return undefined;
@@ -154,4 +153,11 @@ export class WriteTool implements BuiltinTool<WriteInput> {
     }
     return undefined;
   }
+}
+
+function isMissingFileError(error: unknown): boolean {
+  if (error === null || typeof error !== 'object') return false;
+  const code = (error as { readonly code?: unknown }).code;
+  if (code === 'ENOENT') return true;
+  return error instanceof Error && error.name === 'KaosFileNotFoundError' && code === 2;
 }

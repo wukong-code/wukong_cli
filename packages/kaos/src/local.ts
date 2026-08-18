@@ -19,7 +19,12 @@ import type { Readable, Writable } from 'node:stream';
 
 import { detectEnvironmentFromNode, type Environment } from './environment';
 import { KaosFileExistsError } from './errors';
-import { BufferedReadable, decodeTextWithErrors, globPatternToRegex } from './internal';
+import {
+  BufferedReadable,
+  decodeTextWithErrors,
+  globPatternToRegex,
+  normalizeGlobPattern,
+} from './internal';
 import type { Kaos } from './kaos';
 import type { KaosProcess } from './process';
 import type { StatResult } from './types';
@@ -301,7 +306,7 @@ export class LocalKaos implements Kaos {
   ): AsyncGenerator<string> {
     const resolved = this._resolvePath(path);
     const caseSensitive = options?.caseSensitive ?? true;
-    const patternParts = pattern.split('/');
+    const { patternParts, directoriesOnly } = normalizeGlobPattern(pattern);
     // Seed `visited` with basePath's own inode so that a symlink inside
     // basePath that points back at basePath is caught on its first
     // encounter (not on the second level — the "+1 depth" off-by-one
@@ -316,7 +321,18 @@ export class LocalKaos implements Kaos {
     } catch {
       // base does not exist / not accessible — walker handles via its own catch
     }
-    yield* this._globWalk(resolved, patternParts, caseSensitive, initVisited);
+    const seen = new Set<string>();
+    for await (const match of this._globWalk(
+      resolved,
+      patternParts,
+      caseSensitive,
+      initVisited,
+      directoriesOnly,
+    )) {
+      if (seen.has(match)) continue;
+      seen.add(match);
+      yield match;
+    }
   }
 
   // `visited` holds the `(stDev, stIno)` keys of directories on the
@@ -344,6 +360,7 @@ export class LocalKaos implements Kaos {
     patternParts: string[],
     caseSensitive: boolean,
     visited: Set<string>,
+    directoriesOnly: boolean,
   ): AsyncGenerator<string> {
     if (patternParts.length === 0) {
       return;
@@ -368,8 +385,14 @@ export class LocalKaos implements Kaos {
       // because case (a) inside the child recursion already yields those
       // results.
       if (remainingParts.length > 0) {
-        yield* this._globWalk(basePath, remainingParts, caseSensitive, visited);
-      } else {
+        yield* this._globWalk(
+          basePath,
+          remainingParts,
+          caseSensitive,
+          visited,
+          directoriesOnly,
+        );
+      } else if (!directoriesOnly) {
         // Pattern ends with `**`: yield basePath itself (zero-dir match).
         yield basePath;
       }
@@ -379,6 +402,12 @@ export class LocalKaos implements Kaos {
         entries = await readdir(basePath);
       } catch {
         return;
+      }
+
+      // A trailing slash restricts the terminal `**` match to directories.
+      // Successful readdir distinguishes a directory base from a file base.
+      if (remainingParts.length === 0 && directoriesOnly) {
+        yield basePath;
       }
 
       for (const entry of entries) {
@@ -398,8 +427,9 @@ export class LocalKaos implements Kaos {
             patternParts,
             caseSensitive,
             key !== null ? new Set([...visited, key]) : visited,
+            directoriesOnly,
           );
-        } else if (remainingParts.length === 0) {
+        } else if (remainingParts.length === 0 && !directoriesOnly) {
           // Pattern ends with `**`: non-directory entries match too
           // (since `**` matches "anything").
           yield fullPath;
@@ -424,7 +454,15 @@ export class LocalKaos implements Kaos {
         const fullPath = join(basePath, entry);
 
         if (remainingParts.length === 0) {
-          yield fullPath;
+          if (!directoriesOnly) {
+            yield fullPath;
+            continue;
+          }
+          try {
+            if ((await stat(fullPath)).isDirectory()) yield fullPath;
+          } catch {
+            continue;
+          }
         } else {
           let entryStat;
           try {
@@ -440,6 +478,7 @@ export class LocalKaos implements Kaos {
               remainingParts,
               caseSensitive,
               key !== null ? new Set([...visited, key]) : visited,
+              directoriesOnly,
             );
           }
         }

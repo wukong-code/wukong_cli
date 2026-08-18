@@ -866,6 +866,58 @@ describe('GoalMode accounting and budgets', () => {
     ]);
   });
 
+  it('returns a deeply detached per-model usage snapshot', async () => {
+    const { goals, records } = makeGoalMode();
+    await goals.createGoal({ objective: 'work' });
+    await goals.recordTokenUsage('anthropic/claude', {
+      inputOther: 10,
+      output: 2,
+      inputCacheRead: 0,
+      inputCacheCreation: 0,
+    });
+
+    const first = goals.getGoal().goal;
+    const exposedUsage = first?.usageByModel?.['anthropic/claude'];
+    if (exposedUsage === undefined) throw new Error('expected usage snapshot');
+    (exposedUsage as { inputOther: number }).inputOther = 999;
+
+    expect(goals.getGoal().goal?.usageByModel?.['anthropic/claude']?.inputOther).toBe(10);
+
+    const usageRecord = records.find(
+      (record) => record.type === 'goal.update' && record.usageByModel !== undefined,
+    );
+    if (usageRecord?.type !== 'goal.update' || usageRecord.usageByModel === undefined) {
+      throw new Error('expected usage update record');
+    }
+    const recordedUsage = usageRecord.usageByModel['anthropic/claude'];
+    if (recordedUsage === undefined) throw new Error('expected recorded usage');
+    (recordedUsage as { inputOther: number }).inputOther = 777;
+
+    expect(goals.getGoal().goal?.usageByModel?.['anthropic/claude']?.inputOther).toBe(10);
+  });
+
+  it('deeply detaches restored per-model usage from the input record', async () => {
+    const { goals } = makeGoalMode();
+    await goals.createGoal({ objective: 'work' });
+    const update = {
+      type: 'goal.update' as const,
+      tokensUsed: 12,
+      usageByModel: {
+        'anthropic/claude': {
+          inputOther: 10,
+          output: 2,
+          inputCacheRead: 0,
+          inputCacheCreation: 0,
+        },
+      },
+    };
+
+    goals.restoreUpdate(update);
+    update.usageByModel['anthropic/claude'].inputOther = 888;
+
+    expect(goals.getGoal().goal?.usageByModel?.['anthropic/claude']?.inputOther).toBe(10);
+  });
+
   it('sets budget limits through SetGoalBudget-style updates', async () => {
     const { goals } = makeGoalMode();
 

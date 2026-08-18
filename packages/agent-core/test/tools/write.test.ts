@@ -218,6 +218,26 @@ describe('WriteTool', () => {
     expect(writeText).toHaveBeenCalledWith('/tmp/missing-dir/file.txt', 'data');
   });
 
+  it('creates a missing SSH parent directory when SFTP reports code 2', async () => {
+    const missing = Object.assign(new Error('No such file'), {
+      name: 'KaosFileNotFoundError',
+      code: 2,
+    });
+    const stat = vi.fn().mockRejectedValue(missing);
+    const mkdir = vi.fn().mockResolvedValue(undefined);
+    const writeText = vi.fn().mockResolvedValue(4);
+    const tool = new WriteTool(createFakeKaos({ stat, mkdir, writeText }), PERMISSIVE_WORKSPACE);
+
+    const result = await executeTool(
+      tool,
+      context({ path: '/tmp/missing-dir/file.txt', content: 'data' }),
+    );
+
+    expect(result.isError).toBeFalsy();
+    expect(mkdir).toHaveBeenCalledWith('/tmp/missing-dir', { parents: true, existOk: true });
+    expect(writeText).toHaveBeenCalledWith('/tmp/missing-dir/file.txt', 'data');
+  });
+
   it('surfaces mkdir failures when a missing parent cannot be created', async () => {
     const enoent = Object.assign(new Error('ENOENT: no such file or directory'), {
       code: 'ENOENT',

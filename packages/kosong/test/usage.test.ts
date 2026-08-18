@@ -109,4 +109,22 @@ describe('estimateUsageCost', () => {
   it('returns 0 for empty usage', () => {
     expect(estimateUsageCost(emptyUsage(), { input: 3, output: 15 })).toBe(0);
   });
+
+  it('fails closed for tiered prices because aggregate usage lacks request context', () => {
+    expect(() => estimateUsageCost({
+      inputOther: 300_000,
+      output: 10_000,
+      inputCacheRead: 0,
+      inputCacheCreation: 0,
+    }, {
+      input: 2.5,
+      output: 15,
+      tiers: [{ context: 272_000, input: 5, output: 22.5 }],
+    })).toThrow('without per-request context');
+
+    expect(() => estimateUsageCost(emptyUsage(), {
+      input: 2.5,
+      tiers: { '272000': { input: 5 } },
+    })).toThrow('without per-request context');
+  });
 });

@@ -1020,6 +1020,112 @@ describe('SSHKaos mock success paths', () => {
     expect(set.has('/tree/sub/nested.txt')).toBe(true);
   });
 
+  it('normalizes adjacent ** segments and returns each public glob match once', async () => {
+    const root: TreeNode = {
+      type: 'dir',
+      children: {
+        tree: {
+          type: 'dir',
+          children: {
+            sub: {
+              type: 'dir',
+              children: {
+                deep: {
+                  type: 'dir',
+                  children: {
+                    'nested.txt': { type: 'file', content: Buffer.from('n') },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+    };
+    const kaos = makeFakeKaos(makeTreeSftp(root));
+
+    const matches: string[] = [];
+    for await (const m of kaos.glob('/tree', '**/**/**/*.txt')) {
+      matches.push(m);
+    }
+
+    expect(matches).toEqual(['/tree/sub/deep/nested.txt']);
+  });
+
+  it('treats trailing **/ as a directory-only recursive glob including the base', async () => {
+    const root: TreeNode = {
+      type: 'dir',
+      children: {
+        tree: {
+          type: 'dir',
+          children: {
+            'root.txt': { type: 'file', content: Buffer.from('r') },
+            sub: {
+              type: 'dir',
+              children: {
+                'nested.txt': { type: 'file', content: Buffer.from('n') },
+                deep: { type: 'dir', children: {} },
+              },
+            },
+          },
+        },
+      },
+    };
+    const kaos = makeFakeKaos(makeTreeSftp(root));
+
+    const matches: string[] = [];
+    for await (const m of kaos.glob('/tree', '**/')) {
+      matches.push(m);
+    }
+
+    expect(new Set(matches)).toEqual(new Set(['/tree', '/tree/sub', '/tree/sub/deep']));
+    expect(matches.every((match) => !match.endsWith('.txt'))).toBe(true);
+  });
+
+  it('does not treat a file base as a directory for trailing **/', async () => {
+    const root: TreeNode = {
+      type: 'dir',
+      children: {
+        tree: {
+          type: 'dir',
+          children: {
+            'root.txt': { type: 'file', content: Buffer.from('r') },
+          },
+        },
+      },
+    };
+    const kaos = makeFakeKaos(makeTreeSftp(root));
+
+    const matches: string[] = [];
+    for await (const match of kaos.glob('/tree/root.txt', '**/')) {
+      matches.push(match);
+    }
+
+    expect(matches).toEqual([]);
+  });
+
+  it('normalizes multiple trailing slashes as a directory-only glob', async () => {
+    const root: TreeNode = {
+      type: 'dir',
+      children: {
+        tree: {
+          type: 'dir',
+          children: {
+            sub: { type: 'dir', children: {} },
+          },
+        },
+      },
+    };
+    const kaos = makeFakeKaos(makeTreeSftp(root));
+
+    const matches: string[] = [];
+    for await (const match of kaos.glob('/tree', 'sub///')) {
+      matches.push(match);
+    }
+
+    expect(matches).toEqual(['/tree/sub']);
+  });
+
   it('glob with a nested literal path recurses only into the named dir', async () => {
     // Pattern `sub/*.txt` → literal `sub` segment, then `*.txt` inside it.
     // Exercises the non-`**` recursive branch.

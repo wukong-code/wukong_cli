@@ -189,7 +189,17 @@ describe('Session plan, compact, usage, and resume APIs', () => {
       await expect(resumed.getStatus()).resolves.toMatchObject({
         planMode: true,
       });
-      await expect(resumed.getPlan()).resolves.toBeNull();
+      expect(resumed.getResumeState()?.agents['main']?.planMode).toBe(true);
+
+      const restoredPlan = await resumed.getPlan();
+      if (restoredPlan === null) throw new Error('expected restored legacy plan path');
+      expect(restoredPlan.path).toContain('/plans/legacy-restored-plan-');
+      await writeFile(restoredPlan.path, '# Restored Legacy Plan', 'utf-8');
+      await expect(resumed.getPlan()).resolves.toMatchObject({
+        id: restoredPlan.id,
+        content: '# Restored Legacy Plan',
+        path: restoredPlan.path,
+      });
     } finally {
       await resumedHarness.close();
     }

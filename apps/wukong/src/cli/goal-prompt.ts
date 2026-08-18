@@ -1,7 +1,11 @@
 import type { GoalSnapshot, TokenUsage } from '@wukong/wukong-sdk';
 
 import { parseGoalCommand, parseLoopCommand } from '#/tui/commands/index';
-import { formatCost, summarizeCost } from '#/utils/cost';
+import {
+  formatCost,
+  summarizeCost,
+  type CostModelAliases,
+} from '#/utils/cost';
 import { loopNextAction, loopOutcomeFromGoal, type LoopStatus } from '#/utils/loop-result';
 
 export type { LoopStatus } from '#/utils/loop-result';
@@ -148,6 +152,8 @@ export interface LoopSummary {
   readonly durationMs: number | null;
   readonly tokensUsed: number | null;
   readonly usageByModel?: Record<string, TokenUsage>;
+  readonly cost: number | null;
+  readonly costPartial: boolean | null;
   readonly providerUsage: GoalSnapshot['providerUsage'] | null;
   readonly tokenBudget: number | null;
   readonly remainingTokens: number | null;
@@ -167,9 +173,13 @@ export const LOOP_EXIT_CODES = {
   interrupted: 130,
 } as const;
 
-export function loopSummaryJson(goal: GoalSnapshot | null): LoopSummary {
+export function loopSummaryJson(
+  goal: GoalSnapshot | null,
+  modelAliases?: CostModelAliases,
+): LoopSummary {
   const outcome = loopOutcomeFromGoal(goal);
   const loopTerminal = goal?.loopTerminal;
+  const cost = summarizeCost(goal?.usageByModel, undefined, modelAliases);
   const continuationMode = goal !== null
     && loopTerminal !== undefined
     && loopTerminal.runId === goal.loopRunId
@@ -193,6 +203,8 @@ export function loopSummaryJson(goal: GoalSnapshot | null): LoopSummary {
       durationMs: goal.wallClockMs,
       tokensUsed: goal.tokensUsed,
       usageByModel: goal.usageByModel,
+      cost: cost?.usd ?? null,
+      costPartial: cost?.partial ?? null,
       providerUsage: goal.providerUsage ?? null,
       tokenBudget: goal.budget?.tokenBudget ?? null,
       remainingTokens: goal.budget?.remainingTokens ?? null,
@@ -218,6 +230,8 @@ export function loopSummaryJson(goal: GoalSnapshot | null): LoopSummary {
     durationMs: goal?.wallClockMs ?? null,
     tokensUsed: goal?.tokensUsed ?? null,
     usageByModel: goal?.usageByModel,
+    cost: cost?.usd ?? null,
+    costPartial: cost?.partial ?? null,
     providerUsage: goal?.providerUsage ?? null,
     tokenBudget: goal?.budget?.tokenBudget ?? null,
     remainingTokens: goal?.budget?.remainingTokens ?? null,
@@ -231,12 +245,14 @@ export function loopSummaryJson(goal: GoalSnapshot | null): LoopSummary {
 export function loopRuntimeErrorSummary(
   goal: GoalSnapshot | null,
   errorMessage: string,
+  modelAliases?: CostModelAliases,
 ): LoopSummary {
   const message = errorMessage.replaceAll(/\s+/gu, ' ').trim().slice(0, 500);
   const summary = message.length === 0
     ? 'Loop stopped because the provider or runtime failed.'
     : `Loop stopped because the provider or runtime failed: ${message}`;
   const iterations = goal?.iteration ?? 0;
+  const cost = summarizeCost(goal?.usageByModel, undefined, modelAliases);
   const result: Omit<LoopSummary, 'nextAction'> = {
     type: 'loop.result',
     schemaVersion: 2,
@@ -252,6 +268,9 @@ export function loopRuntimeErrorSummary(
     evidence: { verification: 'not_run', reviewer: 'not_run' },
     durationMs: goal?.wallClockMs ?? null,
     tokensUsed: goal?.tokensUsed ?? null,
+    usageByModel: goal?.usageByModel,
+    cost: cost?.usd ?? null,
+    costPartial: cost?.partial ?? null,
     providerUsage: goal?.providerUsage ?? null,
     tokenBudget: goal?.budget?.tokenBudget ?? null,
     remainingTokens: goal?.budget?.remainingTokens ?? null,
@@ -264,8 +283,11 @@ export function loopRuntimeErrorSummary(
   return { ...result, nextAction: loopSummaryNextAction(result) };
 }
 
-export function formatLoopSummaryText(goal: GoalSnapshot | null): string {
-  return formatLoopResultText(loopSummaryJson(goal));
+export function formatLoopSummaryText(
+  goal: GoalSnapshot | null,
+  modelAliases?: CostModelAliases,
+): string {
+  return formatLoopResultText(loopSummaryJson(goal, modelAliases));
 }
 
 export function formatLoopResultText(result: LoopSummary): string {
@@ -296,7 +318,7 @@ export function formatLoopResultText(result: LoopSummary): string {
     `Reason     ${result.summary}`,
     `Writer     ${String(result.writerIterations)} iteration(s)`,
     `Gate       ${result.gateAttempts === null ? 'attempts unavailable' : `${String(result.gateAttempts)} attempt(s)`}`,
-    `Time       ${formatDuration(result.durationMs)} · Tokens ${result.tokensUsed === null ? 'unknown' : String(result.tokensUsed)} · Cost ${formatCost(summarizeCost(result.usageByModel))}`,
+    `Time       ${formatDuration(result.durationMs)} · Tokens ${result.tokensUsed === null ? 'unknown' : String(result.tokensUsed)} · Cost ${formatLoopCost(result)}`,
     `Usage      ${formatLoopUsage(result)}`,
     `Workspace  ${changed}`,
     `Checks     ${checkSummary}`,
@@ -306,6 +328,11 @@ export function formatLoopResultText(result: LoopSummary): string {
     `Unverified ${formatUnverifiedEvidence(result.evidence)}`,
     `Next       ${result.nextAction}`,
   ].join('\n');
+}
+
+function formatLoopCost(result: Pick<LoopSummary, 'cost' | 'costPartial'>): string {
+  if (result.cost === null) return formatCost(undefined);
+  return formatCost({ usd: result.cost, partial: result.costPartial === true });
 }
 
 function formatLoopEvidence(evidence: LoopSummary['evidence']): string {

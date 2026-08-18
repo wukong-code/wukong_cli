@@ -124,7 +124,7 @@ export interface AgentRecordEvents {
   'goal.update': {
     status?: GoalStatus;
     tokensUsed?: number;
-    usageByModel?: Record<string, TokenUsage>;
+    usageByModel?: Readonly<Record<string, Readonly<TokenUsage>>>;
     turnsUsed?: number;
     wallClockMs?: number;
     budgetLimits?: GoalBudgetLimits;

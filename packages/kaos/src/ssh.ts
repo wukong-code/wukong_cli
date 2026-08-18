@@ -14,7 +14,12 @@ import type {
 
 import type { Environment } from './environment';
 import { KaosError, KaosFileExistsError, KaosValueError } from './errors';
-import { BufferedReadable, decodeTextWithErrors, globPatternToRegex } from './internal';
+import {
+  BufferedReadable,
+  decodeTextWithErrors,
+  globPatternToRegex,
+  normalizeGlobPattern,
+} from './internal';
 import type { Kaos } from './kaos';
 import type { KaosProcess } from './process';
 import type { StatResult } from './types';
@@ -627,14 +632,25 @@ export class SSHKaos implements Kaos {
       throw new KaosValueError('Case insensitive glob is not supported in current environment');
     }
     // Use local glob implementation over SFTP readdir
-    const patternParts = pattern.split('/');
-    yield* this._globWalk(resolved, patternParts, caseSensitive);
+    const { patternParts, directoriesOnly } = normalizeGlobPattern(pattern);
+    const seen = new Set<string>();
+    for await (const match of this._globWalk(
+      resolved,
+      patternParts,
+      caseSensitive,
+      directoriesOnly,
+    )) {
+      if (seen.has(match)) continue;
+      seen.add(match);
+      yield match;
+    }
   }
 
   private async *_globWalk(
     basePath: string,
     patternParts: string[],
     caseSensitive: boolean,
+    directoriesOnly: boolean,
   ): AsyncGenerator<string> {
     if (patternParts.length === 0) return;
 
@@ -656,8 +672,8 @@ export class SSHKaos implements Kaos {
       // — that would double-count matches at depth ≥ 1 because case (a)
       // inside the child recursion already yields those results.
       if (remainingParts.length > 0) {
-        yield* this._globWalk(basePath, remainingParts, caseSensitive);
-      } else {
+        yield* this._globWalk(basePath, remainingParts, caseSensitive, directoriesOnly);
+      } else if (!directoriesOnly) {
         // Pattern ends with `**`: yield basePath itself (zero-dir match).
         yield basePath;
       }
@@ -669,12 +685,18 @@ export class SSHKaos implements Kaos {
         return;
       }
 
+      // A trailing slash restricts the terminal `**` match to directories.
+      // Successful readdir distinguishes a directory base from a file base.
+      if (remainingParts.length === 0 && directoriesOnly) {
+        yield basePath;
+      }
+
       for (const entry of entries) {
         if (entry.filename === '.' || entry.filename === '..') continue;
         const fullPath = join(basePath, entry.filename);
         if (entry.attrs.isDirectory()) {
-          yield* this._globWalk(fullPath, patternParts, caseSensitive);
-        } else if (remainingParts.length === 0) {
+          yield* this._globWalk(fullPath, patternParts, caseSensitive, directoriesOnly);
+        } else if (remainingParts.length === 0 && !directoriesOnly) {
           // Pattern ends with `**`: non-directory entries match too.
           yield fullPath;
         }
@@ -695,10 +717,10 @@ export class SSHKaos implements Kaos {
 
         const fullPath = join(basePath, entry.filename);
 
-        if (remainingParts.length === 0) {
+        if (remainingParts.length === 0 && (!directoriesOnly || entry.attrs.isDirectory())) {
           yield fullPath;
         } else if (entry.attrs.isDirectory()) {
-          yield* this._globWalk(fullPath, remainingParts, caseSensitive);
+          yield* this._globWalk(fullPath, remainingParts, caseSensitive, directoriesOnly);
         }
       }
     }

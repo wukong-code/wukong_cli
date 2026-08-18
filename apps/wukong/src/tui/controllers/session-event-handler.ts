@@ -418,6 +418,7 @@ export class SessionEventHandler {
           tokens: ordinaryFacts.tokens > 0 ? ordinaryFacts.tokens : undefined,
           usage: ordinaryFacts.usage,
           model: this.host.state.appState.model,
+          modelAliases: this.host.state.appState.availableModels,
           sessionId: this.host.state.appState.sessionId,
           providerOutcomeUnknown: providerOutcomeUnknownFromTurnDetails(event.error?.details),
         }),
@@ -805,7 +806,10 @@ export class SessionEventHandler {
         id: nextTranscriptId(),
         kind: 'assistant',
         renderMode: 'markdown',
-        content: buildGoalCompletionMessage(event.snapshot),
+        content: buildGoalCompletionMessage(
+          event.snapshot,
+          this.host.state.appState.availableModels,
+        ),
       });
       state.ui.requestRender();
       return;
@@ -1048,7 +1052,11 @@ export class SessionEventHandler {
         id: nextTranscriptId(),
         kind: 'status',
         renderMode: 'plain',
-        content: buildLoopResultCard(snapshot.loopResult, snapshot),
+        content: buildLoopResultCard(
+          snapshot.loopResult,
+          snapshot,
+          this.host.state.appState.availableModels,
+        ),
       });
       return;
     }

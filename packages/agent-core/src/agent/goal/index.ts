@@ -907,7 +907,7 @@ export interface GoalSnapshot {
   readonly status: GoalStatus;
   readonly turnsUsed: number;
   readonly tokensUsed: number;
-  readonly usageByModel?: Record<string, TokenUsage>;
+  readonly usageByModel?: Readonly<Record<string, Readonly<TokenUsage>>>;
   readonly providerUsage?: LoopProviderUsageReport;
   readonly wallClockMs: number;
   readonly budget: GoalBudgetReport;
@@ -1136,7 +1136,9 @@ export class GoalMode {
     }
     if (record.turnsUsed !== undefined) state.turnsUsed = record.turnsUsed;
     if (record.tokensUsed !== undefined) state.tokensUsed = record.tokensUsed;
-    if (record.usageByModel !== undefined) state.usageByModel = { ...record.usageByModel };
+    if (record.usageByModel !== undefined) {
+      state.usageByModel = cloneUsageByModel(record.usageByModel);
+    }
     if (record.providerCalls !== undefined) state.providerCalls = record.providerCalls;
     if (record.providerRetries !== undefined) state.providerRetries = record.providerRetries;
     if (record.iteration !== undefined) state.iteration = record.iteration;
@@ -2892,7 +2894,10 @@ export class GoalMode {
     state.tokensUsed += delta;
     state.usageByModel[model] = addUsage(state.usageByModel[model] ?? emptyUsage(), usage);
     this.persistState(state, { silent: true }); // per-step: no UI update
-    this.appendGoalUpdate({ tokensUsed: state.tokensUsed, usageByModel: { ...state.usageByModel } });
+    this.appendGoalUpdate({
+      tokensUsed: state.tokensUsed,
+      usageByModel: cloneUsageByModel(state.usageByModel),
+    });
     return this.toSnapshot(state);
   }
 
@@ -3312,7 +3317,7 @@ export class GoalMode {
       status: state.status,
       turnsUsed: state.turnsUsed,
       tokensUsed: state.tokensUsed,
-      usageByModel: { ...state.usageByModel },
+      usageByModel: cloneUsageByModel(state.usageByModel),
       providerUsage: providerUsageReport(state),
       wallClockMs: liveWallClockMs(state, Date.now()),
       budget: computeBudgetReport(state, Date.now()),
@@ -3340,6 +3345,14 @@ export class GoalMode {
           },
     };
   }
+}
+
+function cloneUsageByModel(
+  usageByModel: Readonly<Record<string, Readonly<TokenUsage>>>,
+): Record<string, TokenUsage> {
+  return Object.fromEntries(
+    Object.entries(usageByModel).map(([model, usage]) => [model, { ...usage }]),
+  );
 }
 
 function restoreGateAuditRecord(

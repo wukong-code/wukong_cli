@@ -56,10 +56,19 @@ export function addUsage(a: TokenUsage, b: TokenUsage): TokenUsage {
 }
 
 /**
- * Estimate the USD cost of a TokenUsage given catalog pricing
+ * Estimate the USD cost of a TokenUsage given flat catalog pricing
  * (USD per 1M tokens; missing price fields are treated as 0).
+ *
+ * Aggregate TokenUsage does not retain the per-request context needed to
+ * select models.dev `cost.tiers`. Tiered pricing therefore fails closed
+ * instead of silently applying the base price.
  */
 export function estimateUsageCost(usage: TokenUsage, cost: CatalogModelCost): number {
+  if (hasTieredPricing(cost)) {
+    throw new Error(
+      'Cannot estimate aggregate usage with tiered pricing without per-request context.',
+    );
+  }
   return (
     (usage.inputOther * (cost.input ?? 0) +
       usage.output * (cost.output ?? 0) +
@@ -67,4 +76,11 @@ export function estimateUsageCost(usage: TokenUsage, cost: CatalogModelCost): nu
       usage.inputCacheCreation * (cost.cache_write ?? 0)) /
     1_000_000
   );
+}
+
+function hasTieredPricing(cost: CatalogModelCost): boolean {
+  const tiers = cost.tiers;
+  if (tiers === undefined) return false;
+  if (Array.isArray(tiers)) return tiers.length > 0;
+  return Object.keys(tiers).length > 0;
 }

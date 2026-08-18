@@ -37,6 +37,7 @@ export interface ResumedAgentState {
   readonly replay: readonly AgentReplayRecord[];
   readonly permission: PermissionData;
   readonly plan: PlanData;
+  readonly planMode: boolean;
   readonly swarmMode?: boolean | undefined;
   readonly usage: UsageStatus;
   readonly tools: readonly ToolInfo[];

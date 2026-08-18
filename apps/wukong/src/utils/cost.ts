@@ -1,7 +1,7 @@
 import {
-  estimateUsageCost,
   loadBuiltInCatalog,
   type Catalog,
+  type CatalogModelCost,
   type TokenUsage,
 } from '@wukong/wukong-sdk';
 
@@ -23,6 +23,19 @@ export interface CostSummary {
   readonly partial: boolean;
 }
 
+export interface CostModelIdentity {
+  readonly provider: string;
+  readonly model: string;
+}
+
+export type CostModelAliases = Readonly<Record<string, CostModelIdentity>>;
+
+interface ModelCostEstimate {
+  readonly usd: number;
+  readonly estimated: boolean;
+  readonly complete: boolean;
+}
+
 /**
  * Estimates the USD cost of per-model usage against the release-embedded
  * catalog snapshot (offline; no network I/O). Returns `undefined` when there
@@ -32,6 +45,7 @@ export interface CostSummary {
 export function summarizeCost(
   usageByModel: Record<string, TokenUsage> | undefined,
   catalog?: Catalog,
+  modelAliases?: CostModelAliases,
 ): CostSummary | undefined {
   if (usageByModel === undefined) return undefined;
   const aliases = Object.keys(usageByModel);
@@ -43,19 +57,71 @@ export function summarizeCost(
   let partial = false;
   for (const alias of aliases) {
     const usage = usageByModel[alias]!;
-    const parsed = parseModelAlias(alias);
-    const cost = parsed === undefined
+    // Resumed-run deltas can retain historical model keys whose four counters
+    // are all zero. They contributed nothing to this run and therefore must
+    // not make an otherwise complete estimate look partial or unavailable.
+    if (!hasTokenUsage(usage)) continue;
+    const identity = modelAliases === undefined ? parseModelAlias(alias) : modelAliases[alias];
+    const cost = identity === undefined
       ? undefined
-      : effectiveCatalog?.[parsed.provider]?.models?.[parsed.model]?.cost;
+      : effectiveCatalog?.[identity.provider]?.models?.[identity.model]?.cost;
     if (cost === undefined) {
       partial = true;
       continue;
     }
+    const estimate = estimateModelCost(usage, cost);
+    partial ||= !estimate.complete;
+    if (!estimate.estimated) continue;
     matched = true;
-    usd += estimateUsageCost(usage, cost);
+    usd += estimate.usd;
   }
   if (!matched) return undefined;
   return { usd, partial };
+}
+
+function hasTokenUsage(usage: TokenUsage): boolean {
+  return Object.values(usage).some((tokens) => tokens !== 0);
+}
+
+function estimateModelCost(usage: TokenUsage, cost: CatalogModelCost): ModelCostEstimate {
+  const hasUsage = hasTokenUsage(usage);
+  if (hasTieredPricing(cost)) {
+    return { usd: 0, estimated: !hasUsage, complete: !hasUsage };
+  }
+
+  const components = [
+    [usage.inputOther, cost.input],
+    [usage.output, cost.output],
+    [usage.inputCacheRead, cost.cache_read],
+    [usage.inputCacheCreation, cost.cache_write],
+  ] as const;
+  let usd = 0;
+  let pricedUsage = false;
+  let complete = true;
+  let hasPrice = false;
+  for (const [tokens, price] of components) {
+    const validPrice = typeof price === 'number' && Number.isFinite(price) && price >= 0;
+    hasPrice ||= validPrice;
+    if (tokens === 0) continue;
+    if (!validPrice) {
+      complete = false;
+      continue;
+    }
+    pricedUsage = true;
+    usd += tokens * price / 1_000_000;
+  }
+  return {
+    usd,
+    estimated: hasUsage ? pricedUsage : hasPrice,
+    complete,
+  };
+}
+
+function hasTieredPricing(cost: CatalogModelCost): boolean {
+  const tiers = cost.tiers;
+  if (tiers === undefined) return false;
+  if (Array.isArray(tiers)) return tiers.length > 0;
+  return Object.keys(tiers).length > 0;
 }
 
 /** Renders a cost summary; `'unavailable'` when there is nothing to estimate. */

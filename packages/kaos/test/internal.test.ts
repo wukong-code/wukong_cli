@@ -3,7 +3,12 @@ import { setImmediate as defer, setTimeout as delay } from 'node:timers/promises
 
 import { describe, expect, it } from 'vitest';
 
-import { BufferedReadable, decodeTextWithErrors, globPatternToRegex } from '#/internal';
+import {
+  BufferedReadable,
+  decodeTextWithErrors,
+  globPatternToRegex,
+  normalizeGlobPattern,
+} from '#/internal';
 
 async function collectBytes(readable: AsyncIterable<Uint8Array | string>): Promise<Buffer> {
   const chunks: Buffer[] = [];
@@ -172,6 +177,13 @@ describe('decodeTextWithErrors', () => {
 });
 
 describe('globPatternToRegex additional cases', () => {
+  it('collapses repeated recursive directory groups before building the regex', () => {
+    const regex = globPatternToRegex('**/**/**/missing.txt', true);
+
+    expect(regex.source.split('(?:')).toHaveLength(2);
+    expect(regex.test('a/b/c/other.txt')).toBe(false);
+  });
+
   it('converts ? to a single-character class that excludes /', () => {
     const regex = globPatternToRegex('f?o.txt', true);
     expect(regex.test('foo.txt')).toBe(true);
@@ -214,6 +226,15 @@ describe('globPatternToRegex additional cases', () => {
     expect(regex.test('filea.txt')).toBe(true);
     expect(regex.test('file\\.txt')).toBe(true);
     expect(regex.test('filez.txt')).toBe(false);
+  });
+});
+
+describe('normalizeGlobPattern', () => {
+  it('collapses adjacent ** segments and preserves a trailing directory marker', () => {
+    expect(normalizeGlobPattern('src/**/**/**///')).toEqual({
+      patternParts: ['src', '**'],
+      directoriesOnly: true,
+    });
   });
 });
 

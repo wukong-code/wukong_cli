@@ -1,4 +1,5 @@
 import type { ToolCall } from '@wukong/kosong';
+import { dirname } from 'pathe';
 import { describe, expect, it, vi } from 'vitest';
 
 import { createFakeKaos } from '../tools/fixtures/fake-kaos';
@@ -65,6 +66,22 @@ describe('manual plan entry', () => {
     expect(resumed.agent.planMode.planFilePath).toBe(livePath);
   });
 
+  it('treats a missing SSH plan file as empty when restoring a legacy record', async () => {
+    const missing = Object.assign(new Error('No such file'), {
+      name: 'KaosFileNotFoundError',
+      code: 2,
+    });
+    const readText = vi.fn().mockRejectedValue(missing);
+    const ctx = testAgent({ kaos: createPlanKaos({ readText }) });
+    ctx.dispatch({ type: 'plan_mode.enter', time: 12_345 });
+
+    await expect(ctx.rpc.getPlan({})).resolves.toEqual({
+      id: 'legacy-restored-plan-12345',
+      content: '',
+      path: '/workspace/plan/legacy-restored-plan-12345.md',
+    });
+  });
+
   it('enters plan mode through the EnterPlanMode tool and reminds the next step', async () => {
     const enterPlanModeCall: ToolCall = {
       type: 'function',
@@ -128,6 +145,56 @@ describe('plan clear', () => {
 });
 
 describe('plan exit tool', () => {
+  it('writes and exits through the restored path for a legacy enter record without an id', async () => {
+    const files = new Map<string, string>();
+    const missing = Object.assign(new Error('No such file'), {
+      name: 'KaosFileNotFoundError',
+      code: 2,
+    });
+    const stat = vi.fn().mockRejectedValue(missing);
+    const mkdir = vi.fn().mockResolvedValue(undefined);
+    const writeText = vi.fn(async (path: string, content: string) => {
+      files.set(path, content);
+      return content.length;
+    });
+    const readText = vi.fn(async (path: string) => files.get(path) ?? '');
+    const ctx = testAgent({
+      kaos: createPlanKaos({ mkdir, readText, stat, writeText }),
+    });
+    ctx.configure({ tools: ['Write', 'ExitPlanMode'] });
+    await ctx.rpc.setPermission({ mode: 'auto' });
+    ctx.dispatch({ type: 'plan_mode.enter', time: 12_345 });
+
+    const planPath = ctx.agent.planMode.planFilePath;
+    expect(planPath).toMatch(/\/plan\/legacy-restored-plan-12345\.md$/);
+    if (planPath === null) throw new Error('expected restored legacy plan path');
+
+    const writePlanCall: ToolCall = {
+      type: 'function',
+      id: 'call_write_legacy_plan',
+      name: 'Write',
+      arguments: JSON.stringify({ path: planPath, content: '# Legacy Plan\n\n- Continue' }),
+    };
+    const exitPlanModeCall: ToolCall = {
+      type: 'function',
+      id: 'call_exit_legacy_plan',
+      name: 'ExitPlanMode',
+      arguments: '{}',
+    };
+    ctx.mockNextResponse({ type: 'text', text: 'I will write the restored plan.' }, writePlanCall);
+    ctx.mockNextResponse({ type: 'text', text: 'I will present the restored plan.' }, exitPlanModeCall);
+    ctx.mockNextResponse({ type: 'text', text: 'The restored plan is ready.' });
+    await ctx.rpc.prompt({ input: [{ type: 'text', text: 'Continue the legacy plan' }] });
+
+    await ctx.untilTurnEnd();
+    expect(mkdir).toHaveBeenCalledWith(dirname(planPath), { parents: true, existOk: true });
+    expect(writeText).toHaveBeenCalledWith(planPath, '# Legacy Plan\n\n- Continue');
+    expect(readText).toHaveBeenCalledWith(planPath);
+    expect(toolResultText(ctx.agent.context.history)).toContain('# Legacy Plan');
+    expect(ctx.agent.planMode.isActive).toBe(false);
+    await ctx.expectResumeMatches();
+  });
+
   it('reads the current plan file and exits plan mode directly in auto mode', async () => {
     const files = new Map<string, string>();
     const readText = vi.fn(async (path: string) => files.get(path) ?? '');

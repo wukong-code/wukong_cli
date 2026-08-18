@@ -178,6 +178,26 @@ export function decodeTextWithErrors(
   return new TextDecoder(webLabel, { fatal: false, ignoreBOM }).decode(data);
 }
 
+export interface NormalizedGlobPattern {
+  readonly patternParts: string[];
+  readonly directoriesOnly: boolean;
+}
+
+export function normalizeGlobPattern(pattern: string): NormalizedGlobPattern {
+  const directoriesOnly = pattern.endsWith('/');
+  const rawParts = pattern.split('/');
+  if (directoriesOnly) {
+    while (rawParts.at(-1) === '') rawParts.pop();
+  }
+
+  const patternParts: string[] = [];
+  for (const part of rawParts) {
+    if (part === '**' && patternParts.at(-1) === '**') continue;
+    patternParts.push(part);
+  }
+  return { patternParts, directoriesOnly };
+}
+
 /**
  * Convert a glob pattern (e.g. `*.txt`, `file?.log`, `**\/foo.txt`) into a
  * RegExp. Mirrors Python pathlib behavior: includes dotfiles, case-sensitive
@@ -186,22 +206,23 @@ export function decodeTextWithErrors(
  * @internal
  */
 export function globPatternToRegex(pattern: string, caseSensitive: boolean): RegExp {
+  const normalizedPattern = pattern.replaceAll(/(?:\*\*\/){2,}/g, '**/');
   let regex = '^';
-  for (let i = 0; i < pattern.length; i++) {
-    const ch = pattern[i];
+  for (let i = 0; i < normalizedPattern.length; i++) {
+    const ch = normalizedPattern[i];
     if (ch === undefined) break;
     switch (ch) {
       case '*': {
         const isDoubleStarSegment =
-          pattern[i + 1] === '*' &&
-          (i === 0 || pattern[i - 1] === '/') &&
-          pattern[i + 2] === '/';
+          normalizedPattern[i + 1] === '*' &&
+          (i === 0 || normalizedPattern[i - 1] === '/') &&
+          normalizedPattern[i + 2] === '/';
         if (isDoubleStarSegment) {
           regex += '(?:[^/]+/)*';
           i += 2;
         } else {
           regex += '[^/]*';
-          if (pattern[i + 1] === '*') i++;
+          if (normalizedPattern[i + 1] === '*') i++;
         }
         break;
       }
@@ -209,14 +230,14 @@ export function globPatternToRegex(pattern: string, caseSensitive: boolean): Reg
         regex += '[^/]';
         break;
       case '[': {
-        const end = pattern.indexOf(']', i + 1);
+        const end = normalizedPattern.indexOf(']', i + 1);
         if (end === -1) {
           regex += '\\[';
         } else {
           // Glob character classes only use `!` for negation. A literal
           // leading `^` must remain literal even though JS regex char
           // classes treat it as negation in the first position.
-          let charClass = pattern.slice(i + 1, end);
+          let charClass = normalizedPattern.slice(i + 1, end);
           // Escape backslashes inside the class so a trailing backslash
           // does not accidentally escape the closing `]`.
           charClass = charClass.replaceAll('\\', '\\\\');
@@ -231,8 +252,8 @@ export function globPatternToRegex(pattern: string, caseSensitive: boolean): Reg
         break;
       }
       case '\\': {
-        if (i + 1 < pattern.length) {
-          const next = pattern.charAt(i + 1);
+        if (i + 1 < normalizedPattern.length) {
+          const next = normalizedPattern.charAt(i + 1);
           regex += next.replaceAll(/[{}()+.\\[\]^$|]/g, '\\$&');
           // Advance past the escaped character so it is not processed
           // again as a regex metacharacter. match literally.

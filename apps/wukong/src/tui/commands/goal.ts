@@ -737,7 +737,7 @@ async function showGoalStatus(host: SlashCommandHost): Promise<void> {
     return;
   }
   host.state.transcriptContainer.addChild(
-    new GoalStatusMessageComponent(goal),
+    new GoalStatusMessageComponent(goal, host.state.appState.availableModels),
   );
   host.state.ui.requestRender();
 }
@@ -754,7 +754,9 @@ async function showLoopStatus(host: SlashCommandHost): Promise<void> {
     host.showStatus('No Loop is active. Start one with `/loop <objective>`.');
     return;
   }
-  host.state.transcriptContainer.addChild(new GoalStatusMessageComponent(goal));
+  host.state.transcriptContainer.addChild(
+    new GoalStatusMessageComponent(goal, host.state.appState.availableModels),
+  );
   host.state.ui.requestRender();
 }
 

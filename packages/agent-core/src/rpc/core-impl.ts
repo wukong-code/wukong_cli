@@ -1192,6 +1192,7 @@ async function resumeSessionResult(
     const context = await api.getContext({ agentId });
     const permission = await api.getPermission({ agentId });
     const plan = await api.getPlan({ agentId });
+    const planMode = await api.getPlanMode({ agentId });
     const swarmMode = await api.getSwarmMode({ agentId });
     const usage = await api.getUsage({ agentId });
     agents[agentId] = {
@@ -1201,6 +1202,7 @@ async function resumeSessionResult(
       replay: agent.replayBuilder.buildResult(),
       permission,
       plan,
+      planMode,
       swarmMode,
       usage,
       tools: await api.getTools({ agentId }),

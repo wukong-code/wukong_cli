@@ -17,13 +17,18 @@ import {
   type SessionStatus,
   type SessionUsage,
   type TelemetryClient,
+  type TokenUsage,
   type WukongConfig,
 } from '@wukong/wukong-sdk';
 import { inspectGit, type GitInspection } from '@wukong/verification';
 import { resolve } from 'pathe';
 
 import { CLI_SHUTDOWN_TIMEOUT_MS } from '#/constant/app';
-import { formatCost, summarizeCost } from '#/utils/cost';
+import {
+  formatCost,
+  summarizeCost,
+  type CostModelAliases,
+} from '#/utils/cost';
 import { durableLoopResultFromGoal } from '#/utils/loop-result';
 
 import type { CLIOptions, PromptOutputFormat } from './options';
@@ -171,7 +176,7 @@ export async function runPrompt(
         return;
       }
     }
-    const { session, restorePermission, telemetryModel, goalModel, goalPermission } =
+    const { session, resumed, restorePermission, telemetryModel, goalModel, goalPermission } =
       await resolvePromptSession(
         harness,
         opts,
@@ -260,6 +265,9 @@ export async function runPrompt(
       }
     } else {
       const status = await session.getStatus();
+      const usageBefore = resumed
+        ? await session.getUsage().catch(() => undefined)
+        : undefined;
       const workspaceBefore = await inspectGit(workDir);
       writePromptPreflight({
         prompt: opts.prompt!,
@@ -304,7 +312,8 @@ export async function runPrompt(
           stdout,
           stderr,
           durationMs: Date.now() - turnStartedAt,
-          usage,
+          usage: resumed ? sessionUsageDelta(usage, usageBefore) : usage,
+          modelAliases: config.models ?? {},
           workspaceBefore,
           workspaceAfter,
           facts,
@@ -327,7 +336,8 @@ export async function runPrompt(
           stdout,
           stderr,
           durationMs: Date.now() - turnStartedAt,
-          usage,
+          usage: resumed ? sessionUsageDelta(usage, usageBefore) : usage,
+          modelAliases: config.models ?? {},
           workspaceBefore,
           workspaceAfter,
           facts: promptTurnFactsFromError(error),
@@ -569,10 +579,11 @@ async function runHeadlessGoal(
         ?? (await session.getGoal().catch(() => ({ goal: null }))).goal;
       const result = durableLoopResultFromGoal(failedSnapshot) !== undefined
         || failedSnapshot?.providerOutcomeUnknown !== undefined
-        ? loopSummaryJson(failedSnapshot)
+        ? loopSummaryJson(failedSnapshot, config.models ?? {})
         : loopRuntimeErrorSummary(
             failedSnapshot,
             error instanceof Error ? error.message : String(error),
+            config.models ?? {},
           );
       await completeLoopRun(loopRun, result.status, result.iterations);
       track('loop_terminal', {
@@ -594,17 +605,21 @@ async function runHeadlessGoal(
     if (!promptFailed) {
       const snapshot = completedSnapshot ?? (await session.getGoal()).goal;
       if (outputFormat === 'stream-json') {
-        const summary = goal.kind === 'loop' ? loopSummaryJson(snapshot) : goalSummaryJson(snapshot);
+        const summary = goal.kind === 'loop'
+          ? loopSummaryJson(snapshot, config.models ?? {})
+          : goalSummaryJson(snapshot);
         stdout.write(`${JSON.stringify(summary)}\n`);
       } else {
-        const summary = goal.kind === 'loop' ? formatLoopSummaryText(snapshot) : formatGoalSummaryText(snapshot);
+        const summary = goal.kind === 'loop'
+          ? formatLoopSummaryText(snapshot, config.models ?? {})
+          : formatGoalSummaryText(snapshot);
         stderr.write(`${summary}\n`);
       }
       // Map the terminal goal status to a distinct, non-fatal exit code. A turn
       // that threw (error / cancellation) already propagates its own exit path.
       if (goal.kind === 'loop') {
         if (loopRun !== undefined) {
-          const result = loopSummaryJson(snapshot);
+          const result = loopSummaryJson(snapshot, config.models ?? {});
           const completion = await completeLoopRun(loopRun, result.status, result.iterations);
           if (completion?.repeatedCompletedWithin7d) track('loop_repeat_completed_7d');
           track('loop_terminal', {
@@ -1470,6 +1485,7 @@ interface PromptRunSummaryInput {
   readonly stderr: PromptOutput;
   readonly durationMs: number;
   readonly usage: SessionUsage;
+  readonly modelAliases: CostModelAliases;
   readonly workspaceBefore: GitInspection;
   readonly workspaceAfter: GitInspection;
   readonly facts: PromptTurnFacts;
@@ -1477,6 +1493,7 @@ interface PromptRunSummaryInput {
 
 function writePromptRunSummary(input: PromptRunSummaryInput): void {
   const tokenCount = totalTokens(input.usage);
+  const cost = summarizeCost(input.usage.byModel, undefined, input.modelAliases);
   const verificationTools = input.facts.toolNames.filter((name) => (
     /(?:verify|proof|scan|test)/i.test(name)
   ));
@@ -1510,7 +1527,8 @@ function writePromptRunSummary(input: PromptRunSummaryInput): void {
     exit_meaning: input.exitMeaning,
     duration_ms: input.durationMs,
     usage_tokens: tokenCount,
-    cost: summarizeCost(input.usage.byModel)?.usd ?? null,
+    cost: cost?.usd ?? null,
+    cost_partial: cost?.partial ?? null,
     workspace: {
       dirty_before: input.workspaceBefore.changedFiles.length > 0,
       changed_files: changedFiles,
@@ -1546,7 +1564,7 @@ function writePromptRunSummary(input: PromptRunSummaryInput): void {
     `Outcome    ${input.outcome}`,
     `Exit       ${String(input.exitCode)} — ${input.exitMeaning}`,
     `Activity   ${String(input.facts.steps)} step(s) · ${String(input.facts.toolNames.length)} tool(s) · ${String(input.facts.commands.length)} command(s)`,
-    `Time       ${formatElapsed(input.durationMs)} · Tokens ${tokenCount === null ? 'unknown' : String(tokenCount)} · Cost ${formatCost(summarizeCost(input.usage.byModel))}`,
+    `Time       ${formatElapsed(input.durationMs)} · Tokens ${tokenCount === null ? 'unknown' : String(tokenCount)} · Cost ${formatCost(cost)}`,
     `Workspace  ${changedSummary}; ${attribution}`,
     `Checks     ${checks}`,
     'Evidence   no durable Goal/Loop PASS evidence',
@@ -1646,6 +1664,80 @@ function totalTokens(usage: SessionUsage): number | null {
   const total = usage.total;
   if (total === undefined) return null;
   return total.inputOther + total.output + total.inputCacheRead + total.inputCacheCreation;
+}
+
+function sessionUsageDelta(
+  after: SessionUsage,
+  before: SessionUsage | undefined,
+): SessionUsage {
+  if (before === undefined) return {};
+  const beforeTotal = before.total ?? totalUsageByModel(before.byModel);
+  const canSubtractByModel = before.byModel !== undefined
+    || beforeTotal === undefined
+    || tokenUsageTotal(beforeTotal) === 0;
+  const byModel = after.byModel === undefined || !canSubtractByModel
+    ? undefined
+    : usageByModelDelta(after.byModel, before.byModel);
+  const total = after.total === undefined
+    ? totalUsageByModel(byModel)
+    : tokenUsageDelta(after.total, beforeTotal);
+  return {
+    byModel,
+    total,
+    currentTurn: after.currentTurn,
+  };
+}
+
+function usageByModelDelta(
+  after: Record<string, TokenUsage>,
+  before: Record<string, TokenUsage> | undefined,
+): Record<string, TokenUsage> {
+  return Object.fromEntries(
+    Object.entries(after).map(([model, usage]) => [
+      model,
+      tokenUsageDelta(usage, before?.[model]),
+    ]),
+  );
+}
+
+function tokenUsageDelta(
+  after: TokenUsage,
+  before: TokenUsage | undefined,
+): TokenUsage {
+  return {
+    inputOther: Math.max(0, after.inputOther - (before?.inputOther ?? 0)),
+    output: Math.max(0, after.output - (before?.output ?? 0)),
+    inputCacheRead: Math.max(0, after.inputCacheRead - (before?.inputCacheRead ?? 0)),
+    inputCacheCreation: Math.max(
+      0,
+      after.inputCacheCreation - (before?.inputCacheCreation ?? 0),
+    ),
+  };
+}
+
+function totalUsageByModel(
+  usageByModel: Record<string, TokenUsage> | undefined,
+): TokenUsage | undefined {
+  if (usageByModel === undefined) return undefined;
+  let total: TokenUsage | undefined;
+  for (const usage of Object.values(usageByModel)) {
+    total = total === undefined
+      ? { ...usage }
+      : {
+          inputOther: total.inputOther + usage.inputOther,
+          output: total.output + usage.output,
+          inputCacheRead: total.inputCacheRead + usage.inputCacheRead,
+          inputCacheCreation: total.inputCacheCreation + usage.inputCacheCreation,
+        };
+  }
+  return total;
+}
+
+function tokenUsageTotal(usage: TokenUsage): number {
+  return usage.inputOther
+    + usage.output
+    + usage.inputCacheRead
+    + usage.inputCacheCreation;
 }
 
 function oneLine(value: string, maxLength: number): string {

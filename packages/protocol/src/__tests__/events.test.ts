@@ -129,6 +129,41 @@ describe('events / display re-exports', () => {
     },
   );
 
+  it('preserves per-model Goal usage through the canonical schema', () => {
+    const usageByModel = {
+      writer: {
+        inputOther: 120,
+        output: 30,
+        inputCacheRead: 40,
+        inputCacheCreation: 10,
+      },
+    };
+    const parsed = goalSnapshotSchema.parse({
+      goalId: 'goal-with-usage',
+      objective: 'finish the task',
+      iteration: 1,
+      status: 'complete',
+      turnsUsed: 1,
+      tokensUsed: 200,
+      usageByModel,
+      wallClockMs: 100,
+      budget: {
+        tokenBudget: null,
+        turnBudget: null,
+        wallClockBudgetMs: null,
+        remainingTokens: null,
+        remainingTurns: null,
+        remainingWallClockMs: null,
+        tokenBudgetReached: false,
+        turnBudgetReached: false,
+        wallClockBudgetReached: false,
+        overBudget: false,
+      },
+    });
+
+    expect(parsed.usageByModel).toEqual(usageByModel);
+  });
+
   it('rejects unknown event types through the full agent event union', () => {
     expect(
       agentEventSchema.safeParse({

@@ -456,7 +456,15 @@ export class SessionReplayRenderer {
         return;
       case 'completion':
         this.host.appendTranscriptEntry(
-          replayEntry(context, 'assistant', buildGoalCompletionMessage(record.snapshot), 'markdown'),
+          replayEntry(
+            context,
+            'assistant',
+            buildGoalCompletionMessage(
+              record.snapshot,
+              this.host.state.appState.availableModels,
+            ),
+            'markdown',
+          ),
         );
         return;
       case 'lifecycle': {
@@ -468,7 +476,11 @@ export class SessionReplayRenderer {
             replayEntry(
               context,
               'status',
-              buildLoopResultCard(durableResult, record.snapshot),
+              buildLoopResultCard(
+                durableResult,
+                record.snapshot,
+                this.host.state.appState.availableModels,
+              ),
               'plain',
             ),
           );
