@@ -136,6 +136,21 @@ Wukong 当前只提供完整的本地 BYOK Loop。0.1.0 的目标是把它做成
 
 ## 版本发布序列
 
+### 发布分级（0.1.1 起生效）
+
+每个版本开工前先定级，验收矩阵按级别取，不再每个版本重新争论清单。
+完整性底线（immutable assets、SHA-256、provenance、publish-no-rebuild、失败不
+替换旧 binary）是所有级别的公开承诺，**任何级别都不降**；分级只调验收广度。
+
+| 级别 | 适用 | 必跑验收 | 可豁免 |
+|---|---|---|---|
+| `patch` | 缺陷修复、显示/文案层增强、发布工程加固；不新增命令、不改 Gate/record 语义 | 全量自动化 + typecheck/lint；六平台构建 + checksum + provenance；fresh install 与上一版本 upgrade smoke；CHANGELOG/官网版本面同步 | cohort 对齐、adversarial 矩阵、五来源真实 Resume 重跑、docs 全量候选审计 |
+| `minor` | 新用户可见能力、新命令、record/snapshot schema 演进 | patch 全部 + 相关真实 fixture/E2E 矩阵 + 恢复兼容回归 + 中英文发布面同步 | cohort 与集中宣传门槛（仍属发布后学习） |
+| `major` | 破坏性变更（需用户显式确认后单独评审） | minor 全部 + 迁移路径与回退方案验收 | 无 |
+
+豁免项是"本次不重跑"，不是删除；对应债务仍挂在 TODO，由下一个
+minor/major 或专项任务关闭。发布级别写在版本设计文档头部。
+
 | 版本 | 目标 | 发布门槛 |
 |---|---|---|
 | `0.0.11` | 改善 TUI 可理解性、公告与升级链路 | TUI 文案与对齐完成；公告端点 200；文档与实现一致 |

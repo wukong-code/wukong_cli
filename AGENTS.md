@@ -90,3 +90,9 @@ This is the **Wukong CLI monorepo**: a TypeScript codebase for the local-first t
 - After finishing a task and before submitting a PR, you must run the `gen-changesets` skill (see `.agents/skills/gen-changesets/SKILL.md`) and generate a changeset under `.changeset/` according to its rules.
 - When generating a changeset, **never** decide on a `major` bump on your own. When you judge a change to meet the major criteria (breaking changes, incompatible user configuration, renamed or removed commands/arguments, changed behavior semantics, etc.), you must stop and explain it to the user and ask for confirmation. **Only write `major` after the user has explicitly agreed.** Otherwise default to `minor` (and fall back to `patch` if `minor` is unclear). See the "Hard rule: confirm with the user before writing `major`" section in `.agents/skills/gen-changesets/SKILL.md` for details.
 - Prefer importing via `import ... from '#/...'`, which serves the same purpose as `import ... from '@/...'`.
+
+## agent-core Module Boundaries
+
+- `packages/agent-core/src` is split into modules (immediate subdirectories of `src/`, plus sub-modules under `src/agent/`, e.g. `loop`, `session`, `agent/goal`). Cross-module imports must go through the target module's index (module root) — deep-importing another module's internal files is forbidden.
+- Existing violations are grandfathered in `scripts/agent-core-boundaries-baseline.json`; do not add new ones. When you remove a violation, regenerate the baseline.
+- Check locally with `pnpm run lint:boundaries` (runs as part of `pnpm run lint` / CI); regenerate the baseline after intentional changes with `node scripts/check-agent-core-boundaries.mjs --update`.
