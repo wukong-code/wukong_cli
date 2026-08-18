@@ -65,7 +65,8 @@ export interface AgentRecordEvents {
   'full_compaction.begin': CompactionBeginData;
 
   'plan_mode.enter': {
-    id: string;
+    // Optional for legacy records written before plan ids existed.
+    id?: string;
   };
   'plan_mode.cancel': {
     id?: string;

@@ -55,15 +55,18 @@ export class PlanMode {
     if (emitStatus) this.agent.emitStatusUpdated();
   }
 
-  restoreEnter({ id }: { readonly id: string }): void {
+  restoreEnter({ id }: { readonly id?: string }): void {
     this.agent.replayBuilder.push({
       type: 'plan_updated',
       enabled: true,
     });
 
     this._isActive = true;
-    this._planId = id;
-    this._planFilePath = this.planFilePathFor(id);
+    // Legacy records may carry no plan id: restore the active mode without a
+    // backing file, so `data()` honestly returns null instead of fabricating
+    // a path like `undefined.md`.
+    this._planId = id ?? null;
+    this._planFilePath = id === undefined ? null : this.planFilePathFor(id);
   }
 
   cancel(id?: string): void {

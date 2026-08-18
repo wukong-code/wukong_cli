@@ -472,7 +472,7 @@ export abstract class SDKRpcClientBase {
       sessionId: input.sessionId,
       agentId,
     });
-    const plan = await rpc.getPlan({
+    const planMode = await rpc.getPlanMode({
       sessionId: input.sessionId,
       agentId,
     });
@@ -493,7 +493,7 @@ export abstract class SDKRpcClientBase {
       model: config.modelAlias ?? config.provider?.model,
       thinkingLevel: config.thinkingLevel,
       permission: permission.mode,
-      planMode: plan !== null,
+      planMode,
       swarmMode,
       contextTokens,
       maxContextTokens,

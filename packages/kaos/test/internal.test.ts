@@ -264,7 +264,7 @@ describe('globPatternToRegex', () => {
       expect(regex.test('.config')).toBe(true);
     });
 
-    it.skip('Python treats **/foo.txt as recursive; current helper is segment-based and does not implement zero-or-more directories', () => {
+    it('treats a **/ segment as zero-or-more directories, matching Python', () => {
       const regex = globPatternToRegex('**/foo.txt', true);
 
       expect(regex.test('foo.txt')).toBe(true);

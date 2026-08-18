@@ -157,7 +157,7 @@ describe('Session plan, compact, usage, and resume APIs', () => {
     }
   });
 
-  it.todo('marks resumed plan mode active when the restored plan has no plan data', async () => {
+  it('marks resumed plan mode active when the restored plan has no plan data', async () => {
     const homeDir = await makeTempDir(tempDirs, 'wukong-sdk-resume-legacy-plan-home-');
     const workDir = await makeTempDir(tempDirs, 'wukong-sdk-resume-legacy-plan-work-');
     await writeTestConfig(homeDir);
@@ -320,8 +320,8 @@ async function removeManualPlanIds(sessionDir: string): Promise<void> {
     .filter((line) => line.length > 0)
     .flatMap((line) => {
       const record = JSON.parse(line) as Record<string, unknown>;
-      if (record['type'] === 'plan.enter') return [];
-      if (record['type'] === 'plan.manual_enter') delete record['id'];
+      // Simulate a legacy enter record written before plan ids existed.
+      if (record['type'] === 'plan_mode.enter') delete record['id'];
       return [JSON.stringify(record)];
     });
   await writeFile(wirePath, `${lines.join('\n')}\n`, 'utf-8');

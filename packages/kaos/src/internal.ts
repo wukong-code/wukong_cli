@@ -179,8 +179,10 @@ export function decodeTextWithErrors(
 }
 
 /**
- * Convert a glob pattern segment (e.g. "*.txt", "file?.log") into a RegExp.
- * Mirrors Python pathlib behavior: includes dotfiles, case-sensitive by default.
+ * Convert a glob pattern (e.g. `*.txt`, `file?.log`, `**\/foo.txt`) into a
+ * RegExp. Mirrors Python pathlib behavior: includes dotfiles, case-sensitive
+ * by default. A `**` path segment followed by `/` matches zero or more
+ * directories; `*`/`**` anywhere else stay single-segment wildcards.
  * @internal
  */
 export function globPatternToRegex(pattern: string, caseSensitive: boolean): RegExp {
@@ -189,9 +191,20 @@ export function globPatternToRegex(pattern: string, caseSensitive: boolean): Reg
     const ch = pattern[i];
     if (ch === undefined) break;
     switch (ch) {
-      case '*':
-        regex += '[^/]*';
+      case '*': {
+        const isDoubleStarSegment =
+          pattern[i + 1] === '*' &&
+          (i === 0 || pattern[i - 1] === '/') &&
+          pattern[i + 2] === '/';
+        if (isDoubleStarSegment) {
+          regex += '(?:[^/]+/)*';
+          i += 2;
+        } else {
+          regex += '[^/]*';
+          if (pattern[i + 1] === '*') i++;
+        }
         break;
+      }
       case '?':
         regex += '[^/]';
         break;

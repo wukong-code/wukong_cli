@@ -716,6 +716,10 @@ export class WukongCore implements PromisableMethods<CoreAPI> {
     return this.sessionApi(sessionId).getPlan(payload);
   }
 
+  getPlanMode({ sessionId, ...payload }: SessionAgentPayload<EmptyPayload>) {
+    return this.sessionApi(sessionId).getPlanMode(payload);
+  }
+
   getUsage({ sessionId, ...payload }: SessionAgentPayload<EmptyPayload>) {
     return this.sessionApi(sessionId).getUsage(payload);
   }

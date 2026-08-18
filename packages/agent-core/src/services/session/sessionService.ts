@@ -453,11 +453,12 @@ export class SessionService extends Disposable implements ISessionService {
       throw new SessionNotFoundError(id);
     }
 
-    const [config, context, permission, plan] = await Promise.all([
+    const [config, context, permission, planMode] = await Promise.all([
       this.core.rpc.getConfig({ sessionId: id, agentId: 'main' }),
       this.core.rpc.getContext({ sessionId: id, agentId: 'main' }),
       this.core.rpc.getPermission({ sessionId: id, agentId: 'main' }),
-      this.core.rpc.getPlan({ sessionId: id, agentId: 'main' }),
+      // Plan mode is agent runtime state, not "plan file exists" (legacy resumes can have no id).
+      this.core.rpc.getPlanMode({ sessionId: id, agentId: 'main' }),
     ]);
 
     const maxContextTokens = config.modelCapabilities?.max_context_tokens ?? 0;
@@ -471,7 +472,7 @@ export class SessionService extends Disposable implements ISessionService {
       model: config.modelAlias ?? config.provider?.model,
       thinking_level: config.thinkingLevel,
       permission: permission.mode,
-      plan_mode: plan !== null,
+      plan_mode: planMode,
       swarm_mode: agentState?.swarmMode ?? false,
       context_tokens: contextTokens,
       max_context_tokens: maxContextTokens,
