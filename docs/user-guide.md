@@ -209,7 +209,9 @@ Guest 试用或月度次数，也不请求 Wukong quota 服务。默认单次最
    显示可获得的 Gate 状态、writer iteration、Gate attempt、耗时、workspace、checks、
    evidence、主要 blocker 与确定性的 Next。calls/tokens/retries/remaining 以及
    pre-existing、Wukong introduced/modified/deleted 和 unknown 会按 durable record 分开
-   展示；无法证明的 token/cost 或文件归因保持 `unavailable` / `unknown`，不能补写成
+   展示；所用模型在发布内嵌 catalog snapshot 中有 pricing 时显示离线估算成本，
+   部分模型缺少 pricing 时以 `+` 标注为部分覆盖；无法证明的 token/cost 或文件归因
+   保持 `unavailable` / `unknown`，不能补写成
    成功数据。
 5. **结果后处理**：Wukong 不会因为 `PASS` 自动 commit、push 或发布。先检查
    `git status --short`、`git diff`，并用 `/loop status` 或 review feedback 检查

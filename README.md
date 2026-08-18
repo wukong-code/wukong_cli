@@ -27,8 +27,10 @@ checksums and provenance have passed. Stable release is gated by
 the same exact-source, six-platform, public-install, upgrade, recovery, and
 release-surface checks. The opt-in cohort and real-user flows continue after
 release as product-learning evidence; there is no fixed 14-day waiting gate.
-Full multi-layer coverage schemas, direct-shell content/PATH attestation, and a
-provider pricing database are deferred rather than release blockers.
+Cost estimates are computed offline from pricing in the release-embedded
+catalog snapshot. Full multi-layer coverage schemas, direct-shell content/PATH
+attestation, and a self-hosted provider pricing database remain deferred rather
+than release blockers.
 
 Version `0.0.22` keeps provider setup usable when the primary remote catalog is down and
 clarifies the CLI's session and permission controls:
@@ -124,7 +126,9 @@ verified result.
 
 At the end, act on the deterministic terminal summary. It separates decisive
 evidence, pre-existing changes, files introduced/modified/deleted by the Loop,
-unknown attribution, checks, calls/tokens/retries/remaining budget, the primary
+unknown attribution, checks, calls/tokens/retries/remaining budget, an
+estimated provider cost when the release-embedded catalog carries pricing for
+the model used (`Cost unavailable` otherwise), the primary
 blocker, and the safe Next action:
 
 - `PASS`: checks and the read-only reviewer passed. Inspect `git status --short`,

@@ -43,7 +43,7 @@ Useful scripts:
 - `pnpm dev:cli` — run the CLI in dev mode
 - `pnpm test` — run tests (vitest)
 - `pnpm typecheck` — TypeScript check (builds packages first)
-- `pnpm lint` — oxlint
+- `pnpm lint` — oxlint plus the agent-core module boundary guard
 - `pnpm lint:fix` — oxlint with auto-fix
 - `pnpm build` — build all packages
 
