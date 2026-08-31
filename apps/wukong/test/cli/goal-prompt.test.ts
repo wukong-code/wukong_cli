@@ -1,5 +1,4 @@
 import { describe, expect, it } from 'vitest';
-import type { GoalSnapshot } from '@wukong/wukong-sdk';
 
 import {
   formatGoalSummaryText,
@@ -9,7 +8,6 @@ import {
   goalSummaryJson,
   LOOP_EXIT_CODES,
   loopExitCode,
-  loopRuntimeErrorSummary,
   loopSummaryJson,
   parseHeadlessGoalCreate,
 } from '#/cli/goal-prompt';
@@ -61,13 +59,8 @@ describe('parseHeadlessGoalCreate', () => {
     });
   });
 
-  it('parses stop conditions', () => {
-    expect(parseHeadlessGoalCreate('/goal --until verify-pass ship it')).toEqual({
-      kind: 'goal',
-      objective: 'ship it',
-      replace: false,
-      stopCondition: 'proof-pass',
-    });
+  it('does not start a legacy --until goal headlessly', () => {
+    expect(parseHeadlessGoalCreate('/goal --until verify-pass ship it')).toBeUndefined();
   });
 
   it('parses Loop as a headless goal with the delivery gate', () => {
@@ -77,6 +70,23 @@ describe('parseHeadlessGoalCreate', () => {
       replace: false,
       stopCondition: 'proof-pass',
       maxIterations: 5,
+    });
+  });
+
+  it('preserves all Loop runtime safety caps in headless mode', () => {
+    expect(parseHeadlessGoalCreate(
+      '/loop --max-iterations 7 --every 2m --review-model reviewer --writer-call-limit 8 --reviewer-call-limit 3 --token-budget 40000 -- fix tests',
+    )).toEqual({
+      kind: 'loop',
+      objective: 'fix tests',
+      replace: false,
+      stopCondition: 'proof-pass',
+      maxIterations: 7,
+      minIntervalMs: 120_000,
+      reviewModel: 'reviewer',
+      writerProviderCallLimit: 8,
+      reviewerProviderCallLimit: 3,
+      tokenBudget: 40_000,
     });
   });
 
@@ -94,14 +104,6 @@ describe('Loop result contract', () => {
       iteration: 2,
       wallClockMs: 100,
       tokensUsed: 10,
-      usageByModel: {
-        'anthropic/claude': {
-          inputOther: 8,
-          output: 2,
-          inputCacheRead: 0,
-          inputCacheCreation: 0,
-        },
-      },
       gateAttempts: 2,
       loopTerminal: {
         schemaVersion: 1,
@@ -138,12 +140,7 @@ describe('Loop result contract', () => {
       writerIterations: 2,
       gateAttempts: 2,
       blockers: [],
-      usageByModel: snapshot.usageByModel,
-      cost: null,
-      costPartial: null,
     });
-    // Source builds embed no catalog snapshot, so pricing stays unavailable.
-    expect(formatLoopResultText(loopSummaryJson(snapshot))).toContain('Cost unavailable');
     expect(loopExitCode(snapshot)).toBe(LOOP_EXIT_CODES.PASS);
   });
 
@@ -291,8 +288,6 @@ describe('Loop result contract', () => {
       evidence: { verification: 'not_run', reviewer: 'not_run' },
       durationMs: 1,
       tokensUsed: 10,
-      cost: null,
-      costPartial: null,
       providerUsage: null,
       tokenBudget: null,
       remainingTokens: null,
@@ -387,53 +382,6 @@ describe('Loop result contract', () => {
       reasonCode: 'workspace_changed',
     });
     expect(loopExitCode(snapshot)).toBe(LOOP_EXIT_CODES.ERROR);
-  });
-
-  it('keeps usage and explicit cost availability fields on runtime errors', () => {
-    const usageByModel = {
-      writer: {
-        inputOther: 100,
-        output: 20,
-        inputCacheRead: 0,
-        inputCacheCreation: 0,
-      },
-    };
-    const snapshot: GoalSnapshot = {
-      goalId: 'goal-runtime-error',
-      objective: 'finish safely',
-      iteration: 2,
-      status: 'paused',
-      turnsUsed: 2,
-      wallClockMs: 500,
-      tokensUsed: 120,
-      usageByModel,
-      budget: {
-        tokenBudget: 1_000,
-        turnBudget: null,
-        wallClockBudgetMs: null,
-        remainingTokens: 880,
-        remainingTurns: null,
-        remainingWallClockMs: null,
-        tokenBudgetReached: false,
-        turnBudgetReached: false,
-        wallClockBudgetReached: false,
-        overBudget: false,
-      },
-    };
-    const result = loopRuntimeErrorSummary(snapshot, 'provider disconnected', {});
-
-    expect(result).toMatchObject({
-      status: 'ERROR',
-      reasonCode: 'runtime_error',
-      usageByModel,
-      cost: null,
-      costPartial: null,
-    });
-    expect(JSON.parse(JSON.stringify(result))).toMatchObject({
-      usageByModel,
-      cost: null,
-      costPartial: null,
-    });
   });
 });
 

@@ -26,7 +26,7 @@ describe('parseServerOptions', () => {
     expect(parsed.port).toBe(DEFAULT_SERVER_PORT);
     expect(parsed.logLevel).toBe(DEFAULT_FOREGROUND_LOG_LEVEL);
     expect(parsed.debugEndpoints).toBe(false);
-    expect(parsed.insecureNoTls).toBe(true);
+    expect(parsed.insecureNoTls).toBe(false);
     expect(parsed.allowRemoteShutdown).toBe(false);
     expect(parsed.allowRemoteTerminals).toBe(false);
     expect(parsed.allowedHosts).toEqual([]);
@@ -40,7 +40,7 @@ describe('parseServerOptions', () => {
       port: '8080',
       logLevel: 'debug',
       debugEndpoints: true,
-      insecureNoTls: false,
+      insecureNoTls: true,
       allowRemoteShutdown: true,
       allowRemoteTerminals: true,
       allowedHost: ['a,b', 'c'],
@@ -51,7 +51,7 @@ describe('parseServerOptions', () => {
     expect(parsed.port).toBe(8080);
     expect(parsed.logLevel).toBe('debug');
     expect(parsed.debugEndpoints).toBe(true);
-    expect(parsed.insecureNoTls).toBe(false);
+    expect(parsed.insecureNoTls).toBe(true);
     expect(parsed.allowRemoteShutdown).toBe(true);
     expect(parsed.allowRemoteTerminals).toBe(true);
     expect(parsed.allowedHosts).toEqual(['a', 'b', 'c']);

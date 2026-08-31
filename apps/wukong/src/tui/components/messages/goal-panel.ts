@@ -27,7 +27,6 @@ import { STATUS_BULLET } from '#/tui/constant/symbols';
 import { currentTheme } from '#/tui/theme';
 import type { ColorToken } from '#/tui/theme';
 import { durableLoopResultFromGoal, parseLoopTerminalReason } from '#/utils/loop-result';
-import type { CostModelAliases } from '#/utils/cost';
 import { formatTokenCount } from '#/utils/usage/usage-format';
 import { buildLoopResultPresentation } from '../../utils/goal-completion';
 import { formatGoalElapsed } from './goal-format';
@@ -111,17 +110,14 @@ export class GoalCompletionMessageComponent implements Component {
 }
 
 export class GoalStatusMessageComponent implements Component {
-  constructor(
-    private readonly goal: GoalSnapshot,
-    private readonly modelAliases?: CostModelAliases,
-  ) {}
+  constructor(private readonly goal: GoalSnapshot) {}
 
   invalidate(): void {}
 
   render(width: number): string[] {
     const panelContentWidth = Math.max(1, width - 6);
     const panel = new UsagePanelComponent(
-      () => buildGoalReportLines(this.goal, panelContentWidth, this.modelAliases),
+      () => buildGoalReportLines(this.goal, panelContentWidth),
       'primary',
       goalPanelTitle(this.goal),
     );
@@ -137,11 +133,7 @@ export function goalPanelTitle(goal: GoalSnapshot): string {
   return ` Goal · ${goal.status} `;
 }
 
-export function buildGoalReportLines(
-  goal: GoalSnapshot,
-  wrapWidth: number = WRAP_WIDTH,
-  modelAliases?: CostModelAliases,
-): string[] {
+export function buildGoalReportLines(goal: GoalSnapshot, wrapWidth: number = WRAP_WIDTH): string[] {
   const statusColor = statusToken(goal.status);
   const bar = (s: string) => currentTheme.fg(statusColor, s);
   const value = (s: string) => currentTheme.fg('text', s);
@@ -261,7 +253,7 @@ export function buildGoalReportLines(
     }
   }
   if (durableResult !== undefined) {
-    const presentation = buildLoopResultPresentation(durableResult, goal, modelAliases);
+    const presentation = buildLoopResultPresentation(durableResult, goal);
     lines.push(row('Outcome', value(presentation.outcome)));
     wrappedRow('Reason', presentation.reason);
     lines.push(row('Checks', value(presentation.checks)));

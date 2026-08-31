@@ -49,13 +49,7 @@ export {
   catalogProviderModels,
   inferWireType,
 } from './catalog';
-export type {
-  Catalog,
-  CatalogModel,
-  CatalogModelCost,
-  CatalogModelEntry,
-  CatalogProviderEntry,
-} from './catalog';
+export type { Catalog, CatalogModel, CatalogModelEntry, CatalogProviderEntry } from './catalog';
 
 // Core functions
 export { generate } from './generate';
@@ -65,7 +59,7 @@ export type { GenerateCallbacks, GenerateResult } from './generate';
 export type { Tool } from './tool';
 
 // Token usage
-export { addUsage, emptyUsage, estimateUsageCost, grandTotal, inputTotal } from './usage';
+export { addUsage, emptyUsage, grandTotal, inputTotal } from './usage';
 export type { TokenUsage } from './usage';
 
 // Errors

@@ -1,5 +1,4 @@
 import type { createWukongDeviceId as createWukongDeviceIdFn } from '@wukong/wukong-oauth';
-import type { SessionUsage, WukongConfig } from '@wukong/wukong-sdk';
 import { afterEach, describe, expect, it, vi, type Mock } from 'vitest';
 
 import { runPrompt } from '#/cli/run-prompt';
@@ -30,7 +29,7 @@ const mocks = vi.hoisted(() => {
         permission: 'manual',
       }),
     ),
-    getUsage: vi.fn(async (): Promise<SessionUsage> => ({
+    getUsage: vi.fn(async () => ({
       total: {
         inputOther: 10,
         output: 5,
@@ -166,16 +165,6 @@ const mocks = vi.hoisted(() => {
 
   return {
     session,
-    builtInCatalogJson: JSON.stringify({
-      anthropic: {
-        models: {
-          claude: {
-            cost: { input: 3, output: 15, cache_read: 0.3, cache_write: 3.75 },
-          },
-        },
-      },
-      openai: { models: { gpt: {} } },
-    }),
     finishLineProposal,
     preflightReady,
     eventHandlers,
@@ -184,7 +173,7 @@ const mocks = vi.hoisted(() => {
     wukongHarnessConstructor: vi.fn(),
     harnessEnsureConfigFile: vi.fn(),
     harnessGetConfig: vi.fn(
-      async (): Promise<WukongConfig> => ({
+      async (): Promise<{ providers: {}; defaultModel?: string; telemetry: boolean }> => ({
         providers: {},
         defaultModel: 'k2',
         telemetry: true,
@@ -241,11 +230,6 @@ const mocks = vi.hoisted(() => {
       changedFiles: [],
     })),
   };
-});
-
-vi.mock('#/built-in-catalog', async (importOriginal) => {
-  const actual = await importOriginal<typeof import('#/built-in-catalog')>();
-  return { ...actual, BUILT_IN_CATALOG_JSON: mocks.builtInCatalogJson };
 });
 
 vi.mock('@wukong/verification', async (importOriginal) => {
@@ -774,8 +758,6 @@ describe('runPrompt', () => {
       role: 'meta',
       type: 'run.summary',
       outcome: 'COMPLETED',
-      cost: null,
-      cost_partial: null,
       session_id: 'ses_prompt',
       resume_command: 'wukong -r ses_prompt',
     });
@@ -852,138 +834,6 @@ describe('runPrompt', () => {
     expect(mocks.session.setPermission).toHaveBeenNthCalledWith(2, 'manual', { transient: true });
   });
 
-  it('reports only the current run usage delta for a resumed session', async () => {
-    mocks.session.getUsage
-      .mockResolvedValueOnce({
-        byModel: {
-          writer: {
-            inputOther: 1_000,
-            output: 200,
-            inputCacheRead: 100,
-            inputCacheCreation: 0,
-          },
-        },
-        total: {
-          inputOther: 1_000,
-          output: 200,
-          inputCacheRead: 100,
-          inputCacheCreation: 0,
-        },
-      })
-      .mockResolvedValueOnce({
-        byModel: {
-          writer: {
-            inputOther: 1_100,
-            output: 230,
-            inputCacheRead: 120,
-            inputCacheCreation: 5,
-          },
-        },
-        total: {
-          inputOther: 1_100,
-          output: 230,
-          inputCacheRead: 120,
-          inputCacheCreation: 5,
-        },
-      });
-    const stdout = writer();
-
-    await runPrompt(opts({ session: 'ses_existing', outputFormat: 'stream-json' }), '1.2.3-test', {
-      stdout,
-      stderr: writer(),
-    });
-
-    const report = stdout.text().trim().split('\n').map((line) => JSON.parse(line))
-      .find((record) => record.type === 'run.summary');
-    expect(report).toMatchObject({
-      usage_tokens: 155,
-      cost: null,
-      cost_partial: null,
-    });
-  });
-
-  it('does not report cumulative resumed usage when the baseline cannot be read', async () => {
-    mocks.session.getUsage
-      .mockRejectedValueOnce(new Error('usage baseline unavailable'))
-      .mockResolvedValueOnce({
-        byModel: {
-          writer: {
-            inputOther: 1_100,
-            output: 230,
-            inputCacheRead: 120,
-            inputCacheCreation: 5,
-          },
-        },
-        total: {
-          inputOther: 1_100,
-          output: 230,
-          inputCacheRead: 120,
-          inputCacheCreation: 5,
-        },
-      });
-    const stdout = writer();
-
-    await runPrompt(opts({ session: 'ses_existing', outputFormat: 'stream-json' }), '1.2.3-test', {
-      stdout,
-      stderr: writer(),
-    });
-
-    const report = stdout.text().trim().split('\n').map((line) => JSON.parse(line))
-      .find((record) => record.type === 'run.summary');
-    expect(report).toMatchObject({
-      usage_tokens: null,
-      cost: null,
-      cost_partial: null,
-    });
-  });
-
-  it('exposes a partial multi-model cost in ordinary run JSON', async () => {
-    mocks.harnessGetConfig.mockResolvedValueOnce({
-      providers: {},
-      defaultModel: 'writer',
-      telemetry: true,
-      models: {
-        writer: { provider: 'anthropic', model: 'claude', maxContextSize: 200_000 },
-        unpriced: { provider: 'openai', model: 'gpt', maxContextSize: 200_000 },
-      },
-    });
-    mocks.session.getUsage.mockResolvedValueOnce({
-      byModel: {
-        writer: {
-          inputOther: 1_000_000,
-          output: 0,
-          inputCacheRead: 0,
-          inputCacheCreation: 0,
-        },
-        unpriced: {
-          inputOther: 1_000_000,
-          output: 0,
-          inputCacheRead: 0,
-          inputCacheCreation: 0,
-        },
-      },
-      total: {
-        inputOther: 2_000_000,
-        output: 0,
-        inputCacheRead: 0,
-        inputCacheCreation: 0,
-      },
-    });
-    const stdout = writer();
-
-    await runPrompt(opts({ outputFormat: 'stream-json' }), '1.2.3-test', {
-      stdout,
-      stderr: writer(),
-    });
-
-    const report = stdout.text().trim().split('\n').map((line) => JSON.parse(line))
-      .find((record) => record.type === 'run.summary');
-    expect(report).toMatchObject({
-      cost: 3,
-      cost_partial: true,
-    });
-  });
-
   it('continues the previous workdir session when --continue is used', async () => {
     await runPrompt(opts({ continue: true }), '1.2.3-test', {
       stdout: { write: vi.fn(() => true) },
@@ -1024,6 +874,59 @@ describe('runPrompt', () => {
     expect(mocks.initializeTelemetry).toHaveBeenCalledWith(
       expect.objectContaining({ model: 'saved-model' }),
     );
+  });
+
+  it('reports only the current run usage delta for a resumed session', async () => {
+    mocks.session.getUsage
+      .mockResolvedValueOnce({
+        total: {
+          inputOther: 1_000,
+          output: 200,
+          inputCacheRead: 100,
+          inputCacheCreation: 0,
+        },
+      })
+      .mockResolvedValueOnce({
+        total: {
+          inputOther: 1_100,
+          output: 230,
+          inputCacheRead: 120,
+          inputCacheCreation: 5,
+        },
+      });
+    const stdout = writer();
+
+    await runPrompt(opts({ session: 'ses_existing', outputFormat: 'stream-json' }), '1.2.3-test', {
+      stdout,
+      stderr: writer(),
+    });
+
+    const report = stdout.text().trim().split('\n').map((line) => JSON.parse(line))
+      .find((record) => record.type === 'run.summary');
+    expect(report).toMatchObject({ usage_tokens: 155, cost: null });
+  });
+
+  it('does not report cumulative resumed usage when the baseline cannot be read', async () => {
+    mocks.session.getUsage
+      .mockRejectedValueOnce(new Error('usage baseline unavailable'))
+      .mockResolvedValueOnce({
+        total: {
+          inputOther: 1_100,
+          output: 230,
+          inputCacheRead: 120,
+          inputCacheCreation: 5,
+        },
+      });
+    const stdout = writer();
+
+    await runPrompt(opts({ session: 'ses_existing', outputFormat: 'stream-json' }), '1.2.3-test', {
+      stdout,
+      stderr: writer(),
+    });
+
+    const report = stdout.text().trim().split('\n').map((line) => JSON.parse(line))
+      .find((record) => record.type === 'run.summary');
+    expect(report).toMatchObject({ usage_tokens: null, cost: null });
   });
 
   it('restores resumed session permission even when the turn fails', async () => {
@@ -1605,19 +1508,7 @@ describe('runPrompt', () => {
         loopRunId: 'core-run-runtime-error',
       });
       mocks.session.getGoal.mockResolvedValueOnce({
-        goal: {
-          goalId: 'goal-runtime-error',
-          status: 'paused',
-          iteration: 1,
-          usageByModel: {
-            writer: {
-              inputOther: 100,
-              output: 20,
-              inputCacheRead: 0,
-              inputCacheCreation: 0,
-            },
-          },
-        },
+        goal: { goalId: 'goal-runtime-error', status: 'paused', iteration: 1 },
       });
       mocks.session.prompt.mockImplementationOnce(async () => {
         for (const handler of mocks.eventHandlers) {
@@ -1655,16 +1546,6 @@ describe('runPrompt', () => {
         status: 'ERROR',
         reasonCode: 'runtime_error',
         writerIterations: 1,
-        usageByModel: {
-          writer: {
-            inputOther: 100,
-            output: 20,
-            inputCacheRead: 0,
-            inputCacheCreation: 0,
-          },
-        },
-        cost: null,
-        costPartial: null,
         checks: [],
         evidence: { verification: 'not_run', reviewer: 'not_run' },
       }));
@@ -1672,98 +1553,6 @@ describe('runPrompt', () => {
         type: 'session.resume_hint',
       }));
       expect(process.exitCode).toBe(2);
-      process.exitCode = undefined;
-    });
-
-    it('emits priced cost and completeness in successful headless Loop stream-json', async () => {
-      process.exitCode = undefined;
-      mocks.harnessGetConfig.mockResolvedValueOnce({
-        providers: {},
-        defaultModel: 'writer',
-        telemetry: true,
-        models: {
-          writer: { provider: 'anthropic', model: 'claude', maxContextSize: 200_000 },
-        },
-      });
-      mocks.parseHeadlessGoalCreate.mockReturnValue({
-        kind: 'loop',
-        objective: 'fix tests',
-        replace: false,
-        stopCondition: 'proof-pass',
-        maxIterations: 3,
-      });
-      mocks.session.createGoal.mockResolvedValueOnce({
-        goalId: 'goal-priced-loop',
-        loopRunId: 'core-run-priced-loop',
-      });
-      const completed = {
-        goalId: 'goal-priced-loop',
-        status: 'complete',
-        terminalReason: 'loop:PASS:passed:Delivery gate passed.',
-        loopRunId: 'core-run-priced-loop',
-        iteration: 1,
-        wallClockMs: 100,
-        tokensUsed: 1_100_000,
-        usageByModel: {
-          writer: {
-            inputOther: 1_000_000,
-            output: 100_000,
-            inputCacheRead: 0,
-            inputCacheCreation: 0,
-          },
-        },
-        loopTerminal: {
-          schemaVersion: 1,
-          runId: 'core-run-priced-loop',
-          contractId: 'contract-priced-loop',
-          status: 'PASS',
-          reasonCode: 'passed',
-          continuationPolicy: {
-            mode: 'blocked',
-            automaticRetry: false,
-            requiresPreflightRevalidation: true,
-          },
-          blockerKeys: [],
-          terminalDigest: 'sha256:priced-loop',
-          createdAt: 1,
-        },
-        loopResult: {
-          schemaVersion: 2,
-          status: 'PASS',
-          reasonCode: 'passed',
-          summary: 'Delivery gate passed.',
-          iterations: 1,
-          checks: [],
-          blockers: [],
-        },
-      };
-      mocks.session.prompt.mockImplementationOnce(async () => {
-        for (const handler of mocks.eventHandlers) {
-          handler(mocks.mainEvent({ type: 'turn.started', turnId: 12, origin: { kind: 'user' } }));
-          handler(mocks.mainEvent({
-            type: 'goal.updated',
-            change: { kind: 'completion' },
-            snapshot: completed,
-          }));
-          handler(mocks.mainEvent({ type: 'turn.ended', turnId: 12, reason: 'completed' }));
-        }
-      });
-      const stdout = writer();
-
-      await runPrompt(opts({ prompt: '/loop fix tests', outputFormat: 'stream-json' }), '1.2.3-test', {
-        stdout,
-        stderr: writer(),
-      });
-
-      const result = stdout.text().trim().split('\n').map((line) => JSON.parse(line))
-        .find((record) => record.type === 'loop.result');
-      expect(result).toMatchObject({
-        status: 'PASS',
-        usageByModel: completed.usageByModel,
-        cost: 4.5,
-        costPartial: false,
-      });
-      expect(process.exitCode).toBe(0);
       process.exitCode = undefined;
     });
 

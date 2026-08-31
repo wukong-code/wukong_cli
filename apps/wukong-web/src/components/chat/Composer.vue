@@ -57,7 +57,11 @@ const placeholder = computed(() =>
 );
 
 const emit = defineEmits<{
-  submit: [payload: { text: string; attachments: { fileId: string; kind: 'image' | 'video' }[] }];
+  submit: [payload: {
+    text: string;
+    attachments: { fileId: string; kind: 'image' | 'video' }[];
+    complete: (accepted: boolean) => void;
+  }];
   /** Steer the composer text (+ any queued prompts, merged by the parent)
       into the RUNNING turn — TUI ctrl+s. */
   steer: [payload: { text: string; attachments: { fileId: string; kind: 'image' | 'video' }[] }];
@@ -238,6 +242,7 @@ const {
 void fileInputRef;
 
 onMounted(() => {
+  document.addEventListener('keydown', onAttachmentPreviewKeydown);
   // Fit the box to a restored draft on first render, and reflect its grown
   // state so the expand toggle shows for an already-long draft.
   if (text.value) {
@@ -249,9 +254,17 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
+  document.removeEventListener('keydown', onAttachmentPreviewKeydown);
   document.removeEventListener('mousedown', onModesDocClick);
   clearCompositionEndTimer();
 });
+
+function onAttachmentPreviewKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape' || previewAttachment.value === null) return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  closeAttachmentPreview();
+}
 
 // ---------------------------------------------------------------------------
 // Submit / keydown
@@ -307,16 +320,24 @@ function handleSubmit(): void {
     attachments: readyAttachments.map((a) => ({ fileId: a.fileId!, kind: a.kind })),
   };
 
-  // Revoke object URLs and drop the submitted attachments.
-  previewAttachment.value = null;
-  clearAfterSubmit();
-
-  text.value = '';
-  clearDraft();
   slashOpen.value = false;
   mentionOpen.value = false;
-  collapseAndRefit();
-  emit('submit', payload);
+  emit('submit', {
+    ...payload,
+    complete: (accepted) => {
+      if (!accepted) {
+        focus();
+        return;
+      }
+      previewAttachment.value = null;
+      clearAfterSubmit();
+      if (text.value.trim() === trimmed) {
+        text.value = '';
+        clearDraft();
+      }
+      collapseAndRefit();
+    },
+  });
 }
 
 /**
@@ -587,9 +608,6 @@ function toggleThinking(): void {
 
 // Plan toggle
 const planOn = computed(() => props.planMode === true);
-const swarmOn = computed(() => props.swarmMode === true);
-const goalActive = computed(() => props.activationBadges?.goal !== null);
-const goalArmed = computed(() => goalActive.value || props.goalMode === true);
 
 // Modes selector (plan / goal / swarm) — the popover that replaces the bare
 // "plan" pill. Plan/Swarm are real client toggles; goal reflects agent-driven
@@ -600,7 +618,7 @@ const modesMenuRef = ref<HTMLElement | null>(null);
 // The menu is position:fixed (so no composer stacking context can paint over
 // it); these coords anchor it just above the pill, computed on open.
 const modesMenuStyle = ref<Record<string, string>>({});
-const anyModeActive = computed(() => planOn.value || swarmOn.value || goalArmed.value);
+const anyModeActive = computed(() => planOn.value);
 function closeModes(): void {
   modesOpen.value = false;
   document.removeEventListener('mousedown', onModesDocClick);
@@ -628,8 +646,8 @@ function toggleModes(): void {
 // Permission modes
 const PERM_MODES: { mode: PermissionMode; color: string; labelKey: string; descKey: string }[] = [
   { mode: 'manual', color: 'var(--dim)', labelKey: 'status.permissionManual', descKey: 'status.permissionManualDesc' },
-  { mode: 'yolo', color: 'var(--warn)', labelKey: 'status.permissionYolo', descKey: 'status.permissionYoloDesc' },
-  { mode: 'auto', color: 'var(--err)', labelKey: 'status.permissionAuto', descKey: 'status.permissionAutoDesc' },
+  { mode: 'auto', color: 'var(--warn)', labelKey: 'status.permissionAuto', descKey: 'status.permissionAutoDesc' },
+  { mode: 'yolo', color: 'var(--err)', labelKey: 'status.permissionYolo', descKey: 'status.permissionYoloDesc' },
 ];
 
 function choosePermission(mode: PermissionMode): void {
@@ -711,7 +729,14 @@ function selectModel(modelId: string): void {
       </div>
     </div>
 
-    <div v-if="previewAttachment" class="att-lightbox" @click.self="closeAttachmentPreview">
+    <div
+      v-if="previewAttachment"
+      class="att-lightbox"
+      role="dialog"
+      aria-modal="true"
+      :aria-label="previewAttachment.name"
+      @click.self="closeAttachmentPreview"
+    >
       <div class="att-lightbox-card">
         <button type="button" class="att-lightbox-close" :title="t('model.close')" @click="closeAttachmentPreview">✕</button>
         <video
@@ -882,7 +907,8 @@ function selectModel(modelId: string): void {
             </button>
           </div>
 
-          <!-- Modes selector (plan / goal / swarm) — replaces the plan pill. -->
+          <!-- Primary mode selector. Goal/Swarm/BTW remain advanced typed commands
+               until the Web client supports the full Loop contract. -->
           <div v-if="status" ref="modesRef" class="modes">
             <button
               type="button"
@@ -893,8 +919,6 @@ function selectModel(modelId: string): void {
             >
               <span class="mode-label">{{ t('status.modesLabel') }}</span>
               <span v-if="planOn" class="mode-tag">{{ t('status.planLabel') }}</span>
-              <span v-if="swarmOn" class="mode-tag">{{ t('status.swarmLabel') }}</span>
-              <span v-if="goalArmed" class="mode-tag">{{ t('status.goalLabel') }}</span>
             </button>
 
             <div v-if="modesOpen" ref="modesMenuRef" class="modes-menu" :style="modesMenuStyle">
@@ -903,34 +927,6 @@ function selectModel(modelId: string): void {
                 <span class="mode-row-name">{{ t('status.planLabel') }}</span>
                 <span class="mode-switch" :class="{ on: planOn }"><span class="mode-knob" /></span>
               </button>
-              <!-- Swarm — functional client toggle -->
-              <button type="button" class="mode-row" :class="{ on: swarmOn }" @click="emit('toggleSwarm')">
-                <span class="mode-row-name">{{ t('status.swarmLabel') }}</span>
-                <span class="mode-switch" :class="{ on: swarmOn }"><span class="mode-knob" /></span>
-              </button>
-              <!-- Goal — lifecycle controls when active; switch is on when active or armed. -->
-              <div class="mode-row mode-row-goal" :class="{ on: goalActive || props.goalMode }">
-                <button
-                  type="button"
-                  class="mode-row-main"
-                  @click="goalActive ? emit('controlGoal', 'cancel') : emit('toggleGoal')"
-                >
-                  <span class="mode-row-name">{{ t('status.goalLabel') }}</span>
-                  <span v-if="!goalActive" class="mode-switch" :class="{ on: props.goalMode }"><span class="mode-knob" /></span>
-                </button>
-                <div v-if="goalActive" class="mode-row-actions">
-                  <button
-                    type="button"
-                    class="mode-row-action"
-                    @click="emit('controlGoal', 'pause')"
-                  >{{ t('status.goalPause') }}</button>
-                  <button
-                    type="button"
-                    class="mode-row-action"
-                    @click="emit('controlGoal', 'resume')"
-                  >{{ t('status.goalResume') }}</button>
-                </div>
-              </div>
             </div>
           </div>
 

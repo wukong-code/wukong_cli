@@ -237,12 +237,15 @@ function resolveInputPath(input: string, cwd: string): string {
 }
 
 function formatSuccess(results: readonly CheckResult[]): string {
+  const checkedAny = results.some((result) => result.status === 'OK');
   return [
     'Wukong doctor',
     '',
     ...formatResults(results),
     '',
-    'All checked config files are valid.',
+    checkedAny
+      ? 'All checked config files are valid.'
+      : 'No config files were found. Start `wukong` to create them, or pass an explicit path to check.',
     '',
   ].join('\n');
 }

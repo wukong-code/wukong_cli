@@ -157,7 +157,7 @@ describe('approval adapter', () => {
     ]);
   });
 
-  it('omits plan review content from the approval panel while keeping Python-style choices', () => {
+  it('keeps the plan in the transcript card while preserving review choices', () => {
     const adapted = adaptApprovalRequest({
       toolCallId: 'tc-plan',
       toolName: 'ExitPlanMode',
@@ -169,6 +169,7 @@ describe('approval adapter', () => {
       },
     });
 
+    expect(adapted.description).toBe('');
     expect(adapted.display).toEqual([]);
     expect(adapted.choices).toEqual([
       { label: 'Approve', response: 'approved', selected_label: 'Approve' },

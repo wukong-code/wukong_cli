@@ -1,22 +1,19 @@
 # Wukong Code Roadmap
 
-> 最后更新: 2026-08-08
+> 最后更新: 2026-08-31
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 
-0.0.22 已完成 provider catalog resilience 与 CLI session/permission clarity
-维护发布。下一计划版本直接进入
-0.1.0 Trusted Local Loop：交付一条可控、可恢复、可解释的单 Loop，补齐可编辑
-Preflight、可信 no-check、provider-call/token 上限、dirty workspace 文件归因、
-STOPPED_BY_USER、provider outcome、最小 Gate completeness/freshness、安装升级和
-跨平台验证。实现侧 RC P0 已完成，immutable `0.1.0-rc.1` 的六平台 CI、公开资产、
-安装、升级与恢复验收已通过；当前直接发布 stable `0.1.0`。opt-in cohort 与真实用户
-流程继续作为发布后产品学习，不设置固定 14 天等待门槛。不再用完整多层
-coverage schema 或 direct-shell content attestation 阻塞 RC。产品继续 Free + BYOK；隔离 worktree / Safe
-Promote 实验已经取消，当前没有付费计划、Checkout 或 entitlement。
+`0.1.0` Trusted Local Loop 已发布并完成六平台资产、公开安装、升级、恢复和
+生产版本面验收。当前工作树在其上收口 `0.1.1 Reliability Maintenance`：只修复
+Loop revision、Resume、Provider 配置和 Web 交互可靠性，不新增命令、不改变
+Gate 语义，也不包含 Cost Visibility。工作树实现完成不等于 release 完成；当前
+package version 仍为 `0.1.0`，`0.1.1` 六平台资产和公开升级/安装验收尚未开始。
+产品继续 Free + BYOK；隔离 worktree / Safe Promote 实验已经取消，当前没有付费
+计划、Checkout 或 entitlement。
 
 当前版本真相源：
 
-- [0.1.1 Cost Visibility（实现完成，待发布）](docs/design/0.1.1-cost-visibility.md)
+- [0.1.1 Reliability Maintenance（未发布）](docs/releases/0.1.1.md)
 - [0.0.18 Loop-First Simplification](docs/design/0.0.18-loop-first-simplification.md)
 - [0.0.19 Explicit Finish Line](docs/design/0.0.19-explicit-finish-line.md)
 - [0.0.20 Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md)
@@ -168,22 +165,20 @@ minor/major 或专项任务关闭。发布级别写在版本设计文档头部�
 
 ### 下一版本与后续候选
 
-0.1.0 功能设计与实现侧 RC P0 已完成，`0.1.0-rc.1` 已通过候选与公开验收，当前正在
-直接发布 stable。旧设计中依赖 isolated
+0.1.0 已发布；当前 checkout 正在收口 0.1.1 reliability maintenance。旧设计中依赖 isolated
 worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继续
 作为实现依据或对外承诺：
 
 | 版本 | 状态与目标 | 发布门槛 |
 |---|---|---|
 | `0.1.0` | **已发布。** 可控、可恢复、可解释的 Trusted Local Loop：可编辑 Preflight、可信 no-check、调用/token 上限、三态 Gate verdict 与 STOPPED_BY_USER、文件归因、恢复兼容、最小 completeness/freshness、五来源 Resume、六平台安装升级和 public truth；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移 | immutable stable 资产通过 stage-verify-publish-exact、六平台 draft smoke、公开 URL provenance、固定安装、0.0.22 upgrade、恢复与生产版本面验收。25/20/15/7 cohort、首次用户理解和真实来源流程发布后继续收集，不设置固定 14 天等待；三个授权案例只阻断集中宣传 |
-| `0.1.1` | **实现完成，待发布。** Cost Visibility 补丁：catalog snapshot 保留 models.dev pricing，Goal 按 model alias 累计 token 拆分，四个终态摘要面离线显示估算成本（无可靠 pricing 保持 `Cost unavailable`）；release staging 增加 pricedModels 硬门槛；不新增命令、不改变 Gate 语义、不建设价格数据库 | 相关测试/typecheck/lint 通过；旧 `goal.update` 记录兼容；六平台发布管道沿用 0.1.0 门槛 |
+| `0.1.1` | **当前工作树实现完成，发布未开始。** Reliability Maintenance 补丁：除 Plan 恢复、递归 glob 与 boundary guard 外，修复 Loop revision、headless 上限、resume token 增量、Provider 原子导入、跨 workspace Resume，以及 Web 连接/权限/弹层/Workspace/stub 联调；不包含 Cost Visibility，不新增命令，不改变 Gate 语义 | 当前工作树测试、typecheck、lint、build 与浏览器 stub 流程通过；仍需版本/changeset、六平台 assets、0.1.0 upgrade、fresh install、恢复和公开版本面验收 |
 | `0.2.0` | Pro Reliable Autonomy：保留为待重新评审的可靠自治与商业验证候选；不能继承已经取消的 Promote、lease、fencing 或 Final Gate 设计 | 0.1.0 发布并稳定观察至少 30 天；先验证重复多任务监督需求，再单独批准技术方案、Pilot 权益和收费门槛 |
 
 当前顺序是：0.0.22 → 0.1.0-rc.1 → 0.1.0 → 0.1.1 → 发布后真实项目与 opt-in cohort。
 0.0.22 是已发布的维护版本，不扩张 0.1.0 范围；若再出现生产 P0，只能另行
-决定紧急补丁。0.1.1 只做 Cost Visibility 补丁：成本估算为纯本地显示层信息，
-不参与 Gate 判定或预算阻断；真实用户验证债务（Windows 真实 repo、五来源真实
-Resume、cohort）继续作为发布后产品证据收集。旧的 2026 年 9–11 月排期
+决定紧急补丁。0.1.1 只收维护与可靠性修复，不包含 Cost Visibility；真实用户验证债务（Windows 真实 repo、五来源真实 Resume、cohort）
+继续作为发布后产品证据收集。旧的 2026 年 9–11 月排期
 随隔离 Promote 方案取消，不再有效。0.2.0 待 0.1.0 稳定观察期满后再评审。
 
 `0.0.18` 继续收口现有产品层：命令只做默认可见性分层，不删除底层能力；Kimi Code/Grok Resume 只读本地会话；Feedback API 只接收用户确认的文本；`/login` 由 CLI 发起 device flow，用户在 Wukong 网站用 Google/GitHub 确认，CLI 获取 token 后读取 `200` 模型目录。当前没有 Wukong 模型，目录应诚实返回空数组，登录仍成功且不改变 BYOK 默认模型。最新托管模型与推理 endpoint 留给后续独立决策，在真实 backend、隐私和 E2E 就绪前不能发布 placeholder。0.1.0 不预建 invite-only 付费、Checkout 或 entitlement。
@@ -594,7 +589,7 @@ telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
 - 0.0.21 只做 repeated-risk evidence identity 修复与六平台一致发布；不增加新的执行架构。
 - 0.0.22 只做 provider catalog resilience 与 CLI clarity 维护发布；不增加新的执行架构。
 - 0.1.0 规格已收敛：只稳定可控、可恢复、可解释的单 Loop；可编辑 Preflight、可信 no-check、provider-call/token 上限、文件归因、provider outcome、最小 Gate completeness/freshness、兼容恢复、五来源 Resume 与发布 workflow 已完成自动化，RC 六平台公开验收已通过。stable 只保留 exact-source、P0/release-blocking P1 清零、六平台资产/安装/升级/恢复与生产版本面门槛；opt-in cohort 发布后继续，不设固定 14 天等待。完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移。
-- 0.1.1 只做 Cost Visibility：snapshot 保留 pricing、Goal per-model token 拆分、终态摘要离线估算成本；不做实时 pricing 查询、价格数据库或 reviewer 成本聚合。
+- 0.1.1 只做已存在体验的维护与可靠性修复；不包含 Cost Visibility、实时 pricing 查询、价格数据库或 reviewer 成本聚合。
 - 0.2.0 是未批准且待重新评审的 Reliable Autonomy 候选；不能继承已取消的 Promote/lease/fencing 设计，在 0.1.0 真实验证前不开工、不公开 Checkout。
 - 公告与更新通道分离：公告 JSON 由 Web 静态文件维护，失败不阻塞 CLI。
 - `/report` 和 Hosted Report/上传路径保持删除；本地 Gate 结果只在已有显式保存能力下留档。

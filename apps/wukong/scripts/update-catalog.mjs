@@ -40,7 +40,6 @@ const KEEP_MODEL = new Set([
   "reasoning",
   "interleaved",
   "modalities",
-  "cost",
 ]);
 
 function resolveOutputFile(args) {
@@ -108,30 +107,11 @@ export function buildBuiltInCatalog(raw, providerIds = BUILT_IN_PROVIDER_IDS) {
   return stripped;
 }
 
-/** Counts kept models whose `cost` object carries at least one numeric field. */
-export function countPricedModels(catalog) {
-  let count = 0;
-  for (const provider of Object.values(catalog)) {
-    for (const model of Object.values(provider.models ?? {})) {
-      const cost = model.cost;
-      if (
-        typeof cost === "object" &&
-        cost !== null &&
-        Object.values(cost).some((value) => typeof value === "number")
-      ) {
-        count += 1;
-      }
-    }
-  }
-  return count;
-}
-
 export async function fetchCatalog(url, fetchImpl = fetch) {
   const res = await fetchImpl(url, { headers: { Accept: "application/json" } });
   if (!res.ok) throw new Error(`HTTP ${res.status}`);
   const raw = await res.json();
-  const catalog = buildBuiltInCatalog(raw);
-  const json = JSON.stringify(catalog);
+  const json = JSON.stringify(buildBuiltInCatalog(raw));
   return {
     json,
     metadata: {
@@ -142,7 +122,6 @@ export async function fetchCatalog(url, fetchImpl = fetch) {
       lastModified: res.headers.get("last-modified"),
       sha256: createHash("sha256").update(json).digest("hex"),
       bytes: Buffer.byteLength(json),
-      pricedModels: countPricedModels(catalog),
     },
   };
 }

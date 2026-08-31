@@ -2,25 +2,6 @@ import type { ModelCapability } from './capability';
 import type { ProviderType } from './providers';
 
 /**
- * Per-model pricing (models.dev field names), USD per 1M tokens.
- */
-export interface CatalogModelCost {
-  readonly input?: number;
-  readonly output?: number;
-  readonly cache_read?: number;
-  readonly cache_write?: number;
-  /**
-   * Context-dependent price overrides from models.dev. The catalog has used
-   * both keyed and array representations over time, so consumers that do not
-   * retain per-request context must treat any non-empty value as tiered
-   * pricing rather than silently applying the base prices.
-   */
-  readonly tiers?:
-    | readonly Readonly<Record<string, unknown>>[]
-    | Readonly<Record<string, Readonly<Record<string, unknown>>>>;
-}
-
-/**
  * models.dev-style catalog: a public map of provider/model metadata. Callers
  * consume a snapshot of this shape to populate provider + model configuration
  * without hand-writing context windows or capabilities.
@@ -37,7 +18,6 @@ export interface CatalogModelEntry {
     readonly input?: readonly string[];
     readonly output?: readonly string[];
   };
-  readonly cost?: CatalogModelCost;
 }
 
 export interface CatalogProviderEntry {

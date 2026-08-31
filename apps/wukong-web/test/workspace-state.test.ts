@@ -8,6 +8,8 @@ import type { ExtendedState } from '../src/composables/useWukongWebClient';
 const apiMock = vi.hoisted(() => ({
   abortPrompt: vi.fn(),
   abortSession: vi.fn(),
+  addWorkspace: vi.fn(),
+  updateWorkspace: vi.fn(),
 }));
 
 vi.mock('../src/api', () => ({
@@ -56,12 +58,14 @@ function createState(): ExtendedState {
     goalMode: false,
     loading: false,
     sessionLoading: false,
+    sessionLoadError: false,
     queuedBySession: {},
     gitStatusBySession: {},
     promptIdBySession: { sess_1: 'prompt_stale' },
     sendingBySession: {},
     unreadBySession: {},
     authReady: true,
+    bootstrapError: false,
     defaultModel: null,
     managedProviderStatus: null,
     workspaces: [],
@@ -102,7 +106,7 @@ function createDeps(): UseWorkspaceStateDeps {
     subscribeToSessionEvents: vi.fn(),
     hasLoadedMessages: vi.fn(),
     refreshSessionStatus: vi.fn(),
-    persistSessionProfile: vi.fn(),
+    persistSessionProfile: vi.fn().mockResolvedValue(true),
     mergedWorkspaces: computed(() => []),
     workspacesView: computed(() => []),
     status: computed(() => ({})),
@@ -128,6 +132,8 @@ describe('useWorkspaceState — abortCurrentPrompt', () => {
   beforeEach(() => {
     apiMock.abortPrompt.mockReset();
     apiMock.abortSession.mockReset();
+    apiMock.addWorkspace.mockReset();
+    apiMock.updateWorkspace.mockReset();
   });
 
   it('falls back to session abort when the cached prompt id is already completed', async () => {
@@ -151,5 +157,73 @@ describe('useWorkspaceState — abortCurrentPrompt', () => {
 
     expect(apiMock.abortPrompt).toHaveBeenCalledWith('sess_1', 'prompt_stale');
     expect(apiMock.abortSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('useWorkspaceState — workspace persistence', () => {
+  it('does not manufacture a local workspace when server validation fails', async () => {
+    apiMock.addWorkspace.mockRejectedValueOnce(new Error('path not found'));
+    const state = createState();
+    const deps = createDeps();
+    const workspace = useWorkspaceState(state, deps);
+
+    await expect(workspace.addWorkspaceByPath('/missing')).resolves.toBe(false);
+
+    expect(state.workspaces).toEqual([]);
+    expect(deps.pushOperationFailure).toHaveBeenCalledWith(
+      'addWorkspace',
+      expect.any(Error),
+    );
+  });
+
+  it('persists workspace renames through the daemon', async () => {
+    const renamed = {
+      id: 'workspace-1',
+      root: '/workspace',
+      name: 'Renamed workspace',
+      isGitRepo: true,
+      sessionCount: 0,
+    };
+    apiMock.updateWorkspace.mockResolvedValueOnce(renamed);
+    const state = createState();
+    state.workspaces = [{ ...renamed, name: 'Old name' }];
+    const workspace = useWorkspaceState(state, createDeps());
+
+    await workspace.renameWorkspace('workspace-1', '  Renamed workspace  ');
+
+    expect(apiMock.updateWorkspace).toHaveBeenCalledWith('workspace-1', {
+      name: 'Renamed workspace',
+    });
+    expect(state.workspaces[0]?.name).toBe('Renamed workspace');
+  });
+});
+
+describe('useWorkspaceState — profile controls', () => {
+  it('rolls back plan mode when the session profile write fails', async () => {
+    const state = createState();
+    const deps = createDeps();
+    vi.mocked(deps.persistSessionProfile).mockResolvedValue(false);
+    const workspace = useWorkspaceState(state, deps);
+
+    workspace.setPlanMode(true);
+    expect(state.planMode).toBe(true);
+    await vi.waitFor(() => {
+      expect(state.planMode).toBe(false);
+    });
+    expect(deps.savePlanModeToStorage).toHaveBeenLastCalledWith(false);
+  });
+
+  it('keeps the new permission mode when the session profile write succeeds', async () => {
+    const state = createState();
+    const deps = createDeps();
+    const workspace = useWorkspaceState(state, deps);
+
+    workspace.setPermission('auto');
+    await vi.waitFor(() => {
+      expect(deps.persistSessionProfile).toHaveBeenCalled();
+    });
+
+    expect(state.permission).toBe('auto');
+    expect(deps.savePermissionToStorage).toHaveBeenLastCalledWith('auto');
   });
 });

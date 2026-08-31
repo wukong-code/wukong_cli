@@ -983,6 +983,15 @@ export class DaemonWukongWebApi implements WukongWebApi {
     return toAppWorkspace(data);
   }
 
+  /** Rename a registered workspace. */
+  async updateWorkspace(id: string, input: { name: string }): Promise<AppWorkspace> {
+    const data = await this.http.patch<WireWorkspace>(
+      `/workspaces/${encodeURIComponent(id)}`,
+      { name: input.name },
+    );
+    return toAppWorkspace(data);
+  }
+
   /**
    * Remove a registered workspace.
    * PRESUMED — DELETE /api/v1/workspaces/:id. On error this throws.

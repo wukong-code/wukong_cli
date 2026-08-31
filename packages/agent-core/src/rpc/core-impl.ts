@@ -15,6 +15,7 @@ import {
   ensureWukongHome,
   loadRuntimeConfigSafe,
   mergeConfigPatch,
+  validateConfig,
   readConfigFileForUpdate,
   normalizeAdditionalDirs,
   readWorkspaceAdditionalDirs,
@@ -91,6 +92,7 @@ import type {
   ReloadSessionPayload,
   ReloadPluginsResult,
   RemoveWukongProviderPayload,
+  ReplaceWukongConfigPayload,
   RemovePluginPayload,
   RenameSessionPayload,
   ResumeGoalPayload,
@@ -554,6 +556,12 @@ export class WukongCore implements PromisableMethods<CoreAPI> {
 
   async setWukongConfig(input: SetWukongConfigPayload): Promise<WukongConfig> {
     const config = mergeConfigPatch(this.readConfigForWrite(), input);
+    await writeConfigFile(this.configPath, config);
+    return this.reloadRuntimeConfig();
+  }
+
+  async replaceWukongConfig(input: ReplaceWukongConfigPayload): Promise<WukongConfig> {
+    const config = validateConfig(input);
     await writeConfigFile(this.configPath, config);
     return this.reloadRuntimeConfig();
   }

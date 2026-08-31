@@ -33,4 +33,5 @@ export default {
   searchPlaceholder: 'Search sessions',
   searchClear: 'Clear search',
   searchNoResults: 'No matching sessions',
+  treeLabel: 'Workspaces and sessions',
 } as const;

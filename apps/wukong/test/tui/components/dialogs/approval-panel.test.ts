@@ -214,7 +214,7 @@ describe('ApprovalPanelComponent', () => {
     expect(out).toContain(CURSOR_MARKER);
   });
 
-  it.each(['\u0003', '\u0004', '\u001B'])(
+  it.each(['\u0003', '\u0004'])(
     'shortcut %j rejects approval immediately',
     (key) => {
       const { dialog, responses } = makeDialog();
@@ -222,6 +222,12 @@ describe('ApprovalPanelComponent', () => {
       expect(responses).toEqual([{ response: 'rejected' }]);
     },
   );
+
+  it('treats Escape as cancellation rather than rejection', () => {
+    const { dialog, responses } = makeDialog();
+    dialog.handleInput('\u001B');
+    expect(responses).toEqual([{ response: 'cancelled' }]);
+  });
 
   it('renders ExitPlanMode with plan-specific header and plan-review choices', () => {
     const pending: PendingApproval = {

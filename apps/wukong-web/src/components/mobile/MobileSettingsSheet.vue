@@ -53,7 +53,6 @@ const PERM_MODES: PermissionMode[] = ['manual', 'auto', 'yolo'];
 
 const thinkingLevel = computed<ThinkingLevel>(() => props.thinking ?? 'high');
 const planOn = computed<boolean>(() => props.planMode === true);
-const swarmOn = computed<boolean>(() => props.swarmMode === true);
 
 const permColor = computed<string>(() => {
   const p = props.status.permission;
@@ -137,15 +136,6 @@ function onLogout(): void {
         <span class="srow-sub">{{ t('mobile.planModeSub') }}</span>
       </span>
       <span class="toggle" :class="{ on: planOn }" role="switch" :aria-checked="planOn" />
-    </button>
-
-    <!-- Swarm mode → real toggle switch -->
-    <button type="button" class="srow" @click="emit('toggleSwarm')">
-      <span class="srow-main">
-        <span class="srow-label">{{ t('status.statusSwarmMode') }}</span>
-        <span class="srow-sub">{{ t('mobile.swarmModeSub') }}</span>
-      </span>
-      <span class="toggle" :class="{ on: swarmOn }" role="switch" :aria-checked="swarmOn" />
     </button>
 
     <!-- Permission → cycle (sub-line + chevron) -->

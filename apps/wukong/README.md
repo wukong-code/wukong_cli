@@ -33,14 +33,14 @@ local credential slot and managed account config. Local cleanup still runs
 when revocation is unconfirmed; the command warns that the server session may
 remain active instead of reporting a false remote success.
 
-The published binary baseline is `v0.0.22`; this package checkout may contain
-unreleased `0.1.0` stabilization and is not evidence that `0.1.0-rc.1` has
+The published stable baseline is `v0.1.0`; this package checkout contains
+unreleased `0.1.1` reliability maintenance and is not evidence that `0.1.1` has
 shipped. Version 0.1.0 is scoped to one controllable, recoverable, explainable
 local Loop. Enforceable call/token limits, versioned no-check policy, file
 attribution, terminal usage/next actions, compatibility fixtures, and native
-release smoke are implemented and covered locally. RC still requires a current
-six-platform candidate run and zero release-blocking defects; final release
-also requires public-asset and opt-in cohort evidence. Full coverage-schema
+release smoke are implemented. The 0.1.1 checkout adds reliability fixes but
+still requires six-platform assets, upgrade, and public install verification.
+Full coverage-schema
 replacement and direct-shell content/PATH attestation are deferred. The normal interactive path starts from an editable Goal or an
 optional `/resume`, then enters `/loop` and Gate. Version 0.0.21 preserves every
 distinct built-in risk occurrence under a stable evidence identity when the
@@ -51,12 +51,17 @@ read trust plus per-run consent for the exact BYOK provider endpoint. Existing
 Verification Skills may contribute strict qualitative criteria, but suggestions
 are never selected automatically and Skill commands are never executed.
 `wukong loop --dry-run --output-format stream-json` previews the exact catalog,
-selection CAS, provider destination, input exclusions, and cost without
+selection CAS, provider destination, and input exclusions without
 creating a run or opening a provider connection. `verify`, `scan`, `proof`, and
 `judge` remain advanced diagnostics; `/goal` is the hidden compatibility engine
 behind Loop. The package remains free, local-first, and BYOK. It does not
 provide hosted inference, payment, quota, cloud session/evidence sync, PR Gate,
 Skill authoring, or a complete shell sandbox.
+
+The exact unreleased 0.1.1 scope, local validation evidence, and remaining
+release gates are documented in
+[`docs/releases/0.1.1.md`](../../docs/releases/0.1.1.md). It explicitly excludes
+Cost Visibility and provider charge estimates.
 
 ## Provider Catalog Availability
 
@@ -92,7 +97,9 @@ The package runtime engine is `>=22.19.0`; the monorepo development engine is st
 
 The published package name is `@wukong.today/code`.
 
-The internal workspace name remains `@wukong/wukong` for historical reasons; do not use the legacy `@wukong.today/wukong-cli` name.
+The monorepo workspace uses the same `@wukong.today/code` name. Do not use the
+historical `@wukong/wukong` or legacy `@wukong.today/wukong-cli` names in new
+commands or documentation.
 
 ## Repository
 

@@ -14,8 +14,6 @@ const props = defineProps<{
   thinking: ThinkingLevel;
   planMode: boolean;
   swarmMode?: boolean;
-  /** Cumulative session cost in USD, when known (>= 0). */
-  costUsd?: number;
 }>();
 
 const emit = defineEmits<{
@@ -52,13 +50,11 @@ const permColor = computed(() => {
 const planText = computed(() => (props.planMode ? t('status.planOn') : t('status.planOff')));
 const swarmText = computed(() => (props.swarmMode ? t('status.swarmOn') : t('status.swarmOff')));
 
-const showCost = computed(() => typeof props.costUsd === 'number' && props.costUsd > 0);
-const costText = computed(() =>
-  showCost.value ? `$${(props.costUsd as number).toFixed(4)}` : t('status.statusNone'),
-);
-
 function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape') emit('close');
+  if (e.key !== 'Escape') return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  emit('close');
 }
 
 onMounted(() => document.addEventListener('keydown', onKeydown));
@@ -67,7 +63,7 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown));
 
 <template>
   <div class="backdrop" @click.self="emit('close')">
-    <div class="dialog" role="dialog" :aria-label="t('status.statusPanelTitle')">
+    <div class="dialog" role="dialog" aria-modal="true" :aria-label="t('status.statusPanelTitle')">
       <div class="dh">
         <span class="dtitle">{{ t('status.statusPanelTitle') }}</span>
         <button class="close-btn" :title="t('status.statusPanelClose')" @click="emit('close')">✕</button>
@@ -100,10 +96,6 @@ onUnmounted(() => document.removeEventListener('keydown', onKeydown));
             <span class="ctx-text">{{ contextValue }}</span>
             <span v-if="status.ctxMax > 0" class="bar"><i :style="{ width: pct + '%' }"></i></span>
           </dd>
-        </div>
-        <div class="row">
-          <dt>{{ t('status.statusCost') }}</dt>
-          <dd>{{ costText }}</dd>
         </div>
       </dl>
     </div>

@@ -164,12 +164,12 @@ describe('native release workflow contract', () => {
     expect(publicSmoke).toContain('verify-archive.mjs');
     expect(publicSmoke).toContain('WUKONG_CODE_NATIVE_SMOKE_ARCHIVE');
     expect(publicSmoke).toContain('scripts/native/smoke.mjs');
-    expect(publicSmoke).toContain('WUKONG_VERSION=v0.0.22');
+    expect(publicSmoke).toContain('WUKONG_VERSION="$PREVIOUS_LATEST_TAG"');
     expect(publicSmoke).toContain('WUKONG_VERSION="$RELEASE_TAG"');
     expect(publicSmoke).toContain('Download and checksum anonymous prerelease archive');
     expect(publicSmoke).toContain('Download and checksum authenticated stable draft archive');
     expect(publicSmoke).toContain(
-      'Replace v0.0.22 with the authenticated stable draft archive',
+      'Replace the previous stable release with the authenticated stable draft archive',
     );
     expect(publicSmoke).toContain(
       "needs.validate-source.outputs.is_prerelease == 'true' && runner.os != 'Windows'",
@@ -553,20 +553,21 @@ describe('native release workflow contract', () => {
     expect(source).not.toMatch(/git push|git update-ref|gh api .*git\/refs/imu);
   });
 
-  it('runs a checksum-verified Windows v0.0.22 in-place upgrade after the old process exits', async () => {
+  it('runs a checksum-verified Windows in-place upgrade from the previous stable release', async () => {
     const source = await workflow('.github/workflows/publish-binary.yml');
-    const stepIndex = source.indexOf('Direct Windows upgrade from v0.0.22 after process exit');
+    const stepIndex = source.indexOf('Direct Windows upgrade from the previous stable release after process exit');
     expect(stepIndex).toBeGreaterThan(0);
     const step = source.slice(stepIndex, source.indexOf('\n  finalize-release-channel:', stepIndex));
 
     expect(step).toContain("if: runner.os == 'Windows'");
     expect(step).toContain('shell: pwsh');
-    expect(step).toContain('releases/download/v0.0.22');
+    expect(step).toContain('releases/download/$env:PREVIOUS_LATEST_TAG');
     expect(step).toContain('Invoke-WebRequest');
     expect(step).toContain('verify-archive.mjs');
     expect(step).toContain('Expand-Archive');
-    expect(step).toContain("Select-String -Quiet -SimpleMatch '0.0.22'");
-    expect(step).toContain("throw 'Installed baseline did not report 0.0.22'");
+    expect(step).toContain("$baselineVersion = $env:PREVIOUS_LATEST_TAG.TrimStart('v')");
+    expect(step).toContain('Select-String -Quiet -SimpleMatch $baselineVersion');
+    expect(step).toContain('throw "Installed baseline did not report $baselineVersion"');
     expect(step).toContain('Move-Item -LiteralPath $installedExe -Destination $backupExe');
     expect(step).toContain('Move-Item -LiteralPath $backupExe -Destination $installedExe');
     expect(step).toContain('WUKONG_CODE_HOME');

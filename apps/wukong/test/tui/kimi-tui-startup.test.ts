@@ -1272,7 +1272,7 @@ describe('WukongTUI startup', () => {
 
       const transcript = driver.state.transcriptContainer.render(160).join('\n');
       expect(transcript).toContain('Outcome     PASS');
-      expect(transcript).toContain('Next        Review the diff');
+      expect(transcript).toContain('Next        Review git status --short and git diff');
       expect(harness.track).toHaveBeenCalledWith('loop_terminal', {
         outcome: 'PASS',
         iterations: 2,
@@ -1459,6 +1459,43 @@ describe('WukongTUI startup', () => {
     expect(transcript).toContain(`To resume, run: ${expectedResumeCmd}`);
     expect(transcript).toContain(`To resume, run: ${expectedResumeCmd}`);
     expect(transcript).toContain('Command copied to clipboard');
+  });
+
+  it('does not import an external session from another cwd', async () => {
+    discoverForeignSessionRowsMock.mockResolvedValueOnce([{
+      id: 'external:codex:codex-other',
+      title: 'Other project Codex session',
+      work_dir: '/tmp/proj-b',
+      updated_at: Date.now(),
+      source: 'codex',
+      external: {
+        id: 'codex-other',
+        sourcePath: '/tmp/home/.codex/sessions/codex-other.jsonl',
+      },
+    }]);
+    const harness = makeHarness(makeSession({ id: 'ses-current' }));
+    const driver = makeDriver(harness, makeStartupInput());
+    const sendSkillActivation = vi.spyOn(
+      driver as unknown as {
+        sendSkillActivation(session: unknown, skillName: string, skillArgs: string): void;
+      },
+      'sendSkillActivation',
+    ).mockImplementation(() => {});
+    await expect(driver.init()).resolves.toBe(false);
+    copyTextToClipboardMock.mockClear();
+
+    await (driver as unknown as { showSessionPicker(source?: 'codex'): Promise<void> })
+      .showSessionPicker('codex');
+    const picker = driver.state.editorContainer.children[0] as { handleInput(data: string): void };
+    picker.handleInput('\r');
+    await new Promise((resolve) => setImmediate(resolve));
+
+    const expectedOpenCmd = `cd ${quoteShellArg('/tmp/proj-b')} && wukong`;
+    expect(sendSkillActivation).not.toHaveBeenCalled();
+    expect(copyTextToClipboardMock).toHaveBeenCalledWith(expectedOpenCmd);
+    const transcript = driver.state.transcriptContainer.render(160).join('\n');
+    expect(transcript).toContain('This codex session is in a different working directory.');
+    expect(transcript).toContain('run /resume codex');
   });
 
   it('copies a shell-safe resume command for another cwd with metacharacters', async () => {

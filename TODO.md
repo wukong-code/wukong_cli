@@ -4,16 +4,23 @@
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
-## 🚧 0.1.1 — Cost Visibility（实现完成，待发布）
+## 🚧 0.1.1 — Reliability Maintenance（工作树实现完成，发布未开始）
 
-> 方案: [docs/design/0.1.1-cost-visibility.md](docs/design/0.1.1-cost-visibility.md)。补丁版本，继续 Free、local-first、BYOK；不新增命令、不改变 Gate 语义、不建设价格数据库。
+> 说明：[0.1.1 未发布说明](docs/releases/0.1.1.md)。补丁版本继续
+> Free、local-first、BYOK；不新增命令、不改变 Loop/Gate 语义，不包含 Cost
+> Visibility。当前 package version 仍为 `0.1.0`，勾选项只代表工作树实现，
+> 不代表已提交、已生成 release candidate 或已上线。
 
-- [x] `CatalogModelEntry` 增加可选 `cost`（models.dev pricing，USD / 1M tokens），发布 snapshot 生成脚本保留该字段（2026-08-18）
-- [x] 新增离线 `estimateUsageCost` 估算与 `summarizeCost`/`formatCost` 显示入口；唯一 pricing source 是 release-embedded snapshot，零网络请求（2026-08-18）
-- [x] Goal token 统计扩展为按 model alias 的 `usageByModel` 拆分；`goal.update` durable record 携带并恢复该字段，旧记录兼容回退 `Cost unavailable`（2026-08-18）
-- [x] 四个摘要面接入成本显示：headless run summary（含 JSON `cost` 字段）、headless Loop summary、TUI 普通回合摘要、TUI Loop 终态卡片；部分覆盖显示 `~$X.XX+`，reviewer token 继续诚实标注 unavailable（2026-08-18）
-- [x] snapshot metadata 增加 `pricedModels` 计数，release staging 验证新增 `pricedModels > 0` 硬门槛（2026-08-18）
-- [x] 相关测试（161 项）、typecheck、lint 通过；snapshot strip 回归测试反转为 `cost` 必须保留（2026-08-18）
+- [x] 恢复旧 Plan session 时保留真实 plan mode 状态（2026-08-18）
+- [x] 支持递归 `**/` glob，并统一本地与 SSH workspace 行为（2026-08-18）
+- [x] agent-core boundary guard 对新增和 stale baseline fail closed（2026-08-18）
+- [x] 修复 `/loop revise` 被活动 Goal 预检阻断，并保留 Done when、Must not、Verification Criteria 与未显式覆盖的运行上限（2026-08-31）
+- [x] 禁止 `/goal --until` 创建旧合同；headless Loop 完整传递 provider-call/token 上限；恢复会话只报告本次 token 增量（2026-08-31）
+- [x] Provider catalog/custom registry 改为校验后的单次完整配置替换，避免批量导入半写入、旧 alias 复活或默认模型丢失（2026-08-31）
+- [x] 跨 workspace 的外部 Resume 只提供切换目录提示，不把外部 transcript 交给错误项目；修正 Kimi/Grok 来源标签（2026-08-31）
+- [x] Web 修正 Auto/YOLO 语义并统一 YOLO 确认；补弹层 Escape、移动端键盘、Workspace 持久化、side-chat 并发和安全失败保留（2026-08-31）
+- [x] `dev:stub` 补齐 bearer 鉴权、HTTP 200 envelope、Workspace rename 与可直接打开的 token URL（2026-08-31）
+- [x] 相关测试与 typecheck 通过；真实浏览器已验证 token onboarding、YOLO 取消与 stub 首条消息（2026-08-31）
 - [ ] 六平台 0.1.1 assets、0.1.0 → 0.1.1 升级与公开安装验收（发布时执行）
 
 ## ✅ 0.0.21 — Loop Evidence Integrity（已发布）
@@ -44,7 +51,7 @@
 - [x] 将 consolidated Preflight 完成到可编辑状态：Goal、Done when、Must not、checks/no-check、dirty paths、exact provider/model、outbound input、permission、iterations、provider-call ceiling 和可选 token budget；高级字段折叠，危险 Continue 固定最后（2026-08-06）
 - [x] 保持 local-read、provider-send、permission、project-check execution distinct approvals；Cancel 不创建 contract/trust/run，也不调用 provider（2026-08-06）
 - [x] 把现有 Goal token/turn budget 接入 Loop Preflight、runtime 和 terminal；新增 writer/reviewer provider-call ceiling，真实阻断超限并显示 calls/tokens/retries/remaining（2026-08-06）
-- [x] `budget_exhausted` 返回 `NEEDS_WORK` 且允许 same-contract Continue；无可靠 pricing source 时只显示 `Cost unavailable`，不建设价格数据库（2026-08-06）
+- [x] `budget_exhausted` 返回 `NEEDS_WORK` 且允许 same-contract Continue；0.1.1 不展示成本估算，也不建设价格数据库（2026-08-06）
 
 ### RC admission P0：no-check 与 Gate 完整性
 

@@ -312,7 +312,7 @@ export type ActivityState =
   | 'awaiting-question';
 
 /** Connection state for the WebSocket. */
-export type ConnectionState = 'connecting' | 'connected' | 'disconnected';
+export type ConnectionState = 'connecting' | 'connected' | 'reconnecting' | 'disconnected';
 
 /** Permission mode (client-side policy). */
 export type PermissionMode = 'manual' | 'auto' | 'yolo';

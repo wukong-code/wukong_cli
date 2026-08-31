@@ -1,11 +1,3 @@
-import type { TokenUsage } from '@wukong/wukong-sdk';
-
-import {
-  formatCost,
-  summarizeCost,
-  type CostModelAliases,
-} from '#/utils/cost';
-
 export interface OrdinaryTurnProviderOutcomeUnknown {
   readonly requestId: string;
   readonly idempotencyKey: string;
@@ -19,9 +11,6 @@ export interface OrdinaryTurnSummaryInput {
   readonly failedTools: number;
   readonly durationMs?: number;
   readonly tokens?: number;
-  readonly usage?: TokenUsage;
-  readonly model?: string;
-  readonly modelAliases?: CostModelAliases;
   readonly sessionId: string;
   readonly providerOutcomeUnknown?: OrdinaryTurnProviderOutcomeUnknown;
 }
@@ -37,7 +26,7 @@ export function buildOrdinaryTurnSummary(input: OrdinaryTurnSummaryInput): strin
     `Outcome    ${input.outcome}`,
     `Reason     ${input.reason}`,
     `Activity   ${String(input.steps)} step(s) · ${String(input.tools)} tool(s) · ${String(input.failedTools)} failed`,
-    `Time       ${input.durationMs === undefined ? 'unknown' : formatElapsed(input.durationMs)} · Tokens ${input.tokens === undefined ? 'unknown' : String(input.tokens)} · Cost ${formatCost(summarizeCost(input.usage !== undefined && input.model !== undefined ? { [input.model]: input.usage } : undefined, undefined, input.modelAliases))}`,
+    `Time       ${input.durationMs === undefined ? 'unknown' : formatElapsed(input.durationMs)} · Tokens ${input.tokens === undefined ? 'unknown' : String(input.tokens)}`,
     'Workspace  not attributed in TUI; inspect `git status --short` and `git diff`',
     'Checks     no durable Goal/Loop verdict',
     'Evidence   model completion is not verification',

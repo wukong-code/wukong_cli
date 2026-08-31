@@ -25,6 +25,8 @@ const props = defineProps<{
   wsMenuOpenId: string | null;
   /** True while this group is the active drag source (drag-to-reorder). */
   dragging: boolean;
+  treeFocused: boolean;
+  sessionTreeFocusKey: string | null;
   isCollapsed: (id: string) => boolean;
 }>();
 
@@ -72,7 +74,16 @@ function onHeaderDragStart(event: DragEvent): void {
 </script>
 
 <template>
-  <div class="group" :class="{ dragging }">
+  <div
+    class="group"
+    :class="{ dragging }"
+    role="treeitem"
+    :aria-level="1"
+    :aria-expanded="!isCollapsed(group.workspace.id)"
+    :aria-selected="group.workspace.id === activeWorkspaceId"
+    :tabindex="treeFocused ? 0 : -1"
+    :data-tree-key="`workspace:${group.workspace.id}`"
+  >
     <div
       class="gh"
       :class="{ on: group.workspace.id === activeWorkspaceId, sel: selectedIds.has(group.workspace.id) }"
@@ -153,7 +164,7 @@ function onHeaderDragStart(event: DragEvent): void {
 
       <div class="gh-path" :title="group.workspace.root">{{ group.workspace.shortPath || group.workspace.root }}</div>
     </div>
-    <div v-show="!isCollapsed(group.workspace.id)" class="group-sessions">
+    <div v-show="!isCollapsed(group.workspace.id)" class="group-sessions" role="group">
       <SessionRow
         v-for="s in group.sessions"
         :key="s.id"
@@ -162,6 +173,7 @@ function onHeaderDragStart(event: DragEvent): void {
         :approval-count="pendingBySession[s.id]?.approvals ?? 0"
         :question-count="pendingBySession[s.id]?.questions ?? 0"
         :unread="unreadBySession[s.id] ?? false"
+        :tree-focused="sessionTreeFocusKey === `session:${s.id}`"
         @select="emit('selectSession', $event)"
         @rename="(id, title) => emit('renameSession', id, title)"
         @archive="emit('archiveSession', $event)"
@@ -189,6 +201,14 @@ function onHeaderDragStart(event: DragEvent): void {
    Sidebar.vue, so they don't need to be redeclared here. */
 .group { padding-bottom: 6px; }
 .group.dragging { opacity: 0.45; }
+.group:focus-visible {
+  outline: none;
+}
+.group:focus-visible > .gh {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+  background: var(--panel2);
+}
 .gh {
   display: flex;
   flex-direction: column;

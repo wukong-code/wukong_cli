@@ -1774,8 +1774,15 @@ export class WukongTUI {
 
   private async showResumeOtherWorkDirHint(session: SessionRow): Promise<void> {
     this.hideSessionPicker();
-    const command = `cd ${quoteShellArg(session.work_dir)} && wukong --resume ${quoteShellArg(session.id)}`;
-    const message = `Current session is in a different working directory.\n  To resume, run: ${command}`;
+    const external = session.external !== undefined
+      && session.source !== undefined
+      && session.source !== 'wukong';
+    const command = external
+      ? `cd ${quoteShellArg(session.work_dir)} && wukong`
+      : `cd ${quoteShellArg(session.work_dir)} && wukong --resume ${quoteShellArg(session.id)}`;
+    const message = external
+      ? `This ${session.source} session is in a different working directory.\n  Open Wukong there, then run /resume ${session.source}.\n  To open, run: ${command}`
+      : `Current session is in a different working directory.\n  To resume, run: ${command}`;
     try {
       await copyTextToClipboard(command);
       this.showStatus(`${message}\n  Command copied to clipboard`, 'warning');
@@ -2905,6 +2912,12 @@ export class WukongTUI {
     session: SessionRow,
     applyStartupModes: boolean,
   ): Promise<void> {
+    if (resolve(session.work_dir) !== resolve(this.state.appState.workDir)) {
+      await this.showResumeOtherWorkDirHint(session);
+      if (applyStartupModes) await this.stop(0);
+      return;
+    }
+
     if (
       session.external !== undefined &&
       session.source !== undefined &&
@@ -2920,12 +2933,6 @@ export class WukongTUI {
         return;
       }
       this.showResumeHandoff(session, session.source);
-      return;
-    }
-
-    if (resolve(session.work_dir) !== resolve(this.state.appState.workDir)) {
-      await this.showResumeOtherWorkDirHint(session);
-      if (applyStartupModes) await this.stop(0);
       return;
     }
 

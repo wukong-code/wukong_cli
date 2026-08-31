@@ -221,12 +221,9 @@ async function handleCatalogProviderAdd(host: SlashCommandHost): Promise<void> {
   // Persist the provider and all its models immediately after the api key is
   // entered. The model selector that follows is just a convenience to pick the
   // default model; ESC leaves the provider in place without a default selection.
-  const existingConfig = await host.harness.getConfig();
-  if (existingConfig.providers[providerId] !== undefined) {
-    await host.harness.removeProvider(providerId);
-  }
-
   const config = await host.harness.getConfig();
+  const previousDefaultModel = config.defaultModel;
+  const previousDefaultThinking = config.defaultThinking;
   applyCatalogProvider(config, {
     providerId,
     wire,
@@ -237,10 +234,12 @@ async function handleCatalogProviderAdd(host: SlashCommandHost): Promise<void> {
     thinking: false,    // will be resolved by the model selector
   });
 
-  await host.harness.setConfig({
-    providers: config.providers,
-    models: config.models,
-  });
+  config.defaultModel = previousDefaultModel !== undefined
+    && config.models?.[previousDefaultModel] !== undefined
+    ? previousDefaultModel
+    : undefined;
+  config.defaultThinking = previousDefaultThinking;
+  await host.harness.replaceConfig(config);
 
   await host.authFlow.refreshConfigAfterLogin();
   host.track('connect', { provider: providerId, method: 'catalog' });
@@ -350,15 +349,17 @@ async function handleCustomRegistryAddViaDialog(host: SlashCommandHost): Promise
   const addedProviderIds = Object.values(entries).map((entry) => entry.id);
   try {
     const config = await host.harness.getConfig();
+    const previousDefaultModel = config.defaultModel;
     applyCustomRegistryEntries(
       config as unknown as ManagedWukongConfigShape,
       entries,
       source,
     );
-    await host.harness.setConfig({
-      providers: config.providers,
-      models: config.models,
-    });
+    config.defaultModel = previousDefaultModel !== undefined
+      && config.models?.[previousDefaultModel] !== undefined
+      ? previousDefaultModel
+      : undefined;
+    await host.harness.replaceConfig(config);
     await host.authFlow.refreshConfigAfterLogin();
   } catch (error) {
     host.showError(`Failed to apply registry: ${formatErrorMessage(error)}`);

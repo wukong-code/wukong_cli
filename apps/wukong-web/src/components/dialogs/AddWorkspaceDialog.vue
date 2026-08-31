@@ -193,6 +193,8 @@ onMounted(async () => {
 
 function handleKeydown(e: KeyboardEvent): void {
   if (e.key === 'Escape') {
+    e.preventDefault();
+    e.stopImmediatePropagation();
     emit('close');
   }
 }
@@ -206,7 +208,7 @@ onUnmounted(() => {
 
 <template>
   <div class="backdrop" @click.self="emit('close')">
-    <div class="dialog" role="dialog" :aria-label="t('workspace.addTitle')">
+    <div class="dialog" role="dialog" aria-modal="true" :aria-label="t('workspace.addTitle')">
       <!-- Header -->
       <div class="dh">
         <span class="dtitle">{{ t('workspace.addTitle') }}</span>

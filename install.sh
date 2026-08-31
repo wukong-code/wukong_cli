@@ -60,6 +60,13 @@ fi
 
 CHECKSUM_URL="${RELEASE_URL}.sha256"
 
+for REQUIRED_COMMAND in curl unzip; do
+  if ! command -v "$REQUIRED_COMMAND" >/dev/null 2>&1; then
+    echo "Cannot install Wukong Code: ${REQUIRED_COMMAND} is required."
+    exit 1
+  fi
+done
+
 echo "Installing Wukong Code ${VERSION} for ${TARGET}..."
 echo "Download URL: ${RELEASE_URL}"
 
@@ -113,6 +120,10 @@ mkdir -p "$INSTALL_DIR"
 STAGED_BINARY="${INSTALL_DIR}/.${BINARY_NAME}.update.$$"
 cp "${EXTRACT_DIR}/${BINARY_NAME}" "$STAGED_BINARY"
 chmod +x "$STAGED_BINARY"
+if ! "$STAGED_BINARY" --version >/dev/null 2>&1; then
+  echo "The downloaded Wukong binary failed its self-check; the existing installation was not changed."
+  exit 1
+fi
 mv -f "$STAGED_BINARY" "${INSTALL_DIR}/${BINARY_NAME}"
 STAGED_BINARY=""
 
@@ -121,8 +132,9 @@ echo "Wukong Code installed to: ${INSTALL_DIR}/${BINARY_NAME}"
 
 # POSIX-compatible PATH check
 case ":${PATH}:" in
-  *":${INSTALL_DIR}:"*) ;;
+  *":${INSTALL_DIR}:"*) VERIFY_COMMAND="wukong --version" ;;
   *)
+    VERIFY_COMMAND="${INSTALL_DIR}/${BINARY_NAME} --version"
     echo ""
     echo "Add the following to your shell profile to add wukong to your PATH:"
     echo "  export PATH=\"${INSTALL_DIR}:\$PATH\""
@@ -130,4 +142,10 @@ case ":${PATH}:" in
 esac
 
 echo ""
-echo "Run 'wukong --version' to verify the installation."
+echo "Run '${VERIFY_COMMAND}' to verify the installation."
+echo ""
+echo "Then start Wukong in a project:"
+echo "  cd YOUR_PROJECT"
+echo "  wukong"
+echo ""
+echo "Inside Wukong, run /provider to configure a model, then /loop <goal>."

@@ -29,10 +29,12 @@ export function useSideChat(rawState: ExtendedState, deps: UseSideChatDeps) {
   const { pushOperationFailure, nextOptimisticMsgId, connectEventsIfNeeded, getEventConn } = deps;
 
   const sideChatTargetBySession = ref<Record<string, { agentId: string }>>({});
+  const sideChatOpenBySession = ref<Record<string, boolean>>({});
 
   const activeSideChatTarget = computed<{ parentId: string; agentId: string } | null>(() => {
     const sid = rawState.activeSessionId;
     if (!sid) return null;
+    if (sideChatOpenBySession.value[sid] !== true) return null;
     const target = sideChatTargetBySession.value[sid];
     return target ? { parentId: sid, agentId: target.agentId } : null;
   });
@@ -166,6 +168,10 @@ export function useSideChat(rawState: ExtendedState, deps: UseSideChatDeps) {
       connectEventsIfNeeded();
       getEventConn()?.markSideChannelAgent(agentId);
     }
+    sideChatOpenBySession.value = {
+      ...sideChatOpenBySession.value,
+      [parent]: true,
+    };
     if (initialPrompt && initialPrompt.trim()) {
       await sendSideChatPrompt(initialPrompt.trim());
     }
@@ -174,9 +180,10 @@ export function useSideChat(rawState: ExtendedState, deps: UseSideChatDeps) {
   function closeSideChat(): void {
     const sid = rawState.activeSessionId;
     if (!sid) return;
-    const { [sid]: _removed, ...rest } = sideChatTargetBySession.value;
-    void _removed;
-    sideChatTargetBySession.value = rest;
+    sideChatOpenBySession.value = {
+      ...sideChatOpenBySession.value,
+      [sid]: false,
+    };
   }
 
   /** Send a plain prompt to the side-chat child (no plan/swarm/goal modes). */
@@ -186,6 +193,7 @@ export function useSideChat(rawState: ExtendedState, deps: UseSideChatDeps) {
     if (!target || !trimmed) return;
     const sid = target.parentId;
     const agentId = target.agentId;
+    if (rawState.sideChatSendingByAgent[agentId]) return;
     rawState.sideChatSendingByAgent = { ...rawState.sideChatSendingByAgent, [agentId]: true };
     const userMsg: AppMessage = {
       id: nextOptimisticMsgId(),
@@ -220,10 +228,14 @@ export function useSideChat(rawState: ExtendedState, deps: UseSideChatDeps) {
     const { [sessionId]: _removed, ...rest } = sideChatTargetBySession.value;
     void _removed;
     sideChatTargetBySession.value = rest;
+    const { [sessionId]: _open, ...remainingOpen } = sideChatOpenBySession.value;
+    void _open;
+    sideChatOpenBySession.value = remainingOpen;
   }
 
   return {
     sideChatTargetBySession,
+    sideChatOpenBySession,
     sideChatSessionId,
     sideChatVisible,
     sideChatSending,

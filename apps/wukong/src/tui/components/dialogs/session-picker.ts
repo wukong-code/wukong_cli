@@ -395,8 +395,14 @@ export class SessionPickerComponent extends Container implements Focusable {
     const rawTitle = (session.title ?? session.id).trim() || session.id;
     const titleSource = formatSessionLabel({ title: rawTitle, metadata: session.metadata });
     const source = session.source ?? 'wukong';
-    const sourceLabel =
-      source === 'claude' ? 'Claude' : source === 'codex' ? 'Codex' : 'Cursor';
+    const sourceLabel = {
+      claude: 'Claude',
+      codex: 'Codex',
+      cursor: 'Cursor',
+      kimi: 'Kimi',
+      grok: 'Grok',
+      wukong: 'Wukong',
+    }[source];
     const sourceBadge = source === 'wukong' ? '' : `[${sourceLabel}] `;
 
     // Inline trailing parts after the title: "<title>  <time>  ← current".

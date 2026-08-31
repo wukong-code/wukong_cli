@@ -1,9 +1,13 @@
 # Wukong Code 用户指南
 
-> 适用范围: 当前 `wukong_cli`；stable binary 为 `v0.1.0`，历史候选为 `v0.1.0-rc.1`
-> 更新时间: 2026-08-08
+> 适用范围: 当前 `wukong_cli`；stable binary 为 `v0.1.0`，当前工作树包含未发布
+> `0.1.1 Reliability Maintenance`
+> 更新时间: 2026-08-31
 > 定位: 给 Wukong 一个目标，通过 Goal → Write → Check → Review → Fix 循环直到没有 blocking finding。
-> 版本边界: stable `0.1.0` 已发布，并对 exact assets、安装/升级/恢复和生产版本面完成验收。真实来源流程与 opt-in cohort 仍未完成，作为发布后产品学习，不设置固定 14 天发布等待门槛。完整多层 coverage schema、direct-shell content/PATH attestation 和价格数据库已后移。当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
+> 版本边界: stable `0.1.0` 已发布，并对 exact assets、安装/升级/恢复和生产版本面完成验收。`0.1.1` 当前只代表未提交工作树中的可靠性修复，package version 仍为 `0.1.0`，六平台发布验收尚未开始。完整多层 coverage schema、direct-shell content/PATH attestation 和价格数据库已后移。当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
+
+`0.1.1` 的工作树功能、Web stub 使用方式、验证证据与发布缺口见
+[0.1.1 Reliability Maintenance（未发布）](releases/0.1.1.md)。
 
 CLI telemetry 的现有 wire fields、唯一 endpoint、本地 7 天失败队列和 opt-out 方式见
 [CLI telemetry contract](operations/cli-telemetry.md)。远端 retention 当前没有公开、
@@ -209,10 +213,8 @@ Guest 试用或月度次数，也不请求 Wukong quota 服务。默认单次最
    显示可获得的 Gate 状态、writer iteration、Gate attempt、耗时、workspace、checks、
    evidence、主要 blocker 与确定性的 Next。calls/tokens/retries/remaining 以及
    pre-existing、Wukong introduced/modified/deleted 和 unknown 会按 durable record 分开
-   展示；所用模型在发布内嵌 catalog snapshot 中有 pricing 时显示离线估算成本，
-   部分模型缺少 pricing 时以 `+` 标注为部分覆盖；无法证明的 token/cost 或文件归因
-   保持 `unavailable` / `unknown`，不能补写成
-   成功数据。
+   展示；无法证明的 token 或文件归因保持 `unavailable` / `unknown`，不能补写成
+   成功数据。Wukong 不估算 provider 费用。
 5. **结果后处理**：Wukong 不会因为 `PASS` 自动 commit、push 或发布。先检查
    `git status --short`、`git diff`，并用 `/loop status` 或 review feedback 检查
    non-blocking findings，再决定提交、继续 Loop、修改 Finish Line，或处理
@@ -385,7 +387,7 @@ WUKONG_CODE_HOME=/tmp/wukong-test pnpm -C apps/wukong run dev:cli-only -- doctor
 ## 开发校验
 
 ```bash
-pnpm --filter @wukong/wukong run typecheck
+pnpm --filter @wukong.today/code run typecheck
 pnpm -C apps/wukong run dev:cli-only --help
 pnpm -C apps/wukong run dev:cli-only -- login --help
 ```

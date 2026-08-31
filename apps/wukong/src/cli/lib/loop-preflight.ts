@@ -136,6 +136,8 @@ export interface LoopPreflightOptions {
   readonly workspace: string;
   readonly mode?: LoopPreflightMode;
   readonly getActiveGoal: () => Promise<GoalSnapshot | null>;
+  /** Allow replacing this exact active Goal during a revision preflight. */
+  readonly expectedActiveGoalId?: string;
   readonly approveGatePlanDigest?: string;
   readonly acknowledgeWarningSetDigest?: string;
   readonly acknowledgeNoExecutableChecksDigest?: string;
@@ -214,7 +216,7 @@ export async function runLoopPreflight(
     return blocked(
       'invalid_finish_line',
       'Loop objective is empty.',
-      'Run /loop <goal> with a concrete finish line.',
+      'In the TUI, run `/loop <goal>` with a concrete finish line.',
     );
   }
 
@@ -223,7 +225,7 @@ export async function runLoopPreflight(
     return blocked(
       'model_not_configured',
       'No model is configured.',
-      'Run /provider or /model, then start the Loop again.',
+      'Run `wukong`, then enter `/provider` or `/model` before starting the Loop again.',
     );
   }
 
@@ -247,18 +249,26 @@ export async function runLoopPreflight(
 
   try {
     const activeGoal = await options.getActiveGoal();
-    if (activeGoal !== null) {
+    if (
+      options.expectedActiveGoalId === undefined
+        ? activeGoal !== null
+        : activeGoal?.goalId !== options.expectedActiveGoalId
+    ) {
       return blocked(
         'goal_already_active',
-        'Another Goal is already active.',
-        'Resume or cancel the active Goal before starting a new Loop.',
+        options.expectedActiveGoalId === undefined
+          ? 'Another Goal is already active.'
+          : 'The Goal being revised is no longer the active Goal.',
+        options.expectedActiveGoalId === undefined
+          ? 'Resume or cancel the active Goal before starting a new Loop.'
+          : 'Run `/loop status`, then revise the currently active Loop.',
       );
     }
   } catch {
     return blocked(
       'goal_state_unreadable',
       'The active Goal state could not be read.',
-      'Run /goal status or wukong doctor, then retry.',
+      'In the TUI, run `/goal status`; in a shell, run `wukong doctor`, then retry.',
     );
   }
 
@@ -416,7 +426,7 @@ export async function runLoopPreflight(
     return blocked(
       'model_not_configured',
       `The reviewer model "${model ?? 'selected model'}" is not connected to a configured provider.`,
-      'Open /provider to add or repair the provider, or use `wukong provider list` in scripts, then retry.',
+      'Run `wukong`, then enter `/provider` to add or repair the provider; scripts can use `wukong provider list`.',
       proposal,
       trustChallenge,
       undefined,

@@ -35,6 +35,7 @@ const LOOP_ARG_COMPLETIONS: readonly ArgCompletionSpec[] = [
   { value: 'status', description: 'Show the active Loop' },
   { value: 'pause', description: 'Pause the active Loop' },
   { value: 'resume', description: 'Resume a paused Loop' },
+  { value: 'revise', description: 'Revise the active Loop objective and Finish Line' },
   { value: 'stop', description: 'Stop and remove the active Loop' },
   { value: '--help', description: 'Show Loop usage' },
 ];
@@ -269,7 +270,7 @@ export const BUILTIN_SLASH_COMMANDS = [
     aliases: [],
     description: 'Start a local iteration loop with a verification gate',
     priority: 70,
-    argumentHint: '[status|pause|resume|stop] | [options] -- <objective>',
+    argumentHint: '[status|pause|resume|revise|stop] | [options] -- <objective>',
     completeArgs: loopArgumentCompletions,
     availability: (args) => {
       const control = args.trim().toLowerCase();
@@ -357,13 +358,13 @@ export const BUILTIN_SLASH_COMMANDS = [
     argumentHint: '<role|list|status|off>',
     availability: 'idle-only',
     experimentalFlag: 'role_profiles',
-    visibleWhenDisabled: true,
+    visibleWhenDisabled: false,
     completeArgs: transformArgumentCompletions,
   },
   {
     name: 'provider',
     aliases: ['providers'],
-    description: 'Manage AI providers (add / delete / refresh)',
+    description: 'Manage AI providers (add / delete)',
     priority: 95,
     availability: 'always',
   },

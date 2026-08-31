@@ -110,6 +110,7 @@ export interface GoalStartOptions {
   } | false>;
   readonly afterCreate?: (snapshot: GoalSnapshot) => void | Promise<void>;
   readonly onCreateError?: () => void | Promise<void>;
+  readonly onStartCancelled?: () => void;
   readonly beforeSend?: () => boolean | Promise<boolean>;
   readonly sendInput?: (objective: string) => void;
 }
@@ -171,9 +172,11 @@ export function parseGoalCommand(rawArgs: string): ParsedGoalCommand {
     index += 1;
   }
 
-  const stopCondition = parseStopCondition(tokens, index);
-  if (stopCondition.consumed > 0) {
-    index += stopCondition.consumed;
+  if (tokens[index] === '--until') {
+    return {
+      kind: 'error',
+      message: '`/goal --until` is no longer supported. Use `/loop --until proof-pass -- <objective>`.',
+    };
   }
 
   const objective = tokens.slice(index).join(' ').trim();
@@ -192,19 +195,7 @@ export function parseGoalCommand(rawArgs: string): ParsedGoalCommand {
       message: `Goal objective is too long (max ${MAX_GOAL_OBJECTIVE_LENGTH} characters). Reference long details by file path.`,
     };
   }
-  return { kind: 'create', objective, replace, stopCondition: stopCondition.condition };
-}
-
-function parseStopCondition(
-  tokens: readonly string[],
-  startIndex: number,
-): { readonly condition?: 'proof-pass'; readonly consumed: number } {
-  if (tokens[startIndex] !== '--until') return { consumed: 0 };
-  const value = tokens[startIndex + 1];
-  if (value !== 'proof-pass' && value !== 'verify-pass' && value !== 'scan-clean' && value !== 'judge-pass') {
-    return { consumed: 0 };
-  }
-  return { condition: 'proof-pass', consumed: 2 };
+  return { kind: 'create', objective, replace };
 }
 
 export async function handleGoalCommand(host: SlashCommandHost, args: string): Promise<void> {
@@ -434,6 +425,11 @@ function showGoalStartPermissionPrompt(
 ): void {
   const commandText = `/${options.commandName ?? 'goal'} ${rawArgs.trim()}`;
   const cancelStart = (): void => {
+    if (options.onStartCancelled !== undefined) {
+      options.onStartCancelled();
+      host.showStatus('Goal not started. Your edited setup is still available.');
+      return;
+    }
     host.restoreInputText(commandText);
     host.showStatus('Goal not started.');
   };
@@ -462,7 +458,10 @@ async function startGoalWithPermission(
   const previousPermission = host.state.appState.permissionMode;
   let permissionChanged = false;
   if (choice !== host.state.appState.permissionMode && (choice === 'auto' || choice === 'yolo')) {
-    if (!(await setPermissionForGoal(host, choice))) return;
+    if (!(await setPermissionForGoal(host, choice))) {
+      options.onStartCancelled?.();
+      return;
+    }
     permissionChanged = true;
   }
   let started = false;
@@ -737,7 +736,7 @@ async function showGoalStatus(host: SlashCommandHost): Promise<void> {
     return;
   }
   host.state.transcriptContainer.addChild(
-    new GoalStatusMessageComponent(goal, host.state.appState.availableModels),
+    new GoalStatusMessageComponent(goal),
   );
   host.state.ui.requestRender();
 }
@@ -754,9 +753,7 @@ async function showLoopStatus(host: SlashCommandHost): Promise<void> {
     host.showStatus('No Loop is active. Start one with `/loop <objective>`.');
     return;
   }
-  host.state.transcriptContainer.addChild(
-    new GoalStatusMessageComponent(goal, host.state.appState.availableModels),
-  );
+  host.state.transcriptContainer.addChild(new GoalStatusMessageComponent(goal));
   host.state.ui.requestRender();
 }
 
@@ -854,12 +851,7 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
     const token = tokens[index];
     if (token === '--until') {
       const condition = tokens[index + 1];
-      if (
-        condition !== 'proof-pass'
-        && condition !== 'verify-pass'
-        && condition !== 'scan-clean'
-        && condition !== 'judge-pass'
-      ) {
+      if (condition !== 'proof-pass') {
         return { kind: 'error', message: '`--until` must be `proof-pass`.' };
       }
       index += 2;
@@ -957,8 +949,15 @@ export function parseLoopCommand(rawArgs: string): ParsedLoopCommand {
 }
 
 export async function handleLoopSlashCommand(host: SlashCommandHost, args: string): Promise<void> {
-  const revising = args.trim().startsWith('revise ');
-  const parsed = parseLoopCommand(revising ? args.trim().slice('revise '.length) : args);
+  const normalizedArgs = args.trim();
+  if (normalizedArgs === 'revise') {
+    host.showStatus(
+      'Provide the revised objective, e.g. `/loop revise -- fix the failing tests`.',
+    );
+    return;
+  }
+  const revising = normalizedArgs.startsWith('revise ');
+  const parsed = parseLoopCommand(revising ? normalizedArgs.slice('revise '.length) : args);
   switch (parsed.kind) {
     case 'help':
       host.showStatus([
@@ -996,14 +995,38 @@ export async function handleLoopSlashCommand(host: SlashCommandHost, args: strin
         }
         const revised: Extract<ParsedLoopCommand, { kind: 'create' }> = {
           ...parsed,
+          maxIterations: hasLoopOption(normalizedArgs, '--max-iterations')
+            ? parsed.maxIterations
+            : current.maxIterations ?? parsed.maxIterations,
+          minIntervalMs: hasLoopOption(normalizedArgs, '--every')
+            ? parsed.minIntervalMs
+            : current.minIntervalMs,
+          reviewModel: hasLoopOption(normalizedArgs, '--review-model')
+            ? parsed.reviewModel
+            : current.reviewModel,
+          writerProviderCallLimit: hasLoopOption(normalizedArgs, '--writer-call-limit')
+            ? parsed.writerProviderCallLimit
+            : current.providerUsage?.writerCallLimit ?? undefined,
+          reviewerProviderCallLimit: hasLoopOption(normalizedArgs, '--reviewer-call-limit')
+            ? parsed.reviewerProviderCallLimit
+            : current.providerUsage?.reviewerCallLimit ?? undefined,
+          tokenBudget: hasLoopOption(normalizedArgs, '--token-budget')
+            ? parsed.tokenBudget
+            : current.budget.tokenBudget ?? undefined,
           replace: true,
           supersedesGoalId: current.goalId,
           supersedesContractId: current.loopContract.contractId,
         };
         await openFinishLineReview(host, revised, {
           objective: revised.objective,
+          completionCriterion: current.loopContract.completionCriterion,
           constraints: current.loopContract.constraints.map((constraint) => constraint.text),
-        }, args);
+        }, args, 'tui-default', [], undefined,
+        current.loopContract.schemaVersion === 3
+          ? current.loopContract.verificationCriteria.selected.map(
+              ({ ref }) => ref.provenanceDigest,
+            )
+          : []);
         return;
       }
       await openFinishLineReview(host, parsed, {
@@ -1014,6 +1037,10 @@ export async function handleLoopSlashCommand(host: SlashCommandHost, args: strin
   }
 }
 
+function hasLoopOption(args: string, option: string): boolean {
+  return args.split(/\s+/u).includes(option);
+}
+
 async function openFinishLineReview(
   host: SlashCommandHost,
   parsed: Extract<ParsedLoopCommand, { kind: 'create' }>,
@@ -1022,6 +1049,7 @@ async function openFinishLineReview(
   discoveredCheckDecision: DiscoveredCheckDecision = 'tui-default',
   verificationSkills: readonly VerificationCriteriaChoice[] = [],
   verificationCatalogDigest?: string,
+  revisionCriteriaProvenanceDigests: readonly string[] = [],
 ): Promise<void> {
   const writerModel = parsed.writerModel ?? host.state.appState.model;
   if (host.state.appState.availableModels[writerModel] === undefined) {
@@ -1033,19 +1061,48 @@ async function openFinishLineReview(
     config,
     parsed.reviewModel ?? writerModel,
   );
-  const result = await runLoopPreflight({
+  const preflightOptions = {
     objective: draft.objective,
     completionCriterion: draft.completionCriterion,
     constraints: draft.constraints,
     discoveredCheckDecision,
     model: writerModel,
     workspace: host.state.appState.workDir ?? process.cwd(),
-    mode: 'tui-proposal',
+    mode: 'tui-proposal' as const,
     verificationSkills,
     verificationCatalogDigest,
     reviewProvider,
+    expectedActiveGoalId: parsed.supersedesGoalId,
     getActiveGoal: async () => (await host.requireSession().getGoal()).goal,
-  });
+  };
+  let result = await runLoopPreflight(preflightOptions);
+  if (
+    result.ready
+    && verificationSkills.length === 0
+    && revisionCriteriaProvenanceDigests.length > 0
+  ) {
+    const preservedChoices = revisionCriteriaProvenanceDigests.map((provenanceDigest) => {
+      const entry = result.ready
+        ? result.verificationCatalog.entries.find(
+            (candidate) => candidate.ref.provenanceDigest === provenanceDigest,
+          )
+        : undefined;
+      return entry === undefined
+        ? undefined
+        : { selectionId: entry.selectionId, provenanceDigest };
+    });
+    if (preservedChoices.some((choice) => choice === undefined)) {
+      host.showError(
+        'Loop not revised: one or more frozen verification criteria are no longer available. Re-open the criteria selector and choose current criteria.',
+      );
+      return;
+    }
+    result = await runLoopPreflight({
+      ...preflightOptions,
+      verificationSkills: preservedChoices as readonly VerificationCriteriaChoice[],
+      verificationCatalogDigest: result.verificationCatalog.catalogDigest,
+    });
+  }
   if (!result.ready) {
     host.showError(formatLoopPreflightBlocked(result));
     return;
@@ -1085,6 +1142,7 @@ function showFinishLineReview(
         parsed.writerProviderCallLimit === undefined
         || parsed.reviewerProviderCallLimit === undefined
         || parsed.tokenBudget === undefined,
+      terminalRows: host.state.terminal.rows,
       workspaceGit: preflight.workspaceGit,
       onSelect: (choice) => {
         void handleFinishLineReviewChoice(
@@ -1588,6 +1646,16 @@ async function startConfirmedLoop(
     rawArgs,
     {
       commandName: 'loop',
+      onStartCancelled: () => {
+        showFinishLineReview(
+          host,
+          parsed,
+          draft,
+          rawArgs,
+          initialPreflight,
+          discoveredCheckDecision,
+        );
+      },
       prepareCreate: async () => {
         const config = await host.harness.getConfig();
         const result = await runLoopPreflight({
@@ -1617,15 +1685,32 @@ async function startConfirmedLoop(
             config,
             parsed.reviewModel ?? writerModel,
           ),
+          expectedActiveGoalId: parsed.supersedesGoalId,
           getActiveGoal: async () => (await host.requireSession().getGoal()).goal,
         });
         if (!result.ready) {
           host.showError(formatLoopPreflightBlocked(result));
           await restoreWriterModel();
+          showFinishLineReview(
+            host,
+            parsed,
+            draft,
+            rawArgs,
+            initialPreflight,
+            discoveredCheckDecision,
+          );
           return false;
         }
         const trustGrant = await ensureTuiWorkspaceTrust(host, result.proposal);
         if (trustGrant === false) {
+          showFinishLineReview(
+            host,
+            parsed,
+            draft,
+            rawArgs,
+            initialPreflight,
+            discoveredCheckDecision,
+          );
           return false;
         }
         if (writerModel !== host.state.appState.model) {
@@ -1633,6 +1718,14 @@ async function startConfirmedLoop(
             await host.requireSession().setModel(writerModel);
           } catch (error) {
             host.showError(`Failed to switch writer model: ${formatErrorMessage(error)}`);
+            showFinishLineReview(
+              host,
+              parsed,
+              draft,
+              rawArgs,
+              initialPreflight,
+              discoveredCheckDecision,
+            );
             return false;
           }
           host.setAppState({ model: writerModel });
@@ -1680,6 +1773,14 @@ async function startConfirmedLoop(
       onCreateError: async () => {
         if (run !== undefined) await stopLoopRun(run, 0);
         await restoreWriterModel();
+        showFinishLineReview(
+          host,
+          parsed,
+          draft,
+          rawArgs,
+          initialPreflight,
+          discoveredCheckDecision,
+        );
       },
       sendInput: () => {
         host.sendNormalUserInput(draft.objective);

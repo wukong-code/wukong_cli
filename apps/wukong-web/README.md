@@ -10,16 +10,24 @@ to a local **server** over REST + WebSocket. Vue 3 + Vite + TypeScript.
 ```bash
 # 1) Against a REAL server (the server must be running and reachable)
 WEB_PORT=5197 WUKONG_SERVER_URL=http://192.168.97.91:58627 pnpm -C apps/wukong-web run dev
-#   …or from the repo root:  pnpm dev:web   (uses the defaults below)
 
 # 2) Offline / no server — a stub that fakes the server API + event stream
-pnpm -C apps/wukong-web run dev:stub      # then run dev in another shell
+WUKONG_STUB_WEB_URL=http://127.0.0.1:5175/#token=stub-local \
+  pnpm -C apps/wukong-web run dev:stub
+# then, in another shell:
+WUKONG_SERVER_URL=http://127.0.0.1:58627 pnpm -C apps/wukong-web run dev
 
 # checks
 pnpm -C apps/wukong-web run typecheck     # vue-tsc --noEmit
 pnpm -C apps/wukong-web run test          # vitest (pure logic only)
 pnpm -C apps/wukong-web run build         # vite build
 ```
+
+Open the `Open Web UI` URL printed by `dev:stub`. The default Vite port is
+`5175`; the default stub bearer token is `stub-local` and is only for local
+development. If you override the web port, stub port, or token, also set
+`WUKONG_STUB_WEB_URL` and `WUKONG_SERVER_URL` so the printed URL and Vite proxy
+remain aligned.
 
 ### How it connects to the server
 
@@ -91,19 +99,22 @@ web UI of the `wukong` CLI (`apps/wukong`).
 
 ### Current release flow
 
-1. **Develop** — `pnpm dev:web` (or `pnpm -C apps/wukong-web run dev`).
+1. **Develop** — `pnpm -C apps/wukong-web run dev`.
 2. **Build** — `pnpm -C apps/wukong-web run build` produces `apps/wukong-web/dist`.
 3. **Bundle into CLI** — `pnpm -C apps/wukong run build` runs
    `scripts/copy-web-assets.mjs`, which copies `apps/wukong-web/dist` into
    `apps/wukong/dist-web`.
-4. **Publish** — the root `.github/workflows/release.yml` publishes
-   `@wukong/wukong` to npm; `dist-web` is listed in the package `files`
-   array, so the built web assets travel with the CLI package.
-5. **Serve** — `wukong server run` / `wukong web` serves `dist-web` from the
+4. **Package** — `.github/workflows/_native-build.yml` builds the web app before
+   producing each native Wukong archive. `dist-web` is also listed in the
+   `@wukong.today/code` package `files`, so any package build contains the same
+   bundled UI.
+5. **Release** — `.github/workflows/publish-binary.yml` stages, verifies, and
+   publishes the six-platform archives through the public distribution repo.
+6. **Serve** — `wukong server run` / `wukong web` serves `dist-web` from the
    installed package.
 
 The web UI does not display its own package version or build commit. It is
-bundled into the CLI package and follows the published `@wukong/wukong`
+bundled into the CLI package and follows the published `@wukong.today/code`
 release.
 
 ### Suggested improvements

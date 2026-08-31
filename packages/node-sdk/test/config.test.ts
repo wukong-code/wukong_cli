@@ -316,6 +316,36 @@ describe('WukongHarness config API', () => {
     await expect(readFile(configPath, 'utf-8')).resolves.toBe(before);
   });
 
+  it('replaces complete config state without retaining removed providers', async () => {
+    const homeDir = await makeTempDir();
+    const configPath = join(homeDir, 'config.toml');
+    await writeFile(configPath, COMPLETE_TOML, 'utf-8');
+    const harness = createWukongHarness({ homeDir, identity: TEST_IDENTITY });
+
+    await harness.replaceConfig({
+      providers: {
+        replacement: { type: 'openai', apiKey: 'sk-replacement' },
+      },
+      models: {
+        'replacement/model': {
+          provider: 'replacement',
+          model: 'model',
+          maxContextSize: 128_000,
+        },
+      },
+      defaultModel: 'replacement/model',
+    });
+
+    const config = await harness.getConfig({ reload: true });
+    expect(Object.keys(config.providers)).toEqual(['replacement']);
+    expect(config.models).toEqual({
+      'replacement/model': expect.objectContaining({
+        provider: 'replacement',
+        model: 'model',
+      }),
+    });
+  });
+
   it('uses default config when the config file is absent', async () => {
     const homeDir = await makeTempDir();
     const harness = createWukongHarness({ homeDir, identity: TEST_IDENTITY });

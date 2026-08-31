@@ -393,6 +393,7 @@ jobs:
       RELEASE_TAG: ${{ needs.validate-source.outputs.release_tag }}
       VERSION: ${{ needs.validate-source.outputs.version }}
       IS_PRERELEASE: ${{ needs.validate-source.outputs.is_prerelease }}
+      PREVIOUS_LATEST_TAG: ${{ needs.validate-source.outputs.previous_latest_tag }}
       WUKONG_CODE_BUILD_TARGET: ${{ matrix.target }}
     steps:
       - name: Checkout exact smoke implementation
@@ -489,7 +490,7 @@ jobs:
             throw 'Fresh Windows candidate did not create the user config'
           }
 
-      - name: Direct upgrade from v0.0.22 without losing the old binary on failure
+      - name: Direct upgrade from the previous stable release without losing the old binary on failure
         if: needs.validate-source.outputs.is_prerelease == 'true' && runner.os != 'Windows'
         shell: bash
         run: |
@@ -500,8 +501,9 @@ jobs:
           export WUKONG_CODE_NO_AUTO_UPDATE=1
           export WUKONG_CODE_CATALOG_OFFLINE=1
           export WUKONG_TELEMETRY=0
-          WUKONG_VERSION=v0.0.22 WUKONG_INSTALL_DIR="$INSTALL_DIR" sh source/install.sh
-          "$INSTALL_DIR/wukong" --version | grep -F '0.0.22'
+          BASELINE_VERSION="${PREVIOUS_LATEST_TAG#v}"
+          WUKONG_VERSION="$PREVIOUS_LATEST_TAG" WUKONG_INSTALL_DIR="$INSTALL_DIR" sh source/install.sh
+          "$INSTALL_DIR/wukong" --version | grep -F "$BASELINE_VERSION"
           "$INSTALL_DIR/wukong" provider list --json >/dev/null
           test -s "$STATE_DIR/config.toml"
           cp "$STATE_DIR/config.toml" "$RUNNER_TEMP/config-before-upgrade.toml"
@@ -510,7 +512,7 @@ jobs:
           "$INSTALL_DIR/wukong" provider list --json >/dev/null
           cmp "$RUNNER_TEMP/config-before-upgrade.toml" "$STATE_DIR/config.toml"
 
-      - name: Replace v0.0.22 with the authenticated stable draft archive
+      - name: Replace the previous stable release with the authenticated stable draft archive
         if: needs.validate-source.outputs.is_prerelease == 'false' && runner.os != 'Windows'
         shell: bash
         run: |
@@ -540,39 +542,40 @@ jobs:
           export WUKONG_CODE_NO_AUTO_UPDATE=1
           export WUKONG_CODE_CATALOG_OFFLINE=1
           export WUKONG_TELEMETRY=0
-          WUKONG_VERSION=v0.0.22 WUKONG_INSTALL_DIR="$INSTALL_DIR" sh source/install.sh
-          "$INSTALL_DIR/wukong" --version | grep -F '0.0.22'
+          BASELINE_VERSION="${PREVIOUS_LATEST_TAG#v}"
+          WUKONG_VERSION="$PREVIOUS_LATEST_TAG" WUKONG_INSTALL_DIR="$INSTALL_DIR" sh source/install.sh
+          "$INSTALL_DIR/wukong" --version | grep -F "$BASELINE_VERSION"
           "$INSTALL_DIR/wukong" provider list --json >/dev/null
           test -s "$STATE_DIR/config.toml"
           cp "$STATE_DIR/config.toml" "$RUNNER_TEMP/config-before-stable-draft.toml"
 
-          mv "$INSTALL_DIR/wukong" "$INSTALL_DIR/wukong-v0.0.22"
+          mv "$INSTALL_DIR/wukong" "$INSTALL_DIR/wukong-$PREVIOUS_LATEST_TAG"
           cp "$CANDIDATE_DIR/wukong" "$INSTALL_DIR/wukong.next"
           chmod +x "$INSTALL_DIR/wukong.next"
           mv "$INSTALL_DIR/wukong.next" "$INSTALL_DIR/wukong"
           if ! "$INSTALL_DIR/wukong" --version | grep -F "$VERSION" \
             || ! "$INSTALL_DIR/wukong" provider list --json >/dev/null; then
-            mv "$INSTALL_DIR/wukong-v0.0.22" "$INSTALL_DIR/wukong"
+            mv "$INSTALL_DIR/wukong-$PREVIOUS_LATEST_TAG" "$INSTALL_DIR/wukong"
             exit 1
           fi
-          rm "$INSTALL_DIR/wukong-v0.0.22"
+          rm "$INSTALL_DIR/wukong-$PREVIOUS_LATEST_TAG"
           cmp "$RUNNER_TEMP/config-before-stable-draft.toml" "$STATE_DIR/config.toml"
 
-      - name: Direct Windows upgrade from v0.0.22 after process exit
+      - name: Direct Windows upgrade from the previous stable release after process exit
         if: runner.os == 'Windows'
         shell: pwsh
         run: |
           $ErrorActionPreference = 'Stop'
           $PSNativeCommandUseErrorActionPreference = $true
           $upgradeRoot = Join-Path $env:RUNNER_TEMP 'wukong-upgrade'
-          $oldAssets = Join-Path $upgradeRoot 'v0.0.22-assets'
+          $oldAssets = Join-Path $upgradeRoot "$env:PREVIOUS_LATEST_TAG-assets"
           $installDir = Join-Path $upgradeRoot 'bin'
           $candidateDir = Join-Path $upgradeRoot 'candidate'
           $stateDir = Join-Path $upgradeRoot 'state'
           New-Item -ItemType Directory -Force -Path $oldAssets, $installDir, $candidateDir, $stateDir | Out-Null
 
           $oldArchiveName = "wukong-$env:WUKONG_CODE_BUILD_TARGET.zip"
-          $oldReleaseBase = "https://github.com/$env:RELEASE_REPO/releases/download/v0.0.22"
+          $oldReleaseBase = "https://github.com/$env:RELEASE_REPO/releases/download/$env:PREVIOUS_LATEST_TAG"
           Invoke-WebRequest -Uri "$oldReleaseBase/$oldArchiveName" `
             -OutFile (Join-Path $oldAssets $oldArchiveName)
           Invoke-WebRequest -Uri "$oldReleaseBase/$oldArchiveName.sha256" `
@@ -587,12 +590,13 @@ jobs:
           $env:WUKONG_CODE_CATALOG_OFFLINE = '1'
           $env:WUKONG_TELEMETRY = '0'
           $installedExe = Join-Path $installDir 'wukong.exe'
-          if (-not ((& $installedExe --version) | Select-String -Quiet -SimpleMatch '0.0.22')) {
-            throw 'Installed baseline did not report 0.0.22'
+          $baselineVersion = $env:PREVIOUS_LATEST_TAG.TrimStart('v')
+          if (-not ((& $installedExe --version) | Select-String -Quiet -SimpleMatch $baselineVersion)) {
+            throw "Installed baseline did not report $baselineVersion"
           }
           & $installedExe provider list --json | Out-Null
           if (-not (Test-Path -LiteralPath (Join-Path $stateDir 'config.toml'))) {
-            throw 'v0.0.22 did not create the user config before upgrade'
+            throw "$env:PREVIOUS_LATEST_TAG did not create the user config before upgrade"
           }
           $configBefore = Join-Path $upgradeRoot 'config-before-upgrade.toml'
           Copy-Item -LiteralPath (Join-Path $stateDir 'config.toml') -Destination $configBefore
@@ -606,7 +610,7 @@ jobs:
 
           # The old process has exited before replacement. Keep a same-directory
           # backup until the installed candidate starts and reads the same home.
-          $backupExe = Join-Path $installDir 'wukong-v0.0.22.exe'
+          $backupExe = Join-Path $installDir "wukong-$env:PREVIOUS_LATEST_TAG.exe"
           Move-Item -LiteralPath $installedExe -Destination $backupExe
           try {
             Copy-Item -LiteralPath $candidateExe -Destination $installedExe
@@ -616,7 +620,7 @@ jobs:
             & $installedExe provider list --json | Out-Null
             if ((Get-FileHash -LiteralPath (Join-Path $stateDir 'config.toml')).Hash `
               -ne (Get-FileHash -LiteralPath $configBefore).Hash) {
-              throw 'Candidate changed the existing v0.0.22 config during replacement smoke'
+              throw "Candidate changed the existing $env:PREVIOUS_LATEST_TAG config during replacement smoke"
             }
             Remove-Item -LiteralPath $backupExe
           } catch {

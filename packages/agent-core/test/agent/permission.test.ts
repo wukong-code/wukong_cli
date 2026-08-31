@@ -471,6 +471,32 @@ describe('Permission auto mode', () => {
     },
   );
 
+  it('fails closed when a manual approval is required but no approval handler exists', async () => {
+    const { manager, requestApproval, telemetryTrack } = makePermissionManager(
+      async () => ({ decision: 'approved' }),
+      { approvalRpc: false },
+    );
+
+    await expect(
+      manager.beforeToolCall(
+        hookContext({
+          id: 'call_write_without_rpc',
+          toolName: 'Write',
+          args: { path: '/tmp/notes.md', content: 'x' },
+        }),
+      ),
+    ).resolves.toEqual({
+      block: true,
+      reason: 'Tool "Write" was not run because no approval handler is available.',
+    });
+
+    expect(requestApproval).not.toHaveBeenCalled();
+    expect(telemetryTrack).toHaveBeenCalledWith(
+      'permission_approval_result',
+      expect.objectContaining({ result: 'error', session_cache_written: false }),
+    );
+  });
+
   it.each([
     ['Write', { path: '/tmp/notes.md', content: 'x' }, 'write', 'write file'],
     ['Edit', { path: '/tmp/notes.md', old_string: 'a', new_string: 'b' }, 'edit', 'edit file'],
@@ -2616,7 +2642,7 @@ describe('Approval telemetry', () => {
     });
   });
 
-  it('does not fire approval observer hooks without an approval request', async () => {
+  it('reports a failed approval result when no approval handler exists', async () => {
     const triggerBlock = vi.fn(async () => undefined);
     const fireAndForgetTrigger = vi.fn(async () => []);
     const { manager, requestApproval } = makePermissionManager(
@@ -2630,16 +2656,22 @@ describe('Approval telemetry', () => {
     );
 
     await expect(manager.beforeToolCall(hookContext({ id: 'call_no_approval_rpc' }))).resolves
-      .toBeUndefined();
+      .toMatchObject({
+        block: true,
+        reason: expect.stringContaining('no approval handler is available'),
+      });
 
     expect(requestApproval).not.toHaveBeenCalled();
     expect(fireAndForgetTrigger).not.toHaveBeenCalledWith(
       'PermissionRequest',
       expect.anything(),
     );
-    expect(fireAndForgetTrigger).not.toHaveBeenCalledWith(
+    expect(fireAndForgetTrigger).toHaveBeenCalledWith(
       'PermissionResult',
-      expect.anything(),
+      expect.objectContaining({
+        matcherValue: 'Bash',
+        inputData: expect.objectContaining({ decision: 'error' }),
+      }),
     );
   });
 

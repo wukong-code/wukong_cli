@@ -35,6 +35,7 @@ import { useIsMobile } from './composables/useIsMobile';
 import ServerAuthDialog from './components/ServerAuthDialog.vue';
 import { initServerAuth, onAuthRequired } from './api/daemon/serverAuth';
 import type { AppConfig, ThinkingLevel } from './api/types';
+import type { PermissionMode } from './types';
 
 // Hydrate the server-transport credential (fragment token or sessionStorage)
 // BEFORE the client connects, so the first REST/WS calls already carry it.
@@ -74,6 +75,20 @@ const running = computed(() => client.activity.value !== 'idle');
 // Auth readiness gates the main app. Once the first load finishes and auth is
 // still missing, show a full-page login entry instead of an in-app banner.
 const { showAuthGate } = useAuthGate({ client });
+const showBootstrapError = computed(
+  () => client.initialized.value && client.bootstrapError.value,
+);
+const showConnectionBanner = computed(
+  () =>
+    client.initialized.value
+    && !client.bootstrapError.value
+    && client.connection.value !== 'connected',
+);
+const connectionBannerText = computed(() =>
+  client.connection.value === 'reconnecting'
+    ? t('app.realtimeReconnecting')
+    : t('app.realtimeConnecting'),
+);
 
 
 // Static page title (app name only). The session title and workspace name are
@@ -221,15 +236,6 @@ const {
 // Reference to ConversationPane so we can imperatively switch tabs
 const conversationPaneRef = ref<InstanceType<typeof ConversationPane> | null>(null);
 
-// Shift-multi-selected workspace ids; when >1 are selected the main pane
-// shows a "coming soon" placeholder instead of the conversation.
-const selectedWorkspaceIds = ref<string[]>([]);
-const hasMultiSelect = computed(() => selectedWorkspaceIds.value.length > 1);
-
-function handleSelectWorkspaces(ids: string[]): void {
-  selectedWorkspaceIds.value = ids;
-}
-
 // Dialog visibility refs
 const showModelPicker = ref(false);
 const showProviders = ref(false);
@@ -241,6 +247,7 @@ const showSettings = ref(false);
 type SubmitPayload = {
   text: string;
   attachments: { fileId: string; kind: 'image' | 'video' }[];
+  complete: (accepted: boolean) => void;
 };
 const pendingWorkspaceSubmit = ref<SubmitPayload | null>(null);
 
@@ -249,6 +256,7 @@ const pendingWorkspaceSubmit = ref<SubmitPayload | null>(null);
 // open dialog — otherwise Escape dismisses the panel behind the dialog and the
 // dialog's own Escape handler never fires. New top-level dialogs go here too.
 const anyOverlayOpen = computed<boolean>(() =>
+  showServerAuth.value ||
   showModelPicker.value ||
   showProviders.value ||
   showLogin.value ||
@@ -259,6 +267,15 @@ const anyOverlayOpen = computed<boolean>(() =>
   showMobileSwitcher.value ||
   showMobileSettings.value,
 );
+
+function setPermissionSafely(mode: PermissionMode): void {
+  if (
+    mode === 'yolo'
+    && client.permission.value !== 'yolo'
+    && !window.confirm(t('app.yoloConfirm'))
+  ) return;
+  client.setPermission(mode);
+}
 
 // Loading state for model/provider fetches
 const modelsLoading = ref(false);
@@ -316,6 +333,11 @@ async function handleRefreshProvider(id: string): Promise<void> {
 }
 
 async function handleUpdateConfig(patch: Partial<AppConfig>): Promise<void> {
+  if (
+    patch.defaultPermissionMode === 'yolo'
+    && client.config.value?.defaultPermissionMode !== 'yolo'
+    && !window.confirm(t('app.yoloDefaultConfirm'))
+  ) return;
   configSaving.value = true;
   try {
     const saved = await client.updateConfig(patch);
@@ -412,17 +434,17 @@ function handleCommand(cmd: string): void {
       // Cycle manual → auto → yolo → manual
       const current = client.permission.value;
       const next = current === 'manual' ? 'auto' : current === 'auto' ? 'yolo' : 'manual';
-      client.setPermission(next);
+      setPermissionSafely(next);
       break;
     }
     case '/plan':
       client.togglePlanMode();
       break;
     case '/auto':
-      client.setPermission('auto');
+      setPermissionSafely('auto');
       break;
     case '/yolo':
-      client.setPermission('yolo');
+      setPermissionSafely('yolo');
       break;
     case '/thinking':
       // No popover anchor from a slash command — step to the next level.
@@ -470,7 +492,12 @@ function handleEditQueued(index: number): void {
 async function handleSubmit(payload: SubmitPayload): Promise<void> {
   const wsId = client.activeWorkspaceId.value;
   if (!client.activeSessionId.value && wsId) {
-    await client.startSessionAndSendPrompt(wsId, payload.text, payload.attachments);
+    const accepted = await client.startSessionAndSendPrompt(
+      wsId,
+      payload.text,
+      payload.attachments,
+    );
+    payload.complete(accepted);
     return;
   }
   if (!client.activeSessionId.value && !wsId) {
@@ -478,21 +505,30 @@ async function handleSubmit(payload: SubmitPayload): Promise<void> {
     showAddWorkspace.value = true;
     return;
   }
-  void client.sendPrompt(payload.text, payload.attachments);
+  payload.complete(await client.sendPrompt(payload.text, payload.attachments));
 }
 
 async function handleAddWorkspace(root: string): Promise<void> {
+  const added = await client.addWorkspaceByPath(root);
+  if (!added) return;
   showAddWorkspace.value = false;
-  await client.addWorkspaceByPath(root);
   const pending = pendingWorkspaceSubmit.value;
   pendingWorkspaceSubmit.value = null;
   const wsId = client.activeWorkspaceId.value;
   if (pending && wsId) {
-    await client.startSessionAndSendPrompt(wsId, pending.text, pending.attachments);
+    const accepted = await client.startSessionAndSendPrompt(
+      wsId,
+      pending.text,
+      pending.attachments,
+    );
+    pending.complete(accepted);
+  } else {
+    pending?.complete(false);
   }
 }
 
 function handleCloseAddWorkspace(): void {
+  pendingWorkspaceSubmit.value?.complete(false);
   pendingWorkspaceSubmit.value = null;
   showAddWorkspace.value = false;
 }
@@ -533,7 +569,19 @@ function openPr(url: string): void {
 <template>
   <div class="app-shell">
     <ServerAuthDialog v-if="showServerAuth" />
-    <section v-if="showAuthGate" class="auth-page">
+    <section v-if="showBootstrapError" class="auth-page">
+      <div class="auth-page-inner">
+        <img class="auth-page-logo" src="/wukong-logo.svg" alt="Wukong" />
+        <div class="auth-page-copy">
+          <h1>{{ t('app.bootstrapErrorTitle') }}</h1>
+          <p>{{ t('app.bootstrapErrorMessage') }}</p>
+        </div>
+        <button type="button" class="auth-page-btn" @click="client.load()">
+          <span>{{ t('app.bootstrapRetry') }}</span>
+        </button>
+      </div>
+    </section>
+    <section v-else-if="showAuthGate" class="auth-page">
       <div class="auth-page-inner">
         <img class="auth-page-logo" src="/wukong-logo.svg" alt="Wukong" />
         <div class="auth-page-copy">
@@ -551,7 +599,16 @@ function openPr(url: string): void {
       </div>
     </section>
     <div
-      v-else
+      v-if="showConnectionBanner && !showAuthGate && !showBootstrapError"
+      class="connection-banner"
+      role="status"
+      aria-live="polite"
+    >
+      <span class="connection-banner-dot" aria-hidden="true" />
+      <span>{{ connectionBannerText }}</span>
+    </div>
+    <div
+      v-if="!showBootstrapError && !showAuthGate"
       class="app"
       :class="{ mobile: isMobile, 'sidebar-collapsed': sidebarCollapsed && !isMobile }"
       :style="{ '--side-w': sideWidth + 'px', '--preview-w': previewPanelWidth + 'px' }"
@@ -582,7 +639,6 @@ function openPr(url: string): void {
         @reorder-workspaces="client.reorderWorkspaces($event)"
         @load-more-sessions="(id) => void client.loadMoreSessions(id)"
         @load-all-sessions="void client.loadAllSessions()"
-        @select-workspaces="handleSelectWorkspaces"
         @open-settings="showSettings = true"
         @collapse="toggleSidebarCollapse"
       />
@@ -625,7 +681,6 @@ function openPr(url: string): void {
     />
 
     <ConversationPane
-      v-if="!hasMultiSelect"
       ref="conversationPaneRef"
       :mobile="isMobile"
       :modern="client.theme.value === 'modern' || client.theme.value === 'wukong'"
@@ -656,6 +711,7 @@ function openPr(url: string): void {
       :fast-moon="client.fastMoon.value"
       :file-reload-key="client.activeSessionId.value"
       :session-loading="client.sessionLoading.value"
+      :session-load-error="client.sessionLoadError.value"
       :compaction="client.compaction.value"
       :has-more-messages="client.hasMoreMessages.value"
       :loading-more="client.loadingMoreMessages.value"
@@ -683,7 +739,7 @@ function openPr(url: string): void {
       @interrupt="client.abortCurrentPrompt()"
       @unqueue="handleUnqueue"
       @edit-queued="handleEditQueued"
-      @set-permission="client.setPermission($event)"
+      @set-permission="setPermissionSafely($event)"
       @set-thinking="client.setThinking($event)"
       @toggle-plan="client.togglePlanMode()"
       @toggle-swarm="client.toggleSwarmMode()"
@@ -704,13 +760,8 @@ function openPr(url: string): void {
       @open-agent="openAgentPanel($event)"
       @open-tool-diff="openToolDiff($event)"
       @edit-message="handleEditMessage"
+      @retry-session="client.activeSessionId.value && client.selectSession(client.activeSessionId.value, { urlMode: 'replace' })"
     />
-
-    <!-- Multi-workspace selection placeholder -->
-    <div v-else class="coming-soon">
-      <span class="cs-icon">🚧</span>
-      <span class="cs-text">{{ t('app.comingSoon') }}</span>
-    </div>
 
     <ResizeHandle
       v-if="sidePanelVisible && !isMobile"
@@ -859,7 +910,6 @@ function openPr(url: string): void {
       :thinking="client.thinking.value"
       :plan-mode="client.planMode.value"
       :swarm-mode="client.swarmMode.value"
-      :cost-usd="client.sessionCost.value"
       @close="showStatusPanel = false"
     />
 
@@ -880,7 +930,7 @@ function openPr(url: string): void {
 
     <!-- First-run onboarding overlay (theme / language / welcome greeting) -->
     <Onboarding
-      v-if="showOnboarding && !showAuthGate"
+      v-if="showOnboarding && !showAuthGate && !showServerAuth"
       :theme="client.theme.value"
       @set-theme="client.setTheme($event)"
       @complete="completeOnboarding"
@@ -931,7 +981,7 @@ function openPr(url: string): void {
       @set-thinking="client.setThinking($event)"
       @toggle-plan="client.togglePlanMode()"
       @toggle-swarm="client.toggleSwarmMode()"
-      @set-permission="client.setPermission($event)"
+      @set-permission="setPermissionSafely($event)"
       @set-theme="client.setTheme($event)"
       @set-color-scheme="client.setColorScheme($event)"
       @set-ui-font-size="client.setUiFontSize($event)"
@@ -956,6 +1006,90 @@ function openPr(url: string): void {
 /* Global connecting splash fade-out (only the leave matters; it mounts instantly). */
 .gload-fade-leave-active { transition: opacity 0.28s ease; }
 .gload-fade-leave-to { opacity: 0; }
+
+.connection-banner {
+  position: fixed;
+  top: max(8px, env(safe-area-inset-top));
+  left: 50%;
+  z-index: 120;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  max-width: calc(100vw - 24px);
+  padding: 7px 11px;
+  border: 1px solid color-mix(in srgb, var(--warn) 42%, var(--line));
+  border-radius: 7px;
+  background: color-mix(in srgb, var(--warn) 10%, var(--bg));
+  color: var(--ink);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.1);
+  font-family: var(--mono);
+  font-size: var(--ui-font-size-xs);
+  line-height: 1.35;
+  transform: translateX(-50%);
+}
+.connection-banner-dot {
+  width: 7px;
+  height: 7px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--warn);
+}
+.startup-retry-banner {
+  position: fixed;
+  top: max(48px, calc(env(safe-area-inset-top) + 48px));
+  left: 50%;
+  z-index: 119;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: calc(100vw - 24px);
+  padding: 8px 10px 8px 12px;
+  border: 1px solid color-mix(in srgb, var(--err) 35%, var(--line));
+  border-radius: 7px;
+  background: var(--bg);
+  color: var(--ink);
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.12);
+  font-family: var(--mono);
+  font-size: var(--ui-font-size-xs);
+  line-height: 1.35;
+  transform: translateX(-50%);
+}
+.startup-retry-banner button {
+  flex: none;
+  min-height: 28px;
+  padding: 4px 9px;
+  border: 1px solid var(--blue);
+  border-radius: 5px;
+  background: var(--blue);
+  color: var(--bg);
+  font: inherit;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.startup-retry-banner button:hover:not(:disabled) { background: var(--blue2); }
+.startup-retry-banner button:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: 2px;
+}
+.startup-retry-banner button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+.startup-retry-banner .startup-retry-dismiss {
+  border-color: var(--line);
+  background: transparent;
+  color: var(--dim);
+}
+
+@media (max-width: 640px) {
+  .startup-retry-banner {
+    right: 12px;
+    left: 12px;
+    flex-wrap: wrap;
+    transform: none;
+  }
+  .startup-retry-banner > span { flex: 1 0 100%; }
+}
 
 .app-shell {
   height: 100vh;

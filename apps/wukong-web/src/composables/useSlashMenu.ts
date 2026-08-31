@@ -3,6 +3,8 @@ import { nextTick, ref, type Ref } from 'vue';
 import type { AppSkill } from '../api/types';
 import { buildSlashItems, filterCommands, type SlashCommand } from '../lib/slashCommands';
 
+const ADVANCED_HIDDEN_COMMANDS = new Set(['/swarm', '/goal', '/btw']);
+
 export interface SlashMenuDeps {
   /** The live composer text — drives filtering and is rewritten on select. */
   text: Ref<string>;
@@ -44,7 +46,12 @@ export function useSlashMenu(deps: SlashMenuDeps) {
     // Only show if the value starts with `/` and has no space yet (single token).
     if (val.startsWith('/') && !val.includes(' ')) {
       // Built-in commands + the active session's skills (shown as /<skill-name>).
-      items.value = filterCommands(val, buildSlashItems(skills()));
+      items.value = filterCommands(
+        val,
+        buildSlashItems(skills()).filter(
+          (item) => item.isSkill === true || !ADVANCED_HIDDEN_COMMANDS.has(item.name),
+        ),
+      );
       active.value = 0;
       open.value = items.value.length > 0;
     } else {

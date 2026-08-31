@@ -48,6 +48,8 @@ const props = defineProps<{
   modern?: boolean;
   /** True while switching sessions and the turns array is not yet loaded. */
   sessionLoading?: boolean;
+  /** The active session snapshot failed to load; the composer stays disabled until retry. */
+  sessionLoadError?: boolean;
   /** Live compaction state of the active session (non-null while running). */
   compaction?: { status: 'running' } | null;
   /** Whether there are older messages available to load when scrolling up. */
@@ -83,7 +85,11 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  submit: [payload: { text: string; attachments: { fileId: string; kind: 'image' | 'video' }[] }];
+  submit: [payload: {
+    text: string;
+    attachments: { fileId: string; kind: 'image' | 'video' }[];
+    complete: (accepted: boolean) => void;
+  }];
   steer: [payload: { text: string; attachments: { fileId: string; kind: 'image' | 'video' }[] }];
   approval: [approvalId: string, response: { decision: 'approved' | 'rejected' | 'cancelled'; scope?: 'session'; feedback?: string }];
   cancelTask: [taskId: string];
@@ -118,6 +124,7 @@ const emit = defineEmits<{
   selectWorkspace: [workspaceId: string];
   /** Empty-composer workspace picker: create a new workspace. */
   addWorkspace: [];
+  retrySession: [];
   /** Chat header: open the GitHub PR in a new tab. */
   openPr: [url: string];
   /** Chat header / session row: rename current session. */
@@ -725,7 +732,11 @@ function followAfterUserAction(): void {
   });
 }
 
-function handleComposerSubmit(payload: { text: string; attachments: { fileId: string; kind: 'image' | 'video' }[] }): void {
+function handleComposerSubmit(payload: {
+  text: string;
+  attachments: { fileId: string; kind: 'image' | 'video' }[];
+  complete: (accepted: boolean) => void;
+}): void {
   followAfterUserAction();
   emit('submit', payload);
 }
@@ -835,7 +846,12 @@ function handleInterrupt(): void {
 }
 
 function onKeyDown(event: KeyboardEvent): void {
-  if (event.key === 'Escape' && (props.running || props.sending)) {
+  if (
+    event.key === 'Escape'
+    && !event.defaultPrevented
+    && document.querySelector('[aria-modal="true"]') === null
+    && (props.running || props.sending)
+  ) {
     event.preventDefault();
     handleInterrupt();
   }
@@ -931,7 +947,18 @@ defineExpose({ loadComposerForEdit, focusComposer });
         @scroll.passive="onPanesScroll"
       >
         <div class="content-wrap" :class="[mobile ? 'align-mobile' : 'align-center']">
-          <template v-if="turns.length === 0 && !sessionLoading">
+          <template v-if="sessionLoadError">
+            <div class="empty-spacer" />
+            <div class="empty-hint">
+              <span class="empty-hint-title">{{ t('conversation.loadFailedTitle') }}</span>
+              <span class="empty-hint-text">{{ t('conversation.loadFailedMessage') }}</span>
+              <button type="button" class="empty-add-workspace" @click="emit('retrySession')">
+                {{ t('conversation.retryLoad') }}
+              </button>
+            </div>
+            <div class="empty-spacer" />
+          </template>
+          <template v-else-if="turns.length === 0 && !sessionLoading">
             <!-- Empty session: Composer rendered in the centre of the pane -->
             <div class="empty-spacer" />
             <div class="empty-hint">
@@ -1072,7 +1099,7 @@ defineExpose({ loadComposerForEdit, focusComposer });
         </div>
       </div>
       <ChatDock
-        v-if="!(turns.length === 0 && !sessionLoading)"
+        v-if="!sessionLoadError && !(turns.length === 0 && !sessionLoading)"
         :ref="bindChatDock"
         :style="chatDockStyle"
         :session-id="sessionId"

@@ -206,6 +206,41 @@ describe('Loop preflight', () => {
     if (!noModel.ready) expect(formatLoopPreflightBlocked(noModel)).toContain('Loop not started');
   });
 
+  it('allows only the exact active Goal during revision preflight', async () => {
+    const cwd = await workspace();
+    const base = {
+      objective: 'revise the loop',
+      model: 'glm-5.2',
+      workspace: cwd,
+      reviewProvider,
+      expectedActiveGoalId: 'goal-current',
+      discoverChecks: async () => ['pnpm test'],
+    };
+
+    const exact = await runLoopPreflight({
+      ...base,
+      getActiveGoal: async () => ({ goalId: 'goal-current' }) as never,
+    });
+    const changed = await runLoopPreflight({
+      ...base,
+      getActiveGoal: async () => ({ goalId: 'goal-other' }) as never,
+    });
+    const missing = await runLoopPreflight({
+      ...base,
+      getActiveGoal: async () => null,
+    });
+
+    expect(exact.ready).toBe(true);
+    expect(changed).toMatchObject({
+      ready: false,
+      reason: 'The Goal being revised is no longer the active Goal.',
+    });
+    expect(missing).toMatchObject({
+      ready: false,
+      reason: 'The Goal being revised is no longer the active Goal.',
+    });
+  });
+
   it('requires exact headless selection, warning, plan, and workspace approvals', async () => {
     const cwd = await workspace();
     const base = {

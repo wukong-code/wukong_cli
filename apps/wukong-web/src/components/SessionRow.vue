@@ -19,8 +19,11 @@ const props = withDefaults(
     questionCount?: number;
     /** A background turn finished here that the user hasn't opened — blue dot. */
     unread?: boolean;
+    /** Roving-tabindex state owned by Sidebar's tree. */
+    treeFocused?: boolean;
+    treeLevel?: number;
   }>(),
-  { approvalCount: 0, questionCount: 0, unread: false },
+  { approvalCount: 0, questionCount: 0, unread: false, treeFocused: false, treeLevel: 2 },
 );
 
 const emit = defineEmits<{
@@ -123,7 +126,17 @@ defineExpose({ closeMenu, cancelArchive });
 </script>
 
 <template>
-  <div class="se" :class="{ on: active }" @click="emit('select', session.id)">
+  <div
+    class="se"
+    :class="{ on: active }"
+    role="treeitem"
+    :aria-level="treeLevel"
+    :aria-selected="active"
+    :aria-label="session.title"
+    :tabindex="treeFocused ? 0 : -1"
+    :data-tree-key="`session:${session.id}`"
+    @click="emit('select', session.id)"
+  >
     <div class="row">
       <!-- Leading status slot (in the gutter left of the title): a spinner
            while the session runs, otherwise an unread blue dot. Fixed width
@@ -247,6 +260,11 @@ defineExpose({ closeMenu, cancelArchive });
 }
 .se:hover { background: var(--panel2); }
 .se.on { background: color-mix(in srgb, var(--blue) 7%, transparent); }
+.se:focus-visible {
+  outline: 2px solid var(--blue);
+  outline-offset: -2px;
+  background: var(--panel2);
+}
 
 .row {
   display: flex;
@@ -356,6 +374,7 @@ defineExpose({ closeMenu, cancelArchive });
   border-radius: 4px;
 }
 .se:hover .kebab,
+.se:focus-within .kebab,
 .kebab.open {
   display: inline-flex;
 }

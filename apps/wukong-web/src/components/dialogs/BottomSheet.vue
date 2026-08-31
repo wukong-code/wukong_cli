@@ -30,7 +30,10 @@ function close(): void {
 
 // Close on Escape while open (desktop keyboard / test convenience).
 function onKeydown(e: KeyboardEvent): void {
-  if (e.key === 'Escape') close();
+  if (e.key !== 'Escape') return;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+  close();
 }
 
 watch(
@@ -52,7 +55,7 @@ onUnmounted(() => {
   <Transition name="sheet">
     <div v-if="modelValue" class="sheet-root">
       <div class="sheet-scrim" @click="close" />
-      <div class="sheet-panel" role="dialog" :aria-label="title || t('mobile.sheetLabel')">
+      <div class="sheet-panel" role="dialog" aria-modal="true" :aria-label="title || t('mobile.sheetLabel')">
         <button
           type="button"
           class="sheet-grab"

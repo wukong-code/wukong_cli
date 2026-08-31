@@ -83,7 +83,7 @@ export interface UseWorkspaceStateDeps {
   subscribeToSessionEvents: (sessionId: string) => void;
   hasLoadedMessages: (sessionId: string) => boolean;
   refreshSessionStatus: (sessionId: string) => Promise<void>;
-  persistSessionProfile: (patch: PersistSessionProfilePatch) => void;
+  persistSessionProfile: (patch: PersistSessionProfilePatch) => Promise<boolean>;
   mergedWorkspaces: ComputedRef<AppWorkspace[]>;
   /** Sidebar-facing workspaces in the user's (dragged) display order. */
   workspacesView: ComputedRef<WorkspaceView[]>;
@@ -140,7 +140,6 @@ export function useWorkspaceState(rawState: ExtendedState, deps: UseWorkspaceSta
     saveActiveWorkspaceToStorage,
     saveHiddenWorkspacesToStorage,
     goalErrorMessage,
-    basename,
     resetFastMoon,
     initialized,
     selectedDiffPath,
@@ -254,8 +253,10 @@ export function useWorkspaceState(rawState: ExtendedState, deps: UseWorkspaceSta
       rawState.authReady = result.ready;
       rawState.defaultModel = result.defaultModel;
       rawState.managedProviderStatus = result.managedProvider?.status ?? null;
-    } catch {
-      // Daemon may not have this endpoint yet; leave defaults (authReady: false)
+      rawState.bootstrapError = false;
+    } catch (error) {
+      rawState.bootstrapError = true;
+      pushOperationFailure('checkAuth', error);
     }
   }
 
@@ -427,6 +428,7 @@ export function useWorkspaceState(rawState: ExtendedState, deps: UseWorkspaceSta
 
   async function load(): Promise<void> {
     rawState.loading = true;
+    rawState.bootstrapError = false;
     try {
       const api = getWukongWebApi();
       // Parallel: health + meta + models
@@ -619,21 +621,15 @@ export function useWorkspaceState(rawState: ExtendedState, deps: UseWorkspaceSta
     workspaceId: string,
     text: string,
     attachments?: PromptAttachment[],
-  ): Promise<void> {
+  ): Promise<boolean> {
     const ws = mergedWorkspaces.value.find((w) => w.id === workspaceId);
-    if (!ws) return;
+    if (!ws) return false;
     try {
       const api = getWukongWebApi();
-      let workspaceIdForCreate: string | undefined;
-      let cwdForCreate = ws.root;
-      try {
-        const registered = await api.addWorkspace({ root: ws.root });
-        workspaceIdForCreate = registered.id;
-        cwdForCreate = registered.root;
-        upsertWorkspacePreserveOrder(registered);
-      } catch {
-        // Older daemons may not have /workspaces.
-      }
+      const registered = await api.addWorkspace({ root: ws.root });
+      const workspaceIdForCreate = registered.id;
+      const cwdForCreate = registered.root;
+      upsertWorkspacePreserveOrder(registered);
       const draftPick = modelProvider.draftModel.value ?? undefined;
       const session = await api.createSession({
         workspaceId: workspaceIdForCreate,
@@ -656,41 +652,30 @@ export function useWorkspaceState(rawState: ExtendedState, deps: UseWorkspaceSta
       // then submitPromptInternal adds the user turn synchronously (no await in
       // between), so the view goes loading → message with no empty-composer frame.
       await selectSession(session.id);
-      await submitPromptInternal(session.id, text, attachments);
+      return await submitPromptInternal(session.id, text, attachments);
     } catch (error) {
       pushOperationFailure('startSessionAndSendPrompt', error);
+      return false;
     }
   }
 
   /**
-   * Add a workspace by folder path. Tries the daemon registry; on failure (or in
-   * fallback mode) creates a locally-derived workspace from the path and
-   * remembers it, then selects it.
+   * Add a workspace by folder path. The daemon validates and persists the path;
+   * failures stay visible instead of manufacturing a local workspace that the
+   * server cannot use.
    */
-  async function addWorkspaceByPath(root: string): Promise<void> {
+  async function addWorkspaceByPath(root: string): Promise<boolean> {
     const trimmed = root.trim();
-    if (!trimmed) return;
+    if (!trimmed) return false;
     const api = getWukongWebApi();
     try {
       const ws = await api.addWorkspace({ root: trimmed });
       upsertWorkspacePreserveOrder(ws);
       openWorkspaceDraft(ws.id);
-    } catch {
-      // Fallback: remember a derived workspace locally (id = root = path).
-      const existing = rawState.workspaces.find((w) => w.root === trimmed);
-      if (!existing) {
-        rawState.workspaces = [
-          {
-            id: trimmed,
-            root: trimmed,
-            name: basename(trimmed),
-            isGitRepo: false,
-            sessionCount: 0,
-          },
-          ...rawState.workspaces,
-        ];
-      }
-      openWorkspaceDraft(trimmed);
+      return true;
+    } catch (error) {
+      pushOperationFailure('addWorkspace', error);
+      return false;
     }
   }
 
@@ -810,6 +795,7 @@ export function useWorkspaceState(rawState: ExtendedState, deps: UseWorkspaceSta
       // history entries in click order.
       writeSessionUrl(sessionId, opts?.urlMode ?? 'push');
       rawState.sessionLoading = !messagesLoaded && !knownEmpty;
+      rawState.sessionLoadError = false;
       setActiveSessionId(sessionId);
       resetFastMoon();
       // Opening a session clears its unread dot.
@@ -834,6 +820,10 @@ export function useWorkspaceState(rawState: ExtendedState, deps: UseWorkspaceSta
         // First open: full snapshot → seed → subscribe(asOfSeq).
         const result = await syncSessionFromSnapshot(sessionId);
         if (result === 'not-found') return;
+        if (result === 'failed') {
+          rawState.sessionLoadError = true;
+          return;
+        }
       } else {
         // Re-open: resume from the tracked cursor; the daemon replays any
         // missed durable events (or answers resync_required → snapshot).
@@ -967,9 +957,9 @@ export function useWorkspaceState(rawState: ExtendedState, deps: UseWorkspaceSta
     }
   }
 
-  async function sendPrompt(text: string, attachments?: PromptAttachment[]): Promise<void> {
+  async function sendPrompt(text: string, attachments?: PromptAttachment[]): Promise<boolean> {
     const sid = rawState.activeSessionId;
-    if (!sid) return;
+    if (!sid) return false;
 
     // If the session is not idle OR a prompt is already in flight (submitted but
     // the WS turn.started hasn't flipped activity to 'running' yet), enqueue
@@ -977,10 +967,10 @@ export function useWorkspaceState(rawState: ExtendedState, deps: UseWorkspaceSta
     // window where two rapid prompts would both submit and race.
     if (activity.value !== 'idle' || inFlightPromptSessions.has(sid)) {
       enqueue(text, attachments);
-      return;
+      return true;
     }
 
-    await submitPromptInternal(sid, text, attachments);
+    return submitPromptInternal(sid, text, attachments);
   }
 
   /**
@@ -1245,9 +1235,14 @@ export function useWorkspaceState(rawState: ExtendedState, deps: UseWorkspaceSta
 
   /** Persist and apply plan mode (pushed to the session profile + sent per-prompt). */
   function setPlanMode(on: boolean): void {
+    const previous = rawState.planMode;
     rawState.planMode = on;
     savePlanModeToStorage(on);
-    persistSessionProfile({ planMode: on });
+    void persistSessionProfile({ planMode: on }).then((saved) => {
+      if (saved || rawState.planMode !== on) return;
+      rawState.planMode = previous;
+      savePlanModeToStorage(previous);
+    });
   }
 
   /** Flip plan mode on/off. */
@@ -1257,9 +1252,14 @@ export function useWorkspaceState(rawState: ExtendedState, deps: UseWorkspaceSta
 
   /** Persist and apply swarm mode (pushed to the session profile + sent per-prompt). */
   function setSwarmMode(on: boolean): void {
+    const previous = rawState.swarmMode;
     rawState.swarmMode = on;
     saveSwarmModeToStorage(on);
-    persistSessionProfile({ swarmMode: on });
+    void persistSessionProfile({ swarmMode: on }).then((saved) => {
+      if (saved || rawState.swarmMode !== on) return;
+      rawState.swarmMode = previous;
+      saveSwarmModeToStorage(previous);
+    });
   }
 
   /** Flip swarm mode on/off. In manual permission mode, ask before enabling. */
@@ -1316,9 +1316,14 @@ export function useWorkspaceState(rawState: ExtendedState, deps: UseWorkspaceSta
    *  the daemon (auto/yolo are resolved server-side), so any pending approvals
    *  are left for the user to answer explicitly. */
   function setPermission(mode: PermissionMode): void {
+    const previous = rawState.permission;
     rawState.permission = mode;
     savePermissionToStorage(mode);
-    persistSessionProfile({ permissionMode: mode });
+    void persistSessionProfile({ permissionMode: mode }).then((saved) => {
+      if (saved || rawState.permission !== mode) return;
+      rawState.permission = previous;
+      savePermissionToStorage(previous);
+    });
   }
 
   /** Dismiss a warning by index */
@@ -1339,11 +1344,16 @@ export function useWorkspaceState(rawState: ExtendedState, deps: UseWorkspaceSta
     }
   }
 
-  /** Rename a workspace — local-only until the daemon ships a workspace update API. */
-  function renameWorkspace(id: string, name: string): void {
-    rawState.workspaces = rawState.workspaces.map((w) =>
-      w.id === id ? { ...w, name } : w,
-    );
+  /** Rename a workspace through the daemon so it survives reloads and syncs. */
+  async function renameWorkspace(id: string, name: string): Promise<void> {
+    const trimmed = name.trim();
+    if (!trimmed) return;
+    try {
+      const workspace = await getWukongWebApi().updateWorkspace(id, { name: trimmed });
+      upsertWorkspacePreserveOrder(workspace);
+    } catch (error) {
+      pushOperationFailure('renameWorkspace', error);
+    }
   }
 
   /** Delete a workspace — calls API, removes locally */

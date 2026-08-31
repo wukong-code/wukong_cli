@@ -13,7 +13,9 @@ export interface UseAuthGateOptions {
 
 export function useAuthGate({ client }: UseAuthGateOptions) {
   const authReady = computed(() => client.authReady.value);
-  const showAuthGate = computed(() => client.initialized.value && !authReady.value);
+  const showAuthGate = computed(
+    () => client.initialized.value && !client.bootstrapError.value && !authReady.value,
+  );
   const LOGIN_PATH = '/login';
   const authReturnPath = ref<string | null>(null);
 

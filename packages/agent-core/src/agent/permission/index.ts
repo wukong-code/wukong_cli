@@ -226,9 +226,29 @@ export class PermissionManager {
           : this.permissionPolicyResolutionToPrepare(resolved, context, policyName);
       }
     } else {
-      response = {
-        decision: 'approved',
-      };
+      const message = `Tool "${name}" was not run because no approval handler is available.`;
+      this.agent.telemetry.track('permission_approval_result', {
+        policy_name: policyName ?? null,
+        tool_name: name,
+        permission_mode: this.mode,
+        result: 'error',
+        approval_surface: display.kind,
+        duration_ms: Date.now() - startedAt,
+        session_cache_written: false,
+        has_feedback: false,
+      });
+      void this.agent.hooks?.fireAndForgetTrigger?.('PermissionResult', {
+        matcherValue: name,
+        inputData: {
+          turnId: Number(context.turnId),
+          toolCallId: id,
+          toolName: name,
+          action,
+          decision: 'error',
+          error: 'No approval handler is available.',
+        },
+      });
+      return { block: true, reason: message };
     }
 
     const sessionApprovalRule =

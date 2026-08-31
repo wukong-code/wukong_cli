@@ -64,10 +64,10 @@ describe('built-in slash command registry', () => {
     expect(findBuiltInSlashCommand('yes')).toBeUndefined();
   });
 
-  it('keeps /transform visible while disabled so the TUI can show enable guidance', () => {
+  it('hides /transform until role profiles are enabled', () => {
     const transform = findBuiltInSlashCommand('transform');
     expect(transform).toBeDefined();
-    expect(isSlashCommandVisible(transform!)).toBe(true);
+    expect(isSlashCommandVisible(transform!)).toBe(false);
 
     setExperimentalFeatures([{ id: 'role_profiles', enabled: true }]);
     expect(isSlashCommandVisible(transform!)).toBe(true);
@@ -91,7 +91,6 @@ describe('built-in slash command registry', () => {
       'provider',
       'resume',
       'settings',
-      'transform',
     ]);
     expect(isSlashCommandVisible(findBuiltInSlashCommand('verify')!, 'advanced')).toBe(true);
     for (const name of ['goal', 'auto', 'yolo', 'resume-codex', 'resume-claude', 'resume-cursor']) {

@@ -126,6 +126,43 @@ describe('Finish Line TUI dialogs', () => {
     expect(rendered).not.toContain('not separately configured');
   });
 
+  it('compresses and paginates Preflight without hiding actions in a short terminal', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'wukong-finish-line-short-'));
+    paths.push(cwd);
+    const built = await buildFinishLine({
+      cwd,
+      objective: 'Ship safely in a short terminal',
+      includeDiscoveredChecks: true,
+    });
+    expect(built.ok).toBe(true);
+    if (!built.ok) return;
+    const review = new FinishLineReviewComponent({
+      proposal: built.proposal,
+      summary: Array.from({ length: 30 }, (_, index) => `Detail ${String(index + 1)}`).join('\n'),
+      maxIterations: 10,
+      permissionMode: 'yolo',
+      missingUsageCaps: true,
+      terminalRows: 18,
+      workspaceGit: {
+        isRepo: true,
+        changedFileCount: 3,
+        changedFiles: [{ status: 'M', path: 'src/a.ts' }],
+      },
+      onSelect: vi.fn(),
+      onCancel: vi.fn(),
+    });
+
+    const firstPage = strip(review.render(60));
+    expect(firstPage).toContain('Goal    Ship safely in a short terminal');
+    expect(firstPage).toContain('Risks');
+    expect(firstPage).toContain('Page 1/');
+    expect(review.render(60).length).toBeLessThanOrEqual(14);
+
+    for (let index = 0; index < 8; index += 1) review.handleInput('\u001B[B');
+    const laterPage = strip(review.render(60));
+    expect(laterPage).toContain('Continue anyway to approvals');
+  });
+
   it('edits every runtime ceiling in Preflight and submits one validated draft', () => {
     const onDone = vi.fn();
     const editor = new LoopRuntimeEditorComponent({

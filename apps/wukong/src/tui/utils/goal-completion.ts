@@ -1,17 +1,11 @@
-import type { GoalSnapshot, TokenUsage } from '@wukong/wukong-sdk';
+import type { GoalSnapshot } from '@wukong/wukong-sdk';
 
-import {
-  formatCost,
-  summarizeCost,
-  type CostModelAliases,
-} from '#/utils/cost';
 import { loopNextAction, parseLoopTerminalReason } from '#/utils/loop-result';
 
 interface GoalCompletionStats {
   readonly terminalReason?: string | undefined;
   readonly turnsUsed: number;
   readonly tokensUsed: number;
-  readonly usageByModel?: Record<string, TokenUsage>;
   readonly providerUsage?: GoalSnapshot['providerUsage'];
   readonly budget?: GoalSnapshot['budget'];
   readonly wallClockMs: number;
@@ -25,7 +19,6 @@ type LoopResult = NonNullable<GoalSnapshot['loopResult']>;
 type LoopResultStats = Pick<
   GoalCompletionStats,
   | 'tokensUsed'
-  | 'usageByModel'
   | 'providerUsage'
   | 'budget'
   | 'wallClockMs'
@@ -68,20 +61,12 @@ export interface LoopResultPresentation {
  * goal `complete`. It is built from the final snapshot, so the figures
  * (turns / tokens / time) are exact and do not depend on model prose.
  */
-export function buildGoalCompletionMessage(
-  goal: GoalSnapshot,
-  modelAliases?: CostModelAliases,
-): string {
-  return buildGoalCompletionMessageFromStats(goal, modelAliases);
+export function buildGoalCompletionMessage(goal: GoalSnapshot): string {
+  return buildGoalCompletionMessageFromStats(goal);
 }
 
-export function buildGoalCompletionMessageFromStats(
-  goal: GoalCompletionStats,
-  modelAliases?: CostModelAliases,
-): string {
-  if (goal.loopResult !== undefined) {
-    return buildLoopResultCard(goal.loopResult, goal, modelAliases);
-  }
+export function buildGoalCompletionMessageFromStats(goal: GoalCompletionStats): string {
+  if (goal.loopResult !== undefined) return buildLoopResultCard(goal.loopResult, goal);
   const loop = parseLoopTerminalReason(goal.terminalReason);
   const head = loop?.status === 'PASS'
     ? `✓ Loop PASS — ${loop.summary}`
@@ -94,9 +79,8 @@ export function buildGoalCompletionMessageFromStats(
 export function buildLoopResultCard(
   result: LoopResult,
   stats?: LoopResultStats,
-  modelAliases?: CostModelAliases,
 ): string {
-  const presentation = buildLoopResultPresentation(result, stats, modelAliases);
+  const presentation = buildLoopResultPresentation(result, stats);
   const blockerLines = presentation.blockers.flatMap((blocker) => [
     `${blocker.label.padEnd(12)}${blocker.summary}`,
     `  Fix       ${blocker.nextAction}`,
@@ -119,7 +103,7 @@ export function buildLoopResultCard(
     `Blockers    ${String(presentation.blockerCount)}`,
     ...blockerLines,
     `Unverified  ${presentation.unverified}`,
-    ...(presentation.continuationMode === undefined
+    ...(presentation.continuationMode === undefined || result.status === 'PASS'
       ? []
       : [`Continue    ${presentation.continuationMode}`]),
     `Next        ${presentation.next}`,
@@ -129,16 +113,15 @@ export function buildLoopResultCard(
 export function buildLoopResultPresentation(
   result: LoopResult,
   stats?: LoopResultStats,
-  modelAliases?: CostModelAliases,
 ): LoopResultPresentation {
   const loopTerminal = stats?.loopTerminal;
-  const continuationMode = stats !== undefined
+  const continuationMode = result.status !== 'PASS' && stats !== undefined
     && loopTerminal !== undefined
     && loopTerminal.runId === stats.loopRunId
     ? loopTerminal.continuationPolicy.mode
     : undefined;
   const next = result.status === 'PASS'
-    ? 'Review the diff, then explicitly keep or revert the workspace changes.'
+    ? 'Review `git status --short` and `git diff`; keep, commit, or revert changes manually.'
     : result.reasonCode === 'provider_outcome_unknown'
       ? loopNextAction(result.reasonCode)
       : continuationMode === 'same-contract'
@@ -174,7 +157,7 @@ export function buildLoopResultPresentation(
     gate: stats?.gateAttempts === undefined
       ? 'attempts unavailable'
       : `${String(stats.gateAttempts)} attempt(s)`,
-    time: `${stats === undefined ? 'unknown' : formatElapsed(stats.wallClockMs)} · Writer tokens ${stats === undefined ? 'unknown' : formatTokens(stats.tokensUsed)} · Reviewer tokens unavailable · Cost ${formatCost(summarizeCost(stats?.usageByModel, undefined, modelAliases))}`,
+    time: `${stats === undefined ? 'unknown' : formatElapsed(stats.wallClockMs)} · Writer tokens ${stats === undefined ? 'unknown' : formatTokens(stats.tokensUsed)} · Reviewer tokens unavailable`,
     usage: formatLoopUsage(stats),
     workspace: changedSummary,
     checks: evidence.verification === 'not_run'

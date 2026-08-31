@@ -3,10 +3,11 @@
      (language, theme). Both apply live. Re-openable from the settings popover.
      Preferences can be changed any time later, so there's nothing to "lose". -->
 <script setup lang="ts">
-import { ref } from 'vue';
+import { onMounted, onUnmounted, ref } from 'vue';
 import { useI18n } from 'vue-i18n';
 import { availableLocales, setLocale, type LocaleCode } from '../../i18n';
 import type { Theme } from '../../composables/useWukongWebClient';
+import { useDialogFocus } from '../../composables/useDialogFocus';
 
 const props = defineProps<{ theme: Theme }>();
 const emit = defineEmits<{ setTheme: [theme: Theme]; complete: []; skip: [] }>();
@@ -19,16 +20,29 @@ function chooseLocale(code: LocaleCode): void {
 
 // Theme is chosen locally and only applied on "Get started".
 const selectedTheme = ref<Theme>(props.theme);
+const dialogRef = ref<HTMLElement | null>(null);
+
+useDialogFocus(dialogRef);
 
 function finish(): void {
   if (selectedTheme.value !== props.theme) emit('setTheme', selectedTheme.value);
   emit('complete');
 }
+
+function onKeydown(event: KeyboardEvent): void {
+  if (event.key !== 'Escape') return;
+  event.preventDefault();
+  event.stopImmediatePropagation();
+  emit('skip');
+}
+
+onMounted(() => document.addEventListener('keydown', onKeydown));
+onUnmounted(() => document.removeEventListener('keydown', onKeydown));
 </script>
 
 <template>
   <div class="ob-backdrop">
-    <div class="ob-card" role="dialog" aria-modal="true" :aria-label="t('onboarding.title')">
+    <div ref="dialogRef" class="ob-card" role="dialog" aria-modal="true" tabindex="-1" :aria-label="t('onboarding.title')">
       <button
         type="button"
         class="ob-close"

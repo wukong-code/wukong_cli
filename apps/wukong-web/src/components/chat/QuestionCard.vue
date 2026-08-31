@@ -187,6 +187,7 @@ function dismiss(): void {
 // ---------------------------------------------------------------------------
 
 function handleKeydown(e: KeyboardEvent): void {
+  if (document.querySelector('[aria-modal="true"]') !== null) return;
   const tag = (document.activeElement?.tagName ?? '').toLowerCase();
   if (tag === 'input' || tag === 'textarea') return;
   // While minimized the options aren't visible, so don't let number keys pick

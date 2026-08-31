@@ -48,6 +48,10 @@ export interface ChoicePickerOptions {
   readonly searchable?: boolean;
   /** Items per page. Lists longer than this paginate. */
   readonly pageSize?: number;
+  /** Keep notices to one terminal row per source line instead of wrapping. */
+  readonly compactNotice?: boolean;
+  /** In compact layouts, only render the selected option's description. */
+  readonly compactDescriptions?: boolean;
   readonly onSelect: (value: string) => void;
   readonly onCancel: () => void;
 }
@@ -150,6 +154,10 @@ export class ChoicePickerComponent extends Container implements Focusable {
       const tone = this.opts.noticeTone ?? 'success';
       const noticeWidth = Math.max(1, width - 1);
       for (const noticeLine of this.opts.notice.split(/\r?\n/)) {
+        if (this.opts.compactNotice === true) {
+          lines.push(currentTheme.fg(tone, ` ${truncateToWidth(noticeLine, noticeWidth, '…')}`));
+          continue;
+        }
         for (const wrapped of wrapDescription(noticeLine, noticeWidth)) {
           lines.push(currentTheme.fg(tone, ` ${wrapped}`));
         }
@@ -175,7 +183,11 @@ export class ChoicePickerComponent extends Container implements Focusable {
         line += ' ' + currentTheme.fg('success', CURRENT_MARK);
       }
       lines.push(line);
-      if (opt.description !== undefined && opt.description.length > 0) {
+      if (
+        opt.description !== undefined
+        && opt.description.length > 0
+        && (this.opts.compactDescriptions !== true || isSelected)
+      ) {
         const descriptionWidth = Math.max(1, width - 4);
         const descriptionColor =
           isSelected && opt.descriptionTone !== undefined ? opt.descriptionTone : 'textMuted';

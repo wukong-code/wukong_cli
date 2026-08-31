@@ -41,7 +41,7 @@ describe('/transform', () => {
       availability: 'idle-only',
       argumentHint: '<role|list|status|off>',
       experimentalFlag: 'role_profiles',
-      visibleWhenDisabled: true,
+      visibleWhenDisabled: false,
     });
     expect(findBuiltInSlashCommand('role')).toBeUndefined();
   });

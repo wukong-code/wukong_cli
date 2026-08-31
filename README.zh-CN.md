@@ -18,14 +18,12 @@ Wukong Code 是围绕一个主流程构建的终端 AI coding agent：
 
 0.1.0 已收敛为一条可控、可恢复、可解释的本地单 Loop。当前候选已实现可执行的
 provider-call/token 上限、versioned no-check decision、既有改动与 Wukong 改动归因、
-完整终态 usage/next action，以及兼容/发布自动化 smoke。六平台候选构建、
-公开资产、固定版本安装、`0.0.22` 升级、状态恢复、checksum 和 provenance
-已经通过。stable 发布仍必须通过同一 exact-source、六平台、公开安装、升级、恢复与
-公开版本面验收。真实来源流程和 opt-in cohort 改为发布后的产品学习证据，不再设置
-固定 14 天等待门槛。成本估算显示只在当前开发 checkout 中为计划中的
-**未发布 v0.1.1** 补丁实现，不属于 stable v0.1.0 binary；该补丁会使用自身发布内嵌
-catalog snapshot 的 pricing 做纯离线计算。完整多层 coverage schema、direct-shell
-content/PATH attestation 和自建 provider 价格数据库继续后移，不再阻塞版本。
+完整终态 usage/next action，以及兼容/发布自动化 smoke。已发布 stable 的六平台
+构建、公开资产、固定版本安装、`0.0.22` 升级、状态恢复、checksum、provenance
+和公开版本面验收已经通过。真实来源流程和 opt-in cohort 改为发布后的产品学习证据，不再设置
+固定 14 天等待门槛。完整多层 coverage schema 和 direct-shell content/PATH
+attestation 继续后移，不再阻塞版本；Wukong 不维护 provider 价格数据库，也不估算
+provider 费用。
 
 `0.0.22` 在 primary remote catalog 不可用时仍可回退到 models.dev，并澄清 CLI 的
 session 与权限控制：
@@ -38,6 +36,17 @@ session 与权限控制：
   访问。
 
 完整说明见 [v0.1.0 发布说明](docs/releases/0.1.0.md)。
+
+### 当前开发工作树：0.1.1 Reliability Maintenance
+
+当前工作树已经实现 Loop revision、headless 上限、resume usage、Provider 原子配置、
+跨 workspace Resume，以及 Web 连接、权限、键盘导航、Workspace 持久化和 stub
+联调修复。但 `@wukong.today/code` 版本仍为 `0.1.0`，尚未生成或验证 `v0.1.1`
+六平台资产，也没有发布。范围、验证证据和发布缺口见
+[0.1.1 未发布说明](docs/releases/0.1.1.md)。
+
+0.1.1 不包含 Cost Visibility，不估算 provider 费用，不新增顶层命令，也不改变
+Loop/Gate 语义。
 
 ## Wukong 能做什么
 
@@ -113,9 +122,7 @@ TUI 的 `WRITE` / `CHECK` / `REVIEW` 是活动提示；headless
 
 结束时查看确定性的终态摘要，而不是从模型文案猜结果。摘要会分别显示决定性
 evidence、既有改动、Loop introduced/modified/deleted、unknown attribution、checks、
-calls/tokens/retries/remaining budget、所用模型在发布内嵌 catalog 中有 pricing 时的
-估算成本（否则保持 `Cost unavailable`）、主要 blocker 与安全的 Next。成本字段目前
-只存在于未发布 v0.1.1 的开发 checkout，stable v0.1.0 用户不应预期看到该字段：
+calls/tokens/retries/remaining budget、主要 blocker 与安全的 Next：
 
 - `PASS`：检查与只读 reviewer 均通过；先查看 `git status --short`、`git diff`，
   再通过 `/loop status` 或 review feedback 检查 non-blocking findings，最后按自己的

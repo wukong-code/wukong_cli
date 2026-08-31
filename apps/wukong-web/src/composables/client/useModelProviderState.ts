@@ -54,7 +54,7 @@ export interface UseModelProviderStateDeps {
     opts?: { title?: string; message?: string; sessionId?: string },
   ) => void;
   refreshSessionStatus: (sessionId: string) => Promise<void>;
-  persistSessionProfile: (patch: PersistSessionProfilePatch) => void;
+  persistSessionProfile: (patch: PersistSessionProfilePatch) => Promise<boolean>;
   activity: ComputedRef<ActivityState>;
   inFlightPromptSessions: Set<string>;
   saveThinkingToStorage: (v: ThinkingLevel) => void;
@@ -372,8 +372,12 @@ export function useModelProviderState(
   /** Persist and apply a new extended-thinking level (also pushed to the active
    *  session profile so the daemon's /status reflects it; still sent per-prompt). */
   function setThinking(level: ThinkingLevel): void {
+    const previous = rawState.thinking;
     const next = applyThinkingLevel(level);
-    persistSessionProfile({ thinking: next });
+    void persistSessionProfile({ thinking: next }).then((saved) => {
+      if (saved || rawState.thinking !== next) return;
+      applyThinkingLevel(previous);
+    });
   }
 
   return {

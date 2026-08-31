@@ -9,6 +9,44 @@ import { buildDiffLines } from '../src/lib/diffLines';
 import { buildEditDiffLines } from '../src/lib/toolDiff';
 import { createCoalescedAsyncRunner } from '../src/lib/snapshotSync';
 import { normalizeToolName, toolSummary } from '../src/lib/toolMeta';
+import { nextConnectionState } from '../src/lib/connectionState';
+import {
+  moveSidebarTreeFocus,
+  sessionTreeKey,
+  workspaceTreeKey,
+  type SidebarTreeItem,
+} from '../src/lib/sidebarTree';
+
+describe('connection state', () => {
+  it('distinguishes the initial connection from an automatic reconnect', () => {
+    expect(nextConnectionState('disconnected', false)).toBe('connecting');
+    expect(nextConnectionState('connecting', true)).toBe('connected');
+    expect(nextConnectionState('connected', false)).toBe('reconnecting');
+    expect(nextConnectionState('reconnecting', false)).toBe('reconnecting');
+    expect(nextConnectionState('reconnecting', true)).toBe('connected');
+  });
+});
+
+describe('sidebar tree navigation', () => {
+  const items: SidebarTreeItem[] = [
+    { key: workspaceTreeKey('w1'), kind: 'workspace', id: 'w1', workspaceId: 'w1' },
+    { key: sessionTreeKey('s1'), kind: 'session', id: 's1', workspaceId: 'w1' },
+    { key: workspaceTreeKey('w2'), kind: 'workspace', id: 'w2', workspaceId: 'w2' },
+  ];
+
+  it('moves without wrapping and supports Home/End', () => {
+    expect(moveSidebarTreeFocus(items, workspaceTreeKey('w1'), 'previous')).toBe(workspaceTreeKey('w1'));
+    expect(moveSidebarTreeFocus(items, workspaceTreeKey('w1'), 'next')).toBe(sessionTreeKey('s1'));
+    expect(moveSidebarTreeFocus(items, workspaceTreeKey('w2'), 'next')).toBe(workspaceTreeKey('w2'));
+    expect(moveSidebarTreeFocus(items, sessionTreeKey('s1'), 'first')).toBe(workspaceTreeKey('w1'));
+    expect(moveSidebarTreeFocus(items, sessionTreeKey('s1'), 'last')).toBe(workspaceTreeKey('w2'));
+  });
+
+  it('falls back to the first visible item after collapse or removal', () => {
+    expect(moveSidebarTreeFocus(items, 'session:missing', 'next')).toBe(workspaceTreeKey('w1'));
+    expect(moveSidebarTreeFocus([], null, 'first')).toBeNull();
+  });
+});
 
 describe('parseDiff', () => {
   it('parses multiple files and keeps hunk line numbers', () => {

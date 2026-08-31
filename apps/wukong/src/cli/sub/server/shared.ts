@@ -83,7 +83,7 @@ export function parseServerOptions(opts: ServerCliOptions): ParsedServerOptions 
     port: parsePort(opts.port, '--port', DEFAULT_SERVER_PORT),
     logLevel: parseLogLevel(opts.logLevel ?? DEFAULT_FOREGROUND_LOG_LEVEL),
     debugEndpoints: opts.debugEndpoints === true,
-    insecureNoTls: opts.insecureNoTls !== false,
+    insecureNoTls: opts.insecureNoTls === true,
     allowRemoteShutdown: opts.allowRemoteShutdown === true,
     allowRemoteTerminals: opts.allowRemoteTerminals === true,
     allowedHosts: parseAllowedHostArgs(opts.allowedHost),

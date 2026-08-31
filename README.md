@@ -23,16 +23,12 @@ provider-call/token limits, a versioned no-check decision,
 pre-existing-versus-Wukong file attribution, terminal usage/next actions, and
 automated compatibility/release smoke coverage. Its six-platform candidate
 build, public assets, pinned fresh installs, `0.0.22` upgrades, state recovery,
-checksums and provenance have passed. Stable release is gated by
-the same exact-source, six-platform, public-install, upgrade, recovery, and
-release-surface checks. The opt-in cohort and real-user flows continue after
+checksums, provenance, and production release-surface verification have passed
+for the published stable. The opt-in cohort and real-user flows continue after
 release as product-learning evidence; there is no fixed 14-day waiting gate.
-The cost-estimate display is implemented in this development checkout for the
-planned, **unreleased v0.1.1** patch; it is not part of the stable v0.1.0
-binary. That patch computes estimates offline from pricing in its
-release-embedded catalog snapshot. Full multi-layer coverage schemas,
-direct-shell content/PATH attestation, and a self-hosted provider pricing
-database remain deferred rather than release blockers.
+Full multi-layer coverage schemas and direct-shell content/PATH attestation
+remain deferred rather than release blockers. Wukong does not maintain a
+provider pricing database or estimate provider charges.
 
 Version `0.0.22` keeps provider setup usable when the primary remote catalog is down and
 clarifies the CLI's session and permission controls:
@@ -46,6 +42,19 @@ clarifies the CLI's session and permission controls:
   workspace access.
 
 See the [v0.1.0 release notes](docs/releases/0.1.0.md).
+
+### Development checkout: 0.1.1 Reliability Maintenance
+
+The current working tree implements fixes for Loop revision, headless limits,
+resumed usage, atomic Provider configuration, cross-workspace Resume, and Web
+connection, permission, keyboard, Workspace, and stub behavior. The
+`@wukong.today/code` package version is still `0.1.0`; no six-platform `v0.1.1`
+assets have been produced, verified, or published. See the
+[unreleased 0.1.1 notes](docs/releases/0.1.1.md) for scope, current verification,
+and remaining release work.
+
+Version 0.1.1 does not include Cost Visibility or provider charge estimates,
+add top-level commands, or change Loop/Gate semantics.
 
 ## What Wukong does
 
@@ -128,11 +137,8 @@ verified result.
 
 At the end, act on the deterministic terminal summary. It separates decisive
 evidence, pre-existing changes, files introduced/modified/deleted by the Loop,
-unknown attribution, checks, calls/tokens/retries/remaining budget, an
-estimated provider cost when the release-embedded catalog carries pricing for
-the model used (`Cost unavailable` otherwise), the primary blocker, and the
-safe Next action. The cost field is currently available only in the development
-checkout for unreleased v0.1.1; stable v0.1.0 users should not expect it:
+unknown attribution, checks, calls/tokens/retries/remaining budget, the primary
+blocker, and the safe Next action:
 
 - `PASS`: checks and the read-only reviewer passed. Inspect `git status --short`,
   `git diff`, and `/loop status` or the review feedback for non-blocking

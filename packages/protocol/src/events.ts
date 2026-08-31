@@ -562,7 +562,6 @@ export interface GoalSnapshot {
   readonly status: GoalStatus;
   readonly turnsUsed: number;
   readonly tokensUsed: number;
-  readonly usageByModel?: Readonly<Record<string, Readonly<TokenUsage>>>;
   readonly providerUsage?: {
     readonly writerCalls: number;
     readonly reviewerCalls: number;
@@ -1681,7 +1680,6 @@ export const goalSnapshotSchema = z.object({
   status: goalStatusSchema,
   turnsUsed: z.number(),
   tokensUsed: z.number(),
-  usageByModel: z.record(z.string(), tokenUsageSchema).optional(),
   providerUsage: z.object({
     writerCalls: z.number().int().nonnegative(),
     reviewerCalls: z.number().int().nonnegative(),

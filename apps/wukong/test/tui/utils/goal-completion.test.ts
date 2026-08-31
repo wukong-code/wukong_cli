@@ -53,37 +53,13 @@ describe('buildGoalCompletionMessage', () => {
     expect(text).toContain('Reason      Delivery gate passed.');
     expect(text).toContain('Writer      2 iteration(s)');
     expect(text).toContain('Gate        attempts unavailable');
-    expect(text).toContain('Time        4m20s · Writer tokens 12.5k · Reviewer tokens unavailable · Cost unavailable');
+    expect(text).toContain('Time        4m20s · Writer tokens 12.5k · Reviewer tokens unavailable');
+    expect(text).not.toContain('Cost');
     expect(text).toContain('Checks      not run');
     expect(text).toContain('Evidence    verification not_run; reviewer not_run');
     expect(text).toContain('Blockers    0');
-    expect(text).toContain('Next        Review the diff');
+    expect(text).toContain('Next        Review `git status --short` and `git diff`');
     expect(text).not.toContain('loop:PASS');
-  });
-
-  it('keeps Cost unavailable when usage has no catalog pricing', () => {
-    const text = buildGoalCompletionMessage(snapshot({
-      usageByModel: {
-        'anthropic/claude': {
-          inputOther: 10_000,
-          output: 2_500,
-          inputCacheRead: 0,
-          inputCacheCreation: 0,
-        },
-      },
-      loopResult: {
-        schemaVersion: 2,
-        status: 'PASS',
-        reasonCode: 'passed',
-        summary: 'Delivery gate passed.',
-        iterations: 2,
-        checks: [],
-        blockers: [],
-      },
-    }));
-
-    // Source builds embed no catalog snapshot, so pricing cannot be resolved.
-    expect(text).toContain('Cost unavailable');
   });
 
   it('shows exact writer/reviewer calls and remaining token budget', () => {

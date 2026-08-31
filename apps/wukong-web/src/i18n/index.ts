@@ -22,8 +22,15 @@ export const i18n = createI18n({
   messages,
 });
 
+function applyDocumentLanguage(locale: LocaleCode): void {
+  if (typeof document !== 'undefined') document.documentElement.lang = locale === 'zh' ? 'zh-CN' : 'en';
+}
+
+applyDocumentLanguage(i18n.global.locale.value);
+
 export function setLocale(l: LocaleCode): void {
   i18n.global.locale.value = l;
+  applyDocumentLanguage(l);
   safeSetString(STORAGE_KEYS.locale, l);
 }
 

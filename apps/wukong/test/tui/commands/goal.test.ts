@@ -384,6 +384,7 @@ function makeHost(
         isCompacting: false,
       },
       transcriptContainer,
+      terminal: { rows: 40 },
       ui: { requestRender: vi.fn() },
       theme: { palette: getBuiltInPalette('dark') },
     },
@@ -519,37 +520,13 @@ describe('parseGoalCommand', () => {
     });
   });
 
-  it('parses --until stop conditions', () => {
-    expect(parseGoalCommand('--until verify-pass fix tests')).toMatchObject({
-      kind: 'create',
-      objective: 'fix tests',
-      stopCondition: 'proof-pass',
+  it('rejects legacy --until goals and directs them to Loop', () => {
+    expect(parseGoalCommand('--until verify-pass fix tests')).toEqual({
+      kind: 'error',
+      message: '`/goal --until` is no longer supported. Use `/loop --until proof-pass -- <objective>`.',
     });
-    expect(parseGoalCommand('--until scan-clean clean up risks')).toMatchObject({
-      kind: 'create',
-      objective: 'clean up risks',
-      stopCondition: 'proof-pass',
-    });
-    expect(parseGoalCommand('--until judge-pass make it mergeable')).toMatchObject({
-      kind: 'create',
-      objective: 'make it mergeable',
-      stopCondition: 'proof-pass',
-    });
-  });
-
-  it('ignores unknown --until values and keeps them in the objective', () => {
-    expect(parseGoalCommand('--until unknown fix tests')).toMatchObject({
-      kind: 'create',
-      objective: '--until unknown fix tests',
-    });
-  });
-
-  it('parses replace with --until', () => {
     expect(parseGoalCommand('replace --until verify-pass fix tests')).toMatchObject({
-      kind: 'create',
-      objective: 'fix tests',
-      replace: true,
-      stopCondition: 'proof-pass',
+      kind: 'error',
     });
   });
 
@@ -577,8 +554,8 @@ describe('parseLoopCommand', () => {
     });
   });
 
-  it('parses --until verify-pass with default max iterations', () => {
-    expect(parseLoopCommand('--until verify-pass fix tests')).toEqual({
+  it('parses --until proof-pass with default max iterations', () => {
+    expect(parseLoopCommand('--until proof-pass fix tests')).toEqual({
       kind: 'create',
       objective: 'fix tests',
       stopCondition: 'proof-pass',
@@ -586,24 +563,25 @@ describe('parseLoopCommand', () => {
     });
   });
 
-  it('parses --until scan-clean with custom max iterations', () => {
-    expect(parseLoopCommand('--until scan-clean --max-iterations 5 clean risks')).toEqual({
-      kind: 'create',
-      objective: 'clean risks',
-      stopCondition: 'proof-pass',
-      maxIterations: 5,
-    });
-  });
+  it.each(['verify-pass', 'scan-clean', 'judge-pass'])(
+    'rejects legacy --until %s instead of silently changing its meaning',
+    (condition) => {
+      expect(parseLoopCommand(`--until ${condition} fix tests`)).toEqual({
+        kind: 'error',
+        message: '`--until` must be `proof-pass`.',
+      });
+    },
+  );
 
   it('parses --every duration as minIntervalMs', () => {
-    expect(parseLoopCommand('--until verify-pass --every 5m fix tests')).toEqual({
+    expect(parseLoopCommand('--until proof-pass --every 5m fix tests')).toEqual({
       kind: 'create',
       objective: 'fix tests',
       stopCondition: 'proof-pass',
       maxIterations: 10,
       minIntervalMs: 300_000,
     });
-    expect(parseLoopCommand('--until verify-pass --every 1h --max-iterations 3 fix tests')).toEqual({
+    expect(parseLoopCommand('--until proof-pass --every 1h --max-iterations 3 fix tests')).toEqual({
       kind: 'create',
       objective: 'fix tests',
       stopCondition: 'proof-pass',
@@ -638,20 +616,11 @@ describe('parseLoopCommand', () => {
   });
 
   it('rejects invalid --every values', () => {
-    expect(parseLoopCommand('--until verify-pass --every fix tests')).toMatchObject({
+    expect(parseLoopCommand('--until proof-pass --every fix tests')).toMatchObject({
       kind: 'error',
     });
-    expect(parseLoopCommand('--until verify-pass --every 5x fix tests')).toMatchObject({
+    expect(parseLoopCommand('--until proof-pass --every 5x fix tests')).toMatchObject({
       kind: 'error',
-    });
-  });
-
-  it('parses --until judge-pass', () => {
-    expect(parseLoopCommand('--until judge-pass make mergeable')).toEqual({
-      kind: 'create',
-      objective: 'make mergeable',
-      stopCondition: 'proof-pass',
-      maxIterations: 10,
     });
   });
 
@@ -1074,6 +1043,7 @@ describe('handleGoalCommand', () => {
     session.getGoal.mockResolvedValueOnce({
       goal: {
         ...fakeSnapshot(),
+        stopCondition: 'proof-pass',
         status: 'blocked',
         reviewModel: 'wukong-model',
         loopContract: {
@@ -1248,7 +1218,7 @@ describe('handleLoopSlashCommand', () => {
   it('creates a loop goal with stop condition, max iterations, and min interval', async () => {
     const { host, session } = makeHost();
 
-    await handleLoopSlashCommand(host, '--until verify-pass --every 5m --max-iterations 3 fix tests');
+    await handleLoopSlashCommand(host, '--until proof-pass --every 5m --max-iterations 3 fix tests');
     await confirmLoopStart(host);
     await vi.waitFor(() => {
       expect(session.createGoal).toHaveBeenCalled();
@@ -1283,6 +1253,48 @@ describe('handleLoopSlashCommand', () => {
     expect(session.createGoal).toHaveBeenCalledWith(expect.objectContaining({
       maxIterations: 12,
     }));
+  });
+
+  it('revises the exact active Loop and preserves its frozen setup and runtime limits', async () => {
+    const { host, session } = makeHost();
+    session.getGoal.mockResolvedValue({
+      goal: {
+        ...fakeSnapshot(),
+        stopCondition: 'proof-pass',
+        completionCriterion: 'All release checks pass',
+        reviewModel: 'wukong-model',
+        maxIterations: 6,
+        minIntervalMs: 90_000,
+        providerUsage: {
+          writerCalls: 1,
+          reviewerCalls: 1,
+          writerRetries: 0,
+          reviewerRetries: 0,
+          writerCallLimit: 9,
+          reviewerCallLimit: 4,
+          remainingWriterCalls: 8,
+          remainingReviewerCalls: 3,
+        },
+        budget: { ...fakeSnapshot().budget, tokenBudget: 50_000 },
+        loopContract: {
+          schemaVersion: 2,
+          contractId: 'contract-current',
+          completionCriterion: 'All release checks pass',
+          constraints: [{ id: 'constraint-1', text: 'Do not weaken tests' }],
+        },
+      },
+    } as never);
+
+    await handleLoopSlashCommand(host, 'revise -- ship the corrected release');
+
+    expect(loopPreflightMocks.run).toHaveBeenCalledWith(expect.objectContaining({
+      objective: 'ship the corrected release',
+      completionCriterion: 'All release checks pass',
+      constraints: ['Do not weaken tests'],
+      expectedActiveGoalId: 'g1',
+    }));
+    const rendered = stripAnsi(latestMountedPicker(host).render(100).join('\n'));
+    expect(rendered).toContain('up to 6 iterations');
   });
 
   it('edits the writer model in Preflight but switches only after final approval', async () => {
@@ -1400,10 +1412,19 @@ describe('handleLoopSlashCommand', () => {
   it('rejects an invalid --every duration', async () => {
     const { host, session } = makeHost();
 
-    await handleLoopSlashCommand(host, '--until verify-pass --every 5x fix tests');
+    await handleLoopSlashCommand(host, '--until proof-pass --every 5x fix tests');
 
     expect(session.createGoal).not.toHaveBeenCalled();
     expect(host.showError).toHaveBeenCalled();
+  });
+
+  it('shows revise usage instead of creating a Loop whose objective is "revise"', async () => {
+    const { host, session } = makeHost();
+
+    await handleLoopSlashCommand(host, 'revise');
+
+    expect(session.createGoal).not.toHaveBeenCalled();
+    expect(host.showStatus).toHaveBeenCalledWith(expect.stringContaining('/loop revise --'));
   });
 
   it('does not let /loop stop cancel an ordinary Goal', async () => {

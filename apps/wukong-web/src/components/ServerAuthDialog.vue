@@ -5,16 +5,18 @@
      it up. The overlay is fully opaque so it covers the whole page (nothing
      underneath shows through). Light only, Wukong blue #1565C0, no emoji. -->
 <script setup lang="ts">
-import { nextTick, onMounted, ref } from 'vue';
+import { ref } from 'vue';
+import { useI18n } from 'vue-i18n';
 import { setCredential } from '../api/daemon/serverAuth';
+import { useDialogFocus } from '../composables/useDialogFocus';
 
 const credential = ref('');
+const dialogRef = ref<HTMLElement | null>(null);
 const inputRef = ref<HTMLInputElement | null>(null);
 const submitting = ref(false);
+const { t } = useI18n();
 
-onMounted(() => {
-  void nextTick(() => inputRef.value?.focus());
-});
+useDialogFocus(dialogRef, inputRef);
 
 function submit(): void {
   const value = credential.value;
@@ -34,20 +36,21 @@ function onKeydown(e: KeyboardEvent): void {
 </script>
 
 <template>
-  <div class="server-auth-overlay" role="dialog" aria-modal="true" aria-labelledby="server-auth-title">
+  <div ref="dialogRef" class="server-auth-overlay" role="dialog" aria-modal="true" aria-labelledby="server-auth-title" tabindex="-1">
     <div class="server-auth-card">
-      <h1 id="server-auth-title" class="server-auth-title">Server token required</h1>
+      <h1 id="server-auth-title" class="server-auth-title">{{ t('app.serverAuthTitle') }}</h1>
       <p class="server-auth-hint">
-        This server is protected. Enter the bearer token printed when the server
-        started (or the password set via <code>WUKONG_CODE_PASSWORD</code>).
+        {{ t('app.serverAuthHint') }} <code>WUKONG_CODE_PASSWORD</code>.
       </p>
+      <label class="server-auth-label" for="server-auth-token">{{ t('app.serverAuthLabel') }}</label>
       <input
+        id="server-auth-token"
         ref="inputRef"
         v-model="credential"
         type="password"
         class="server-auth-input"
         autocomplete="current-password"
-        placeholder="Token"
+        :placeholder="t('app.serverAuthPlaceholder')"
         :disabled="submitting"
         @keydown="onKeydown"
       />
@@ -57,7 +60,7 @@ function onKeydown(e: KeyboardEvent): void {
         :disabled="!credential || submitting"
         @click="submit"
       >
-        {{ submitting ? 'Connecting…' : 'Connect' }}
+        {{ submitting ? t('app.connecting') : t('app.serverAuthConnect') }}
       </button>
     </div>
   </div>
@@ -118,6 +121,14 @@ function onKeydown(e: KeyboardEvent): void {
   border: 1px solid #d0d0d0;
   border-radius: 8px;
   outline: none;
+}
+
+.server-auth-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
 }
 
 .server-auth-input:focus {

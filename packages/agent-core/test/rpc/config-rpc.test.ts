@@ -107,4 +107,28 @@ max_steps_per_turn = "nope"
     expect(adopted.defaultThinking).toBe(true);
     await expect(core.getConfigDiagnostics({})).resolves.toEqual({ warnings: [] });
   });
+
+  it('replaces the complete config atomically instead of deep-merging stale keys', async () => {
+    const home = await makeHome(VALID_TOML);
+    const core = makeCore(home);
+
+    const replaced = await core.replaceWukongConfig({
+      providers: {
+        local: { type: 'openai', apiKey: 'sk-new' },
+      },
+      models: {
+        'local/model': { provider: 'local', model: 'model', maxContextSize: 128_000 },
+      },
+      defaultModel: 'local/model',
+    });
+
+    expect(replaced.providers).toEqual({
+      local: expect.objectContaining({ type: 'openai', apiKey: 'sk-new' }),
+    });
+    expect(replaced.providers['wukong']).toBeUndefined();
+    expect(replaced.models?.['k2']).toBeUndefined();
+    await expect(core.getWukongConfig({ reload: true })).resolves.toMatchObject({
+      defaultModel: 'local/model',
+    });
+  });
 });

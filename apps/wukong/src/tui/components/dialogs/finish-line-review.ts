@@ -19,6 +19,7 @@ export interface FinishLineReviewOptions {
   readonly selectedCriteriaCount?: number;
   readonly permissionMode?: 'manual' | 'auto' | 'yolo';
   readonly missingUsageCaps?: boolean;
+  readonly terminalRows?: number;
   readonly workspaceGit?: {
     readonly isRepo: boolean;
     readonly changedFileCount: number;
@@ -98,18 +99,42 @@ export class FinishLineReviewComponent extends ChoicePickerComponent {
       },
       ...(dangerous ? [startChoice] : []),
     ];
+    const compact = options.terminalRows !== undefined && options.terminalRows <= 28;
+    const veryCompact = options.terminalRows !== undefined && options.terminalRows <= 20;
     super({
       title: 'Loop preflight',
       hint: '↑↓ navigate · Enter select · Esc cancel',
-      notice: options.summary,
+      notice: compact ? compactSummary(options, warningCount) : options.summary,
       noticeTone: dangerous ? 'warning' : 'success',
       options: choices,
+      pageSize: compact ? (veryCompact ? 2 : 3) : undefined,
+      compactNotice: compact,
+      compactDescriptions: compact,
       onSelect: (value) => {
         if (isChoice(value)) options.onSelect(value);
       },
       onCancel: options.onCancel,
     });
   }
+}
+
+function compactSummary(options: FinishLineReviewOptions, warningCount: number): string {
+  const requiredChecks = options.proposal.gatePlan.requiredChecks.length;
+  const risks = [
+    warningCount > 0 ? `${String(warningCount)} finish-line warning${warningCount === 1 ? '' : 's'}` : '',
+    options.workspaceGit !== undefined && !options.workspaceGit.isRepo
+      ? 'workspace is not a Git repository'
+      : options.workspaceGit !== undefined && options.workspaceGit.changedFileCount > 0
+        ? `${String(options.workspaceGit.changedFileCount)} pre-existing changed file${options.workspaceGit.changedFileCount === 1 ? '' : 's'}`
+        : '',
+    options.permissionMode === 'yolo' ? 'yolo permission' : '',
+    options.missingUsageCaps === true ? 'usage caps missing' : '',
+  ].filter((risk) => risk.length > 0);
+  return [
+    `Goal    ${options.proposal.objective}`,
+    `Checks  ${String(requiredChecks)} required · ${String(options.selectedCriteriaCount ?? 0)} skill criteria selected · Risks ${risks.length === 0 ? 'none detected' : risks.join(' · ')}`,
+    'Details use the review actions below; every action remains reachable with ↑↓ and paging',
+  ].join('\n');
 }
 
 function isChoice(value: string): value is FinishLineReviewChoice {

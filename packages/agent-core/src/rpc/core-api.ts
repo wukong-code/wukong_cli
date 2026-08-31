@@ -387,6 +387,7 @@ export interface ConfigDiagnostics {
 }
 
 export type SetWukongConfigPayload = WukongConfigPatch;
+export type ReplaceWukongConfigPayload = WukongConfig;
 
 export interface RemoveWukongProviderPayload {
   readonly providerId: string;
@@ -461,6 +462,7 @@ export interface CoreAPI extends SessionAPIWithId {
   getWukongConfig: (payload: GetWukongConfigPayload) => WukongConfig;
   getConfigDiagnostics: (payload: EmptyPayload) => ConfigDiagnostics;
   setWukongConfig: (payload: SetWukongConfigPayload) => WukongConfig;
+  replaceWukongConfig: (payload: ReplaceWukongConfigPayload) => WukongConfig;
   removeWukongProvider: (payload: RemoveWukongProviderPayload) => WukongConfig;
   createSession: (payload: CreateSessionPayload) => SessionSummary;
   closeSession: (payload: CloseSessionPayload) => void;

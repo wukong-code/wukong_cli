@@ -259,11 +259,12 @@ export class ApprovalPanelComponent extends Container implements Focusable {
   }
 
   handleInput(data: string): void {
-    if (
-      matchesKey(data, Key.escape) ||
-      matchesKey(data, Key.ctrl('c')) ||
-      matchesKey(data, Key.ctrl('d'))
-    ) {
+    if (matchesKey(data, Key.escape)) {
+      this.onResponse({ response: 'cancelled' });
+      return;
+    }
+
+    if (matchesKey(data, Key.ctrl('c')) || matchesKey(data, Key.ctrl('d'))) {
       this.onResponse({ response: 'rejected' });
       return;
     }

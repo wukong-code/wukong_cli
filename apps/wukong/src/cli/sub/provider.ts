@@ -13,7 +13,7 @@
  */
 
 import {
-  applyCustomRegistryProvider,
+  applyCustomRegistryEntries,
   CustomRegistryApiError,
   fetchCustomRegistry,
   type CustomRegistrySource,
@@ -115,31 +115,20 @@ export async function handleProviderAdd(
     deps.exit(1);
   }
 
-  // `harness.removeProvider` reloads the config from disk on each call (see
-  // `core-impl.ts removeWukongProvider`), so calling it inside the apply loop
-  // would discard providers we already applied in memory but have not yet
-  // persisted. Drop every stale id up front in a single batch instead, then
-  // apply against the resulting fresh config.
-  let config = await harness.getConfig();
-  const staleIds = entryList
-    .filter((entry) => config.providers[entry.id] !== undefined)
-    .map((entry) => entry.id);
-  for (const id of staleIds) {
-    config = await harness.removeProvider(id);
-  }
+  const config = await harness.getConfig();
+  const previousDefaultModel = config.defaultModel;
+  applyCustomRegistryEntries(asManaged(config), entries, source);
+  config.defaultModel = previousDefaultModel !== undefined
+    && config.models?.[previousDefaultModel] !== undefined
+    ? previousDefaultModel
+    : undefined;
+  await harness.replaceConfig(config);
 
-  const addedProviderIds: string[] = [];
-  let modelCount = 0;
-  for (const entry of entryList) {
-    applyCustomRegistryProvider(asManaged(config), entry, source);
-    addedProviderIds.push(entry.id);
-    modelCount += Object.keys(entry.models).length;
-  }
-
-  await harness.setConfig({
-    providers: config.providers,
-    models: config.models,
-  });
+  const addedProviderIds = entryList.map((entry) => entry.id);
+  const modelCount = entryList.reduce(
+    (count, entry) => count + Object.keys(entry.models).length,
+    0,
+  );
 
   deps.stdout.write(
     `Imported ${String(addedProviderIds.length)} provider${addedProviderIds.length === 1 ? '' : 's'} ` +
@@ -174,9 +163,7 @@ export async function handleProviderList(
   const config = await harness.getConfig();
 
   if (opts.json) {
-    deps.stdout.write(
-      `${JSON.stringify({ providers: config.providers, models: config.models ?? {} }, null, 2)}\n`,
-    );
+    deps.stdout.write(`${JSON.stringify(providerListJson(config), null, 2)}\n`);
     return;
   }
 
@@ -189,7 +176,9 @@ export async function handleProviderList(
 
   const providerIds = Object.keys(config.providers).toSorted();
   if (providerIds.length === 0) {
-    deps.stdout.write('No providers configured.\n');
+    deps.stdout.write(
+      'No providers configured. Run `wukong`, then enter `/provider` to add one.\n',
+    );
     return;
   }
 
@@ -339,7 +328,7 @@ export async function handleCatalogAdd(
   const harness = deps.getHarness();
   await harness.ensureConfigFile();
 
-  let config = await harness.getConfig();
+  const config = await harness.getConfig();
 
   // Capture defaults BEFORE `removeProvider`, because that call clears
   // `defaultModel` when it points at one of this provider's aliases (see
@@ -348,10 +337,6 @@ export async function handleCatalogAdd(
   // even when `--default-model` is not supplied.
   const previousDefaultModel = config.defaultModel;
   const previousDefaultThinking = config.defaultThinking;
-
-  if (config.providers[providerId] !== undefined) {
-    config = await harness.removeProvider(providerId);
-  }
 
   const baseUrl = catalogBaseUrl(entry, wire);
   // `applyCatalogProvider` always overwrites both `defaultModel` and
@@ -387,12 +372,7 @@ export async function handleCatalogAdd(
   // for thinking-capable models.
   config.defaultThinking = previousDefaultThinking;
 
-  await harness.setConfig({
-    providers: config.providers,
-    models: config.models,
-    defaultModel: config.defaultModel,
-    defaultThinking: config.defaultThinking,
-  });
+  await harness.replaceConfig(config);
 
   const displayName = entry.name ?? providerId;
   const sourceLabel =
@@ -404,7 +384,60 @@ export async function handleCatalogAdd(
   );
   if (opts.defaultModel !== undefined) {
     deps.stdout.write(`Default model set to ${providerId}/${opts.defaultModel}.\n`);
+  } else if (config.defaultModel === undefined) {
+    deps.stderr.write(
+      'No default model is configured. Run `wukong`, enter `/provider`, and choose a model before starting a session.\n',
+    );
   }
+}
+
+function providerListJson(config: WukongConfig): Record<string, unknown> {
+  const providers = Object.fromEntries(
+    Object.entries(config.providers).map(([id, provider]) => {
+      const source = provider.source;
+      const sourceKind = typeof source?.['kind'] === 'string' ? source['kind'] : undefined;
+      const sourceUrl = typeof source?.['url'] === 'string' ? source['url'] : undefined;
+      return [
+        id,
+        {
+          type: provider.type,
+          ...(provider.baseUrl === undefined ? {} : { baseUrl: provider.baseUrl }),
+          ...(provider.defaultModel === undefined ? {} : { defaultModel: provider.defaultModel }),
+          hasApiKey: provider.apiKey !== undefined,
+          hasOAuth: provider.oauth !== undefined,
+          hasEnv: provider.env !== undefined && Object.keys(provider.env).length > 0,
+          hasCustomHeaders:
+            provider.customHeaders !== undefined && Object.keys(provider.customHeaders).length > 0,
+          ...(sourceKind === undefined ? {} : { sourceKind }),
+          ...(sourceUrl === undefined ? {} : { sourceUrl }),
+        },
+      ];
+    }),
+  );
+  const models = Object.fromEntries(
+    Object.entries(config.models ?? {}).map(([alias, model]) => [
+      alias,
+      {
+        provider: model.provider,
+        model: model.model,
+        maxContextSize: model.maxContextSize,
+        ...(model.maxOutputSize === undefined ? {} : { maxOutputSize: model.maxOutputSize }),
+        ...(model.capabilities === undefined ? {} : { capabilities: model.capabilities }),
+        ...(model.displayName === undefined ? {} : { displayName: model.displayName }),
+        ...(model.reasoningKey === undefined ? {} : { reasoningKey: model.reasoningKey }),
+        ...(model.protocol === undefined ? {} : { protocol: model.protocol }),
+        ...(model.adaptiveThinking === undefined
+          ? {}
+          : { adaptiveThinking: model.adaptiveThinking }),
+        ...(model.betaApi === undefined ? {} : { betaApi: model.betaApi }),
+      },
+    ]),
+  );
+  return {
+    providers,
+    models,
+    ...(config.defaultModel === undefined ? {} : { defaultModel: config.defaultModel }),
+  };
 }
 
 async function loadCatalogOrExit(
@@ -435,7 +468,13 @@ export function registerProviderCommand(parent: Command, deps?: Partial<Provider
   const defaultCatalogUrl = resolveCatalogUrl(deps?.env);
   const provider = parent
     .command('provider')
-    .description('Configure LLM providers and browse or import provider catalogs.');
+    .description('Configure LLM providers and browse or import provider catalogs.')
+    .action(() => {
+      const resolved = resolveDeps(deps);
+      resolved.stdout.write(
+        'Interactive provider setup is available in the TUI. Run `wukong`, then enter `/provider`.\nUse `wukong provider --help` for non-interactive commands.\n',
+      );
+    });
 
   // Last-resort boundary: handlers report expected failures themselves, but
   // anything that escapes (e.g. a config write rejected because config.toml
@@ -470,7 +509,7 @@ export function registerProviderCommand(parent: Command, deps?: Partial<Provider
   provider
     .command('list')
     .description('Show configured providers and their model counts.')
-    .option('--json', 'Emit the raw providers/models config as JSON.', false)
+    .option('--json', 'Emit a redacted providers/models summary as JSON.', false)
     .action(async (options: { json?: boolean }) => {
       const resolved = resolveDeps(deps);
       await runAction(resolved, () => handleProviderList(resolved, { json: options.json === true }));

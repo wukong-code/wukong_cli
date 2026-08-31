@@ -61,7 +61,7 @@ export async function runLoginFlow(): Promise<never> {
     harness.track('device_login_terminal', { outcome: 'approved' });
     process.stderr.write(
       result.modelCount === 0
-        ? `Logged in to ${result.providerName}. No Wukong models are available yet; use /provider for BYOK models.\n`
+        ? `Logged in to ${result.providerName}. No Wukong models are available yet; run \`wukong\`, then enter \`/provider\` for BYOK models.\n`
         : `Logged in to ${result.providerName}. ${String(result.modelCount)} model(s) available.\n`,
     );
     process.exit(0);

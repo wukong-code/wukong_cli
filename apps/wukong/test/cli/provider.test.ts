@@ -22,6 +22,7 @@ describe('handleProviderList', () => {
         defaultModel: config.defaultModel,
       }),
       setConfig: vi.fn(),
+      replaceConfig: vi.fn(),
       removeProvider: vi.fn(),
     };
   }
@@ -43,7 +44,9 @@ describe('handleProviderList', () => {
   it('reports no providers when config is empty', async () => {
     const deps = makeDeps();
     await handleProviderList(deps, { json: false });
-    expect(deps.stdout.write).toHaveBeenCalledWith('No providers configured.\n');
+    expect(deps.stdout.write).toHaveBeenCalledWith(
+      'No providers configured. Run `wukong`, then enter `/provider` to add one.\n',
+    );
   });
 
   it('lists providers with model counts in human format', async () => {
@@ -67,18 +70,42 @@ describe('handleProviderList', () => {
     expect(deps.stdout.write).toHaveBeenCalledWith(expect.stringContaining('Default model: gpt4'));
   });
 
-  it('emits JSON when requested', async () => {
+  it('emits redacted JSON when requested', async () => {
     const deps = makeDeps({
       harness: makeHarness({
-        providers: { openai: { type: 'openai' } },
+        providers: {
+          openai: {
+            type: 'openai',
+            apiKey: 'top-level-secret',
+            env: { OPENAI_API_KEY: 'env-secret' },
+            customHeaders: { Authorization: 'header-secret' },
+            source: {
+              kind: 'apiJson',
+              url: 'https://catalog.example/api.json',
+              apiKey: 'source-secret',
+            },
+          },
+        },
         models: { gpt4: { provider: 'openai' } },
       }),
     });
     await handleProviderList(deps, { json: true });
 
     const output = JSON.parse((deps.stdout.write as ReturnType<typeof vi.fn>).mock.calls[0]?.[0] ?? '{}');
-    expect(output.providers).toHaveProperty('openai');
+    expect(output.providers.openai).toMatchObject({
+      type: 'openai',
+      hasApiKey: true,
+      hasEnv: true,
+      hasCustomHeaders: true,
+      sourceKind: 'apiJson',
+      sourceUrl: 'https://catalog.example/api.json',
+    });
     expect(output.models).toHaveProperty('gpt4');
+    const serialized = JSON.stringify(output);
+    expect(serialized).not.toContain('top-level-secret');
+    expect(serialized).not.toContain('env-secret');
+    expect(serialized).not.toContain('header-secret');
+    expect(serialized).not.toContain('source-secret');
   });
 });
 
@@ -91,6 +118,7 @@ describe('handleProviderRemove', () => {
         models: {},
       }),
       setConfig: vi.fn(),
+      replaceConfig: vi.fn(),
       removeProvider: vi.fn().mockResolvedValue({ providers: {}, models: {} }),
     };
   }
@@ -147,5 +175,16 @@ describe('registerProviderCommand', () => {
     const list = catalog.commands.find((cmd) => cmd.name() === 'list')!;
     const urlOption = list.options.find((option) => option.long === '--url')!;
     expect(urlOption.description).toContain('https://modelpricelab.com/api.json');
+  });
+
+  it('routes a bare provider command to the interactive setup without failing', async () => {
+    const stdout = { write: vi.fn() };
+    const program = new Command();
+    program.exitOverride();
+    registerProviderCommand(program, { env: {}, stdout });
+
+    await program.parseAsync(['node', 'wukong', 'provider']);
+
+    expect(stdout.write).toHaveBeenCalledWith(expect.stringContaining('enter `/provider`'));
   });
 });

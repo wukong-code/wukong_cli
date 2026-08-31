@@ -230,6 +230,11 @@ export abstract class SDKRpcClientBase {
     return rpc.setWukongConfig(input);
   }
 
+  async replaceConfig(input: WukongConfig): Promise<WukongConfig> {
+    const rpc = await this.getRpc();
+    return rpc.replaceWukongConfig(input);
+  }
+
   async removeProvider(providerId: string): Promise<WukongConfig> {
     const rpc = await this.getRpc();
     return rpc.removeWukongProvider({ providerId });

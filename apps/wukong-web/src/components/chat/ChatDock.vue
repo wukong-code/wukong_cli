@@ -47,7 +47,11 @@ const props = defineProps<{
 }>();
 
 const emit = defineEmits<{
-  submit: [payload: { text: string; attachments: { fileId: string; kind: 'image' | 'video' }[] }];
+  submit: [payload: {
+    text: string;
+    attachments: { fileId: string; kind: 'image' | 'video' }[];
+    complete: (accepted: boolean) => void;
+  }];
   steer: [payload: { text: string; attachments: { fileId: string; kind: 'image' | 'video' }[] }];
   command: [cmd: string];
   interrupt: [];

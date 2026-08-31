@@ -196,7 +196,12 @@ onUnmounted(() => {
         <div
           class="mgh"
           :class="{ on: g.workspace.id === activeWorkspaceId }"
+          role="button"
+          tabindex="0"
+          :aria-expanded="!isCollapsed(g.workspace.id)"
           @click="toggleCollapse(g.workspace.id)"
+          @keydown.enter="toggleCollapse(g.workspace.id)"
+          @keydown.space.prevent="toggleCollapse(g.workspace.id)"
         >
           <!-- Folder icon: open/closed mirrors the desktop sidebar -->
           <svg
@@ -269,7 +274,11 @@ onUnmounted(() => {
             :key="s.id"
             class="srow"
             :class="{ cur: s.id === activeId }"
+            role="button"
+            tabindex="0"
             @click="onSelectSession(s.id)"
+            @keydown.enter="onSelectSession(s.id)"
+            @keydown.space.prevent="onSelectSession(s.id)"
           >
             <div class="m">
               <div class="t" :class="{ run: s.busy, aborted: s.status === 'aborted' }">{{ s.title }}</div>

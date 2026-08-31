@@ -73,6 +73,7 @@ import type {
   WorkspaceGroup,
   WorkspaceView,
 } from '../types';
+import { nextConnectionState } from '../lib/connectionState';
 
 const appearance = useAppearance();
 const notification = useNotification();
@@ -278,6 +279,7 @@ export interface ExtendedState extends WukongClientState {
   goalMode: boolean;
   loading: boolean;
   sessionLoading: boolean;
+  sessionLoadError: boolean;
   queuedBySession: Record<string, QueuedPrompt[]>;
   gitStatusBySession: Record<string, GitStatusEntry>;
   // Real daemon prompt_id of the last submitted prompt, per session. This is the
@@ -292,6 +294,8 @@ export interface ExtendedState extends WukongClientState {
   unreadBySession: Record<string, boolean>;
   // Auth state (real daemon)
   authReady: boolean;
+  /** The daemon could not be reached during auth bootstrap. */
+  bootstrapError: boolean;
   defaultModel: string | null;
   managedProviderStatus: string | null;
   // Workspace state
@@ -342,12 +346,14 @@ const rawState: ExtendedState = reactive({
   goalMode: loadGoalModeFromStorage(),
   loading: false,
   sessionLoading: false,
+  sessionLoadError: false,
   queuedBySession: {},
   gitStatusBySession: {},
   promptIdBySession: {},
   sendingBySession: {},
   unreadBySession: loadUnread(),
   authReady: false,
+  bootstrapError: false,
   defaultModel: null,
   managedProviderStatus: null,
   workspaces: [],
@@ -552,8 +558,8 @@ async function refreshSessionStatus(sessionId: string): Promise<void> {
 }
 
 /** Persist runtime controls to the active session via POST /profile, then
- *  re-read /status. Fire-and-forget: the UI already updated optimistically. */
-function persistSessionProfile(patch: {
+ *  re-read /status. Callers use the result to roll back optimistic controls. */
+async function persistSessionProfile(patch: {
   model?: string;
   permissionMode?: string;
   planMode?: boolean;
@@ -561,15 +567,19 @@ function persistSessionProfile(patch: {
   goalObjective?: string;
   goalControl?: 'pause' | 'resume' | 'cancel';
   thinking?: string;
-}): void {
+}): Promise<boolean> {
   const sid = rawState.activeSessionId;
-  if (!sid) return;
-  // Promise.resolve wrap: tolerate a sync/undefined return (e.g. test mocks).
-  void Promise.resolve(getWukongWebApi().updateSession(sid, patch))
-    .then(() => refreshSessionStatus(sid))
-    .catch(() => {
-      /* ignore — local state already reflects the change */
-    });
+  // Draft-session controls are local defaults and are applied on the first prompt.
+  if (!sid) return true;
+  try {
+    // Promise.resolve wrap: tolerate a sync/undefined return in test doubles.
+    await Promise.resolve(getWukongWebApi().updateSession(sid, patch));
+    await refreshSessionStatus(sid);
+    return true;
+  } catch (error) {
+    pushOperationFailure('updateSessionProfile', error, { sessionId: sid });
+    return false;
+  }
 }
 
 // ---------------------------------------------------------------------------
@@ -781,7 +791,9 @@ const enqueueEvent = createEventBatcher<PendingEvent>(
 );
 
 // ---------------------------------------------------------------------------
-// WS subscription (lazy, only when a session is selected)
+// WS connection + session subscriptions. The connection starts after bootstrap
+// even with no session selected so global workspace events and connection
+// health remain observable; session subscriptions are still lazy.
 // ---------------------------------------------------------------------------
 
 function connectEventsIfNeeded(): void {
@@ -829,6 +841,10 @@ function connectEventsIfNeeded(): void {
     },
 
     onError(_code: number, msg: string, _fatal: boolean) {
+      // Browser WebSocket errors carry no actionable detail and fire on every
+      // automatic retry. The persistent reconnect banner owns this state;
+      // emitting a toast per backoff attempt would create an unbounded stack.
+      if (!_fatal && msg === 'WebSocket error') return;
       pushWarning({
         severity: 'error',
         title: i18n.global.t('warnings.wsTitle'),
@@ -841,9 +857,14 @@ function connectEventsIfNeeded(): void {
 
     onConnectionChange(connected: boolean) {
       rawState.connected = connected;
-      rawState.connection = connected ? 'connected' : 'disconnected';
+      rawState.connection = nextConnectionState(rawState.connection, connected);
     },
   });
+}
+
+async function loadClient(): Promise<void> {
+  await workspaceState.load();
+  connectEventsIfNeeded();
 }
 
 // Journal epoch per session, learned from snapshots / resync frames. Not
@@ -1537,6 +1558,7 @@ const connection = computed<ConnectionState>(() => rawState.connection);
 
 const loading = computed<boolean>(() => rawState.loading);
 const sessionLoading = computed<boolean>(() => rawState.sessionLoading);
+const sessionLoadError = computed<boolean>(() => rawState.sessionLoadError);
 const loadingMoreMessages = computed<boolean>(() => {
   const sid = rawState.activeSessionId;
   return sid ? rawState.messagesLoadingMoreBySession[sid] ?? false : false;
@@ -1721,13 +1743,8 @@ const status = computed<ConversationStatus>(() => {
 /** Parsed unified-diff lines for the file selected in the ~/diff tab. */
 const fileDiff = computed<DiffViewLine[]>(() => fileDiffLines.value);
 
-/** Cumulative cost (USD) for the active session, from daemon usage. 0 if unknown. */
-const sessionCost = computed<number>(() => {
-  const activeSession = rawState.sessions.find((s) => s.id === rawState.activeSessionId);
-  return activeSession?.usage.totalCostUsd ?? 0;
-});
-
 const authReady = computed<boolean>(() => rawState.authReady);
+const bootstrapError = computed<boolean>(() => rawState.bootstrapError);
 const defaultModel = computed<string | null>(() => rawState.defaultModel);
 const managedProviderStatus = computed<string | null>(() => rawState.managedProviderStatus);
 const config = computed<AppConfig | null>(() => rawState.config);
@@ -2189,7 +2206,6 @@ export function useWukongWebClient() {
     activationBadges,
     compaction,
     status,
-    sessionCost,
     fileDiff,
     selectedDiffPath,
     fileDiffLoading,
@@ -2205,6 +2221,7 @@ export function useWukongWebClient() {
     connection,
     loading,
     sessionLoading,
+    sessionLoadError,
     loadingMoreMessages,
     hasMoreMessages,
     loadMoreMessagesError,
@@ -2255,7 +2272,7 @@ export function useWukongWebClient() {
     setOnboarded,
 
     // Actions
-    load: workspaceState.load,
+    load: loadClient,
     selectSession: workspaceState.selectSession,
     clearActiveSession: workspaceState.clearActiveSession,
     loadOlderMessages: workspaceState.loadOlderMessages,
@@ -2343,6 +2360,7 @@ export function useWukongWebClient() {
 
     // Auth state
     authReady,
+    bootstrapError,
     defaultModel,
     managedProviderStatus,
 

@@ -16,7 +16,7 @@
 6. 跑到终态，逐项核对：
    - [ ] 终态为 `PASS`；失败测试确实被修复并真实重跑通过
    - [ ] 文件归因区分 pre-existing dirty 与 Wukong touched，第 2 步的既有改动没有被归给 Wukong
-   - [ ] usage（calls/tokens）与 budget 显示完整；有 pricing 时显示 `~$` 估算
+   - [ ] usage（calls/tokens）与 budget 显示完整
    - [ ] decisive evidence、blocker、next action 可读且与实际一致
 7. 中途打断补测：重跑一次到中途 Ctrl-C → 恢复 → 到达终态，确认无重复 provider 副作用、无状态损坏。
 8. 记录：Windows 版本、arch、wukong 版本、repo 类型、终态截图/日志位置。
@@ -45,6 +45,28 @@
 1. TUI 启动 `/loop "<一个真实小目标>"`。
 2. 迭代过程中确认 transcript 仍保留高级诊断细节（check 输出、reviewer finding 可展开）。
 3. 终态卡片信息分层正确：Gate、主要 blocker、下一步；页脚只有一条紧凑计数。
+
+## D. 0.1.1 发布候选验收
+
+> 只在生成候选资产后执行。工作树测试或本地 `dev:stub` 通过不能替代本节。
+
+1. 记录 exact source commit、package version、catalog identity 和六平台 workflow run。
+2. 对 macOS、Linux、Windows 的 x64/ARM64 ZIP 与相邻 SHA-256 逐项核对：
+   - [ ] archive 内 `wukong --version` 为 `0.1.1`
+   - [ ] provider catalog smoke、基础 Loop、Resume、stop/recovery 通过
+   - [ ] 同一平台 ZIP 与 SHA-256 来源一致，provenance 指向 exact source
+3. 公开 `0.1.0` 安装后运行 `wukong upgrade`：
+   - [ ] 升级到 `0.1.1`，原 config、provider、session 与 Loop records 可读
+   - [ ] 恢复 session 后 usage 只显示本次新增量
+   - [ ] 跨 workspace 外部 Resume 只提示切换目录，不导入错误项目
+4. Fresh install：
+   - [ ] installer、下载页和 GitHub Release 都指向同一 `0.1.1` 资产
+   - [ ] 首次启动安装引导包含 project、`/provider` 和 `/loop` 下一步
+5. Web smoke：
+   - [ ] Server token gate 先于 onboarding；token 从 URL hash 清除
+   - [ ] 断线/重连状态持续可见且恢复后消失
+   - [ ] Session/Workspace 键盘导航、YOLO 确认、Workspace rename 持久化通过
+6. 只有以上公开资产与版本面都通过，才能把文档中的“未发布”改为“已发布”。
 
 ## 记录模板
 

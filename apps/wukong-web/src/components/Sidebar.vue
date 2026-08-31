@@ -9,11 +9,18 @@ import { serverEndpointLabel } from '../api/config';
 import { copyTextToClipboard } from '../lib/clipboard';
 import { loadCollapsedWorkspaces, saveCollapsedWorkspaces } from '../lib/storage';
 import { moveInOrder, type DropPosition } from '../lib/workspaceOrder';
+import {
+  moveSidebarTreeFocus,
+  sessionTreeKey,
+  workspaceTreeKey,
+  type SidebarTreeItem,
+} from '../lib/sidebarTree';
 import type { Session, WorkspaceGroup as WorkspaceGroupType, WorkspaceView } from '../types';
 import SessionRow from './SessionRow.vue';
 import WorkspaceGroup from './WorkspaceGroup.vue';
 
 const { t } = useI18n();
+const sideRef = ref<HTMLElement | null>(null);
 
 // Dev-only affordance: when the page is served by the Vite dev server, the
 // logo turns yellow and the backend host:port is appended to the title —
@@ -50,7 +57,6 @@ const emit = defineEmits<{
   create: [];
   createInWorkspace: [workspaceId: string];
   selectWorkspace: [workspaceId: string];
-  selectWorkspaces: [ids: string[]];
   addWorkspace: [];
   rename: [id: string, title: string];
   archive: [id: string];
@@ -115,6 +121,126 @@ function toggleCollapse(id: string): void {
 }
 
 // ---------------------------------------------------------------------------
+// Keyboard tree navigation (roving tabindex)
+// ---------------------------------------------------------------------------
+const treeFocusKey = ref<string | null>(null);
+
+const treeItems = computed<SidebarTreeItem[]>(() => {
+  if (isSearching.value) {
+    return searchResults.value.map((session) => {
+      const workspaceId = props.groups.find((group) =>
+        group.sessions.some((candidate) => candidate.id === session.id),
+      )?.workspace.id;
+      return {
+        key: sessionTreeKey(session.id),
+        kind: 'session',
+        id: session.id,
+        workspaceId,
+      };
+    });
+  }
+
+  const items: SidebarTreeItem[] = [];
+  for (const group of props.groups) {
+    const workspaceId = group.workspace.id;
+    items.push({
+      key: workspaceTreeKey(workspaceId),
+      kind: 'workspace',
+      id: workspaceId,
+      workspaceId,
+    });
+    if (isCollapsed(workspaceId)) continue;
+    for (const session of group.sessions) {
+      items.push({
+        key: sessionTreeKey(session.id),
+        kind: 'session',
+        id: session.id,
+        workspaceId,
+      });
+    }
+  }
+  return items;
+});
+
+watch(
+  [treeItems, () => props.activeId, () => props.activeWorkspaceId],
+  ([items]) => {
+    if (items.some((item) => item.key === treeFocusKey.value)) return;
+    const activeSessionKey = props.activeId ? sessionTreeKey(props.activeId) : null;
+    const activeWorkspaceKey = props.activeWorkspaceId
+      ? workspaceTreeKey(props.activeWorkspaceId)
+      : null;
+    treeFocusKey.value =
+      items.find((item) => item.key === activeSessionKey)?.key
+      ?? items.find((item) => item.key === activeWorkspaceKey)?.key
+      ?? items[0]?.key
+      ?? null;
+  },
+  { immediate: true },
+);
+
+function focusTreeItem(key: string | null): void {
+  if (key === null) return;
+  treeFocusKey.value = key;
+  void nextTick().then(() => {
+    const item = Array.from(
+      sideRef.value?.querySelectorAll<HTMLElement>('[data-tree-key]') ?? [],
+    ).find((candidate) => candidate.dataset['treeKey'] === key);
+    item?.focus();
+  });
+}
+
+function onTreeFocus(event: FocusEvent): void {
+  const item = (event.target as HTMLElement).closest<HTMLElement>('[data-tree-key]');
+  const key = item?.dataset['treeKey'];
+  if (key !== undefined) treeFocusKey.value = key;
+}
+
+function onTreeKeydown(event: KeyboardEvent): void {
+  const target = event.target as HTMLElement;
+  if (target.closest('button, input, textarea, select')) return;
+  const element = target.closest<HTMLElement>('[data-tree-key]');
+  const currentKey = element?.dataset['treeKey'] ?? treeFocusKey.value;
+  const current = treeItems.value.find((item) => item.key === currentKey);
+  if (!current) return;
+
+  let nextKey: string | null = null;
+  if (event.key === 'ArrowDown') {
+    nextKey = moveSidebarTreeFocus(treeItems.value, current.key, 'next');
+  } else if (event.key === 'ArrowUp') {
+    nextKey = moveSidebarTreeFocus(treeItems.value, current.key, 'previous');
+  } else if (event.key === 'Home') {
+    nextKey = moveSidebarTreeFocus(treeItems.value, current.key, 'first');
+  } else if (event.key === 'End') {
+    nextKey = moveSidebarTreeFocus(treeItems.value, current.key, 'last');
+  } else if (event.key === 'ArrowRight' && current.kind === 'workspace') {
+    if (isCollapsed(current.id)) {
+      toggleCollapse(current.id);
+    } else {
+      nextKey = treeItems.value.find(
+        (item) => item.kind === 'session' && item.workspaceId === current.id,
+      )?.key ?? null;
+    }
+  } else if (event.key === 'ArrowLeft') {
+    if (current.kind === 'workspace' && !isCollapsed(current.id)) {
+      toggleCollapse(current.id);
+    } else if (current.kind === 'session' && current.workspaceId !== undefined) {
+      nextKey = workspaceTreeKey(current.workspaceId);
+    }
+  } else if (event.key === 'Enter' || event.key === ' ') {
+    if (current.kind === 'workspace') emit('selectWorkspace', current.id);
+    else if (isSearching.value) onSelectResult(current.id);
+    else onSelectSession(current.id);
+  } else {
+    return;
+  }
+
+  event.preventDefault();
+  event.stopPropagation();
+  if (nextKey !== null) focusTreeItem(nextKey);
+}
+
+// ---------------------------------------------------------------------------
 // Workspace drag-to-reorder
 // ---------------------------------------------------------------------------
 // The header of each group is the drag handle (see WorkspaceGroup). We track
@@ -163,29 +289,21 @@ function onGroupDrop(targetId: string): void {
 }
 
 // ---------------------------------------------------------------------------
-// Shift-multi-select workspaces
+// Workspace selection is single-target in 0.1.1. Keep an empty set for the
+// WorkspaceGroup visual contract; multi-workspace actions are not exposed.
 // ---------------------------------------------------------------------------
 const selectedIds = ref<Set<string>>(new Set());
 
 function handleGhClick(wsId: string, e: MouseEvent): void {
-  if (e.shiftKey) {
-    e.stopPropagation();
-    const next = new Set(selectedIds.value);
-    if (next.has(wsId)) next.delete(wsId);
-    else next.add(wsId);
-    selectedIds.value = next;
-    emit('selectWorkspaces', Array.from(next));
-    return;
-  }
-  // Normal click: clear multi-selection then toggle collapse
+  e.stopPropagation();
   selectedIds.value = new Set();
-  emit('selectWorkspaces', []);
+  focusTreeItem(workspaceTreeKey(wsId));
   toggleCollapse(wsId);
 }
 
 function onSelectSession(sessionId: string): void {
   selectedIds.value = new Set();
-  emit('selectWorkspaces', []);
+  focusTreeItem(sessionTreeKey(sessionId));
   emit('select', sessionId);
 }
 
@@ -242,16 +360,6 @@ function onGhMenuDocClick(e: MouseEvent): void {
 }
 
 function openGhMenu(ws: WorkspaceView, e: MouseEvent): void {
-  if (e.shiftKey) {
-    // shift+right-click = multi-select (same as shift+click)
-    e.stopPropagation();
-    const next = new Set(selectedIds.value);
-    if (next.has(ws.id)) next.delete(ws.id);
-    else next.add(ws.id);
-    selectedIds.value = next;
-    emit('selectWorkspaces', Array.from(next));
-    return;
-  }
   e.preventDefault();
   e.stopPropagation();
   ghMenuTarget.value = ws;
@@ -403,7 +511,7 @@ const showNewWorkspaceButton = false;
 </script>
 
 <template>
-  <aside class="side">
+  <aside ref="sideRef" class="side">
     <!-- Session column -->
     <div class="col" :style="{ width: colWidth + 'px' }">
       <!-- Header: logo + settings (no hard border — flows into workspace list) -->
@@ -492,7 +600,14 @@ const showNewWorkspaceButton = false;
       </div>
 
       <!-- Search results (flat, across all workspaces) -->
-      <div v-if="isSearching" class="sessions">
+      <div
+        v-if="isSearching"
+        class="sessions"
+        role="tree"
+        :aria-label="t('sidebar.treeLabel')"
+        @focusin="onTreeFocus"
+        @keydown="onTreeKeydown"
+      >
         <template v-if="searchResults.length > 0">
           <SessionRow
             v-for="s in searchResults"
@@ -502,6 +617,8 @@ const showNewWorkspaceButton = false;
             :approval-count="pendingBySession[s.id]?.approvals ?? 0"
             :question-count="pendingBySession[s.id]?.questions ?? 0"
             :unread="unreadBySession[s.id] ?? false"
+            :tree-focused="treeFocusKey === sessionTreeKey(s.id)"
+            :tree-level="1"
             @select="onSelectResult($event)"
             @rename="(id, title) => emit('rename', id, title)"
             @archive="emit('archive', $event)"
@@ -514,7 +631,14 @@ const showNewWorkspaceButton = false;
       </div>
 
       <!-- Session list — grouped by workspace -->
-      <div v-else class="sessions">
+      <div
+        v-else
+        class="sessions"
+        role="tree"
+        :aria-label="t('sidebar.treeLabel')"
+        @focusin="onTreeFocus"
+        @keydown="onTreeKeydown"
+      >
         <!-- Empty state — only when no workspace is registered at all; empty
              workspaces still render their group header (with the + button). -->
         <div v-if="groups.length === 0" class="empty">
@@ -545,6 +669,8 @@ const showNewWorkspaceButton = false;
               :unread-by-session="unreadBySession"
               :ws-menu-open-id="wsMenuOpenId"
               :dragging="draggingWsId === g.workspace.id"
+              :tree-focused="treeFocusKey === workspaceTreeKey(g.workspace.id)"
+              :session-tree-focus-key="treeFocusKey"
               :is-collapsed="isCollapsed"
               @group-click="handleGhClick"
               @group-contextmenu="openGhMenu"

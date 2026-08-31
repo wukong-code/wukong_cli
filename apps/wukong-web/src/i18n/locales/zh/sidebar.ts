@@ -33,4 +33,5 @@ export default {
   searchPlaceholder: '搜索会话',
   searchClear: '清除搜索',
   searchNoResults: '没有匹配的会话',
+  treeLabel: '工作区和会话',
 };

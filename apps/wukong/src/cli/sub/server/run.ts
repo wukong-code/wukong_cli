@@ -121,8 +121,8 @@ export function buildRunCommand(cmd: Command, options: { defaultOpen: boolean })
     )
     .option(
       '--insecure-no-tls',
-      'Allow a non-loopback bind without a TLS-terminating reverse proxy. Defaults to true; only relevant for non-loopback binds.',
-      true,
+      'Allow a non-loopback bind without a TLS-terminating reverse proxy. Only relevant for non-loopback binds.',
+      false,
     )
     .option(
       '--allow-remote-shutdown',

@@ -242,6 +242,10 @@ export class WukongHarness {
     return this.rpc.setConfig(patch);
   }
 
+  async replaceConfig(config: WukongConfig): Promise<WukongConfig> {
+    return this.rpc.replaceConfig(config);
+  }
+
   async removeProvider(providerId: string): Promise<WukongConfig> {
     return this.rpc.removeProvider(providerId);
   }

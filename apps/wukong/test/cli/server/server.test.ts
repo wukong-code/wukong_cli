@@ -667,7 +667,7 @@ describe('--host threading (M6.2)', () => {
 });
 
 describe('default bind (M6.3)', () => {
-  it('defaults host to 127.0.0.1 and insecureNoTls to true when no flags are passed', async () => {
+  it('defaults host to 127.0.0.1 and insecureNoTls to false when no flags are passed', async () => {
     const { handleRunCommand } = await import('#/cli/sub/server/run');
     let parsed: unknown;
 
@@ -684,7 +684,7 @@ describe('default bind (M6.3)', () => {
       },
     );
 
-    expect(parsed).toMatchObject({ host: '127.0.0.1', insecureNoTls: true });
+    expect(parsed).toMatchObject({ host: '127.0.0.1', insecureNoTls: false });
   });
 
   it('treats a bare --host as the default LAN host', async () => {
@@ -704,7 +704,7 @@ describe('default bind (M6.3)', () => {
       },
     );
 
-    expect(parsed).toMatchObject({ host: '0.0.0.0', insecureNoTls: true });
+    expect(parsed).toMatchObject({ host: '0.0.0.0', insecureNoTls: false });
   });
 });
 

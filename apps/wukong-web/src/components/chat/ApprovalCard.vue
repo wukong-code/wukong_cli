@@ -108,6 +108,7 @@ function rejectAndExitPlan(): void { emit('decide', { decision: 'rejected', sele
 // ---------------------------------------------------------------------------
 
 function handleKeydown(e: KeyboardEvent): void {
+  if (document.querySelector('[aria-modal="true"]') !== null) return;
   const tag = (document.activeElement?.tagName ?? '').toLowerCase();
   if (tag === 'input' || tag === 'textarea') return;
   // Hidden actions shouldn't fire from number keys while minimized.

@@ -29,6 +29,12 @@ describe('handleDoctor', () => {
 
     expect(code).toBe(0);
     expect(deps.stdout.write).toHaveBeenCalledWith(expect.stringContaining('SKIP'));
+    expect(deps.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining('No config files were found'),
+    );
+    expect(deps.stdout.write).not.toHaveBeenCalledWith(
+      expect.stringContaining('All checked config files are valid'),
+    );
   });
 
   it('validates existing config and tui files', async () => {
