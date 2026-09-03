@@ -1,15 +1,15 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；`0.1.1` 正在执行正式发布，`0.1.0` 是直接升级基线。真实用户 cohort 是发布后产品学习，不设置固定等待门槛；不包含隔离 worktree / Safe Promote。0.2.0 尚未批准开工。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；`0.1.1` 已于 2026-09-03 正式发布，也是 `0.1.2` 的直接升级基线。真实用户 cohort 是发布后产品学习，不设置固定等待门槛；不包含隔离 worktree / Safe Promote。0.2.0 尚未批准开工。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
-## 🚧 0.1.1 — Reliability And Trust Boundary（正式发布中）
+## ✅ 0.1.1 — Reliability And Trust Boundary（已发布）
 
 > 说明：[0.1.1 发布说明](docs/releases/0.1.1.md)。补丁版本继续
 > Free、local-first、BYOK；不新增命令、不改变 Loop/Gate 语义，不包含 Cost
-> Visibility。package version 已更新为 `0.1.1`；发布完成仍以不可变资产、升级、
-> 恢复和 production version surfaces 的 exact-SHA 验收为准。
+> Visibility。`0.1.1` 已通过不可变资产、升级、恢复和 production version
+> surfaces 的 exact-SHA 验收。
 
 - [x] 恢复旧 Plan session 时保留真实 plan mode 状态（2026-08-18）
 - [x] 支持递归 `**/` glob，并统一本地与 SSH workspace 行为（2026-08-18）
@@ -28,7 +28,7 @@
 - [x] 删除空 `packages/wukong-migration-legacy` workspace，并同步 `flake.nix`、pnpm lock 与 Nix workspace 检查（2026-09-03）
 - [x] Web 请求路径移除 schema DDL；冻结旧 SaaS 表，停止应用层新增宠物/memory/achievement/invite/usage 数据（2026-09-03）
 - [x] 重写 Web `CLAUDE.md`，修正公开 Loop 终态文案，并为官网与 local Web 固化浏览器 Golden Journey（2026-09-03；见 `docs/test/0.1.1-browser-golden-journeys.md`）
-- [ ] 六平台 0.1.1 assets、0.1.0 → 0.1.1 升级与公开安装验收（发布时执行）
+- [x] 六平台 0.1.1 assets、0.1.0 → 0.1.1 升级与公开安装验收（2026-09-03；publish `33719487397`、promotion `33720931233`、production surfaces `33720991004`）
 
 ## 📋 0.1.2 — First Success And Surface Simplification（未开工）
 
@@ -39,6 +39,8 @@
 - [ ] 增加高级 `wukong check`；旧 verify/scan/proof/judge/guard 兼容一个 minor，不在本版本删除
 - [ ] Dashboard 只保留真实 Connected CLI sessions/last used/revoke；数据未就绪时从主导航隐藏
 - [ ] 用三个授权脱敏真实案例验收 install→Provider→Preflight→Loop→Gate，而不是动画 PASS
+- [ ] 复核网站锁定依赖的 `npm audit` 基线（当前 1 moderate / 3 high），区分 runtime 与 dev-only；通过兼容升级或移除依赖收口，禁止无审查执行 `npm audit fix --force`，生产 high 必须归零或记录 owner、期限和缓解措施
+- [ ] 将触发 Node.js 20 兼容层的 GitHub Actions 升级到 Node 24-compatible 版本；继续使用完整 commit SHA 固定、最小权限，并通过 Web test/build 与发布工作流回归
 
 ## 📋 0.2.0 — Codebase Reduction（需设计批准）
 

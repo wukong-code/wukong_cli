@@ -163,7 +163,7 @@ minor/major 或专项任务关闭。发布级别写在版本设计文档头部�
 
 ### 下一版本与后续候选
 
-0.1.0 已发布；当前 checkout 正在收口 0.1.1 reliability maintenance。旧设计中依赖 isolated
+0.1.0 与 0.1.1 已发布；当前 checkout 开始维护 0.1.2 计划。旧设计中依赖 isolated
 worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继续
 作为实现依据或对外承诺：
 
@@ -171,7 +171,7 @@ worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继�
 |---|---|---|
 | `0.1.0` | **已发布。** 可控、可恢复、可解释的 Trusted Local Loop：可编辑 Preflight、可信 no-check、调用/token 上限、三态 Gate verdict 与 STOPPED_BY_USER、文件归因、恢复兼容、最小 completeness/freshness、五来源 Resume、六平台安装升级和 public truth；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移 | immutable stable 资产通过 stage-verify-publish-exact、六平台 draft smoke、公开 URL provenance、固定安装、0.0.22 upgrade、恢复与生产版本面验收。25/20/15/7 cohort、首次用户理解和真实来源流程发布后继续收集，不设置固定 14 天等待；三个授权案例只阻断集中宣传 |
 | `0.1.1` | **当前 stable。** Reliability And Trust Boundary 补丁：保留 Plan/Loop/Resume/Provider/Web 修复，并关闭 Vis typecheck、更新与插件供应链、workspace checks 发现、根测试编排和空 workspace 问题；不新增顶层命令、不改变 Gate 语义 | 新增缺陷有负向回归；根 test/typecheck/lint/build 覆盖 local Web、vis-web、vis-server；更新不再静默安装；插件安装 fail closed；发布链路验证六平台 assets、0.1.0 upgrade、fresh install、恢复和公开版本面 |
-| `0.1.2` | First Success And Surface Simplification：首次 Provider 连通测试、可恢复 Preflight、可审核 run-plan、安装后真实下一步、命令默认面收敛、账号设备管理或导航隐藏，以及 Web 旧 SaaS 应用层归档 | 不删除兼容别名；真实安装→Provider→Preflight→Loop Golden Journey；三个授权脱敏案例；所有隐藏入口仍可显式发现和调用；生产旧表只冻结不 DROP |
+| `0.1.2` | First Success And Surface Simplification：首次 Provider 连通测试、可恢复 Preflight、可审核 run-plan、安装后真实下一步、命令默认面收敛、账号设备管理或导航隐藏、Web 旧 SaaS 应用层归档，以及 Web 依赖与 CI runtime 维护 | 不删除兼容别名；真实安装→Provider→Preflight→Loop Golden Journey；三个授权脱敏案例；所有隐藏入口仍可显式发现和调用；生产旧表只冻结不 DROP；生产依赖无未处置 high，Actions 不再触发 Node.js 20 弃用告警 |
 | `0.2.0` | Codebase Reduction：拆分 GoalMode/TUI/Web 超大协调器，持续清零 boundary baseline，把 Vis、Web/server、ACP、Plugins/MCP、Swarm、Cron、roles 与 Today 收敛为明确的核心或可选扩展边界 | 先批准迁移设计和兼容策略；每次拆分保持 records、Gate、恢复和 SDK contract；旧命令别名至少经过一个 minor deprecation；真实迁移包只有在支持窗口结束后移除 |
 | `0.3.0` | Evidence-gated Collaboration Pilot：GitHub PR Check、共享 versioned policy、摘要审计、团队权限/预算和完整 Billing lifecycle 只作为付费证据满足后的候选 | 先取得真实重复使用、非关联付款和续费证据；Free local BYOK Loop 不受账号或 entitlement 故障影响；未达门槛不建设公开 Checkout |
 
@@ -203,6 +203,8 @@ worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继�
 - 增加高级 `wukong check` 聚合入口；verify/scan/proof/judge/guard 在本版本只降级为兼容别名，不删除。
 - 普通 Dashboard 只保留有证据的已连接设备、最后使用时间和单设备 revoke；若这些数据未就绪，则从主导航隐藏 Dashboard/Plan。
 - local Web 在没有使用证据时进入 bugfix-only；若保留，先确定 canonical protocol schema 和生成式 wire types，再继续扩展。
+- 复核 Web 锁定依赖的 `npm audit` 告警并区分 runtime/dev-only；兼容升级或移除依赖，不盲目使用 `--force`，生产 high 必须归零或有 owner、期限和缓解措施。
+- 将 GitHub Actions 升级到 Node 24-compatible runtime，保持 action 完整 SHA 固定和最小权限，并回归 Web test/build、六平台发布与生产面验证。
 
 #### 0.2.0：需要迁移设计的结构精简
 
