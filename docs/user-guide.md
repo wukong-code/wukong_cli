@@ -1,13 +1,12 @@
 # Wukong Code 用户指南
 
-> 适用范围: 当前 `wukong_cli`；stable binary 为 `v0.1.0`，当前工作树包含未发布
-> `0.1.1 Reliability Maintenance`
-> 更新时间: 2026-08-31
+> 适用范围: 当前 `wukong_cli`；stable binary 为 `v0.1.1`
+> 更新时间: 2026-09-03
 > 定位: 给 Wukong 一个目标，通过 Goal → Write → Check → Review → Fix 循环直到没有 blocking finding。
-> 版本边界: stable `0.1.0` 已发布，并对 exact assets、安装/升级/恢复和生产版本面完成验收。`0.1.1` 当前只代表未提交工作树中的可靠性修复，package version 仍为 `0.1.0`，六平台发布验收尚未开始。完整多层 coverage schema、direct-shell content/PATH attestation 和价格数据库已后移。当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
+> 版本边界: `0.1.1` 延续 Free、local-first、BYOK 的 Trusted Local Loop，并增加可靠性与信任边界修复。完整多层 coverage schema、direct-shell content/PATH attestation 和价格数据库已后移。当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
 
-`0.1.1` 的工作树功能、Web stub 使用方式、验证证据与发布缺口见
-[0.1.1 Reliability Maintenance（未发布）](releases/0.1.1.md)。
+`0.1.1` 的功能、Web stub 使用方式、验证证据与发布完整性合同见
+[0.1.1 Reliability And Trust Boundary](releases/0.1.1.md)。
 
 CLI telemetry 的现有 wire fields、唯一 endpoint、本地 7 天失败队列和 opt-out 方式见
 [CLI telemetry contract](operations/cli-telemetry.md)。远端 retention 当前没有公开、

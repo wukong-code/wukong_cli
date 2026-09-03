@@ -944,6 +944,7 @@ base_url = "https://search.example.test/v1"
     });
 
     await core.installPlugin({ source: pluginRoot });
+    await core.setPluginEnabled({ id: 'demo', enabled: true });
     const created = await rpc.createSession({
       id: 'ses_runtime_reload_reminder',
       workDir,
@@ -1002,6 +1003,7 @@ base_url = "https://search.example.test/v1"
     });
 
     await core.installPlugin({ source: pluginRoot });
+    await core.setPluginEnabled({ id: 'demo', enabled: true });
     const created = await rpc.createSession({
       id: 'ses_runtime_reload_neutralize',
       workDir,
@@ -1050,6 +1052,7 @@ base_url = "https://search.example.test/v1"
     });
 
     await core.installPlugin({ source: pluginRoot });
+    await core.setPluginEnabled({ id: 'demo', enabled: true });
     const created = await rpc.createSession({
       id: 'ses_runtime_reload_no_force',
       workDir,
@@ -1085,6 +1088,7 @@ base_url = "https://search.example.test/v1"
     });
 
     await core.installPlugin({ source: pluginRoot });
+    await core.setPluginEnabled({ id: 'demo', enabled: true });
     const created = await rpc.createSession({
       id: 'ses_runtime_reload_no_sessionstart',
       workDir,

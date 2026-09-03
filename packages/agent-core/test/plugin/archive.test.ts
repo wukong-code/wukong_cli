@@ -1,11 +1,22 @@
-import { describe, expect, it } from 'vitest';
+import { createHash } from 'node:crypto';
 import { mkdtemp, readFile, stat } from 'node:fs/promises';
 import path from 'node:path';
 import { tmpdir } from 'node:os';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import yazl from 'yazl';
 import { crc32 } from 'node:zlib';
 
-import { downloadZip, extractZip } from '../../src/plugin/archive';
+import {
+  downloadZip,
+  extractZip,
+  MAX_PLUGIN_ARCHIVE_ENTRIES,
+  MAX_PLUGIN_DOWNLOAD_BYTES,
+  MAX_PLUGIN_ENTRY_BYTES,
+} from '../../src/plugin/archive';
+
+afterEach(() => {
+  vi.unstubAllGlobals();
+});
 
 async function createZipBuffer(
   entries: Array<{ name: string; data: string | Buffer; mode?: number }>,
@@ -120,6 +131,51 @@ describe('downloadZip', () => {
 
     await expect(downloadZip(url)).rejects.toThrow(/Failed to download zip: HTTP 404/i);
   });
+
+  it('rejects an insecure non-loopback URL before fetching', async () => {
+    const fetchMock = vi.fn();
+    vi.stubGlobal('fetch', fetchMock);
+
+    await expect(downloadZip('http://example.com/plugin.zip')).rejects.toThrow(/HTTPS/i);
+    expect(fetchMock).not.toHaveBeenCalled();
+  });
+
+  it('rejects an untrusted redirect host', async () => {
+    const response = new Response('zip', { status: 200 });
+    Object.defineProperty(response, 'url', { value: 'https://evil.example/plugin.zip' });
+    vi.stubGlobal('fetch', vi.fn(async () => response));
+
+    await expect(downloadZip('https://plugins.example/plugin.zip')).rejects.toThrow(
+      /untrusted host/i,
+    );
+  });
+
+  it('rejects a declared response larger than the download limit', async () => {
+    const response = new Response(null, {
+      status: 200,
+      headers: { 'content-length': String(MAX_PLUGIN_DOWNLOAD_BYTES + 1) },
+    });
+    vi.stubGlobal('fetch', vi.fn(async () => response));
+
+    await expect(downloadZip('https://plugins.example/plugin.zip')).rejects.toThrow(/too large/i);
+  });
+
+  it('verifies an optional sha256 URL fragment', async () => {
+    const zipBuffer = await createZipBuffer([{ name: 'test.txt', data: 'hello' }]);
+    const digest = createHash('sha256').update(zipBuffer).digest('hex');
+    const url = await serveOnce(zipBuffer);
+
+    await expect(downloadZip(`${url}#sha256=${digest}`)).resolves.toEqual(zipBuffer);
+  });
+
+  it('rejects a mismatched sha256 URL fragment', async () => {
+    const zipBuffer = await createZipBuffer([{ name: 'test.txt', data: 'hello' }]);
+    const url = await serveOnce(zipBuffer);
+
+    await expect(downloadZip(`${url}#sha256=${'0'.repeat(64)}`)).rejects.toThrow(
+      /SHA-256 mismatch/i,
+    );
+  });
 });
 
 describe('extractZip', () => {
@@ -233,5 +289,34 @@ describe('extractZip', () => {
     await extractZip(zipBuffer, destDir);
     expect(await readFile(path.join(destDir, 'foo..bar.txt'), 'utf8')).toBe('ok');
     expect(await readFile(path.join(destDir, 'dir', '..hidden.md'), 'utf8')).toBe('ok');
+  });
+
+  it('rejects archives whose declared entry count exceeds the limit', async () => {
+    const destDir = await mkdtemp(path.join(tmpdir(), 'archive-test-'));
+    const zipBuffer = createMinimalZip('safe.txt', 'ok');
+    zipBuffer.writeUInt16LE(MAX_PLUGIN_ARCHIVE_ENTRIES + 1, zipBuffer.length - 14);
+    zipBuffer.writeUInt16LE(MAX_PLUGIN_ARCHIVE_ENTRIES + 1, zipBuffer.length - 12);
+
+    await expect(extractZip(zipBuffer, destDir)).rejects.toThrow(/too many entries/i);
+  });
+
+  it('rejects an entry whose declared uncompressed size exceeds the per-file limit', async () => {
+    const destDir = await mkdtemp(path.join(tmpdir(), 'archive-test-'));
+    const zipBuffer = createMinimalZip('large.bin', 'x');
+    const centralHeader = zipBuffer.indexOf(Buffer.from([0x50, 0x4b, 0x01, 0x02]));
+    zipBuffer.writeUInt16LE(8, 8);
+    zipBuffer.writeUInt16LE(8, centralHeader + 10);
+    zipBuffer.writeUInt32LE(MAX_PLUGIN_ENTRY_BYTES + 1, centralHeader + 24);
+
+    await expect(extractZip(zipBuffer, destDir)).rejects.toThrow(/per-file limit/i);
+  });
+
+  it('rejects suspiciously high compression ratios', async () => {
+    const destDir = await mkdtemp(path.join(tmpdir(), 'archive-test-'));
+    const zipBuffer = await createZipBuffer([
+      { name: 'compressed.bin', data: Buffer.alloc(2 * 1024 * 1024) },
+    ]);
+
+    await expect(extractZip(zipBuffer, destDir)).rejects.toThrow(/compression ratio/i);
   });
 });

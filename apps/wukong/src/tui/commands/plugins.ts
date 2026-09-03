@@ -492,12 +492,18 @@ function showPluginInstallResult(
 ): void {
   const previous = beforeList.find((entry) => entry.id === summary.id);
   const serverWord = summary.mcpServerCount === 1 ? 'server' : 'servers';
+  const needsEnable = previous === undefined && !summary.enabled;
   const mcpHint =
     summary.mcpServerCount > 0
-      ? ` Declares ${summary.mcpServerCount} MCP ${serverWord}; enabled by default and configurable from /plugins.`
+      ? needsEnable
+        ? ` Declares ${summary.mcpServerCount} MCP ${serverWord}; review capabilities before enabling it from /plugins.`
+        : ` Declares ${summary.mcpServerCount} MCP ${serverWord}; configurable from /plugins.`
       : '';
   const action = describeInstallAction(previous, summary);
-  host.showStatus(`${action} (${summary.id}).${mcpHint}`);
+  const enableHint = needsEnable
+    ? ' Installed disabled.'
+    : '';
+  host.showStatus(`${action} (${summary.id}).${enableHint}${mcpHint}`);
   host.showStatus(PLUGIN_RELOAD_HINT, 'warning');
 }
 

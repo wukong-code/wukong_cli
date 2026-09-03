@@ -174,7 +174,7 @@ function makeSession(overrides: Record<string, unknown> = {}) {
       id: 'demo',
       displayName: 'Demo',
       version: '1.0.0',
-      enabled: true,
+      enabled: false,
       state: 'ok',
       skillCount: 1,
       mcpServerCount: 0,
@@ -3441,6 +3441,7 @@ command = "vim"
     await vi.waitFor(() => {
       const transcript = stripSgr(renderTranscript(driver));
       expect(transcript).toContain('Installed Demo');
+      expect(transcript).toContain('Installed disabled.');
       expect(transcript).toContain('Run /new or /reload to apply plugin changes.');
     });
     // Installing closes the panel so the success notice / reload tip is visible.

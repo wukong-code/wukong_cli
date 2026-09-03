@@ -36,7 +36,7 @@ describe('TUI config', () => {
     expect(text).toContain('theme = "auto"');
     expect(text).toContain('command = ""');
     expect(text).toContain('[upgrade]');
-    expect(text).toContain('auto_install = true');
+    expect(text).toContain('auto_install = false');
     expect(text).toContain('[notifications]');
     expect(text).toContain('enabled = true');
     expect(text).toContain('notification_condition = "unfocused"');
@@ -81,7 +81,7 @@ command = "   "
       theme: 'auto',
       editorCommand: null,
       notifications: { enabled: true, condition: 'unfocused' },
-      upgrade: { autoInstall: true },
+      upgrade: { autoInstall: false },
       resume: { foreignSuggestions: true },
     });
   });
@@ -90,7 +90,7 @@ command = "   "
     const config = parseTuiConfig(`theme = "dark"`);
 
     expect(config.notifications).toEqual({ enabled: true, condition: 'unfocused' });
-    expect(config.upgrade).toEqual({ autoInstall: true });
+    expect(config.upgrade).toEqual({ autoInstall: false });
     expect(config.resume).toEqual({ foreignSuggestions: true });
   });
 

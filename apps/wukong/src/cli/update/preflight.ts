@@ -454,7 +454,7 @@ async function shouldAutoInstallUpdates(): Promise<boolean> {
     const config = await loadTuiConfig();
     return config.upgrade.autoInstall;
   } catch {
-    return true;
+    return false;
   }
 }
 

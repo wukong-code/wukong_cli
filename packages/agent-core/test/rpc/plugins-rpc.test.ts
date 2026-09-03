@@ -22,13 +22,14 @@ describe('WukongCore plugin RPCs', () => {
     const installed = await core.installPlugin({ source: pluginRoot });
     expect(installed.id).toBe('demo');
     expect(installed.version).toBe('1.0.0');
+    expect(installed.enabled).toBe(false);
 
     const list = await core.listPlugins({});
     expect(list).toHaveLength(1);
 
-    await core.setPluginEnabled({ id: 'demo', enabled: false });
+    await core.setPluginEnabled({ id: 'demo', enabled: true });
     const after = await core.listPlugins({});
-    expect(after[0]?.enabled).toBe(false);
+    expect(after[0]?.enabled).toBe(true);
 
     await core.removePlugin({ id: 'demo' });
     await expect(core.listPlugins({})).resolves.toEqual([]);
@@ -119,6 +120,7 @@ oauth = { storage = "file", key = "oauth/wukong-env-1234", oauth_host = "https:/
       const core = new WukongCore(async () => ({}) as never, { homeDir: home });
       await new Promise((r) => setImmediate(r));
       await core.installPlugin({ source: pluginRoot });
+      await core.setPluginEnabled({ id: 'wukong-datasource', enabled: true });
 
       const mcpConfig = (
         core as unknown as {

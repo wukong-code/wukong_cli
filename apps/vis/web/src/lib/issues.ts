@@ -54,7 +54,7 @@ export function computeIssues(
   const toolCallById = new Map<string, { lineNo: number; name: string }>();
   const stepBeginByUuid = new Map<string, { lineNo: number; step: number; turnId: string }>();
   let lastCompactionBegin: { lineNo: number; source: string } | null = null;
-  let lastPlanEnter: { lineNo: number; id: string } | null = null;
+  let lastPlanEnter: { lineNo: number; id?: string } | null = null;
 
   for (const entry of entries) {
     const r = entry.data;
@@ -198,7 +198,9 @@ export function computeIssues(
       severity: 'info',
       kind: 'active_plan_mode',
       lineNo: lastPlanEnter.lineNo,
-      summary: `plan mode still active: ${lastPlanEnter.id}`,
+      summary: lastPlanEnter.id === undefined
+        ? 'plan mode still active'
+        : `plan mode still active: ${lastPlanEnter.id}`,
     });
   }
 

@@ -72,7 +72,7 @@ describe('PluginManager', () => {
 
     const record = await manager.install(pluginRoot);
     expect(record.id).toBe('demo');
-    expect(record.enabled).toBe(true);
+    expect(record.enabled).toBe(false);
     expect(manager.list()).toHaveLength(1);
 
     manager = new PluginManager({ wukongHomeDir: home });
@@ -107,6 +107,7 @@ describe('PluginManager', () => {
     expect(record.root).toBe(managedRoot);
     expect(record.originalSource).toBe(root);
     expect(record.manifest?.skills).toEqual([path.join(managedRoot, 'skills')]);
+    await manager.setEnabled('superpowers', true);
     expect(manager.pluginSkillRoots()).toContainEqual({
       path: path.join(managedRoot, 'skills'),
       source: 'extra',
@@ -147,12 +148,12 @@ describe('PluginManager', () => {
     await manager.load();
     await manager.install(root);
 
-    await manager.setEnabled('demo', false);
-    expect(manager.get('demo')?.enabled).toBe(false);
+    await manager.setEnabled('demo', true);
+    expect(manager.get('demo')?.enabled).toBe(true);
 
     const reloaded = new PluginManager({ wukongHomeDir: home });
     await reloaded.load();
-    expect(reloaded.get('demo')?.enabled).toBe(false);
+    expect(reloaded.get('demo')?.enabled).toBe(true);
   });
 
   it('remove() clears the entry but does not delete the source directory', async () => {
@@ -177,7 +178,7 @@ describe('PluginManager', () => {
     await manager.load();
     await manager.install(a);
     await manager.install(b);
-    await manager.setEnabled('b', false);
+    await manager.setEnabled('a', true);
     const managedA = await managedPluginRoot(home, 'a');
     const managedB = await managedPluginRoot(home, 'b');
     expect(manager.pluginSkillRoots()).toContainEqual({
@@ -264,7 +265,7 @@ describe('PluginManager', () => {
     await manager.load();
     const first = await manager.install(root);
     await manager.setMcpServerEnabled('demo', 'finance', false);
-    await manager.setEnabled('demo', false);
+    await manager.setEnabled('demo', true);
 
     await new Promise((r) => setTimeout(r, 10));
     const updatedRoot = await makePlugin('demo', {
@@ -275,7 +276,7 @@ describe('PluginManager', () => {
 
     expect(manager.list()).toHaveLength(1);
     expect(updated.manifest?.version).toBe('2.0.0');
-    expect(updated.enabled).toBe(false);
+    expect(updated.enabled).toBe(true);
     expect(updated.installedAt).toBe(first.installedAt);
     expect(updated.updatedAt).not.toBe(first.updatedAt);
     expect(updated.originalSource).toBe(updatedRoot);
@@ -314,6 +315,7 @@ describe('PluginManager', () => {
     const manager = new PluginManager({ wukongHomeDir: home });
     await manager.load();
     await manager.install(root);
+    await manager.setEnabled('demo', true);
     expect(manager.enabledSessionStarts()).toEqual([
       { pluginId: 'demo', skillName: 'demo-skill' },
     ]);
@@ -351,6 +353,7 @@ describe('PluginManager', () => {
     const manager = new PluginManager({ wukongHomeDir: home });
     await manager.load();
     await manager.install(root);
+    await manager.setEnabled('demo', true);
     const managedRoot = await managedPluginRoot(home, 'demo');
 
     expect(manager.info('demo')?.mcpServers).toContainEqual(
@@ -433,6 +436,7 @@ describe('PluginManager', () => {
     expect(manager.enabledMcpServers()).toEqual({});
 
     await manager.setMcpServerEnabled('demo', 'finance', true);
+    await manager.setEnabled('demo', true);
 
     expect(manager.info('demo')?.mcpServers).toContainEqual(
       expect.objectContaining({ name: 'finance', enabled: true }),
@@ -470,6 +474,8 @@ describe('PluginManager', () => {
     await manager.load();
     await manager.install(first);
     await manager.install(second);
+    await manager.setEnabled('a-b', true);
+    await manager.setEnabled('a', true);
 
     expect(manager.info('a-b')?.mcpServers).toContainEqual(
       expect.objectContaining({ name: 'c', runtimeName: 'plugin-a-b:c' }),
@@ -497,7 +503,6 @@ describe('PluginManager', () => {
     await manager.load();
     await manager.install(root);
     await manager.setMcpServerEnabled('demo', 'finance', true);
-    await manager.setEnabled('demo', false);
 
     expect(manager.enabledMcpServers()).toEqual({});
   });
@@ -558,7 +563,7 @@ describe('PluginManager', () => {
 
     // Give enough time for the timestamp to change.
     await new Promise((r) => setTimeout(r, 10));
-    await manager.setEnabled('demo', false);
+    await manager.setEnabled('demo', true);
 
     const after = manager.get('demo');
     expect(after?.updatedAt).toBeDefined();
@@ -866,6 +871,7 @@ describe('PluginManager', () => {
     const manager = new PluginManager({ wukongHomeDir: home });
     await manager.load();
     await manager.install(root);
+    await manager.setEnabled('demo', true);
     const installedRoot = await managedPluginRoot(home, 'demo');
     expect(manager.enabledHooks()).toEqual([
       {

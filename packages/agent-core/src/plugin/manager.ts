@@ -123,7 +123,7 @@ export class PluginManager {
     const record = await recordFrom({
       id,
       root: normalizedRoot,
-      enabled: existing?.enabled ?? true,
+      enabled: existing?.enabled ?? false,
       installedAt: existing?.installedAt ?? now,
       updatedAt: now,
       originalSource,
@@ -322,15 +322,34 @@ async function copyPluginToManagedRoot(
   const managedDir = path.dirname(managedRoot);
   await mkdir(managedDir, { recursive: true });
   const stagingRoot = await mkdtemp(path.join(managedDir, `${id}-`));
+  const backupRoot = await mkdtemp(path.join(managedDir, `${id}-backup-`));
+  await rm(backupRoot, { recursive: true, force: true });
+  let movedExisting = false;
   try {
     await cp(sourceRoot, stagingRoot, { recursive: true });
-    await rm(managedRoot, { recursive: true, force: true });
+    if (await pathExists(managedRoot)) {
+      await rename(managedRoot, backupRoot);
+      movedExisting = true;
+    }
     await rename(stagingRoot, managedRoot);
+    if (movedExisting) await rm(backupRoot, { recursive: true, force: true }).catch(() => {});
   } catch (error) {
     await rm(stagingRoot, { recursive: true, force: true });
+    if (movedExisting && !(await pathExists(managedRoot))) {
+      await rename(backupRoot, managedRoot).catch(() => {});
+    }
     throw error;
   }
   return realpath(managedRoot);
+}
+
+async function pathExists(target: string): Promise<boolean> {
+  try {
+    await stat(target);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 async function recordFrom(input: {

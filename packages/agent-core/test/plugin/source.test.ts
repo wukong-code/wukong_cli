@@ -8,9 +8,13 @@ describe('resolveInstallSource', () => {
     expect(result).toEqual({ kind: 'zip-url', path: 'https://example.com/plugin.zip' });
   });
 
-  it('recognizes http:// as zip-url', () => {
-    const result = resolveInstallSource('http://example.com/plugin.zip');
-    expect(result).toEqual({ kind: 'zip-url', path: 'http://example.com/plugin.zip' });
+  it('rejects insecure remote http:// URLs', () => {
+    expect(() => resolveInstallSource('http://example.com/plugin.zip')).toThrow(/HTTPS/i);
+  });
+
+  it('allows loopback http:// URLs for local development', () => {
+    const source = 'http://127.0.0.1:8080/plugin.zip';
+    expect(resolveInstallSource(source)).toEqual({ kind: 'zip-url', path: source });
   });
 
   it('recognizes absolute path as local-path', () => {
@@ -169,10 +173,9 @@ describe('resolveInstallSource', () => {
       expect(result).toEqual({ kind: 'zip-url', path: url });
     });
 
-    it('treats http:// (non-https) github URL as plain zip-url', () => {
-      const url = 'http://github.com/wbxl2000/superpowers';
-      const result = resolveInstallSource(url);
-      expect(result).toEqual({ kind: 'zip-url', path: url });
+  it('rejects http:// github URLs', () => {
+    const url = 'http://github.com/wbxl2000/superpowers';
+    expect(() => resolveInstallSource(url)).toThrow(/HTTPS/i);
     });
 
     it('percent-decodes %23 in /releases/tag/ so storage is human-readable', () => {

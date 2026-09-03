@@ -21,7 +21,15 @@ export function resolveInstallSource(source: string): ResolvedSource {
   const github = parseGithubUrl(trimmed);
   if (github !== undefined) return github;
 
-  if (trimmed.startsWith('http://') || trimmed.startsWith('https://')) {
+  if (trimmed.startsWith('http://')) {
+    const url = new URL(trimmed);
+    const loopback = ['127.0.0.1', '::1', '[::1]', 'localhost'].includes(url.hostname);
+    if (!loopback) {
+      throw new Error('Plugin archive URLs must use HTTPS.');
+    }
+    return { kind: 'zip-url', path: trimmed };
+  }
+  if (trimmed.startsWith('https://')) {
     return { kind: 'zip-url', path: trimmed };
   }
   if (!path.isAbsolute(trimmed)) {

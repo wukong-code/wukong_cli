@@ -1,15 +1,15 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；stable `0.1.0` 已发布，0.0.22 是直接升级基线。真实用户 cohort 改为发布后产品学习，不设置固定 14 天等待门槛；不包含隔离 worktree / Safe Promote。0.2.0 尚未批准开工。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；`0.1.1` 正在执行正式发布，`0.1.0` 是直接升级基线。真实用户 cohort 是发布后产品学习，不设置固定等待门槛；不包含隔离 worktree / Safe Promote。0.2.0 尚未批准开工。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
-## 🚧 0.1.1 — Reliability Maintenance（工作树实现完成，发布未开始）
+## 🚧 0.1.1 — Reliability And Trust Boundary（正式发布中）
 
-> 说明：[0.1.1 未发布说明](docs/releases/0.1.1.md)。补丁版本继续
+> 说明：[0.1.1 发布说明](docs/releases/0.1.1.md)。补丁版本继续
 > Free、local-first、BYOK；不新增命令、不改变 Loop/Gate 语义，不包含 Cost
-> Visibility。当前 package version 仍为 `0.1.0`，勾选项只代表工作树实现，
-> 不代表已提交、已生成 release candidate 或已上线。
+> Visibility。package version 已更新为 `0.1.1`；发布完成仍以不可变资产、升级、
+> 恢复和 production version surfaces 的 exact-SHA 验收为准。
 
 - [x] 恢复旧 Plan session 时保留真实 plan mode 状态（2026-08-18）
 - [x] 支持递归 `**/` glob，并统一本地与 SSH workspace 行为（2026-08-18）
@@ -21,7 +21,38 @@
 - [x] Web 修正 Auto/YOLO 语义并统一 YOLO 确认；补弹层 Escape、移动端键盘、Workspace 持久化、side-chat 并发和安全失败保留（2026-08-31）
 - [x] `dev:stub` 补齐 bearer 鉴权、HTTP 200 envelope、Workspace rename 与可直接打开的 token URL（2026-08-31）
 - [x] 相关测试与 typecheck 通过；真实浏览器已验证 token onboarding、YOLO 取消与 stub 首条消息（2026-08-31）
+- [x] 修复 vis-web 历史 plan id 的 optional/required 类型不一致，并把 vis-web、vis-server 和 local Web 纳入根测试门禁（2026-09-03）
+- [x] 自动更新改为通知与显式 upgrade；默认和配置错误均禁止后台安装（2026-09-03）
+- [x] 插件安装增加 HTTPS/final URL、下载与解压上限、digest、初装 disabled 和失败原子回滚（2026-09-03）
+- [x] checks discovery 只读取真实 workspace 成员，同时保留 root 与成员检查的选择依据（2026-09-03）
+- [x] 删除空 `packages/wukong-migration-legacy` workspace，并同步 `flake.nix`、pnpm lock 与 Nix workspace 检查（2026-09-03）
+- [x] Web 请求路径移除 schema DDL；冻结旧 SaaS 表，停止应用层新增宠物/memory/achievement/invite/usage 数据（2026-09-03）
+- [x] 重写 Web `CLAUDE.md`，修正公开 Loop 终态文案，并为官网与 local Web 固化浏览器 Golden Journey（2026-09-03；见 `docs/test/0.1.1-browser-golden-journeys.md`）
 - [ ] 六平台 0.1.1 assets、0.1.0 → 0.1.1 升级与公开安装验收（发布时执行）
+
+## 📋 0.1.2 — First Success And Surface Simplification（未开工）
+
+- [ ] installer 输出 `cd project → wukong → /provider → /loop` 的真实下一步
+- [ ] Provider 连通测试与可恢复 Preflight；headless dry-run 可生成可审核且无 secret 的 run-plan
+- [ ] CLI 默认面收敛到 `wukong`、`-p`、`provider`、`loop`、`doctor`、`upgrade`
+- [ ] TUI 默认面收敛到 `/loop`、`/resume`、`/provider`、`/settings`、`/new`、`/help`、`/feedback`、`/exit`
+- [ ] 增加高级 `wukong check`；旧 verify/scan/proof/judge/guard 兼容一个 minor，不在本版本删除
+- [ ] Dashboard 只保留真实 Connected CLI sessions/last used/revoke；数据未就绪时从主导航隐藏
+- [ ] 用三个授权脱敏真实案例验收 install→Provider→Preflight→Loop→Gate，而不是动画 PASS
+
+## 📋 0.2.0 — Codebase Reduction（需设计批准）
+
+- [ ] 分批拆 GoalMode、WukongTUI、useWukongWebClient 和 TUI goal command 的领域职责
+- [ ] 每批减少 agent-core boundary baseline，禁止新增或一次性重写 225 个既有豁免
+- [ ] Visualizer 退出默认 CLI bundle；Today 与 Web/server、ACP、Plugins/MCP、Swarm、Cron、roles 建立可选扩展边界
+- [ ] local Web 若继续维护，从 canonical protocol schema 生成 wire types；否则进入 bugfix-only
+- [ ] 支持窗口和真实 upgrade 证据满足后，再移除 `@wukong/migration-legacy`
+
+## 🔒 0.3.0 — Evidence-gated Collaboration Pilot（未批准）
+
+- [ ] 只有重复使用、非关联付款和续费证据满足后，才批准 PR Check、shared policy、摘要审计、团队权限/预算和 Billing lifecycle
+- [ ] 保持 Free local BYOK Loop 与账号、entitlement 和 Web 故障完全解耦
+- [ ] 不优先做 hosted model、云端 Agent、`/schedule`、managed credits、更多 Dashboard 或公开 Checkout
 
 ## ✅ 0.0.21 — Loop Evidence Integrity（已发布）
 

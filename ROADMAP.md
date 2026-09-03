@@ -1,19 +1,17 @@
 # Wukong Code Roadmap
 
-> 最后更新: 2026-08-31
+> 最后更新: 2026-09-03
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 
-`0.1.0` Trusted Local Loop 已发布并完成六平台资产、公开安装、升级、恢复和
-生产版本面验收。当前工作树在其上收口 `0.1.1 Reliability Maintenance`：只修复
-Loop revision、Resume、Provider 配置和 Web 交互可靠性，不新增命令、不改变
-Gate 语义，也不包含 Cost Visibility。工作树实现完成不等于 release 完成；当前
-package version 仍为 `0.1.0`，`0.1.1` 六平台资产和公开升级/安装验收尚未开始。
+`0.1.1` Reliability And Trust Boundary 延续 Trusted Local Loop，只修复 Loop
+revision、Resume、Provider、Web、更新、插件供应链和 workspace checks 可靠性；
+不新增命令、不改变 Gate 语义，也不包含 Cost Visibility。
 产品继续 Free + BYOK；隔离 worktree / Safe Promote 实验已经取消，当前没有付费
 计划、Checkout 或 entitlement。
 
 当前版本真相源：
 
-- [0.1.1 Reliability Maintenance（未发布）](docs/releases/0.1.1.md)
+- [0.1.1 Reliability And Trust Boundary](docs/releases/0.1.1.md)
 - [0.0.18 Loop-First Simplification](docs/design/0.0.18-loop-first-simplification.md)
 - [0.0.19 Explicit Finish Line](docs/design/0.0.19-explicit-finish-line.md)
 - [0.0.20 Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md)
@@ -172,14 +170,52 @@ worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继�
 | 版本 | 状态与目标 | 发布门槛 |
 |---|---|---|
 | `0.1.0` | **已发布。** 可控、可恢复、可解释的 Trusted Local Loop：可编辑 Preflight、可信 no-check、调用/token 上限、三态 Gate verdict 与 STOPPED_BY_USER、文件归因、恢复兼容、最小 completeness/freshness、五来源 Resume、六平台安装升级和 public truth；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移 | immutable stable 资产通过 stage-verify-publish-exact、六平台 draft smoke、公开 URL provenance、固定安装、0.0.22 upgrade、恢复与生产版本面验收。25/20/15/7 cohort、首次用户理解和真实来源流程发布后继续收集，不设置固定 14 天等待；三个授权案例只阻断集中宣传 |
-| `0.1.1` | **当前工作树实现完成，发布未开始。** Reliability Maintenance 补丁：除 Plan 恢复、递归 glob 与 boundary guard 外，修复 Loop revision、headless 上限、resume token 增量、Provider 原子导入、跨 workspace Resume，以及 Web 连接/权限/弹层/Workspace/stub 联调；不包含 Cost Visibility，不新增命令，不改变 Gate 语义 | 当前工作树测试、typecheck、lint、build 与浏览器 stub 流程通过；仍需版本/changeset、六平台 assets、0.1.0 upgrade、fresh install、恢复和公开版本面验收 |
-| `0.2.0` | Pro Reliable Autonomy：保留为待重新评审的可靠自治与商业验证候选；不能继承已经取消的 Promote、lease、fencing 或 Final Gate 设计 | 0.1.0 发布并稳定观察至少 30 天；先验证重复多任务监督需求，再单独批准技术方案、Pilot 权益和收费门槛 |
+| `0.1.1` | **当前 stable。** Reliability And Trust Boundary 补丁：保留 Plan/Loop/Resume/Provider/Web 修复，并关闭 Vis typecheck、更新与插件供应链、workspace checks 发现、根测试编排和空 workspace 问题；不新增顶层命令、不改变 Gate 语义 | 新增缺陷有负向回归；根 test/typecheck/lint/build 覆盖 local Web、vis-web、vis-server；更新不再静默安装；插件安装 fail closed；发布链路验证六平台 assets、0.1.0 upgrade、fresh install、恢复和公开版本面 |
+| `0.1.2` | First Success And Surface Simplification：首次 Provider 连通测试、可恢复 Preflight、可审核 run-plan、安装后真实下一步、命令默认面收敛、账号设备管理或导航隐藏，以及 Web 旧 SaaS 应用层归档 | 不删除兼容别名；真实安装→Provider→Preflight→Loop Golden Journey；三个授权脱敏案例；所有隐藏入口仍可显式发现和调用；生产旧表只冻结不 DROP |
+| `0.2.0` | Codebase Reduction：拆分 GoalMode/TUI/Web 超大协调器，持续清零 boundary baseline，把 Vis、Web/server、ACP、Plugins/MCP、Swarm、Cron、roles 与 Today 收敛为明确的核心或可选扩展边界 | 先批准迁移设计和兼容策略；每次拆分保持 records、Gate、恢复和 SDK contract；旧命令别名至少经过一个 minor deprecation；真实迁移包只有在支持窗口结束后移除 |
+| `0.3.0` | Evidence-gated Collaboration Pilot：GitHub PR Check、共享 versioned policy、摘要审计、团队权限/预算和完整 Billing lifecycle 只作为付费证据满足后的候选 | 先取得真实重复使用、非关联付款和续费证据；Free local BYOK Loop 不受账号或 entitlement 故障影响；未达门槛不建设公开 Checkout |
 
-当前顺序是：0.0.22 → 0.1.0-rc.1 → 0.1.0 → 0.1.1 → 发布后真实项目与 opt-in cohort。
+当前顺序是：0.0.22 → 0.1.0-rc.1 → 0.1.0 → 0.1.1 → 0.1.2 → 0.2.0；
+0.3.0 仍由付费证据门控，不因前序版本完成而自动开工。
 0.0.22 是已发布的维护版本，不扩张 0.1.0 范围；若再出现生产 P0，只能另行
 决定紧急补丁。0.1.1 只收维护与可靠性修复，不包含 Cost Visibility；真实用户验证债务（Windows 真实 repo、五来源真实 Resume、cohort）
 继续作为发布后产品证据收集。旧的 2026 年 9–11 月排期
-随隔离 Promote 方案取消，不再有效。0.2.0 待 0.1.0 稳定观察期满后再评审。
+随隔离 Promote 方案取消，不再有效。
+
+### 已确认代码问题的版本分配
+
+#### 0.1.1：先恢复可信基线
+
+- 修复 Visualizer 对历史可选 plan id 的错误必填假设，并让 vis-web typecheck 进入根门禁。
+- 自动更新改为通知加用户显式 `wukong upgrade`；配置缺失或损坏必须 fail closed。
+- 插件下载与解压设置响应体、文件数、单文件、总展开量、跳转和 digest 边界；新装插件默认 disabled，更新失败不替换既有可用版本。
+- checks discovery 读取真实 pnpm/npm/yarn/bun workspace 声明；根脚本不能无解释地遮蔽成员检查，Preflight 保留每条命令的 source locator/definition。
+- 根测试编排覆盖 `apps/wukong-web`、`apps/vis/web` 和 `apps/vis/server`；删除空的 `wukong-migration-legacy` workspace 并同步 Nix/lockfile。
+- Web 请求路径不再执行 schema DDL；旧 SaaS 表和列只冻结，应用层停止新增宠物、memory、achievement、invite、usage 等数据。
+- 重写会误导后续开发的 Web `CLAUDE.md`，公开文案明确 Loop 可能以 PASS、NEEDS_WORK、ERROR、PAUSED 或 STOPPED_BY_USER 结束。
+
+#### 0.1.2：首次成功与公开表面收敛
+
+- installer 给出 `cd project → wukong → /provider → /loop` 的真实下一步。
+- Provider 增加显式连通测试；Preflight 可在取消、重启和修复配置后恢复。
+- headless dry-run 可写出不含 secret 的可审核 run-plan，再由用户显式确认执行。
+- 默认 CLI 只突出 `wukong`、`-p`、`provider`、`loop`、`doctor`、`upgrade`；TUI 只突出 `/loop`、`/resume`、`/provider`、`/settings`、`/new`、`/help`、`/feedback`、`/exit`。
+- 增加高级 `wukong check` 聚合入口；verify/scan/proof/judge/guard 在本版本只降级为兼容别名，不删除。
+- 普通 Dashboard 只保留有证据的已连接设备、最后使用时间和单设备 revoke；若这些数据未就绪，则从主导航隐藏 Dashboard/Plan。
+- local Web 在没有使用证据时进入 bugfix-only；若保留，先确定 canonical protocol schema 和生成式 wire types，再继续扩展。
+
+#### 0.2.0：需要迁移设计的结构精简
+
+- GoalMode 按 contract/version migration、纯 reducer、Gate audit、budget/usage、workspace attribution 拆分。
+- TUI 与 local Web 按 session、approval、workspace、notice controller 拆分；不制造无领域价值的微型 utility。
+- 逐批删除 225 个 grandfathered 跨模块深层 import，每批都缩小 baseline，禁止一次性重写。
+- Visualizer 不再嵌入每个 CLI build；Today、Web/server、ACP、Plugins/MCP、Swarm、Cron 和 roles 明确为核心依赖或默认关闭的独立扩展。
+- `@wukong/migration-legacy` 只在兼容支持窗口结束、fresh upgrade 样本证明不再需要后移除。
+
+#### 0.3.0：只在商业证据成立后研究
+
+- GitHub PR Check/Status、共享且版本化的 verification policy、只上传摘要的审计记录、团队权限/预算，以及 Checkout→renewal→failure→grace→cancel→recovery。
+- 不优先做 hosted model、云端 Agent、`/schedule`、managed credits、更多 Dashboard 或公开 Checkout。
 
 `0.0.18` 继续收口现有产品层：命令只做默认可见性分层，不删除底层能力；Kimi Code/Grok Resume 只读本地会话；Feedback API 只接收用户确认的文本；`/login` 由 CLI 发起 device flow，用户在 Wukong 网站用 Google/GitHub 确认，CLI 获取 token 后读取 `200` 模型目录。当前没有 Wukong 模型，目录应诚实返回空数组，登录仍成功且不改变 BYOK 默认模型。最新托管模型与推理 endpoint 留给后续独立决策，在真实 backend、隐私和 E2E 就绪前不能发布 placeholder。0.1.0 不预建 invite-only 付费、Checkout 或 entitlement。
 

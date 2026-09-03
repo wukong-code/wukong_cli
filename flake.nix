@@ -68,7 +68,6 @@
         ./packages/server
         ./packages/server-e2e
         ./packages/kaos
-        ./packages/wukong-migration-legacy
         ./packages/kosong
         ./packages/migration-legacy
         ./packages/node-sdk
@@ -104,7 +103,6 @@
         "@wukong/vis-server"
         "@wukong/vis-web"
         "wukong-docs"
-        "wukong-migration-legacy"
       ];
     in
     {

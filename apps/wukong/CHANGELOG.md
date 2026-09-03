@@ -1,5 +1,23 @@
 # @wukong.today/code
 
+## 0.1.1
+
+### Patch Changes
+
+- [`6d38888`](https://github.com/mutnpc/wukong_cli/commit/6d388880e508ed2f2936ad0de9385493c3f2226f) Thanks [@xxg1413](https://github.com/xxg1413)! - Support recursive `**/` glob segments (zero or more directories) in path matching, aligning with Python pathlib behavior.
+
+- [`52826eb`](https://github.com/mutnpc/wukong_cli/commit/52826eb5d7b3007632db88970f849a839e01fe4c) Thanks [@xxg1413](https://github.com/xxg1413)! - Preserve Loop revisions, resumed usage, provider imports, and cross-workspace session boundaries without losing user configuration or importing context into the wrong project.
+
+- [`6d38888`](https://github.com/mutnpc/wukong_cli/commit/6d388880e508ed2f2936ad0de9385493c3f2226f) Thanks [@xxg1413](https://github.com/xxg1413)! - Keep plan mode active when resuming a session whose legacy plan record has no plan data, instead of silently reporting plan mode as off. Status now reflects the real plan-mode state rather than whether plan content exists.
+
+- [`52826eb`](https://github.com/mutnpc/wukong_cli/commit/52826eb5d7b3007632db88970f849a839e01fe4c) Thanks [@xxg1413](https://github.com/xxg1413)! - Validate native upgrades from the actual previous stable release instead of a hard-coded historical version.
+
+- Fail closed on automatic updates, plugin downloads, archive extraction, and workspace check discovery while preserving atomic rollback and explainable provenance.
+
+- [`52826eb`](https://github.com/mutnpc/wukong_cli/commit/52826eb5d7b3007632db88970f849a839e01fe4c) Thanks [@xxg1413](https://github.com/xxg1413)! - Add an authenticated local web stub for REST, WebSocket, workspace, and first-message testing. Run `pnpm -C apps/wukong-web run dev:stub` to start it.
+
+- [`52826eb`](https://github.com/mutnpc/wukong_cli/commit/52826eb5d7b3007632db88970f849a839e01fe4c) Thanks [@xxg1413](https://github.com/xxg1413)! - Keep the bundled web client reliable across reconnects, permission changes, keyboard navigation, workspace updates, dialogs, and side chats.
+
 ## 0.1.0
 
 ### Minor Changes

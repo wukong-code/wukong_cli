@@ -1,11 +1,14 @@
 import { existsSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
-import { join, relative } from 'node:path';
+import { join, matchesGlob, relative } from 'node:path';
 
 import type { VerificationCommand } from './types';
 
 interface PackageJson {
   readonly scripts?: Record<string, string>;
+  readonly workspaces?: readonly string[] | {
+    readonly packages?: readonly string[];
+  };
 }
 
 interface ProjectChecksConfig {
@@ -44,7 +47,7 @@ export async function selectVerificationCommands(options: {
   const rootPackage = existsSync(packageJsonPath)
     ? await readPackageJson(packageJsonPath)
     : {};
-  const workspacePackages = await discoverWorkspacePackages(options.cwd);
+  const workspacePackages = await discoverWorkspacePackages(options.cwd, rootPackage);
   const selected: VerificationCommand[] = [];
   for (const scriptName of scriptSelection(options.includeBuild === true)) {
     if (rootPackage.scripts?.[scriptName] !== undefined) {
@@ -54,7 +57,6 @@ export async function selectVerificationCommands(options: {
         sourceLocator: `package.json#scripts.${scriptName}`,
         definition: rootPackage.scripts[scriptName],
       });
-      continue;
     }
     for (const workspacePackage of workspacePackages) {
       if (workspacePackage.packageJson.scripts?.[scriptName] === undefined) continue;
@@ -197,17 +199,70 @@ async function readProjectChecks(cwd: string): Promise<VerificationCommand[]> {
   });
 }
 
-async function discoverWorkspacePackages(cwd: string): Promise<Array<{
+async function discoverWorkspacePackages(cwd: string, rootPackage: PackageJson): Promise<Array<{
   readonly relativePath: string;
   readonly packageJson: PackageJson;
 }>> {
+  const patterns = await readWorkspacePatterns(cwd, rootPackage);
+  if (patterns.length === 0) return [];
   const packagePaths: string[] = [];
   await walkForPackages(cwd, 0, packagePaths);
-  const sortedPackagePaths = packagePaths.toSorted();
+  const sortedPackagePaths = packagePaths
+    .filter((path) => isWorkspacePackage(relative(cwd, path), patterns))
+    .toSorted();
   return Promise.all(sortedPackagePaths.map(async (path) => ({
     relativePath: relative(cwd, path),
     packageJson: await readPackageJson(join(path, 'package.json')),
   })));
+}
+
+async function readWorkspacePatterns(
+  cwd: string,
+  rootPackage: PackageJson,
+): Promise<readonly string[]> {
+  const pnpmWorkspace = await readOptionalText(join(cwd, 'pnpm-workspace.yaml'));
+  if (pnpmWorkspace !== undefined) return parsePnpmWorkspacePatterns(pnpmWorkspace);
+  const workspaces = rootPackage.workspaces;
+  if (workspaces === undefined) return [];
+  if (isWorkspaceArray(workspaces)) return workspaces;
+  return workspaces.packages ?? [];
+}
+
+function isWorkspaceArray(
+  value: NonNullable<PackageJson['workspaces']>,
+): value is readonly string[] {
+  return Array.isArray(value);
+}
+
+function parsePnpmWorkspacePatterns(text: string): string[] {
+  const patterns: string[] = [];
+  let insidePackages = false;
+  for (const line of text.split(/\r?\n/u)) {
+    if (/^packages\s*:\s*$/u.test(line)) {
+      insidePackages = true;
+      continue;
+    }
+    if (!insidePackages) continue;
+    if (/^\S/u.test(line)) break;
+    const match = /^\s*-\s*(.+?)\s*$/u.exec(line);
+    if (match?.[1] === undefined) continue;
+    const withoutComment = match[1].replace(/\s+#.*$/u, '').trim();
+    const pattern = withoutComment.replace(/^(['"])(.*)\1$/u, '$2').trim();
+    if (pattern.length > 0) patterns.push(pattern);
+  }
+  return patterns;
+}
+
+function isWorkspacePackage(relativePath: string, patterns: readonly string[]): boolean {
+  const normalized = normalizeLocatorPath(relativePath);
+  let included = false;
+  for (const rawPattern of patterns) {
+    const negated = rawPattern.startsWith('!');
+    const pattern = normalizeLocatorPath(negated ? rawPattern.slice(1) : rawPattern);
+    if (pattern.length === 0 || !matchesGlob(normalized, pattern)) continue;
+    included = !negated;
+  }
+  return included;
 }
 
 async function walkForPackages(

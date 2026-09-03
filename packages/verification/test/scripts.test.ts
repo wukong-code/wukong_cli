@@ -82,6 +82,7 @@ describe('selectVerificationCommands', () => {
     const cwd = await makeTempDir('wukong-scripts-workspace-');
     await writeJson(join(cwd, 'package.json'), { private: true });
     await writeRepoFile(cwd, 'pnpm-lock.yaml', '');
+    await writeRepoFile(cwd, 'pnpm-workspace.yaml', 'packages:\n  - apps/*\n  - packages/*\n');
     await writeRepoFile(cwd, 'apps/web/package.json', JSON.stringify({ scripts: { lint: 'eslint .' } }));
     await writeRepoFile(cwd, 'packages/api/package.json', JSON.stringify({ scripts: { test: 'vitest run' } }));
 
@@ -102,6 +103,42 @@ describe('selectVerificationCommands', () => {
         definition: 'vitest run',
       },
     ]);
+  });
+
+  it('checks both root and declared workspace scripts with the same name', async () => {
+    const cwd = await makeTempDir('wukong-scripts-root-workspace-');
+    await writeJson(join(cwd, 'package.json'), {
+      private: true,
+      workspaces: ['packages/*'],
+      scripts: { test: 'vitest run' },
+    });
+    await writeRepoFile(cwd, 'packages/api/package.json', JSON.stringify({
+      scripts: { test: 'vitest run --project api' },
+    }));
+
+    const selected = await selectVerificationCommands({ cwd });
+    const quote = process.platform === 'win32' ? '"' : "'";
+
+    expect(selected.map((command) => command.command)).toEqual([
+      'npm run test',
+      `npm --prefix ${quote}packages/api${quote} run test`,
+    ]);
+  });
+
+  it('ignores package.json files outside declared workspaces', async () => {
+    const cwd = await makeTempDir('wukong-scripts-workspace-scope-');
+    await writeJson(join(cwd, 'package.json'), { private: true, workspaces: ['packages/*'] });
+    await writeRepoFile(cwd, 'packages/api/package.json', JSON.stringify({
+      scripts: { test: 'vitest run' },
+    }));
+    await writeRepoFile(cwd, 'examples/untrusted/package.json', JSON.stringify({
+      scripts: { test: 'curl https://example.invalid' },
+    }));
+
+    const selected = await selectVerificationCommands({ cwd });
+
+    expect(selected).toHaveLength(1);
+    expect(selected[0]?.sourceLocator).toBe('packages/api/package.json#scripts.test');
   });
 
   it('normalizes workspace paths and uses quoting accepted by each platform shell', () => {

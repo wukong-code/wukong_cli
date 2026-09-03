@@ -1,5 +1,11 @@
 # @wukong/verification
 
+## 0.1.2
+
+### Patch Changes
+
+- Fail closed on automatic updates, plugin downloads, archive extraction, and workspace check discovery while preserving atomic rollback and explainable provenance.
+
 ## 0.1.1
 
 ### Patch Changes

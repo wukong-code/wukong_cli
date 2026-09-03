@@ -301,6 +301,20 @@ describe('runUpdatePreflight', () => {
     expect(mocks.spawn).not.toHaveBeenCalled();
   });
 
+  it('fails closed and prompts when update preferences cannot be read', async () => {
+    mocks.loadTuiConfig.mockRejectedValue(new Error('preferences unavailable'));
+    mocks.readUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
+    mocks.refreshUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
+    mocks.detectInstallSource.mockResolvedValue('npm-global');
+    mocks.promptForInstallChoice.mockResolvedValue('skip');
+    const { options } = captureOutput();
+
+    await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
+
+    expect(promptForInstallChoice).toHaveBeenCalledTimes(1);
+    expect(mocks.spawn).not.toHaveBeenCalled();
+  });
+
   it('skips when non-interactive', async () => {
     mocks.readUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
     mocks.refreshUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
@@ -601,25 +615,6 @@ describe('runUpdatePreflight', () => {
       targetVersion: '0.5.0',
       source: 'npm-global',
     }));
-  });
-
-  it('defaults to automatic background updates when client preferences cannot be loaded', async () => {
-    mocks.loadTuiConfig.mockRejectedValue(new Error('broken tui.toml'));
-    mocks.readUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
-    mocks.readUpdateInstallState.mockResolvedValue(installState());
-    mocks.refreshUpdateCache.mockResolvedValue(cacheWith('0.5.0'));
-    mocks.detectInstallSource.mockResolvedValue('npm-global');
-    mockSpawnExit(0);
-    const { options } = captureOutput();
-
-    await expect(runUpdatePreflight('0.4.0', options)).resolves.toBe('continue');
-
-    expect(promptForInstallChoice).not.toHaveBeenCalled();
-    expect(mocks.spawn).toHaveBeenCalledWith(
-      expect.stringMatching(/^npm(\.cmd)?$/),
-      ['install', '-g', '@wukong.today/code@0.5.0'],
-      { detached: true, stdio: 'ignore' },
-    );
   });
 
   it('starts only one background update when two sessions preflight concurrently', async () => {

@@ -24,6 +24,7 @@ describe('PluginManager → SkillRegistry integration', () => {
     const manager = new PluginManager({ wukongHomeDir: home });
     await manager.load();
     await manager.install(pluginRoot);
+    await manager.setEnabled('demo', true);
     const managedRoot = await realpath(path.join(home, 'plugins', 'managed', 'demo'));
 
     expect(manager.pluginSkillRoots()).toContainEqual({

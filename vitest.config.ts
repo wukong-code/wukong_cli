@@ -18,7 +18,13 @@ const coverageGateEnabled =
 
 export default defineConfig({
   test: {
-    projects: ['packages/*', 'apps/wukong', 'apps/vis/web'],
+    projects: [
+      'packages/*',
+      'apps/wukong',
+      'apps/wukong-web',
+      'apps/vis/web',
+      'apps/vis/server',
+    ],
     coverage: {
       provider: 'v8',
       include: ['packages/*/src/**/*.ts', 'apps/*/src/**/*.ts'],

@@ -626,8 +626,6 @@ importers:
 
   packages/verification: {}
 
-  packages/wukong-migration-legacy: {}
-
 packages:
 
   '@agentclientprotocol/sdk@0.23.0':
