@@ -32,15 +32,42 @@
 
 ## 📋 0.1.2 — First Success And Surface Simplification（未开工）
 
-- [ ] installer 输出 `cd project → wukong → /provider → /loop` 的真实下一步
-- [ ] Provider 连通测试与可恢复 Preflight；headless dry-run 可生成可审核且无 secret 的 run-plan
-- [ ] CLI 默认面收敛到 `wukong`、`-p`、`provider`、`loop`、`doctor`、`upgrade`
-- [ ] TUI 默认面收敛到 `/loop`、`/resume`、`/provider`、`/settings`、`/new`、`/help`、`/feedback`、`/exit`
-- [ ] 增加高级 `wukong check`；旧 verify/scan/proof/judge/guard 兼容一个 minor，不在本版本删除
-- [ ] Dashboard 只保留真实 Connected CLI sessions/last used/revoke；数据未就绪时从主导航隐藏
-- [ ] 用三个授权脱敏真实案例验收 install→Provider→Preflight→Loop→Gate，而不是动画 PASS
-- [ ] 复核网站锁定依赖的 `npm audit` 基线（当前 1 moderate / 3 high），区分 runtime 与 dev-only；通过兼容升级或移除依赖收口，禁止无审查执行 `npm audit fix --force`，生产 high 必须归零或记录 owner、期限和缓解措施
-- [ ] 将触发 Node.js 20 兼容层的 GitHub Actions 升级到 Node 24-compatible 版本；继续使用完整 commit SHA 固定、最小权限，并通过 Web test/build 与发布工作流回归
+> 方案、发布级别（`minor`）、兼容策略与完成定义见
+> [0.1.2 First Success And Surface Simplification](docs/design/0.1.2-first-success-and-surface-simplification.md)。
+> 本节只记录执行进度，不重复定义方案。现状实测见该文档第 1 节（2026-09-09）。
+
+### P0：首次成功路径
+
+- [ ] `install.sh`、npm postinstall、`wukong doctor` 由同一份常量输出 `cd project → wukong → /provider → /loop`，并有三处一致性回归（`install.sh` 已达标，另两处未对齐）
+- [ ] 新增 `wukong provider test [providerId]` 与 TUI `/provider` 等价动作，区分 `ok`/`auth-failed`/`not-found`/`network`/`timeout`/offline，不打印 key、endpoint query 或响应体
+- [ ] Preflight 用户编辑落盘为 workspace 级草稿，进程重启或修复配置后可继续；草稿不含 secret/evidence，启动成功或显式丢弃即删除，损坏草稿 fail closed
+- [ ] `--dry-run --plan-out <file>` 写出无 secret 的可审核 run-plan；`--plan <file> --approve-plan <digest>` 单次确认启动，覆盖现有 8 个 digest/challenge flag 的全集并与其并存一个 minor
+- [ ] run-plan 负向测试：不含 provider key、endpoint credential、transcript、raw evidence、home 绝对路径
+
+### P0：命令面收敛（只改默认可见性）
+
+- [ ] TUI core 从 13 个收敛到 8 个：把 `/permission`、`/model`、`/transform`、`/login`、`/logout` 降为 `advanced`
+- [ ] CLI 引入与 TUI 对齐的三级 tier；`wukong --help` 只列 `wukong`、`-p`、`provider`、`loop`、`doctor`、`upgrade`、`check`，并指向 `wukong help --all`
+- [ ] `export`、`review`、`roles`、`today`、`guard`、`judge`、`login`、`logout` 降为 advanced（保持可执行、可发现，不加 `hidden: true`）
+- [ ] 新增确定性聚合入口 `wukong check`；`verify`/`scan`/`proof`/`judge`/`guard` 只降级为兼容别名，行为不变
+- [ ] 命令契约回归：core 集合精确匹配、advanced/hidden 仍可执行、兼容别名退出码与输出同 0.1.1
+
+### P0：账号与 Web 面（跨仓，见 `wukong_web/TODO.md`）
+
+- [ ] Dashboard 只保留真实 Connected CLI sessions/last used/单设备 revoke；数据未就绪时从主导航隐藏 Dashboard/Plan（隐藏而非删路由）
+- [ ] 三个授权脱敏真实案例就绪后再替换动画式 PASS，且至少一个案例展示非 PASS 终态
+
+### P0：工程维护
+
+- [ ] 重记网站 `npm audit` 基线：2026-09-09 实测 13 项（1 critical `next` / 7 high / 5 moderate），旧的“1 moderate / 3 high”已过期；按生产运行时、构建工具链、构建期传递、仅测试四类分别处置，禁止无审查 `--force`，生产 high 归零或记 owner/期限/缓解措施
+- [ ] 收口 `.github/workflows/ci.yml` 中 8 处 `actions/checkout@11d5960…`（v4/Node 20）到 v6；其余工作流已是 v6/v7。保持完整 SHA 固定与最小权限，回归 Web test/build、六平台发布与生产面验证
+
+### 发布门槛（`minor`）
+
+- [ ] 三个授权脱敏真实案例覆盖 install→provider test→Preflight→Loop→Gate，其中一个经 `/resume` 导入、一个以 NEEDS_WORK 或 STOPPED_BY_USER 结束
+- [ ] 全量自动化 + typecheck/lint/build/sherif/publint/attw；0.1.1 records 与 session 恢复兼容回归
+- [ ] 六平台资产 + checksum + provenance + fresh install + 0.1.1 → 0.1.2 upgrade smoke
+- [ ] 中英文发布面同步：CHANGELOG、官网版本面、README、user-guide、docs 侧边栏（当前 nav 停在“0.0.21 RC”、0.1.0 仍标 In Development、缺 0.1.1）
 
 ## 📋 0.2.0 — Codebase Reduction（需设计批准）
 
