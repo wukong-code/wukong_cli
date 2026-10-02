@@ -59,7 +59,7 @@
 
 ### P0：工程维护
 
-- [ ] 重记网站 `npm audit` 基线：2026-09-09 实测 13 项（1 critical `next` / 7 high / 5 moderate），旧的“1 moderate / 3 high”已过期；按生产运行时、构建工具链、构建期传递、仅测试四类分别处置，禁止无审查 `--force`，生产 high 归零或记 owner/期限/缓解措施
+- [ ] 重记网站 `npm audit` 基线：2026-10-02 实测 15 项（1 critical `next` / 9 high / 5 moderate；2026-09-09 为 13 项），旧的“1 moderate / 3 high”已过期；按生产运行时、构建工具链、构建期传递、仅测试四类分别处置，禁止无审查 `--force`，生产 high 归零或记 owner/期限/缓解措施
 - [ ] 收口 `.github/workflows/ci.yml` 中 8 处 `actions/checkout@11d5960…`（v4/Node 20）到 v6；其余工作流已是 v6/v7。保持完整 SHA 固定与最小权限，回归 Web test/build、六平台发布与生产面验证
 
 ### 发布门槛（`minor`）
@@ -67,7 +67,7 @@
 - [ ] 三个授权脱敏真实案例覆盖 install→provider test→Preflight→Loop→Gate，其中一个经 `/resume` 导入、一个以 NEEDS_WORK 或 STOPPED_BY_USER 结束
 - [ ] 全量自动化 + typecheck/lint/build/sherif/publint/attw；0.1.1 records 与 session 恢复兼容回归
 - [ ] 六平台资产 + checksum + provenance + fresh install + 0.1.1 → 0.1.2 upgrade smoke
-- [ ] 中英文发布面同步：CHANGELOG、官网版本面、README、user-guide、docs 侧边栏（当前 nav 停在“0.0.21 RC”、0.1.0 仍标 In Development、缺 0.1.1）
+- [ ] 中英文发布面同步：CHANGELOG、官网版本面、README、user-guide、docs 侧边栏（2026-10-02 核对：docs nav/sidebar 已含 0.1.1 与 0.1.2 Plan，0.1.2 发布时再加 0.1.2 条目）
 
 ## 📋 0.2.0 — Codebase Reduction（需设计批准）
 
@@ -342,13 +342,14 @@
 
 - command/argv recipe、sandbox/private scratch/artifact、Skill authoring/scaffold/draft/promotion、embedded binding、recipe dependency graph、动态 chained execution、Marketplace/远程 registry/自动更新/云同步、MCP/公网/secret Gate steps、PR Gate、Team policy、托管 grader、新默认命令、支付/quota 均不进入 0.0.20。
 
-## 🧭 0.2.0 及更后版本（等待重新规划）
+## 🧭 已取代：原 0.2.0 Reliable Autonomy 候选（历史记录）
 
-> 0.1.0 的当前任务已移到文件顶部。隔离 worktree / Safe Promote 实验已经
-> 取消；依赖 Promote/lease/fencing 的旧 0.2.0 文档只作历史研究，不能直接
-> 进入 checkbox 队列或对外承诺。
+> 2026-10-02 起，0.2.0 是 Codebase Reduction（见文件顶部），收费与协作候选归
+> 0.3.0（见文件顶部）。本节保留原 0.2.0 Reliable Autonomy 候选的版本记录：隔离
+> worktree / Safe Promote 实验已经取消；依赖 Promote/lease/fencing 的旧 0.2.0
+> 文档只作历史研究，不能直接进入 checkbox 队列或对外承诺。
 
-### 0.2.0 — Reliable Autonomy 候选
+### 原 0.2.0 — Reliable Autonomy 候选（已取代）
 
 - 当前没有已批准技术方案、收费 SKU、价格或公开 Checkout 计划。
 - 旧 Bounded Parallel Loop、Local Loop Supervisor 和 Pro 文档依赖已取消的 Promote/lease/fencing 架构，等待 0.1.0 后重新研究。
@@ -843,4 +844,4 @@
 
 ---
 
-**最后更新**: 2026-08-08（stable `0.1.0` 已发布并完成 immutable assets、六平台 draft smoke、公开安装与生产版本面验收；真实 Windows repo、五来源真实 Resume、首次用户与 cohort 继续作为发布后验证，不设固定 14 天发布门槛）
+**最后更新**: 2026-10-02（stable `0.1.1` 已于 2026-09-03 发布；0.1.2 已批准未开工；0.2.0/0.3.0 口径与 ROADMAP 统一）。此前：2026-08-08（stable `0.1.0` 已发布并完成 immutable assets、六平台 draft smoke、公开安装与生产版本面验收；真实 Windows repo、五来源真实 Resume、首次用户与 cohort 继续作为发布后验证，不设固定 14 天发布门槛）

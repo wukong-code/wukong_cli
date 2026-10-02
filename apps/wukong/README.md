@@ -33,13 +33,12 @@ local credential slot and managed account config. Local cleanup still runs
 when revocation is unconfirmed; the command warns that the server session may
 remain active instead of reporting a false remote success.
 
-The published stable baseline is `v0.1.0`; this package checkout contains
-unreleased `0.1.1` reliability maintenance and is not evidence that `0.1.1` has
-shipped. Version 0.1.0 is scoped to one controllable, recoverable, explainable
+The published stable baseline is `v0.1.1` (2026-09-03), a reliability and
+trust-boundary patch on top of 0.1.0. Version 0.1.0 is scoped to one controllable, recoverable, explainable
 local Loop. Enforceable call/token limits, versioned no-check policy, file
 attribution, terminal usage/next actions, compatibility fixtures, and native
-release smoke are implemented. The 0.1.1 checkout adds reliability fixes but
-still requires six-platform assets, upgrade, and public install verification.
+release smoke are implemented. 0.1.1 adds reliability fixes and has passed six-platform assets, upgrade, and
+public install verification.
 Full coverage-schema
 replacement and direct-shell content/PATH attestation are deferred. The normal interactive path starts from an editable Goal or an
 optional `/resume`, then enters `/loop` and Gate. Version 0.0.21 preserves every

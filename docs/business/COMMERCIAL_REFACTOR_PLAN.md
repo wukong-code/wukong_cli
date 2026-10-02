@@ -1,7 +1,9 @@
 # Wukong Code 商业化与产品重构方案
 
 > 状态：**SUPERSEDED HISTORICAL PLAN**。本文保留 2026-07-20 的旧额度与 PR Gate 收费假设，不是当前 roadmap、TODO 或实现依据。
-> 当前版本边界：[0.1.0 Trusted Local Loop](../design/0.1.0-trusted-local-loop.md) 继续 Free；[0.2.0 Pro Reliable Autonomy](../design/0.2.0-pro-reliable-autonomy.md) 才是未批准的邀请制商业候选。
+> 当前版本边界（2026-10-02 核对）：0.1.x 继续 Free（stable 0.1.1）；0.2.0 是 Codebase Reduction；收费与协作候选只在 0.3.0 Evidence-gated Collaboration Pilot 取得付费证据后研究，见仓库根 `ROADMAP.md`。文中引用的 [0.2.0 Pro Reliable Autonomy](../design/0.2.0-pro-reliable-autonomy.md) 本身也已取代。
+>
+> 阅读指引：§3 的 P0 本地闭环与 P0.5 Loop 控制层、§3.1 三层叙事、§5 的“已完成”项和 §6 Guard 口径描述的是已实现能力，仍然成立；§4 的 Loop 额度与 PR Gate 收费、§5 的“当前重点：0.0.12”属于 2026-07-20 时点，Loop 额度已于 0.0.17 删除。
 >
 > 版本: v1.5
 > 日期: 2026-07-20

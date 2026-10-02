@@ -1,6 +1,8 @@
 # Wukong 能力体系与商业化原则
 
-> 状态：长期能力研究。2026-07-25 起，版本与商业边界以 [0.1.0 Trusted Local Loop](../design/0.1.0-trusted-local-loop.md) 和 [0.2.0 Pro Reliable Autonomy](../design/0.2.0-pro-reliable-autonomy.md) 为准；本文中的旧 PR Gate、Managed Gate 与 tier 示例不构成当前计划。
+> 状态：长期能力研究。版本与商业边界以仓库根 `ROADMAP.md` 为准（2026-10-02：0.1.x Free、0.2.0 Codebase Reduction、收费只在 0.3.0 付费证据满足后研究）；本文中的旧 PR Gate、Managed Gate 与 tier 示例不构成当前计划。
+>
+> 阅读指引（2026-10-02 核对）：§2 品牌能力映射、§3 产品主次与 §5 权限不变量仍然成立，权限不变量已由 0.0.16 Permission Mode v2 实现；§6 商业分层、§7 Managed Gate 与 §8 中的 0.2.0 Reliable Autonomy 指导已过时（该候选已取代）。
 >
 > 日期：2026-07-20
 >
@@ -275,7 +277,9 @@ Managed Gate 的价值不是模型代理转售，而是提供独立、稳定、�
 
 0.1.0 不做付费实验。旧的 isolated worktree、Safe Promote 与 target Final Gate 方案已经取消；当前规格以 [0.1.0 Trusted Local Loop](../design/0.1.0-trusted-local-loop.md) 为准，把既有 Finish Line、reusable criteria 和 durable lifecycle 收敛为一条可控、可恢复、可解释的 Free + BYOK 单 Loop，重点补齐 call/token limits、no-check、文件归因、终态、兼容恢复和真实跨平台证据。完整多层 coverage schema 与 direct-shell content/PATH attestation 后移。单前台 Loop 不登录、不查 entitlement，也不设置 Wukong 商业次数或 token quota；用户主动配置的运行预算属于成本保护，不是付费配额。
 
-### 0.2.0：Reliable Autonomy 邀请制候选
+### 0.2.0：Reliable Autonomy 邀请制候选（已取代）
+
+> 2026-10-02：该候选已取代；0.2.0 现为 Codebase Reduction，收费候选归 0.3.0。以下保留原版本记录。
 
 0.2.0 候选验证用户是否愿意为 2–5 个有界并行任务、显式 Detach、本机 exception-first Supervisor 与可选 Verified PR Gate 组成的可靠自治 bundle 付费。一个候选月付 SKU `$12/月`；10 人受邀、5 人真实使用、3 人付款、2 人续费前不讨论 public Checkout。
 

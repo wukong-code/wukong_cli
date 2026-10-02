@@ -61,12 +61,12 @@ const config = withMermaid(defineConfig({
           { text: '0.1.0 Trusted Local Loop (Released)', link: '/design/0.1.0-trusted-local-loop' },
           { text: '0.1.1 Reliability And Trust Boundary (Released)', link: '/releases/0.1.1' },
           { text: '0.1.2 First Success And Surface Simplification (Planned)', link: '/design/0.1.2-first-success-and-surface-simplification' },
-          { text: '0.2.0 Reliable Autonomy (Needs Replan)', link: '/design/0.2.0-pro-reliable-autonomy' },
         ],
       },
       {
         text: 'Historical Product & Commercial Research',
         items: [
+          { text: 'Superseded 0.2.0 Pro Reliable Autonomy', link: '/design/0.2.0-pro-reliable-autonomy' },
           { text: 'Canceled 0.0.21 Isolated Loop Worktrees', link: '/design/0.0.21-isolated-loop-worktrees' },
           { text: 'Old Bounded Parallel Loop', link: '/design/0.2.0-bounded-parallel-loop' },
           { text: 'Old Local Loop Supervisor', link: '/design/0.2.0-local-loop-supervisor' },

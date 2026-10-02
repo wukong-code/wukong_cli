@@ -1,6 +1,6 @@
 # Wukong Code Roadmap
 
-> 最后更新: 2026-09-03
+> 最后更新: 2026-10-02（0.2.0/0.3.0 口径统一；状态行核对）
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 
 `0.1.1` Reliability And Trust Boundary 延续 Trusted Local Loop，只修复 Loop
@@ -23,14 +23,14 @@ revision、Resume、Provider、Web、更新、插件供应链和 workspace check
 - [TODO.md](TODO.md)：本仓库执行层任务清单，按本 ROADMAP 的版本拆解
 - `wukong_web/TODO.md`：官网与托管产品 TODO，位于 sibling web 仓库中
 
-更后版本候选：
+更后版本候选（范围以下文“版本发布序列”为准）：
 
-- [0.2.0 Pro Reliable Autonomy](docs/design/0.2.0-pro-reliable-autonomy.md)
-  - [Bounded Parallel Loop 组件](docs/design/0.2.0-bounded-parallel-loop.md)
-  - [Local Loop Supervisor 组件](docs/design/0.2.0-local-loop-supervisor.md)
+- `0.2.0` Codebase Reduction：需先批准迁移设计，尚无设计文档。
+- `0.3.0` Evidence-gated Collaboration Pilot：只在付费证据满足后研究。
 
 下列商业化或旧版本设计只作历史探索/追溯，不是当前执行真相源：
 
+- [已取代：0.2.0 Pro Reliable Autonomy](docs/design/0.2.0-pro-reliable-autonomy.md)（含 [Bounded Parallel Loop](docs/design/0.2.0-bounded-parallel-loop.md) 与 [Local Loop Supervisor](docs/design/0.2.0-local-loop-supervisor.md) 组件；0.2.0 现为 Codebase Reduction）
 - [已取消：0.0.21 Isolated Loop Worktrees](docs/design/0.0.21-isolated-loop-worktrees.md)
 - [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
 - [Wukong 能力体系与商业化原则](docs/business/WUKONG_CAPABILITY_MODEL.md)
@@ -57,7 +57,7 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 
 差异化叙事不再以"又一个 coding agent"为主，而是围绕 Loop Engineering：Wukong 是 AI Coding Loop 的控制层与验证层。
 
-当前产品层级只有 Free + BYOK。0.1.0 继续免费；0.2.0 只记录“有界并行 + 显式 Detach + 本机 Supervisor + 可选 PR Gate”的邀请制 Pro Pilot 候选。Custom Specialist、Managed Gate、托管并行、团队治理和 managed credits 不在该候选范围，不能从历史文档推断版本承诺。
+当前产品层级只有 Free + BYOK。0.1.x 继续免费；0.2.0 只做代码瘦身；收费只在 0.3.0 Evidence-gated Collaboration Pilot 取得付费证据后研究（原“有界并行 + 显式 Detach + 本机 Supervisor + 可选 PR Gate”的 0.2.0 Pro Pilot 候选已取代）。Custom Specialist、Managed Gate、托管并行、团队治理和 managed credits 不在该候选范围，不能从历史文档推断版本承诺。
 
 命令分层参考 loop engineering 的谱系，但 Wukong 不照搬 Claude Code 的命令命名：
 
@@ -78,9 +78,9 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 - 停止判断不由写代码的 agent 自评。v1 `/goal` verification gate 已实现；0.0.12 将它收敛到统一 Proof gate 和 PASS/NEEDS_WORK/ERROR。
 - 0.0.12 之后的 Wow Moment 是 Loop 自己收敛并给出可信 Gate 结论；独立 verify/scan/proof 只是高级本地诊断能力。
 - 0.0.20 Verification Skill 只能提供 strict qualitative criteria；它不执行 Skill command、不能获得 PASS 决策权，也不能覆盖 frozen deterministic blocker。
-- Hosted Report 与报告上传已经退出产品；Verified PR Gate 只可能作为 0.2.0 Pro bundle 的可选增强，team rules 和 audit log 均未排期。
+- Hosted Report 与报告上传已经退出产品；GitHub PR Check 只可能在 0.3.0 付费证据满足后研究，team rules 和 audit log 均未排期。
 
-Wukong 当前只提供完整的本地 BYOK Loop。0.1.0 的目标是把它做成可稳定推荐的 Trusted Local Loop；付费只能在 0.1.0 发布并验证重复使用后，以 0.2.0 邀请制 Pilot 另行批准。
+Wukong 当前只提供完整的本地 BYOK Loop。0.1.0 的目标是把它做成可稳定推荐的 Trusted Local Loop；付费只能在验证重复使用、非关联付款和续费证据后，以 0.3.0 另行批准。
 
 ## 当前基线
 
@@ -110,7 +110,7 @@ Wukong 当前只提供完整的本地 BYOK Loop。0.1.0 的目标是把它做成
 |---|---|---|
 | `/schedule` 云端例程 | 未排期 | 历史 Hosted 假设，需未来重新批准；本机定时巡检先用已实现的 cron 工具 |
 | `/ship` 发布 gate | 未实现 | proof + 版本/changelog/dry-run，更靠后的发布前 gate |
-| GitHub PR comment / gate | 0.2.0 可选候选 | 只能作为 Reliable Autonomy bundle 的附属能力，不能从历史 PR Gate 文档推断已批准 |
+| GitHub PR comment / gate | 0.3.0 候选 | 只在付费证据满足后研究，不能从历史 PR Gate 文档推断已批准 |
 | Team rules / Audit log | 未排期 | 没有已批准的团队或付费产品范围 |
 | Model-assisted review | BYOK 已实现 | 独立 reviewer model 已可用；managed credits 后移 |
 | Private runner / self-hosted path | 未实现 | 企业级承诺前必须具备的边界 |
@@ -119,7 +119,7 @@ Wukong 当前只提供完整的本地 BYOK Loop。0.1.0 的目标是把它做成
 
 1. 本地 BYOK `loop` 不受账号或月度额度限制；`verify`、`scan`、`proof` 是内部层和高级诊断命令。
 2. 不用人为额度制造升级压力；0.0.18 不新增 Web/D1 telemetry 产品指标后端。用户主动 `/feedback` 是显式产品反馈，不是 telemetry。
-3. 用户自带 API Key；0.1.0 不定义付费权益。0.2.0 候选只为可靠自治编排收费，不对 BYOK token 加价或限制 Free 单 Loop。
+3. 用户自带 API Key；0.1.0 不定义付费权益。0.3.0 候选只为协作与可靠交付工作流收费，不对 BYOK token 加价或限制 Free 单 Loop。
 4. 只写恢复与 Gate 必需的本地 durable state，不默认生成报告或云端副本；不上传给 Wukong。模型所需内容只按 run-scoped consent 发送给 exact BYOK provider，本地导出仍由用户显式触发。
 5. 在 guard、redaction、audit、private runner 真正完成前，不宣传安全合规能力。
 6. 每个 milestone 必须有可见用户路径和验收方式，不能只完成路由或表结构。
@@ -234,7 +234,7 @@ worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继�
 现有单 Loop 的用户合同稳定版，详细 RC admission P0、最小 Gate completeness/
 freshness、兼容、隐私、技术发布门槛与发布后产品验证见
 [0.1.0 Trusted Local Loop](docs/design/0.1.0-trusted-local-loop.md)。
-`0.2.0` 仍只是更后的可靠自治候选，不能复用已取消的 Promote 架构。当前均
+`0.2.0` 现为 Codebase Reduction（只做结构精简，需先批准迁移设计），不能复用已取消的 Promote 架构。当前均
 不新增默认 `/agents`、`/parallel`、`/worktree` 或 `/supervisor` 命令；
 完整 process sandbox、dynamic workflow graph、云端 Routine、Remote
 Control、Hosted Terminal、Team 和 managed credits 都不在范围；0.1.0 不新增
@@ -507,7 +507,7 @@ telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
 
 ## 历史探索：Pro PR Gate + Billing（已被取代）
 
-> 本节保留 2026-07-20 的旧研究内容用于追溯，不代表已排期、已批准或正在实现。它已被 [0.1.0 Trusted Local Loop](docs/design/0.1.0-trusted-local-loop.md) 与 [0.2.0 Pro Reliable Autonomy](docs/design/0.2.0-pro-reliable-autonomy.md) 取代。
+> 本节保留 2026-07-20 的旧研究内容用于追溯，不代表已排期、已批准或正在实现。它已被 [0.1.0 Trusted Local Loop](docs/design/0.1.0-trusted-local-loop.md) 与 [0.2.0 Pro Reliable Autonomy](docs/design/0.2.0-pro-reliable-autonomy.md) 取代；后者也已取代，PR Check 与 Billing 现归 0.3.0 候选。
 
 归档 contract 见 [历史候选：Pro PR Gate 与 Billing](docs/design/historical-pro-pr-gate-billing.md)。
 
@@ -631,7 +631,7 @@ telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
 - 0.0.22 只做 provider catalog resilience 与 CLI clarity 维护发布；不增加新的执行架构。
 - 0.1.0 规格已收敛：只稳定可控、可恢复、可解释的单 Loop；可编辑 Preflight、可信 no-check、provider-call/token 上限、文件归因、provider outcome、最小 Gate completeness/freshness、兼容恢复、五来源 Resume 与发布 workflow 已完成自动化，RC 六平台公开验收已通过。stable 只保留 exact-source、P0/release-blocking P1 清零、六平台资产/安装/升级/恢复与生产版本面门槛；opt-in cohort 发布后继续，不设固定 14 天等待。完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移。
 - 0.1.1 只做已存在体验的维护与可靠性修复；不包含 Cost Visibility、实时 pricing 查询、价格数据库或 reviewer 成本聚合。
-- 0.2.0 是未批准且待重新评审的 Reliable Autonomy 候选；不能继承已取消的 Promote/lease/fencing 设计，在 0.1.0 真实验证前不开工、不公开 Checkout。
+- 0.2.0 是 Codebase Reduction，需先批准迁移设计；原 Reliable Autonomy 候选已取代，不能继承已取消的 Promote/lease/fencing 设计。收费与公开 Checkout 只在 0.3.0 付费证据满足后研究。
 - 公告与更新通道分离：公告 JSON 由 Web 静态文件维护，失败不阻塞 CLI。
 - `/report` 和 Hosted Report/上传路径保持删除；本地 Gate 结果只在已有显式保存能力下留档。
 - 登录命令保持简单：OAuth first，不展示重复 platform choices。
@@ -644,11 +644,11 @@ telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
 - 不把 `/schedule`（历史云端例程设想）塞进本机 `/loop`；当前只承诺关机即停的本机 Loop 和本机 cron，跨机器持续性未排期且需未来重新批准。
 - 不为 `/loop` 创建脱离 Goal 生命周期的定时任务；`--every` 节流必须由 Goal driver 持有并可取消。
 - 不把 worktree 写入隔离宣传成完整 sandbox，也不把内部 AgentSwarm 的 128 上限宣传成并行产品能力。
-- 0.1.0 不做 detached 多 Loop；0.2.0 候选也只允许用户显式 Detach 的本机进程，机器关闭后不会继续。
+- 0.1.x 不做 detached 多 Loop；已取代的 0.2.0 Pro 候选也只设想用户显式 Detach 的本机进程，机器关闭后不会继续。
 
-## 0.2.0 Candidate Commercial Readiness Gates
+## 收费候选门槛（原 0.2.0 Pro Pilot；收费现归 0.3.0）
 
-> 以下收费门槛属于 [0.2.0 Pro Reliable Autonomy](docs/design/0.2.0-pro-reliable-autonomy.md) 候选，不构成当前任务、公开价格或发布日期承诺。0.1.0 仍是 Free 稳定版。
+> 以下门槛原属已取代的 [0.2.0 Pro Reliable Autonomy](docs/design/0.2.0-pro-reliable-autonomy.md) 候选，保留作为版本记录。其中 Parallel/Detach/Supervisor 相关前置条件随该候选失效；用户完成、重复使用、非关联付款、续费与 P0/P1 为 0 的证据门槛仍适用于 0.3.0。不构成当前任务、公开价格或发布日期承诺；0.1.x 仍是 Free 稳定版。
 
 开始 0.2.0 invite-only Pilot 前：
 
@@ -668,7 +668,7 @@ Pilot 的最低商业证据：
 
 公开 Checkout 前还必须有 10 个真实 Pro users、5 个 30 天重复使用者、3 个续费者，并保持 Billing/entitlement、privacy、false PASS、workspace damage 与失控后台执行的 P0/P1 为 0。未达到时继续 invite-only，不用代码完成替代付款、复用和续费证据。
 
-Team 只在 shared policy、budget、audit、SSO 和组织权限出现独立需求后另立版本，不自动跟随 0.2.0。
+Team 只在 shared policy、budget、audit、SSO 和组织权限出现独立需求后另立版本，不自动跟随 0.3.0。
 
 ## 历史探索：Commercial Metrics（未启用）
 

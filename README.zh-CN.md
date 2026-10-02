@@ -10,9 +10,20 @@ Wukong Code 是围绕一个主流程构建的终端 AI coding agent：
 给 `/loop` 一个目标，Wukong 会持续修改代码、运行仓库真实检查、从新的只读
 上下文审查结果，并针对同一个目标修复 blocking findings。
 
-## 当前版本：v0.1.0
+## 当前版本：v0.1.1
 
-`v0.1.0` 是默认 installer 选择的 stable binary。immutable
+`v0.1.1`（2026-09-03 发布）是默认 installer 选择的 stable binary。它是在 0.1.0
+之上的可靠性与信任边界补丁：Loop revision、headless 上限、resume usage、Provider
+原子配置、跨 workspace Resume、显式 `wukong upgrade`、有界插件安装、真实 workspace
+检查发现，以及 local Web 修复。不新增顶层命令，不改变 Loop/Gate 语义，也不包含
+Cost Visibility 或 provider 费用估算。完整说明见 [v0.1.1 发布说明](docs/releases/0.1.1.md)。
+
+下一版本 0.1.2 First Success And Surface Simplification 范围已批准、尚未开工，见
+[ROADMAP.md](ROADMAP.md)。
+
+### v0.1.0
+
+`v0.1.0`（2026-08-08 发布）是第一个 Trusted Local Loop stable。immutable
 [`v0.1.0-rc.1`](https://github.com/mutnpc/wukong-code/releases/tag/v0.1.0-rc.1)
 继续保留为候选证据快照。
 
@@ -36,17 +47,6 @@ session 与权限控制：
   访问。
 
 完整说明见 [v0.1.0 发布说明](docs/releases/0.1.0.md)。
-
-### 当前开发工作树：0.1.1 Reliability Maintenance
-
-当前工作树已经实现 Loop revision、headless 上限、resume usage、Provider 原子配置、
-跨 workspace Resume，以及 Web 连接、权限、键盘导航、Workspace 持久化和 stub
-联调修复。但 `@wukong.today/code` 版本仍为 `0.1.0`，尚未生成或验证 `v0.1.1`
-六平台资产，也没有发布。范围、验证证据和发布缺口见
-[0.1.1 未发布说明](docs/releases/0.1.1.md)。
-
-0.1.1 不包含 Cost Visibility，不估算 provider 费用，不新增顶层命令，也不改变
-Loop/Gate 语义。
 
 ## Wukong 能做什么
 

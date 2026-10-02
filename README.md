@@ -11,9 +11,23 @@ Give `/loop` a goal. Wukong works on the change, runs the repository's real
 checks, reviews the result from a fresh read-only context, and fixes blocking
 findings against the same goal.
 
-## Current release: v0.1.0
+## Current release: v0.1.1
 
-`v0.1.0` is the stable binary selected by the default installer. The immutable
+`v0.1.1` (published 2026-09-03) is the stable binary selected by the default
+installer. It is a reliability and trust-boundary patch on top of 0.1.0: Loop
+revision, headless limits, resumed usage, atomic Provider configuration,
+cross-workspace Resume, explicit `wukong upgrade`, bounded plugin installation,
+real workspace check discovery, and local Web fixes. It adds no top-level
+commands, does not change Loop/Gate semantics, and does not include Cost
+Visibility or provider charge estimates. See the
+[v0.1.1 release notes](docs/releases/0.1.1.md).
+
+The next version, 0.1.2 First Success And Surface Simplification, is approved
+but not started; see [ROADMAP.md](ROADMAP.md).
+
+### v0.1.0
+
+`v0.1.0` (published 2026-08-08) was the first Trusted Local Loop stable. The immutable
 [`v0.1.0-rc.1`](https://github.com/mutnpc/wukong-code/releases/tag/v0.1.0-rc.1)
 prerelease remains available as the candidate evidence snapshot.
 
@@ -42,19 +56,6 @@ clarifies the CLI's session and permission controls:
   workspace access.
 
 See the [v0.1.0 release notes](docs/releases/0.1.0.md).
-
-### Development checkout: 0.1.1 Reliability Maintenance
-
-The current working tree implements fixes for Loop revision, headless limits,
-resumed usage, atomic Provider configuration, cross-workspace Resume, and Web
-connection, permission, keyboard, Workspace, and stub behavior. The
-`@wukong.today/code` package version is still `0.1.0`; no six-platform `v0.1.1`
-assets have been produced, verified, or published. See the
-[unreleased 0.1.1 notes](docs/releases/0.1.1.md) for scope, current verification,
-and remaining release work.
-
-Version 0.1.1 does not include Cost Visibility or provider charge estimates,
-add top-level commands, or change Loop/Gate semantics.
 
 ## What Wukong does
 

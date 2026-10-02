@@ -3,7 +3,7 @@
 > 版本: v2.1
 > 日期: 2026-07-07
 > 适用范围: `wukong_cli` 新 Kimi-code base
-> 状态: 当前架构 + P0 本地验证闭环 + 0.0.12 Loop-first gate 已实现；完整 billing、PR/Team 能力后续实现
+> 状态: 描述 2026-07-07 的架构基线（P0 本地验证闭环 + 0.0.12 Loop-first gate，均已实现）；0.0.13–0.1.1 的后续变化见 `docs/releases/`，代码为准。Billing、PR/Team 未排期，只在 0.3.0 付费证据满足后研究（见仓库根 `ROADMAP.md`）
 > 产品定位: AI Coding Loop 的控制层与验证层（proof layer for AI-written code）
 
 ## 1. 当前事实
