@@ -62,6 +62,8 @@
 - [ ] 重记网站 `npm audit` 基线：2026-10-02 实测 15 项（1 critical `next` / 9 high / 5 moderate；2026-09-09 为 13 项），旧的“1 moderate / 3 high”已过期；按生产运行时、构建工具链、构建期传递、仅测试四类分别处置，禁止无审查 `--force`，生产 high 归零或记 owner/期限/缓解措施
 - [ ] 收口 `.github/workflows/ci.yml` 中 8 处 `actions/checkout@11d5960…`（v4/Node 20）到 v6；其余工作流已是 v6/v7。保持完整 SHA 固定与最小权限，回归 Web test/build、六平台发布与生产面验证
 
+- [ ] 已发布 optional telemetry 的接收端上线（2026-10-02 决定：为已发布的 optional CLI telemetry 补上接收端（独立 D1 `wukong-telemetry`、只按随机安装 ID、忽略账号令牌、不存 IP、90 天删除），只做聚合产品诊断，不作 cohort 证据；实现位于 `wukong_web/workers/telemetry`，CLI 端无需改动）
+
 ### 发布门槛（`minor`）
 
 - [ ] 三个授权脱敏真实案例覆盖 install→provider test→Preflight→Loop→Gate，其中一个经 `/resume` 导入、一个以 NEEDS_WORK 或 STOPPED_BY_USER 结束

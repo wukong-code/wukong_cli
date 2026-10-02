@@ -70,9 +70,15 @@ model identity、tool arguments、hostname、terminal details 或 hardware finge
 - request timeout 为 10 秒；瞬态失败按 1/4/16 秒 backoff；
 - 发送失败写入权限为 `0600` 的 `~/.wukong/telemetry/failed_*.jsonl`；启用 telemetry
   时，超过 7 天的失败文件会在下次启动清除；opt-out 会立即尽力删除这些文件；
-- **远端 retention 尚未在这个 repository 或公开 backend contract 中定义。** 因此不能
-  宣称具体远端删除期限，也不能把 telemetry 当作 0.1.0 的 25/20/15/7 cohort 证据。
-  在 operator 给出可验证的 retention/deletion contract 前，这仍是发布隐私审计项。
+- **远端接收与保留（2026-10-02 起）：** 接收端是 `wukong_web/workers/telemetry` 中的
+  Cloudflare Worker，数据写入独立 D1 数据库 `wukong-telemetry`。它只按随机安装 ID
+  入库，忽略 CLI 为已登录用户附带的 `Authorization`，不保存 IP；字段名、字符串长度和
+  单批事件数有上限，像路径、URL、邮箱的值以及 `model`/`alias`/`args_hash` 等属性在
+  服务端再次丢弃；每日定时任务删除接收满 90 天的事件。运维与删除流程见
+  `wukong_web/docs/privacy-operations.md`。telemetry 只用于聚合产品诊断，仍不能当作
+  25/20/15/7 cohort 证据。
+- 2026-10-02 之前，`telemetry-logs.wukong.today` 没有 DNS 记录，所有已发布版本的事件都
+  未送达，只停留在本地失败队列中（最多 7 天）。
 
 ## 验证位置
 
