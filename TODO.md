@@ -62,7 +62,8 @@
 - [ ] 重记网站 `npm audit` 基线：2026-10-02 实测 15 项（1 critical `next` / 9 high / 5 moderate；2026-09-09 为 13 项），旧的“1 moderate / 3 high”已过期；按生产运行时、构建工具链、构建期传递、仅测试四类分别处置，禁止无审查 `--force`，生产 high 归零或记 owner/期限/缓解措施
 - [ ] 收口 `.github/workflows/ci.yml` 中 8 处 `actions/checkout@11d5960…`（v4/Node 20）到 v6；其余工作流已是 v6/v7。保持完整 SHA 固定与最小权限，回归 Web test/build、六平台发布与生产面验证
 
-- [ ] 已发布 optional telemetry 的接收端上线（2026-10-02 决定：为已发布的 optional CLI telemetry 补上接收端（独立 D1 `wukong-telemetry`、只按随机安装 ID、忽略账号令牌、不存 IP、90 天删除），只做聚合产品诊断，不作 cohort 证据；实现位于 `wukong_web/workers/telemetry`，CLI 端无需改动）
+- [ ] 已发布 optional telemetry 的接收端上线（2026-10-02 决定：为已发布的 optional CLI telemetry 补上接收端，但只统计安装数（独立 D1 `wukong-telemetry`，只存随机安装 ID、使用日期、版本和平台；不存任何事件内容；忽略账号令牌、不存 IP；最后使用 90 天后删除），不作 cohort 证据；实现位于 `wukong_web/workers/telemetry`，CLI 端无需改动）
+- [ ] CLI 统计只发最小使用信号：客户端不再上传事件名、工具、命令、时长和属性，只发随机安装 ID、版本和平台（服务端已只保留这些；旧版本仍会发送完整事件，由服务端收到即丢弃）
 
 ### 发布门槛（`minor`）
 

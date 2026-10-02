@@ -118,7 +118,7 @@ Wukong 当前只提供完整的本地 BYOK Loop。0.1.0 的目标是把它做成
 ## 路线图原则
 
 1. 本地 BYOK `loop` 不受账号或月度额度限制；`verify`、`scan`、`proof` 是内部层和高级诊断命令。
-2. 不用人为额度制造升级压力；0.0.18 不新增 Web/D1 telemetry 产品指标后端（2026-10-02 决定：为已发布的 optional CLI telemetry 补上接收端（独立 D1 `wukong-telemetry`、只按随机安装 ID、忽略账号令牌、不存 IP、90 天删除），只做聚合产品诊断，不作 cohort 证据）。用户主动 `/feedback` 是显式产品反馈，不是 telemetry。
+2. 不用人为额度制造升级压力；0.0.18 不新增 Web/D1 telemetry 产品指标后端（2026-10-02 决定：为已发布的 optional CLI telemetry 补上接收端，但只统计安装数（独立 D1 `wukong-telemetry`，只存随机安装 ID、使用日期、版本和平台；不存任何事件内容；忽略账号令牌、不存 IP；最后使用 90 天后删除），不作 cohort 证据）。用户主动 `/feedback` 是显式产品反馈，不是 telemetry。
 3. 用户自带 API Key；0.1.0 不定义付费权益。0.3.0 候选只为协作与可靠交付工作流收费，不对 BYOK token 加价或限制 Free 单 Loop。
 4. 只写恢复与 Gate 必需的本地 durable state，不默认生成报告或云端副本；不上传给 Wukong。模型所需内容只按 run-scoped consent 发送给 exact BYOK provider，本地导出仍由用户显式触发。
 5. 在 guard、redaction、audit、private runner 真正完成前，不宣传安全合规能力。

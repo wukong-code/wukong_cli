@@ -71,12 +71,12 @@ model identity、tool arguments、hostname、terminal details 或 hardware finge
 - 发送失败写入权限为 `0600` 的 `~/.wukong/telemetry/failed_*.jsonl`；启用 telemetry
   时，超过 7 天的失败文件会在下次启动清除；opt-out 会立即尽力删除这些文件；
 - **远端接收与保留（2026-10-02 起）：** 接收端是 `wukong_web/workers/telemetry` 中的
-  Cloudflare Worker，数据写入独立 D1 数据库 `wukong-telemetry`。它只按随机安装 ID
-  入库，忽略 CLI 为已登录用户附带的 `Authorization`，不保存 IP；字段名、字符串长度和
-  单批事件数有上限，像路径、URL、邮箱的值以及 `model`/`alias`/`args_hash` 等属性在
-  服务端再次丢弃；每日定时任务删除接收满 90 天的事件。运维与删除流程见
-  `wukong_web/docs/privacy-operations.md`。telemetry 只用于聚合产品诊断，仍不能当作
-  25/20/15/7 cohort 证据。
+  Cloudflare Worker，数据写入独立 D1 数据库 `wukong-telemetry`。**服务端只统计安装数**：
+  只保存随机安装 ID、使用日期（精确到天）、CLI 版本、平台和架构；CLI 发来的事件名、
+  工具、命令、时长和全部 `property_*` 只用于校验格式，收到后即丢弃、从不落盘。它忽略
+  CLI 为已登录用户附带的 `Authorization`，不保存 IP；每日定时任务删除最后使用超过 90 天
+  的安装记录和 90 天前的使用日期。运维与删除流程见 `wukong_web/docs/privacy-operations.md`。
+  这些数据只用于统计安装与活跃数，不能当作 25/20/15/7 cohort 证据。
 - 2026-10-02 之前，`telemetry-logs.wukong.today` 没有 DNS 记录，所有已发布版本的事件都
   未送达，只停留在本地失败队列中（最多 7 天）。
 
