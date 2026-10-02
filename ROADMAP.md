@@ -102,6 +102,7 @@ Wukong 当前只提供完整的本地 BYOK Loop。0.1.0 的目标是把它做成
 | `/proof` 本地高级诊断 | v1 已实现 | 共享 snapshot、三态结论；默认不写报告，仅支持显式本地保存 |
 | `/judge` evaluator-only 判定 | 已实现 | deterministic 判定先行；`--agent` 第二-agent 审查后置 |
 | 公开官网 | 已实现 | `wukong.today`、download、docs、pricing、changelog |
+| Model-assisted review | 已实现（BYOK） | 独立 reviewer model 已可用（0.0.13 起）；managed credits 后移 |
 | 可选账号 Auth | 已实现 | Web/device auth 只连接账号，不配置模型或生成付费 entitlement；历史 subscription 表不再写入 |
 
 ### 未完成
@@ -112,7 +113,6 @@ Wukong 当前只提供完整的本地 BYOK Loop。0.1.0 的目标是把它做成
 | `/ship` 发布 gate | 未实现 | proof + 版本/changelog/dry-run，更靠后的发布前 gate |
 | GitHub PR comment / gate | 0.3.0 候选 | 只在付费证据满足后研究，不能从历史 PR Gate 文档推断已批准 |
 | Team rules / Audit log | 未排期 | 没有已批准的团队或付费产品范围 |
-| Model-assisted review | BYOK 已实现 | 独立 reviewer model 已可用；managed credits 后移 |
 | Private runner / self-hosted path | 未实现 | 企业级承诺前必须具备的边界 |
 
 ## 路线图原则
@@ -146,6 +146,16 @@ Wukong 当前只提供完整的本地 BYOK Loop。0.1.0 的目标是把它做成
 
 豁免项是"本次不重跑"，不是删除；对应债务仍挂在 TODO，由下一个
 minor/major 或专项任务关闭。发布级别写在版本设计文档头部。
+
+早期版本（0.0.1–0.0.10，按公开 CHANGELOG 汇总；当时尚未建立发布门槛制度）：
+
+| 版本 | 主题 | 已发布内容 |
+|---|---|---|
+| `0.0.1` | 首个公开版本（2026-07-02） | 交互式 TUI、`-p`、`verify`/`scan`/`guard`、Provider 管理、local Web 与 server、ACP、session 导出与 Visualizer、macOS/Linux/Windows native binary |
+| `0.0.2` | 品牌统一与 TUI 验证入口（2026-07-03） | 改名 Wukong Code（npm `@wukong.today/code`、发布仓 `mutnpc/wukong-code`）；TUI `/verify`、`/scan`、`/guard` 与 verification agent。0.0.3、0.0.4 未公开发布 |
+| `0.0.5`–`0.0.7` | 安装与登录链路（2026-07-03） | 六平台 native binary 与 POSIX `install.sh`；TUI 欢迎卡片改为 Wukong Code；登录只保留 OAuth 并指向 `wukong.today` |
+| `0.0.8` | Milestone 0.5 Loop 控制层（2026-07-08） | 交互式 `/loop`、merge proof 与停止条件；当时的 `--every` 是 cron 式节流，0.0.17 改为 Goal 持有的可取消等待 |
+| `0.0.9`–`0.0.10` | Today 与登录修复（2026-07-09） | `wukong today` 本地简报、Loop 驱动的 TUI 状态；device-code 登录改用 `wukong.today` |
 
 | 版本 | 目标 | 发布门槛 |
 |---|---|---|
@@ -202,7 +212,7 @@ worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继�
 - installer 给出 `cd project → wukong → /provider → /loop` 的真实下一步。
 - Provider 增加显式连通测试；Preflight 可在取消、重启和修复配置后恢复。
 - headless dry-run 可写出不含 secret 的可审核 run-plan，再由用户显式确认执行。
-- 默认 CLI 只突出 `wukong`、`-p`、`provider`、`loop`、`doctor`、`upgrade`；TUI 只突出 `/loop`、`/resume`、`/provider`、`/settings`、`/new`、`/help`、`/feedback`、`/exit`。
+- 默认 CLI 只突出 `wukong`、`-p`、`provider`、`loop`、`doctor`、`upgrade`、`check`、`web`；TUI 只突出 `/loop`、`/resume`、`/provider`、`/settings`、`/new`、`/help`、`/feedback`、`/exit`。
 - 增加高级 `wukong check` 聚合入口；verify/scan/proof/judge/guard 在本版本只降级为兼容别名，不删除。
 - 普通 Dashboard 只保留有证据的已连接设备、最后使用时间和单设备 revoke；若这些数据未就绪，则从主导航隐藏 Dashboard/Plan。
 - local Web 在没有使用证据时进入 bugfix-only；若保留，先确定 canonical protocol schema 和生成式 wire types，再继续扩展。
@@ -251,7 +261,7 @@ telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
 
 - `wukong.today/download` 的稳定安装路径。
 - 公开 package name、binary distribution 和文档一致。
-- CLI welcome、login selector、终端文案统一为 `WuKong Code`。
+- CLI welcome、login selector、终端文案统一为 `Wukong Code`。
 - `wukong verify`、`wukong scan`、`wukong guard` 作为历史交付的实现基础和高级本地诊断保留，不进入当前主命令面。
 - 官网首页和下载页只描述当前真实能力。
 
@@ -293,7 +303,7 @@ telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
 
 - `/loop` TUI slash command + `wukong loop` CLI subcommand。
 - 核心语义 iterate-until-verified：驱动 agent 朝目标推进 → goal gate 评估 → 未过则注入失败反馈立即开始下一轮，直到停止条件满足、达到迭代上限或人取消。**关机即停。**
-- `--every` 是可选的轮间最小间隔（节流，用于等 CI 等外部反馈），由 Goal driver 持有可取消等待，不创建 cron task。
+- `--every` 是可选的轮间最小间隔（节流，用于等 CI 等外部反馈），由 Goal driver 持有可取消等待，不创建 cron task。（0.0.8 发布时为 cron 式节流，0.0.17 起改为本条所述行为）
 - 定时巡检型任务不塞进 `/loop`：本机用 cron 工具；云端 `/schedule` 只保留为历史 Hosted 假设，当前未排期。
 
 **E. 文案**

@@ -57,8 +57,7 @@ behind Loop. The package remains free, local-first, and BYOK. It does not
 provide hosted inference, payment, quota, cloud session/evidence sync, PR Gate,
 Skill authoring, or a complete shell sandbox.
 
-The exact unreleased 0.1.1 scope, local validation evidence, and remaining
-release gates are documented in
+The 0.1.1 scope and release verification are documented in
 [`docs/releases/0.1.1.md`](../../docs/releases/0.1.1.md). It explicitly excludes
 Cost Visibility and provider charge estimates.
 
@@ -70,10 +69,10 @@ Provider discovery first reads the models.dev-compatible catalog configured by
 tries `https://models.dev/api.json`. The source contains a final snapshot path,
 but the official v0.0.22 native archives omitted the snapshot because of a
 release-profile defect. Do not promise offline provider discovery for that
-published binary. The unreleased 0.1.0 release workflow now embeds the snapshot
-and ZIP-smokes provider discovery; the current macOS ARM64 release-profile ZIP
-passed that deterministic smoke locally. This still requires six-platform
-candidate CI before RC and does not repair the already published v0.0.22 asset.
+published binary. Release workflows since 0.1.0 embed the snapshot and ZIP-smoke
+provider discovery; the published 0.1.1 macOS ARM64 binary was confirmed to
+contain it on 2026-10-02. This does not repair the already published v0.0.22
+asset.
 
 Passing `--url` to `wukong provider catalog list` or
 `wukong provider catalog add` disables fallback so custom catalogs fail

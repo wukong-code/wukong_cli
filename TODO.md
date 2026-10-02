@@ -47,7 +47,7 @@
 ### P0：命令面收敛（只改默认可见性）
 
 - [ ] TUI core 从 13 个收敛到 8 个：把 `/permission`、`/model`、`/transform`、`/login`、`/logout` 降为 `advanced`
-- [ ] CLI 引入与 TUI 对齐的三级 tier；`wukong --help` 只列 `wukong`、`-p`、`provider`、`loop`、`doctor`、`upgrade`、`check`，并指向 `wukong help --all`
+- [ ] CLI 引入与 TUI 对齐的三级 tier；`wukong --help` 只列 `wukong`、`-p`、`provider`、`loop`、`doctor`、`upgrade`、`check`、`web`，并指向 `wukong help --all`
 - [ ] `export`、`review`、`roles`、`today`、`guard`、`judge`、`login`、`logout` 降为 advanced（保持可执行、可发现，不加 `hidden: true`）
 - [ ] 新增确定性聚合入口 `wukong check`；`verify`/`scan`/`proof`/`judge`/`guard` 只降级为兼容别名，行为不变
 - [ ] 命令契约回归：core 集合精确匹配、advanced/hidden 仍可执行、兼容别名退出码与输出同 0.1.1
