@@ -247,11 +247,8 @@ deterministic verification.
 
 ## License
 
-This is proprietary internal software. See [LICENSE](LICENSE).
-
-The roadmap now calls for an independently usable open-source local CLI, while
-the website and operations backend remain private. Source publication and
-license migration have not happened; the current license still applies.
+This project is open source under the [MIT License](LICENSE). The website and
+operations backend remain private and are not part of this repository.
 The service path starts with a scoped, one-off repository onboarding and
 acceptance engagement, followed by monthly support only after repeat purchases.
 See the [open-source and service strategy](docs/business/open-source-and-service-strategy.md).

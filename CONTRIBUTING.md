@@ -101,4 +101,5 @@ public issue or share sensitive details in an unprotected channel.
 
 ## License
 
-This is proprietary internal software. See [LICENSE](LICENSE).
+This project is open source under the [MIT License](LICENSE). By contributing
+you agree that your contributions will be licensed under the MIT License.

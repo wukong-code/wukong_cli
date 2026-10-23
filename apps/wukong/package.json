@@ -2,7 +2,7 @@
   "name": "@wukong.today/code",
   "version": "0.1.1",
   "description": "Wukong Code — AI agent for code verification and delivery",
-  "license": "UNLICENSED",
+  "license": "MIT",
   "author": "Wukong Code Team",
   "homepage": "https://wukong.today",
   "repository": {

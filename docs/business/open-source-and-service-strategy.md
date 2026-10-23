@@ -16,6 +16,10 @@
 根与 CLI package 的 license 字段为 `UNLICENSED`，部分内部包标为 `MIT`。
 本次没有修改这些文件或仓库可见性，不能把方向确认表述为已经开源。
 
+2026-10-24 更新：`wukong_cli` 根 `LICENSE` 已替换为 MIT，根与全部 package 的
+`license` 字段统一为 `MIT`，README/CONTRIBUTING 的专有声明已改为 MIT。仓库
+可见性与发布动作仍未变更，开源以仓库实际公开为准。
+
 后续迁移状态：三个仓库已转入 `wukong-code` 组织，本地远程与仓库链接已更新。
 迁移组织不改变上述许可与源码可见性，也不代表已完成开源发布。
 
