@@ -11,16 +11,15 @@ revision、Resume、Provider、Web、更新、插件供应链和 workspace check
 已上线的付费订阅、Checkout 或 entitlement。后续先验证一个可交付的团队验收试点，
 再决定是否建设订阅产品；新方向不改变现有免费 CLI 承诺。
 
-已确认本地 CLI 开源、官网后端保持私有的方向。当前仍为专有许可，实际源码公开、
-许可证变更尚未执行；三个仓库已迁入 `wukong-code` 组织，本地远程与仓库链接已更新。
-收费从一次明确范围的仓库接入/验收陪跑服务开始，
+本地 CLI 已于 v0.1.2 按 MIT 许可公开，官网后端保持私有；三个仓库已迁入
+`wukong-code` 组织，本地远程与仓库链接已更新。收费从一次明确范围的仓库接入/验收陪跑服务开始，
 有复购后再验证月度服务。具体边界见 [开源与服务收费路线](docs/business/open-source-and-service-strategy.md)。
 
 当前版本真相源：
 
 - [0.1.1 Reliability And Trust Boundary](docs/releases/0.1.1.md)
 - [0.1.2 First Success And Surface Simplification](docs/design/0.1.2-first-success-and-surface-simplification.md)
-- [本地 CLI 开源与服务收费路线](docs/business/open-source-and-service-strategy.md)：方向已确认，实际开源发布与服务实验未执行。
+- [本地 CLI 开源与服务收费路线](docs/business/open-source-and-service-strategy.md)：CLI 已按 MIT 发布，官网后端私有；服务实验未执行。
 - [0.0.18 Loop-First Simplification](docs/design/0.0.18-loop-first-simplification.md)
 - [0.0.19 Explicit Finish Line](docs/design/0.0.19-explicit-finish-line.md)
 - [0.0.20 Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md)

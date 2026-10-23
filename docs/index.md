@@ -3,7 +3,7 @@
 ## 规划入口
 
 - [Roadmap](https://github.com/wukong-code/wukong_cli/blob/main/ROADMAP.md)：版本方向、收入试点与产品化门槛。
-- [开源与服务收费路线](business/open-source-and-service-strategy.md)：本地 CLI 开源、官网后端私有与按次服务优先；实际发布/实验未执行。
+- [开源与服务收费路线](business/open-source-and-service-strategy.md)：本地 CLI 已按 MIT 发布，官网后端私有；服务实验未执行。
 - [0.1.2 首次成功](design/0.1.2-first-success-and-surface-simplification.md)：工程维护已开始，首次成功功能未开工。
 - [0.1.3 交付验收试点](design/0.1.3-delivery-acceptance-pilot.md)：候选范围待评审，未开工；具体实施和服务合同仍需批准。
 

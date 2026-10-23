@@ -10,17 +10,14 @@ Wukong Code 是围绕一个主流程构建的终端 AI coding agent：
 给 `/loop` 一个目标，Wukong 会持续修改代码、运行仓库真实检查、从新的只读
 上下文审查结果，并针对同一个目标修复 blocking findings。
 
-## 当前版本：v0.1.1
+## 当前版本：v0.1.2
 
-`v0.1.1`（2026-09-03 发布）是默认 installer 选择的 stable binary。它是在 0.1.0
-之上的可靠性与信任边界补丁：Loop revision、headless 上限、resume usage、Provider
+`v0.1.2`（2026-10-24 发布）是当前公开 stable binary，也是本地 CLI 的 MIT 开源版。
+它延续 0.1.1 的可靠性与信任边界：Loop revision、headless 上限、resume usage、Provider
 原子配置、跨 workspace Resume、显式 `wukong upgrade`、有界插件安装、真实 workspace
-检查发现，以及 local Web 修复。不新增顶层命令，不改变 Loop/Gate 语义，也不包含
-Cost Visibility 或 provider 费用估算。完整说明见 [v0.1.1 发布说明](docs/releases/0.1.1.md)。
+检查发现，以及 local Web 修复。完整说明见 [v0.1.2 发布说明](docs/releases/0.1.2.md)。
 
-下一版本 0.1.2 First Success And Surface Simplification 已开始仓库工程维护，
-首次成功功能仍未开工、尚未发布，见
-[ROADMAP.md](ROADMAP.md)。
+官网、账号系统和运营后端仍保持私有，不属于本仓库 CLI 的 MIT 授权范围。
 
 ### v0.1.0
 
@@ -222,9 +219,9 @@ Wukong Code 是专注 AI coding Loop 控制与确定性验证的独立产品。
 
 ## 许可证
 
-本软件为专有内部软件，详见 [LICENSE](LICENSE)。
+本仓库中的本地 CLI、TUI、Loop/Gate 引擎及其构建所需组件按 [MIT License](LICENSE)
+开源。由本仓库构建的 CLI/npm 包和原生二进制遵循相同的开源范围。
 
-路线已确认：开源可独立使用的本地 CLI，官网与运营后端保持私有。实际源码公开与
-许可证迁移尚未执行，当前许可证继续适用。收费先从按次仓库接入/验收陪跑开始，
-有主动复购后再验证固定范围月度服务，详见
+官网、账号系统、反馈服务、运营后端、部署配置和商标不属于本仓库，也不因 CLI 的
+MIT 许可而开放。服务实验仍未执行，详见
 [开源与服务收费路线](docs/business/open-source-and-service-strategy.md)。
