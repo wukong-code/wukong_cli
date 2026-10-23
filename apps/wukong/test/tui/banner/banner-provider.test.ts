@@ -404,7 +404,7 @@ describe('selectBannerState', () => {
         details: 'Run wukong loop with real checks and structured results.',
         action: {
           label: 'View v0.0.11 release',
-          url: 'https://github.com/mutnpc/wukong-code/releases/tag/v0.0.11',
+          url: 'https://github.com/wukong-code/wukong-code/releases/tag/v0.0.11',
         },
         display: 'once',
         start_time: '2026-07-13T07:17:12Z',
@@ -429,7 +429,7 @@ describe('selectBannerState', () => {
       display: 'once',
       action: {
         label: 'View v0.0.11 release',
-        url: 'https://github.com/mutnpc/wukong-code/releases/tag/v0.0.11',
+        url: 'https://github.com/wukong-code/wukong-code/releases/tag/v0.0.11',
       },
     });
     for (const clientVersion of ['0.0.10', '0.0.12']) {
@@ -534,6 +534,28 @@ describe('selectBannerState', () => {
         () => 0,
       )).toBeNull();
     }
+  });
+
+  it.each([
+    'https://github.com/mutnpc/wukong-code/releases',
+    'https://github.com/wukong-code/wukong_cli/releases',
+    'https://github.com/wukong-code/wukong-code-evil/releases',
+    'https://github.com.evil.example/wukong-code/wukong-code/releases',
+  ])('drops announcement links outside the migrated distribution repository: %s', (url) => {
+    const result = selectBannerState({
+      schema_version: 1,
+      announcements: [{
+        id: 'repository-boundary',
+        enabled: true,
+        level: 'info',
+        message: 'Release update',
+        display: 'always',
+        action: { label: 'Release', url },
+      }],
+    }, '0.14.0', now, () => 0);
+
+    expect(result).not.toBeNull();
+    expect(result?.action).toBeNull();
   });
 
   it('sanitizes terminal controls and drops unapproved action hosts', () => {

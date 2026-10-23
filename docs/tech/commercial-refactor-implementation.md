@@ -1,6 +1,6 @@
 # Wukong 商业化重构技术实现方案
 
-> 状态：**HISTORICAL TECHNICAL PLAN**。本文包含已移除的远端 Loop quota 与旧商业假设，不是当前实现或版本真相源。当前版本边界见 [ROADMAP](../../ROADMAP.md)、[0.1.0 Trusted Local Loop](../design/0.1.0-trusted-local-loop.md) 与 [0.2.0 Pro Reliable Autonomy](../design/0.2.0-pro-reliable-autonomy.md)。
+> 状态：**HISTORICAL TECHNICAL PLAN**。本文包含已移除的远端 Loop quota 与旧商业假设，不是当前实现或版本真相源。当前版本边界见 [ROADMAP](../../ROADMAP.md)、[0.1.2 首次成功](../design/0.1.2-first-success-and-surface-simplification.md) 与 [0.1.3 交付验收试点候选](../design/0.1.3-delivery-acceptance-pilot.md)。旧 0.2.0 Reliable Autonomy 也已取代，本文不授权恢复旧 quota 或 Billing 架构。
 >
 > 版本: v1.3
 > 日期: 2026-07-14

@@ -1,6 +1,10 @@
 # Wukong 能力体系与商业化原则
 
-> 状态：长期能力研究。版本与商业边界以仓库根 `ROADMAP.md` 为准（2026-10-02：0.1.x Free、0.2.0 Codebase Reduction、收费只在 0.3.0 付费证据满足后研究）；本文中的旧 PR Gate、Managed Gate 与 tier 示例不构成当前计划。
+> 2026-10-23 方向同步：本地 CLI 的完整所需源码计划开源，官网后端私有；当前许可与
+> 仓库可见性未变。收入先验证按次接入/验收陪跑，复购后再验证月度服务；当前边界见
+> [开源与服务收费路线](open-source-and-service-strategy.md)，不继承本文旧产品层级。
+>
+> 状态：长期能力研究。版本与商业边界以仓库根 `ROADMAP.md` 为准（2026-10-23：现有本地 Loop 持续 Free + BYOK；0.1.3 交付验收服务试点候选；0.2.0 按交付阻碍精简；0.3.0 由付款、重复使用、续费和交付成本证据门控产品化）；本文中的旧 PR Gate、Managed Gate、价格与 tier 示例不构成当前计划。
 >
 > 阅读指引（2026-10-02 核对）：§2 品牌能力映射、§3 产品主次与 §5 权限不变量仍然成立，权限不变量已由 0.0.16 Permission Mode v2 实现；§6 商业分层、§7 Managed Gate 与 §8 中的 0.2.0 Reliable Autonomy 指导已过时（该候选已取代）。
 >
@@ -279,7 +283,7 @@ Managed Gate 的价值不是模型代理转售，而是提供独立、稳定、�
 
 ### 0.2.0：Reliable Autonomy 邀请制候选（已取代）
 
-> 2026-10-02：该候选已取代；0.2.0 现为 Codebase Reduction，收费候选归 0.3.0。以下保留原版本记录。
+> 2026-10-23：该候选及其购买归因、人数阈值全部归档；0.2.0 现为 Codebase Reduction。收入试点以 [0.1.3 候选](../design/0.1.3-delivery-acceptance-pilot.md) 为准，产品化归 0.3.0。以下只保留原版本记录。
 
 0.2.0 候选验证用户是否愿意为 2–5 个有界并行任务、显式 Detach、本机 exception-first Supervisor 与可选 Verified PR Gate 组成的可靠自治 bundle 付费。一个候选月付 SKU `$12/月`；10 人受邀、5 人真实使用、3 人付款、2 人续费前不讨论 public Checkout。
 

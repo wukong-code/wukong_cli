@@ -1,18 +1,26 @@
 # Wukong Code Roadmap
 
-> 最后更新: 2026-10-02（0.2.0/0.3.0 口径统一；状态行核对）
+> 最后更新: 2026-10-23（确认本地 CLI 开源、官网后端私有与先按次服务的收入路线）
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
+> 本次确认产品方向与路线图文档；新增试点的技术设计、具体实施范围和服务合同仍待确认，未开工。
 
 `0.1.1` Reliability And Trust Boundary 延续 Trusted Local Loop，只修复 Loop
 revision、Resume、Provider、Web、更新、插件供应链和 workspace checks 可靠性；
 不新增命令、不改变 Gate 语义，也不包含 Cost Visibility。
-产品继续 Free + BYOK；隔离 worktree / Safe Promote 实验已经取消，当前没有付费
-计划、Checkout 或 entitlement。
+已发布产品继续 Free + BYOK；隔离 worktree / Safe Promote 实验已经取消，当前没有
+已上线的付费订阅、Checkout 或 entitlement。后续先验证一个可交付的团队验收试点，
+再决定是否建设订阅产品；新方向不改变现有免费 CLI 承诺。
+
+已确认本地 CLI 开源、官网后端保持私有的方向。当前仍为专有许可，实际源码公开、
+许可证变更尚未执行；三个仓库已迁入 `wukong-code` 组织，本地远程与仓库链接已更新。
+收费从一次明确范围的仓库接入/验收陪跑服务开始，
+有复购后再验证月度服务。具体边界见 [开源与服务收费路线](docs/business/open-source-and-service-strategy.md)。
 
 当前版本真相源：
 
 - [0.1.1 Reliability And Trust Boundary](docs/releases/0.1.1.md)
 - [0.1.2 First Success And Surface Simplification](docs/design/0.1.2-first-success-and-surface-simplification.md)
+- [本地 CLI 开源与服务收费路线](docs/business/open-source-and-service-strategy.md)：方向已确认，实际开源发布与服务实验未执行。
 - [0.0.18 Loop-First Simplification](docs/design/0.0.18-loop-first-simplification.md)
 - [0.0.19 Explicit Finish Line](docs/design/0.0.19-explicit-finish-line.md)
 - [0.0.20 Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md)
@@ -20,13 +28,17 @@ revision、Resume、Provider、Web、更新、插件供应链和 workspace check
 - [0.0.21 Release Notes](docs/releases/0.0.21.md)
 - [0.0.22 Release Notes](docs/releases/0.0.22.md)
 - [0.1.0 Trusted Local Loop（已发布）](docs/design/0.1.0-trusted-local-loop.md)
-- [TODO.md](TODO.md)：本仓库执行层任务清单，按本 ROADMAP 的版本拆解
-- `wukong_web/TODO.md`：官网与托管产品 TODO，位于 sibling web 仓库中
+- [TODO.md](TODO.md)：待讨论项与历史进度参考，不是自动执行清单；优先级、checkbox 或版本标题均不构成实施授权
+- `wukong_web/TODO.md`：官网与托管产品的待讨论项与进度参考，位于 sibling web 仓库中
+
+开工前以本索引确定方向，再核对用户已确认的具体版本文档。候选文档不是开工批准，
+不得自行将 TODO 条目移入版本范围。
 
 更后版本候选（范围以下文“版本发布序列”为准）：
 
-- `0.2.0` Codebase Reduction：需先批准迁移设计，尚无设计文档。
-- `0.3.0` Evidence-gated Collaboration Pilot：只在付费证据满足后研究。
+- `0.1.3` [Delivery Acceptance Pilot](docs/design/0.1.3-delivery-acceptance-pilot.md)：建议目标版本；方向已确认、候选范围待评审，先验证具体客户和第一笔收入。
+- `0.2.0` Codebase Reduction：需先批准迁移设计；按试点交付需要分批推进，完整瘦身不作为首次收入前置条件。
+- `0.3.0` Evidence-gated Collaboration Product：在试点付款、重复使用、续费和交付成本证据成立后评审产品化。
 
 下列商业化或旧版本设计只作历史探索/追溯，不是当前执行真相源：
 
@@ -55,9 +67,29 @@ Wukong Code 不要求用户放弃 Cursor / Claude Code / Codex。0.0.14 的入�
 Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 ```
 
-差异化叙事不再以"又一个 coding agent"为主，而是围绕 Loop Engineering：Wukong 是 AI Coding Loop 的控制层与验证层。
+产品方向是 **AI Coding 的验收与交付层**：连接任务、用户确认的验收条件、执行过程和
+新鲜证据，回答“约定了什么、实际验证了什么、还有什么未覆盖”。Resume 是接入现有
+coding-agent 工作流的入口，Loop 是执行能力，Gate 是验收结论。完整任务管理平台
+属于更后的候选，近期复用 GitHub Issue/PR 与现有 Goal、Done when、Preflight。
 
-当前产品层级只有 Free + BYOK。0.1.x 继续免费；0.2.0 只做代码瘦身；收费只在 0.3.0 Evidence-gated Collaboration Pilot 取得付费证据后研究（原“有界并行 + 显式 Detach + 本机 Supervisor + 可选 PR Gate”的 0.2.0 Pro Pilot 候选已取代）。Custom Specialist、Managed Gate、托管并行、团队治理和 managed credits 不在该候选范围，不能从历史文档推断版本承诺。
+当前产品层级只有 Free + BYOK。现有本地 Loop、Resume、Gate、reviewer 和基础验证
+持续免费，不增加 Wukong Loop/token 配额。先尝试 Founding Team Pilot：为一个具体
+团队接通实际仓库、整理验收条件、陪跑交付，首单按明确范围收费；主动复购后再
+测试月度服务，重复价值成立后评审工作流订阅。PR 状态、报告或较低价格本身都不是已验证的购买理由。
+原 0.2.0 Reliable Autonomy 已取代，不恢复 Parallel/Detach/Supervisor 承诺。
+
+### 开源与私有边界
+
+- 开源可独立运行的本地 CLI：CLI/TUI、Resume、Loop、Gate、Provider 接入，以及必要
+  依赖、测试和文档；保留的本地 server/Web UI 随本地产品发布方案核对，不与官网混淆。
+- `wukong_web` 官网账号、反馈、运营后端与部署配置继续私有；合同、收款和客户记录
+  私有留存。未来团队收费工作流的技术与许可边界由独立设计决定。
+- 开源核心无账号、无官网后端仍能使用 BYOK 跑通；不通过隐藏 Gate 实现、限制免费
+  Loop 或 token 配额制造付费需求。开源准备与服务验证可并行，互不作为首次收入前置。
+- Apache-2.0 为优先评估选项，最终许可证、权属/第三方声明、公开源码与分发对应关系
+  及仓库发布方式另行确认。当前 README/许可证不得提前宣称已经开源。
+
+本次只更新方向文档，不把源码公开或许可证修改自动加入 0.1.2 功能范围。
 
 命令分层参考 loop engineering 的谱系，但 Wukong 不照搬 Claude Code 的命令命名：
 
@@ -78,9 +110,31 @@ Cross-Agent Resume + 本地 AI coding Loop + 清晰 Gate
 - 停止判断不由写代码的 agent 自评。v1 `/goal` verification gate 已实现；0.0.12 将它收敛到统一 Proof gate 和 PASS/NEEDS_WORK/ERROR。
 - 0.0.12 之后的 Wow Moment 是 Loop 自己收敛并给出可信 Gate 结论；独立 verify/scan/proof 只是高级本地诊断能力。
 - 0.0.20 Verification Skill 只能提供 strict qualitative criteria；它不执行 Skill command、不能获得 PASS 决策权，也不能覆盖 frozen deterministic blocker。
-- Hosted Report 与报告上传已经退出产品；GitHub PR Check 只可能在 0.3.0 付费证据满足后研究，team rules 和 audit log 均未排期。
+- Hosted Report 与默认报告上传继续退出产品；0.1.3 候选只研究用户授权的 GitHub PR 验收状态与脱敏摘要，不恢复 Hosted Report。团队规则管理和审计服务留待 0.3.0 产品化评审。
 
-Wukong 当前只提供完整的本地 BYOK Loop。0.1.0 的目标是把它做成可稳定推荐的 Trusted Local Loop；付费只能在验证重复使用、非关联付款和续费证据后，以 0.3.0 另行批准。
+Wukong 当前只提供完整的本地 BYOK Loop。试点开始前需要明确客户、反复发生的任务、
+可交付范围与报价，不要求先有续费；续费是试点之后是否产品化的证据。已发布能力、
+候选功能、收费服务与正式订阅必须分开陈述。
+
+### 收入验证优先级
+
+首批客户假设是小型开发团队或软件外包公司中的技术负责人、交付负责人；先选一个
+技术栈和重复验收场景，访谈与真实任务验证后再定，不能宣称需求已经成立。
+
+| 优先级 | 候选能力 | 要验证的购买理由 | 复用与边界 |
+|---|---|---|---|
+| P0 | 当前 CLI + 人工接入/验收陪跑 | 客户是否愿意为一次具体交付购买服务，并在下一次任务主动复购 | 一个仓库、一次任务、约定工时与交付物；先按次报价，不等待新功能 |
+| P0 | Issue/需求 → 用户确认的验收条件 → 检查映射 | 减少需求遗漏和重复解释 | 复用 Goal、Done when、冻结合同；模型生成 Spec 必须人工确认，不另建任务管理器 |
+| P0 | 最小 GitHub PR Gate | 在现有 PR 流程中减少人工验收与返工 | 复用 Gate；绑定 exact commit 与完整 attempt，缺失、过期或未运行的证据不能 PASS |
+| P0 | 可追溯的交付摘要 | 客户接收交付、成员交接时能核对完成范围 | 展示未覆盖项；本地预览、脱敏和显式发布，不默认上传代码、prompt 或 transcript |
+| P1 | 真实 Demo、首次使用和案例 | 目标客户能看懂、安装并独立跑通 | 复用 0.1.2 上手路径；演示失败、修复、重跑和非 PASS，不用动画代替证据 |
+| P1 | 客户环境中的可重复验收 | 客户在下一次真实交付中主动继续使用 | 首版用显式本地/客户 CI 执行；后台 runner 或自动触发需独立设计 |
+| 后续 | 共享规则、审批、审计和 Billing | 多团队对同一能力持续付款，且支持成本可控 | 归 0.3.0；SSO、SLA、私有部署、云端 Agent 和 managed credits 另行评审 |
+
+先争取一个真实仓库的可交付试点，再累计付款、重复使用与续费。首笔收入不等待
+全部重构、四个收费套餐或完整 SaaS；技术发布和商业成功分别验收。
+表中技术候选由实际陪跑中重复出现的卡点决定实施先后，不要求先做完 PR Gate 或
+自动摘要才可以销售现有能力服务；开源采用不作为已验证购买理由。
 
 ## 当前基线
 
@@ -111,26 +165,32 @@ Wukong 当前只提供完整的本地 BYOK Loop。0.1.0 的目标是把它做成
 |---|---|---|
 | `/schedule` 云端例程 | 未排期 | 历史 Hosted 假设，需未来重新批准；本机定时巡检先用已实现的 cron 工具 |
 | `/ship` 发布 gate | 未实现 | proof + 版本/changelog/dry-run，更靠后的发布前 gate |
-| GitHub PR comment / gate | 0.3.0 候选 | 只在付费证据满足后研究，不能从历史 PR Gate 文档推断已批准 |
-| Team rules / Audit log | 未排期 | 没有已批准的团队或付费产品范围 |
+| GitHub PR comment / gate | 0.1.3 候选、未实现 | 先验证具体团队验收场景；以新的试点文档评审范围，历史 PR Gate 文档不授权实施 |
+| Team rules / Audit log | 0.3.0 产品化候选、未实现 | 试点支持配置仓库规则，不承诺组织权限、审批平台或托管审计服务 |
 | Private runner / self-hosted path | 未实现 | 企业级承诺前必须具备的边界 |
 
 ## 路线图原则
 
 1. 本地 BYOK `loop` 不受账号或月度额度限制；`verify`、`scan`、`proof` 是内部层和高级诊断命令。
 2. 不用人为额度制造升级压力；0.0.18 不新增 Web/D1 telemetry 产品指标后端（2026-10-02 决定：为已发布的 optional CLI telemetry 补上接收端，但只统计安装数（独立 D1 `wukong-telemetry`，只存随机安装 ID、使用日期、版本和平台；不存任何事件内容；忽略账号令牌、不存 IP；最后使用 90 天后删除），不作 cohort 证据）。用户主动 `/feedback` 是显式产品反馈，不是 telemetry。
-3. 用户自带 API Key；0.1.0 不定义付费权益。0.3.0 候选只为协作与可靠交付工作流收费，不对 BYOK token 加价或限制 Free 单 Loop。
-4. 只写恢复与 Gate 必需的本地 durable state，不默认生成报告或云端副本；不上传给 Wukong。模型所需内容只按 run-scoped consent 发送给 exact BYOK provider，本地导出仍由用户显式触发。
+3. 用户自带 API Key；只对明确交付的接入服务和经验证的协作工作流研究收费，不对 BYOK token 加价或限制 Free 单 Loop。首次付款在试点中验证，续费和毛利在产品化前验证。
+4. 当前只写恢复与 Gate 必需的本地 durable state，不默认生成报告或云端副本；不上传给 Wukong。模型所需内容只按 run-scoped consent 发送给 exact BYOK provider。本地导出由用户显式触发；未来 GitHub 摘要只在新版本范围获批、去密预览和 exact-target 授权后发布。
 5. 在 guard、redaction、audit、private runner 真正完成前，不宣传安全合规能力。
 6. 每个 milestone 必须有可见用户路径和验收方式，不能只完成路由或表结构。
 7. 优先做 Loop 自动收敛这一 Wow Moment；独立 `/proof`、`/judge` 不再占据普通用户心智。
 8. 不把 Loop Engineering 第三层（GitHub/CI/Sentry 外部反馈集成）写成已具备能力，集成未完成前只作为叙事。
 9. `/loop`（本机迭代，关机即停）和定时巡检拆开：迭代收敛归 `/loop`，本机巡检用已实现的 cron 工具；云端例程未排期，不能从旧 `/schedule` 设想推断版本承诺。
 10. loop 的停止判断不由写代码的 agent 自评：最终 PASS 由 frozen deterministic verification 与 fresh-context reviewer 共同决定；0.0.20 Verification Skill 只提供受控 qualitative criteria，不能执行命令或单独决定 PASS。
+    `wukong check` 只输出确定性检查结果并明确 reviewer 未运行；检查通过不等于完整 Gate PASS。
 11. 不重复造轮子：`/loop` 执行核复用 `/goal`，`--every` 使用 Goal-owned 可取消等待，proof/judge 复用 verification 引擎；独立定时巡检继续使用 cron scheduler。
 12. Reviewer 的长期改进必须来自可追溯的人工反馈和固定 eval；外层 improver 只生成 policy proposal，不能自动修改 active policy 或 reviewer skill。
+13. 每个新增商业功能必须说明买方、重复任务、当前替代方式和可测交付收益；代码完成、Star、等待名单、免费试用和付款意向不能代替收入。
 
 ## 版本发布序列
+
+2026-10-23：已开始 0.1.2 的 CI 工程维护和仓库开发/审查配置优化；首次成功功能
+仍未开工。本地配置检查与远端 CI/发布验收分开报告；运行时 Gate、许可证与仓库
+可见性不随这批协作配置改变。
 
 ### 发布分级（0.1.1 起生效）
 
@@ -152,7 +212,7 @@ minor/major 或专项任务关闭。发布级别写在版本设计文档头部�
 | 版本 | 主题 | 已发布内容 |
 |---|---|---|
 | `0.0.1` | 首个公开版本（2026-07-02） | 交互式 TUI、`-p`、`verify`/`scan`/`guard`、Provider 管理、local Web 与 server、ACP、session 导出与 Visualizer、macOS/Linux/Windows native binary |
-| `0.0.2` | 品牌统一与 TUI 验证入口（2026-07-03） | 改名 Wukong Code（npm `@wukong.today/code`、发布仓 `mutnpc/wukong-code`）；TUI `/verify`、`/scan`、`/guard` 与 verification agent。0.0.3、0.0.4 未公开发布 |
+| `0.0.2` | 品牌统一与 TUI 验证入口（2026-07-03） | 改名 Wukong Code（npm `@wukong.today/code`、发布仓 `wukong-code/wukong-code`）；TUI `/verify`、`/scan`、`/guard` 与 verification agent。0.0.3、0.0.4 未公开发布 |
 | `0.0.5`–`0.0.7` | 安装与登录链路（2026-07-03） | 六平台 native binary 与 POSIX `install.sh`；TUI 欢迎卡片改为 Wukong Code；登录只保留 OAuth 并指向 `wukong.today` |
 | `0.0.8` | Milestone 0.5 Loop 控制层（2026-07-08） | 交互式 `/loop`、merge proof 与停止条件；当时的 `--every` 是 cron 式节流，0.0.17 改为 Goal 持有的可取消等待 |
 | `0.0.9`–`0.0.10` | Today 与登录修复（2026-07-09） | `wukong today` 本地简报、Loop 驱动的 TUI 状态；device-code 登录改用 `wukong.today` |
@@ -183,11 +243,15 @@ worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继�
 | `0.1.0` | **已发布。** 可控、可恢复、可解释的 Trusted Local Loop：可编辑 Preflight、可信 no-check、调用/token 上限、三态 Gate verdict 与 STOPPED_BY_USER、文件归因、恢复兼容、最小 completeness/freshness、五来源 Resume、六平台安装升级和 public truth；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移 | immutable stable 资产通过 stage-verify-publish-exact、六平台 draft smoke、公开 URL provenance、固定安装、0.0.22 upgrade、恢复与生产版本面验收。25/20/15/7 cohort、首次用户理解和真实来源流程发布后继续收集，不设置固定 14 天等待；三个授权案例只阻断集中宣传 |
 | `0.1.1` | **当前 stable。** Reliability And Trust Boundary 补丁：保留 Plan/Loop/Resume/Provider/Web 修复，并关闭 Vis typecheck、更新与插件供应链、workspace checks 发现、根测试编排和空 workspace 问题；不新增顶层命令、不改变 Gate 语义 | 新增缺陷有负向回归；根 test/typecheck/lint/build 覆盖 local Web、vis-web、vis-server；更新不再静默安装；插件安装 fail closed；发布链路验证六平台 assets、0.1.0 upgrade、fresh install、恢复和公开版本面 |
 | `0.1.2` | [First Success And Surface Simplification](docs/design/0.1.2-first-success-and-surface-simplification.md)（`minor`）：首次 Provider 连通测试、可恢复 Preflight、可审核 run-plan、安装后真实下一步、命令默认面收敛、账号设备管理或导航隐藏、Web 旧 SaaS 应用层归档，以及 Web 依赖与 CI runtime 维护 | 不删除兼容别名；真实安装→Provider→Preflight→Loop Golden Journey；三个授权脱敏案例；所有隐藏入口仍可显式发现和调用；生产旧表只冻结不 DROP；生产依赖无未处置 high，Actions 不再触发 Node.js 20 弃用告警 |
-| `0.2.0` | Codebase Reduction：拆分 GoalMode/TUI/Web 超大协调器，持续清零 boundary baseline，把 Vis、Web/server、ACP、Plugins/MCP、Swarm、Cron、roles 与 Today 收敛为明确的核心或可选扩展边界 | 先批准迁移设计和兼容策略；每次拆分保持 records、Gate、恢复和 SDK contract；旧命令别名至少经过一个 minor deprecation；真实迁移包只有在支持窗口结束后移除 |
-| `0.3.0` | Evidence-gated Collaboration Pilot：GitHub PR Check、共享 versioned policy、摘要审计、团队权限/预算和完整 Billing lifecycle 只作为付费证据满足后的候选 | 先取得真实重复使用、非关联付款和续费证据；Free local BYOK Loop 不受账号或 entitlement 故障影响；未达门槛不建设公开 Checkout |
+| `0.1.3` | [Delivery Acceptance Pilot](docs/design/0.1.3-delivery-acceptance-pilot.md)：建议目标版本，候选范围待评审。围绕一种客户/技术栈，验证需求到验收的映射、最小 GitHub PR Gate、显式分享的交付摘要和 Founding Team 服务试点 | 实施前批准技术设计与服务范围；代码验收覆盖 exact commit、负向证据、恢复兼容和授权发布。商业验证另记非关联付款、重复使用、支持成本与后续续费，不把服务付款当作软件订阅成立 |
+| `0.2.0` | Codebase Reduction：按试点交付需要分批处理超大协调器、boundary baseline 和核心/扩展边界；完整瘦身不阻断首次收入验证 | 先批准迁移设计和兼容策略；每次拆分保持 records、Gate、恢复和 SDK contract；旧命令别名至少经过一个 minor deprecation；真实迁移包只有在支持窗口结束后移除 |
+| `0.3.0` | Evidence-gated Collaboration Product：在试点证据成立后评审共享 versioned policy、审批/摘要审计、团队权限/预算与完整 Billing lifecycle | 先取得归因到重复工作流的非关联付款、重复使用、续费和交付毛利证据；Free local BYOK Loop 不受账号或 entitlement 故障影响。公开 Checkout 还需完整 Billing、权限与隐私验收 |
 
-当前顺序是：0.0.22 → 0.1.0-rc.1 → 0.1.0 → 0.1.1 → 0.1.2 → 0.2.0；
-0.3.0 仍由付费证据门控，不因前序版本完成而自动开工。
+已发布顺序是：0.0.22 → 0.1.0-rc.1 → 0.1.0 → 0.1.1。
+建议下一步是：0.1.2 首次成功 → 0.1.3 交付验收试点 → 经商业证据评审的 0.3.0 产品化。
+客户访谈与现有能力陪跑可在 0.1.2 期间开展，不要求先完成新 binary。0.2.0 作为需
+独立批准的工程轨道，按实际阻碍分批推进，不再是团队试点的必经前置。
+0.1.3 的目标版本号、技术实施范围和报价需在开工前确认；0.3.0 不自动开工。
 0.0.22 是已发布的维护版本，不扩张 0.1.0 范围；若再出现生产 P0，只能另行
 决定紧急补丁。0.1.1 只收维护与可靠性修复，不包含 Cost Visibility；真实用户验证债务（Windows 真实 repo、五来源真实 Resume、cohort）
 继续作为发布后产品证据收集。旧的 2026 年 9–11 月排期
@@ -213,23 +277,35 @@ worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继�
 - Provider 增加显式连通测试；Preflight 可在取消、重启和修复配置后恢复。
 - headless dry-run 可写出不含 secret 的可审核 run-plan，再由用户显式确认执行。
 - 默认 CLI 只突出 `wukong`、`-p`、`provider`、`loop`、`doctor`、`upgrade`、`check`、`web`；TUI 只突出 `/loop`、`/resume`、`/provider`、`/settings`、`/new`、`/help`、`/feedback`、`/exit`。
-- 增加高级 `wukong check` 聚合入口；verify/scan/proof/judge/guard 在本版本只降级为兼容别名，不删除。
+- 增加默认可见的确定性 `wukong check` 聚合入口；明确未运行 reviewer，不输出完整 Gate PASS。verify/scan/proof/judge/guard 在本版本只降级为兼容别名，不删除。
 - 普通 Dashboard 只保留有证据的已连接设备、最后使用时间和单设备 revoke；若这些数据未就绪，则从主导航隐藏 Dashboard/Plan。
 - local Web 在没有使用证据时进入 bugfix-only；若保留，先确定 canonical protocol schema 和生成式 wire types，再继续扩展。
-- 复核 Web 锁定依赖的 `npm audit` 告警并区分 runtime/dev-only；2026-09-09 实测基线为 13 项（1 critical / 7 high / 5 moderate），旧的“1 moderate / 3 high”已过期。兼容升级或移除依赖，不盲目使用 `--force`，生产 high 必须归零或有 owner、期限和缓解措施。
+- 复核 Web 锁定依赖的 `npm audit` 告警并区分 runtime/dev-only；2026-09-09 的 13 项与 2026-10-02 的 15 项均为历史快照，不能当作当前漏洞数。实施前对实际 lockfile 重跑并记录基线；兼容升级或移除依赖，不盲目使用 `--force`，生产 high 必须归零或有 owner、期限和缓解措施。
 - 将 GitHub Actions 升级到 Node 24-compatible runtime，保持 action 完整 SHA 固定和最小权限，并回归 Web test/build、六平台发布与生产面验证。
 
-#### 0.2.0：需要迁移设计的结构精简
+#### 0.1.3：交付验收与收入验证试点（候选范围）
+
+- 选一个小团队客户群、一个技术栈和反复发生的验收任务；买方应参与真实交付决策。
+- 需求/Issue 生成验收草案，用户确认后绑定检查与证据；生成 Spec 不等同完成。
+- 最小 PR Gate 和交付摘要接入一个真实仓库，先用显式启动或客户控制的 CI 验收，不预建通用云端 runner。
+- Founding Team 首单按一个仓库、一次交付任务与约定工时报服务价；主动复购后才测试固定范围月度支持，$199/团队/月只是后续报价实验，不是公开套餐。
+- 30 天实验优先顺序是访谈与报价、现有能力陪跑、补重复卡点、付款与重复使用；续费跨账期继续验证。
+- 具体候选边界、用户路径、商业门槛与未决技术问题见 [0.1.3 Delivery Acceptance Pilot](docs/design/0.1.3-delivery-acceptance-pilot.md)。
+
+#### 0.2.0：按交付需要推进的结构精简
 
 - GoalMode 按 contract/version migration、纯 reducer、Gate audit、budget/usage、workspace attribution 拆分。
 - TUI 与 local Web 按 session、approval、workspace、notice controller 拆分；不制造无领域价值的微型 utility。
 - 逐批删除 225 个 grandfathered 跨模块深层 import，每批都缩小 baseline，禁止一次性重写。
 - Visualizer 不再嵌入每个 CLI build；Today、Web/server、ACP、Plugins/MCP、Swarm、Cron 和 roles 明确为核心依赖或默认关闭的独立扩展。
 - `@wukong/migration-legacy` 只在兼容支持窗口结束、fresh upgrade 样本证明不再需要后移除。
+- 每批说明它解除的试点交付阻碍；整个瘦身版本完成不是首次付款或试点开始的门槛。
 
-#### 0.3.0：只在商业证据成立后研究
+#### 0.3.0：只在试点证据成立后评审产品化
 
-- GitHub PR Check/Status、共享且版本化的 verification policy、只上传摘要的审计记录、团队权限/预算，以及 Checkout→renewal→failure→grace→cancel→recovery。
+- 将多个付费团队反复购买的同一能力产品化；候选为共享且版本化的 verification policy、审批和摘要审计、团队权限/预算，以及 Checkout→renewal→failure→grace→cancel→recovery。
+- 首版只讨论 Free 与一个明确的收费工作流；Pro $12/月、Team $29/人/月和 Enterprise 仅为未验证价格/层级假设，不同步建设四个套餐。
+- SSO/SCIM、SLA、私有部署只在独立需求与交付能力成立后另立范围；不把小团队试点宣传为 enterprise-ready。
 - 不优先做 hosted model、云端 Agent、`/schedule`、managed credits、更多 Dashboard 或公开 Checkout。
 
 `0.0.18` 继续收口现有产品层：命令只做默认可见性分层，不删除底层能力；Kimi Code/Grok Resume 只读本地会话；Feedback API 只接收用户确认的文本；`/login` 由 CLI 发起 device flow，用户在 Wukong 网站用 Google/GitHub 确认，CLI 获取 token 后读取 `200` 模型目录。当前没有 Wukong 模型，目录应诚实返回空数组，登录仍成功且不改变 BYOK 默认模型。最新托管模型与推理 endpoint 留给后续独立决策，在真实 backend、隐私和 E2E 就绪前不能发布 placeholder。0.1.0 不预建 invite-only 付费、Checkout 或 entitlement。
@@ -517,7 +593,7 @@ telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
 
 ## 历史探索：Pro PR Gate + Billing（已被取代）
 
-> 本节保留 2026-07-20 的旧研究内容用于追溯，不代表已排期、已批准或正在实现。它已被 [0.1.0 Trusted Local Loop](docs/design/0.1.0-trusted-local-loop.md) 与 [0.2.0 Pro Reliable Autonomy](docs/design/0.2.0-pro-reliable-autonomy.md) 取代；后者也已取代，PR Check 与 Billing 现归 0.3.0 候选。
+> 本节保留 2026-07-20 的旧研究内容用于追溯，不代表已排期、已批准或正在实现。它已被 [0.1.0 Trusted Local Loop](docs/design/0.1.0-trusted-local-loop.md) 与 [0.2.0 Pro Reliable Autonomy](docs/design/0.2.0-pro-reliable-autonomy.md) 取代；后者也已取代。当前 PR Gate 试点以 0.1.3 候选文档为准，完整 Billing 归 0.3.0 产品化评审。
 
 归档 contract 见 [历史候选：Pro PR Gate 与 Billing](docs/design/historical-pro-pr-gate-billing.md)。
 
@@ -616,11 +692,12 @@ telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
 
 官网必须和真实产品状态保持一致。
 
-近期工作：
+近期工作（按 0.1.2 与 0.1.3 候选分别核对范围）：
 
 - 首页继续聚焦 Resume → Loop → Gate 和 CLI 下载，不把 BYOK 写成本地模型。
+- 用真实任务演示验收条件、失败、修复、重跑和未覆盖项；45 秒是演示长度建议，不是验收成功证明。
 - `/download` 保持短、准、可安装。
-- `/pricing` 只陈述当前 Free + BYOK、无月度 Loop 次数限制和无付费计划；没有新批准与真实 entitlement 前不展示候选价格、Checkout 或 Pro/Team 承诺。
+- `/pricing` 继续陈述已上线 Free + BYOK、无月度 Loop 次数限制；候选价格不作为 live 套餐发布。未来服务试点只有在服务范围、报价、条款和收款路径就绪后才能独立展示，不能包装成已上线 SaaS。
 - 使用真实本地 Loop 输出作为 docs 演示素材，不制作付费能力 placeholder。
 - Dashboard 只围绕真实账号连接状态和已上线能力优化，不恢复 quota、billing 或 Hosted Terminal。
 - changelog 保持和公开 release 同步。
@@ -641,9 +718,11 @@ telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
 - 0.0.22 只做 provider catalog resilience 与 CLI clarity 维护发布；不增加新的执行架构。
 - 0.1.0 规格已收敛：只稳定可控、可恢复、可解释的单 Loop；可编辑 Preflight、可信 no-check、provider-call/token 上限、文件归因、provider outcome、最小 Gate completeness/freshness、兼容恢复、五来源 Resume 与发布 workflow 已完成自动化，RC 六平台公开验收已通过。stable 只保留 exact-source、P0/release-blocking P1 清零、六平台资产/安装/升级/恢复与生产版本面门槛；opt-in cohort 发布后继续，不设固定 14 天等待。完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移。
 - 0.1.1 只做已存在体验的维护与可靠性修复；不包含 Cost Visibility、实时 pricing 查询、价格数据库或 reviewer 成本聚合。
-- 0.2.0 是 Codebase Reduction，需先批准迁移设计；原 Reliable Autonomy 候选已取代，不能继承已取消的 Promote/lease/fencing 设计。收费与公开 Checkout 只在 0.3.0 付费证据满足后研究。
+- 0.1.2 继续完成首次成功路径，当前已批准功能范围不扩张。
+- 0.1.3 候选围绕用户确认的验收条件、exact-commit PR Gate 和显式交付摘要验证团队需求；复用既有执行核，不把确定性检查通过包装成完整 Gate PASS。
+- 0.2.0 是 Codebase Reduction，需先批准迁移设计；按实际交付需要推进，不能继承已取消的 Promote/lease/fencing 设计。正式工作流订阅与公开 Checkout 归 0.3.0 的试点证据及 Billing 完整性门控。
 - 公告与更新通道分离：公告 JSON 由 Web 静态文件维护，失败不阻塞 CLI。
-- `/report` 和 Hosted Report/上传路径保持删除；本地 Gate 结果只在已有显式保存能力下留档。
+- `/report` 和 Hosted Report/上传路径保持删除；当前本地 Gate 结果只在已有显式保存能力下留档。未来脱敏交付摘要与 GitHub 发布是新的候选范围，必须先批准新文档，不复活旧上传路径。
 - 登录命令保持简单：OAuth first，不展示重复 platform choices。
 - 终端 UI 保持紧凑、产品导向。
 
@@ -656,9 +735,28 @@ telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
 - 不把 worktree 写入隔离宣传成完整 sandbox，也不把内部 AgentSwarm 的 128 上限宣传成并行产品能力。
 - 0.1.x 不做 detached 多 Loop；已取代的 0.2.0 Pro 候选也只设想用户显式 Detach 的本机进程，机器关闭后不会继续。
 
-## 收费候选门槛（原 0.2.0 Pro Pilot；收费现归 0.3.0）
+## 收入试点与产品化门槛（2026-10-23）
 
-> 以下门槛原属已取代的 [0.2.0 Pro Reliable Autonomy](docs/design/0.2.0-pro-reliable-autonomy.md) 候选，保留作为版本记录。其中 Parallel/Detach/Supervisor 相关前置条件随该候选失效；用户完成、重复使用、非关联付款、续费与 P0/P1 为 0 的证据门槛仍适用于 0.3.0。不构成当前任务、公开价格或发布日期承诺；0.1.x 仍是 Free 稳定版。
+门槛分四层，解决“先有付款才能研究收费”的循环依赖：
+
+| 阶段 | 进入条件 | 要取得的证据 | 下一步 |
+|---|---|---|---|
+| 客户发现与报价 | 明确一个客户群、重复验收任务和可交付服务 | 真实仓库、当前替代流程、买方、预算与试点范围；意向不计收入 | 优先争取一个明确范围的服务试点 |
+| 0.1.3 首单与复购 | 先确认一个仓库、一次交付任务、支持工时与交付物，按次报价；合同与收款路径获批；新功能另批技术设计 | 目标为 3 个非关联付费团队、每队至少 2 次真实交付；分别记录一次性服务费、复购、退款、人工工时与交付收益 | 同一任务类型发生主动复购后，再测试固定范围月度服务 |
+| 月度验收服务实验 | 同一工作流已有实际复购，月度服务范围和报价已确认 | `$199/团队/月、最多 5 人` 仅为待验证报价；记录月度服务付款与下一实际账期续费，第二笔按次订单不冒充续费 | 观察重复使用和扣除接入/支持等成本后的交付毛利，不包装成已上线软件订阅 |
+| 0.3.0 产品化评审 | 同一工作流被反复购买 | 至少 2 个试点团队进入月度服务后的下一实际账期并续费；重复使用归因明确，交付毛利为正 | 另行批准标准工作流、团队边界与 Billing 设计；服务续费仍不等同软件订阅成立 |
+| 公开自助订阅 | 标准产品可独立使用，技术与商业验收通过 | 多个客户可独立接入；完整 Billing/entitlement、权限、隐私、故障恢复与非误导 Gate 验收；适用的 release-blocking P0/P1 为 0 | 才开放自助 Checkout，具体商业阈值在 0.3.0 设计中确认 |
+
+数字是试点决策目标，不是收入预测或自动开工授权。30 天首轮实验可以验证付款与
+重复使用，续费要跨实际账期观察。默认模型费用由客户 BYOK 承担，接入与支持工时
+必须计入成本；安装统计、Star、下载和等待名单不作为商业成功证据。
+
+完整收费路径为：按次接入/验收陪跑 → 同一工作流复购 → 固定范围月度服务 →
+证据成立后评审团队产品化。开源采用、按次服务、月度服务与软件订阅分开记账和验收。
+
+## 历史收费候选门槛（原 0.2.0 Reliable Autonomy；已取代）
+
+> 本节全部保留为历史记录，不再作为当前试点或 0.3.0 的准入条件。Parallel/Detach/Supervisor 的购买归因、旧人数阈值和 Team 版本分配已由上方新门槛及当前版本表取代，不能用于实施授权、公开价格或发布日期承诺。
 
 开始 0.2.0 invite-only Pilot 前：
 

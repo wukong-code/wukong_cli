@@ -5,14 +5,14 @@
   "description": "TypeScript SDK for the Wukong Agent",
   "license": "MIT",
   "author": "Wukong Team",
-  "homepage": "https://github.com/mutnpc/wukong/tree/main/packages/node-sdk#readme",
+  "homepage": "https://github.com/wukong-code/wukong_cli/tree/main/packages/node-sdk#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mutnpc/wukong.git",
+    "url": "git+https://github.com/wukong-code/wukong_cli.git",
     "directory": "packages/node-sdk"
   },
   "bugs": {
-    "url": "https://github.com/mutnpc/wukong/issues"
+    "url": "https://github.com/wukong-code/wukong_cli/issues"
   },
   "keywords": [
     "wukong",

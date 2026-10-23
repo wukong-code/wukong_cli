@@ -22,13 +22,14 @@ commands, does not change Loop/Gate semantics, and does not include Cost
 Visibility or provider charge estimates. See the
 [v0.1.1 release notes](docs/releases/0.1.1.md).
 
-The next version, 0.1.2 First Success And Surface Simplification, is approved
-but not started; see [ROADMAP.md](ROADMAP.md).
+The next version, 0.1.2 First Success And Surface Simplification, has started
+repository engineering maintenance; its first-success features are not yet
+implemented or released. See [ROADMAP.md](ROADMAP.md).
 
 ### v0.1.0
 
 `v0.1.0` (published 2026-08-08) was the first Trusted Local Loop stable. The immutable
-[`v0.1.0-rc.1`](https://github.com/mutnpc/wukong-code/releases/tag/v0.1.0-rc.1)
+[`v0.1.0-rc.1`](https://github.com/wukong-code/wukong-code/releases/tag/v0.1.0-rc.1)
 prerelease remains available as the candidate evidence snapshot.
 
 The 0.1.0 target is deliberately narrow: one controllable, recoverable, and
@@ -78,7 +79,7 @@ See the [v0.1.0 release notes](docs/releases/0.1.0.md).
 ## Install
 
 Public native downloads are distributed from
-[`mutnpc/wukong-code`](https://github.com/mutnpc/wukong-code).
+[`wukong-code/wukong-code`](https://github.com/wukong-code/wukong-code).
 
 ```sh
 curl -fsSL https://wukong.today/install.sh | sh
@@ -216,7 +217,7 @@ Requirements:
 - pnpm `10.33.0`
 
 ```sh
-git clone https://github.com/mutnpc/wukong_cli.git
+git clone https://github.com/wukong-code/wukong_cli.git
 cd wukong_cli
 pnpm install
 pnpm dev:cli
@@ -247,3 +248,10 @@ deterministic verification.
 ## License
 
 This is proprietary internal software. See [LICENSE](LICENSE).
+
+The roadmap now calls for an independently usable open-source local CLI, while
+the website and operations backend remain private. Source publication and
+license migration have not happened; the current license still applies.
+The service path starts with a scoped, one-off repository onboarding and
+acceptance engagement, followed by monthly support only after repeat purchases.
+See the [open-source and service strategy](docs/business/open-source-and-service-strategy.md).

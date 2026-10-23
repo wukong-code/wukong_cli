@@ -1,7 +1,7 @@
 #!/bin/sh
 set -eu
 
-REPO_OWNER="mutnpc"
+REPO_OWNER="wukong-code"
 REPO_NAME="wukong-code"
 INSTALL_DIR="${WUKONG_INSTALL_DIR:-$HOME/.wukong/bin}"
 BINARY_NAME="wukong"

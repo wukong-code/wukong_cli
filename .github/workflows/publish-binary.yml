@@ -35,6 +35,7 @@ jobs:
   validate-source:
     name: Validate release source and version
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       release_tag: ${{ steps.contract.outputs.release_tag }}
       version: ${{ steps.contract.outputs.version }}
@@ -58,8 +59,8 @@ jobs:
           # This token only mutates/reads the public distribution repository.
           GH_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
           RELEASE_TOKEN: ${{ secrets.WUKONG_PUBLIC_RELEASE_TOKEN }}
-          RELEASE_REPO: mutnpc/wukong-code
-          WEBSITE_REPO: mutnpc/wukong_web
+          RELEASE_REPO: wukong-code/wukong-code
+          WEBSITE_REPO: wukong-code/wukong_web
           DISTRIBUTION_SHA_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.distribution_sha || '' }}
           WEBSITE_SHA_INPUT: ${{ github.event_name == 'workflow_dispatch' && inputs.website_sha || '' }}
         shell: bash
@@ -141,9 +142,10 @@ jobs:
       - validate-source
       - native-artifacts
     runs-on: ubuntu-latest
+    timeout-minutes: 30
     env:
-      RELEASE_REPO: mutnpc/wukong-code
-      WEBSITE_REPO: mutnpc/wukong_web
+      RELEASE_REPO: wukong-code/wukong-code
+      WEBSITE_REPO: wukong-code/wukong_web
       RELEASE_TAG: ${{ needs.validate-source.outputs.release_tag }}
       VERSION: ${{ needs.validate-source.outputs.version }}
       SOURCE_SHA: ${{ needs.validate-source.outputs.source_sha }}
@@ -159,7 +161,7 @@ jobs:
       - name: Checkout public distribution truth
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          repository: mutnpc/wukong-code
+          repository: wukong-code/wukong-code
           ref: ${{ needs.validate-source.outputs.distribution_sha }}
           path: distribution
           token: ${{ github.token }}
@@ -372,6 +374,7 @@ jobs:
       - validate-source
       - finalize-release
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 60
     strategy:
       fail-fast: false
       matrix:
@@ -389,7 +392,7 @@ jobs:
           - os: windows-11-arm
             target: win32-arm64
     env:
-      RELEASE_REPO: mutnpc/wukong-code
+      RELEASE_REPO: wukong-code/wukong-code
       RELEASE_TAG: ${{ needs.validate-source.outputs.release_tag }}
       VERSION: ${{ needs.validate-source.outputs.version }}
       IS_PRERELEASE: ${{ needs.validate-source.outputs.is_prerelease }}
@@ -635,8 +638,9 @@ jobs:
       - validate-source
       - public-native-smoke
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     env:
-      RELEASE_REPO: mutnpc/wukong-code
+      RELEASE_REPO: wukong-code/wukong-code
       RELEASE_TAG: ${{ needs.validate-source.outputs.release_tag }}
       IS_PRERELEASE: ${{ needs.validate-source.outputs.is_prerelease }}
       PREVIOUS_LATEST_TAG: ${{ needs.validate-source.outputs.previous_latest_tag }}

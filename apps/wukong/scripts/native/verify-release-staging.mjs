@@ -96,7 +96,7 @@ for (const target of TARGETS) {
     metadata.schemaVersion !== 1 ||
     metadata.target !== target ||
     metadata.version !== expectedVersion ||
-    metadata.sourceRepository !== 'mutnpc/wukong_cli' ||
+    metadata.sourceRepository !== 'wukong-code/wukong_cli' ||
     metadata.sourceSha !== expectedSourceSha ||
     metadata.profile !== 'release'
   ) {
@@ -136,16 +136,16 @@ const provenance = {
   schemaVersion: 1,
   releaseTag,
   version: expectedVersion,
-  sourceRepository: process.env['GITHUB_REPOSITORY'] ?? 'mutnpc/wukong_cli',
+  sourceRepository: process.env['GITHUB_REPOSITORY'] ?? 'wukong-code/wukong_cli',
   sourceSha: expectedSourceSha,
   workflowRun: process.env['GITHUB_RUN_ID']
     ? `https://github.com/${process.env['GITHUB_REPOSITORY']}/actions/runs/${process.env['GITHUB_RUN_ID']}`
     : undefined,
   generatedAt: new Date().toISOString(),
   publicTruth: distributionSha === undefined ? undefined : {
-    distributionRepository: 'mutnpc/wukong-code',
+    distributionRepository: 'wukong-code/wukong-code',
     distributionSha,
-    websiteRepository: 'mutnpc/wukong_web',
+    websiteRepository: 'wukong-code/wukong_web',
     websiteSha,
   },
   builtInCatalog,

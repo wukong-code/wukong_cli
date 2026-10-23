@@ -540,7 +540,7 @@ command = "vim"
     const transcript = stripSgr(renderTranscript(driver));
     expect(transcript).toContain('Feedback service unavailable.');
     expect(transcript).toContain('Feedback was not submitted. You can use GitHub Issues:');
-    expect(transcript).toContain('https://github.com/mutnpc/wukong-code/issues');
+    expect(transcript).toContain('https://github.com/wukong-code/wukong-code/issues');
   });
 
   it('does not submit feedback when text entry is cancelled', async () => {

@@ -47,6 +47,7 @@ jobs:
   validate-release-contract:
     name: Validate native release inputs
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     outputs:
       source_sha: ${{ steps.source.outputs.source_sha }}
     env:
@@ -104,6 +105,7 @@ jobs:
     needs: validate-release-contract
     if: inputs.release-artifact
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout exact source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -146,6 +148,7 @@ jobs:
           && (needs.prepare-release-catalog.result == 'success'
               || needs.prepare-release-catalog.result == 'skipped') }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 120
     strategy:
       fail-fast: false
       matrix:
@@ -302,6 +305,7 @@ jobs:
       - native-bundle
     if: inputs.release-artifact
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout the exact verified source
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6

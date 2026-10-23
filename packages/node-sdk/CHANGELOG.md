@@ -4,9 +4,9 @@
 
 ### Patch Changes
 
-- [`52826eb`](https://github.com/mutnpc/wukong_cli/commit/52826eb5d7b3007632db88970f849a839e01fe4c) Thanks [@xxg1413](https://github.com/xxg1413)! - Preserve Loop revisions, resumed usage, provider imports, and cross-workspace session boundaries without losing user configuration or importing context into the wrong project.
+- [`52826eb`](https://github.com/wukong-code/wukong_cli/commit/52826eb5d7b3007632db88970f849a839e01fe4c) Thanks [@xxg1413](https://github.com/xxg1413)! - Preserve Loop revisions, resumed usage, provider imports, and cross-workspace session boundaries without losing user configuration or importing context into the wrong project.
 
-- [`6d38888`](https://github.com/mutnpc/wukong_cli/commit/6d388880e508ed2f2936ad0de9385493c3f2226f) Thanks [@xxg1413](https://github.com/xxg1413)! - Keep plan mode active when resuming a session whose legacy plan record has no plan data, instead of silently reporting plan mode as off. Status now reflects the real plan-mode state rather than whether plan content exists.
+- [`6d38888`](https://github.com/wukong-code/wukong_cli/commit/6d388880e508ed2f2936ad0de9385493c3f2226f) Thanks [@xxg1413](https://github.com/xxg1413)! - Keep plan mode active when resuming a session whose legacy plan record has no plan data, instead of silently reporting plan mode as off. Status now reflects the real plan-mode state rather than whether plan content exists.
 
 ## 0.10.2
 

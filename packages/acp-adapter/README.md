@@ -2,7 +2,7 @@
 
 Agent Client Protocol adapter for wukong. Exposes the wukong agent over the [Agent Client Protocol](https://agentclientprotocol.com/) so that ACP-compatible clients (editors, IDEs, custom front-ends) can drive a wukong session over stdio.
 
-Part of the [Wukong](https://github.com/mutnpc/wukong) monorepo.
+Part of the [Wukong](https://github.com/wukong-code/wukong_cli) monorepo.
 
 ## Minimum usage
 

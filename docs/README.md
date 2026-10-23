@@ -2,7 +2,7 @@
 
 > 当前 stable 版本：`0.1.1`
 >
-> 候选证据：[`0.1.0-rc.1`](https://github.com/mutnpc/wukong-code/releases/tag/v0.1.0-rc.1)
+> 候选证据：[`0.1.0-rc.1`](https://github.com/wukong-code/wukong-code/releases/tag/v0.1.0-rc.1)
 > immutable prerelease 已通过六平台验收
 >
 > 当前版本说明：[`0.1.1 Reliability And Trust Boundary`](releases/0.1.1.md)
@@ -16,6 +16,10 @@ attestation 后移。
 
 Wukong Code 的主流程是 **Goal → Write → Check → Review → Fix**。下方“已发布”
 描述当前 `0.1.1` stable；标成“开发 checkout”的命令和行为仍以当前源码为准。
+
+后续方向为本地 CLI 开源、官网后端私有，以及按次接入/验收陪跑 → 主动复购 →
+月度服务 → 证据驱动产品化。当前仍为专有许可，实际开源发布与服务实验未执行；
+详见 [开源与服务收费路线](business/open-source-and-service-strategy.md)。
 
 ## 开始使用
 

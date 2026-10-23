@@ -6,10 +6,13 @@ This is the **Wukong CLI monorepo**: a TypeScript codebase for the local-first t
 
 ## Working Principles
 
+- Follow the approved version scope; TODO entries do not authorize implementation.
+- `CLAUDE.md` imports this file so coding tools share one instruction source. Runtime Writer/Reviewer prompts have their own contracts and are not changed by repository guidance.
 - Think from first principles. Start from real requirements, code facts, and verification results; if the goal is unclear, discuss it with the user first.
 - Treat code, not documentation, as the source of truth. Unless the user explicitly says otherwise, do not read ordinary Markdown just to understand the implementation.
 - Before making code changes, read the relevant code and the most recent constraints, and follow the nearest `AGENTS.md` in the directory tree.
 - Keep changes focused. Do not slip in unrelated refactors along the way.
+- Preserve explicit user settings on configuration or recovery failures. Gate PASS requires the frozen checks and fresh reviewer; follow the relevant runtime contract when changing Loop behavior.
 - When committing, do not add any co-author attribution, and do not reveal the identity of the agent in commit messages, PR descriptions, or any explanatory text.
 
 ## Project Map
@@ -28,7 +31,7 @@ This is the **Wukong CLI monorepo**: a TypeScript codebase for the local-first t
 
 ## Environment Requirements
 
-- **Node.js**: `>=24.15.0` (from the root `package.json` `engines`; `.nvmrc` is `24.15.0`, used by nvm / fnm / mise to pick the minimum recommended version).
+- **Node.js**: `>=24.15.0` is the development minimum from root `package.json`; `.nvmrc` currently pins `26.4.0` for development and CI.
 - **pnpm**: `10.33.0` (from the root `package.json` `packageManager`).
 - `pnpm install` will fail when the Node version is not satisfied, because `.npmrc` sets `engine-strict=true`.
 
@@ -74,6 +77,7 @@ This is the **Wukong CLI monorepo**: a TypeScript codebase for the local-first t
   - `pnpm test:watch -- path/to/file.test.ts` — watch a single file
   - Scope to CLI when useful: add `-- --project cli`
 - Full suite (`pnpm test`) is for PR / merge / CI.
+- For behavior fixes, prefer a regression in the existing test file. Use temporary Wukong state and fixtures; live-provider E2E is opt-in. Clean up test processes and timers.
 - Coverage floors live in root `vitest.config.ts` and apply only when `CI=true` or `WUKONG_COVERAGE_GATE=1`. Local `pnpm test` / `pnpm test:coverage` do not fail on thresholds.
   - CI gate job: `apps/wukong` only (`--project cli`)
   - Reproduce locally: `pnpm test:coverage:cli:gate`

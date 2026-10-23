@@ -761,7 +761,7 @@ describe('runUpdatePreflight', () => {
     const rendered = stdout.join('');
     expect(rendered).toContain('Wukong updated to v0.5.0');
     expect(rendered).toContain(
-      'https://github.com/mutnpc/wukong-code/blob/main/CHANGELOG.md',
+      'https://github.com/wukong-code/wukong-code/blob/main/CHANGELOG.md',
     );
     expect(track).toHaveBeenCalledWith('update_success_notice_shown', expect.objectContaining({
       version: '0.5.0',

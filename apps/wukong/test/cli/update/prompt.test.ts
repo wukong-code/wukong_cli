@@ -34,7 +34,7 @@ describe('install prompt helpers', () => {
 
 describe('promptForInstallChoice', () => {
   it('renders changelog hyperlink in the prompt output', async () => {
-    const CHANGELOG_URL = 'https://github.com/mutnpc/wukong-code/blob/main/CHANGELOG.md';
+    const CHANGELOG_URL = 'https://github.com/wukong-code/wukong-code/blob/main/CHANGELOG.md';
 
     const input = Object.assign(new EventEmitter(), {
       isRaw: false,

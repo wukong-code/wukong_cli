@@ -7,11 +7,11 @@
   "homepage": "https://wukong.today",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mutnpc/wukong_cli.git",
+    "url": "git+https://github.com/wukong-code/wukong_cli.git",
     "directory": "apps/wukong"
   },
   "bugs": {
-    "url": "https://github.com/mutnpc/wukong-code/issues"
+    "url": "https://github.com/wukong-code/wukong-code/issues"
   },
   "keywords": [
     "wukong",

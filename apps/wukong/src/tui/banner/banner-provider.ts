@@ -177,7 +177,7 @@ function isAllowedActionUrl(url: URL): boolean {
   if (url.protocol !== 'https:') return false;
   if (url.hostname === 'wukong.today' || url.hostname.endsWith('.wukong.today')) return true;
   return url.hostname === 'github.com'
-    && (url.pathname === '/mutnpc/wukong-code' || url.pathname.startsWith('/mutnpc/wukong-code/'));
+    && (url.pathname === '/wukong-code/wukong-code' || url.pathname.startsWith('/wukong-code/wukong-code/'));
 }
 
 function parseBannerAction(value: unknown): BannerAction | null {

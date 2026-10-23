@@ -14,7 +14,7 @@ import {
 
 import { type InstallSource, type UpdateTarget } from './types';
 
-export const CHANGELOG_URL = 'https://github.com/mutnpc/wukong-code/blob/main/CHANGELOG.md';
+export const CHANGELOG_URL = 'https://github.com/wukong-code/wukong-code/blob/main/CHANGELOG.md';
 
 export type InstallPromptChoiceValue = 'install' | 'skip';
 

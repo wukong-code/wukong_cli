@@ -35,7 +35,7 @@ auto_install = true
 - 客户端检查 `enabled`、客户端最小/最大版本、开始/结束时间、级别和展示策略。
 - `once` 每个公告 `id` 每台设备展示一次；`cooldown` 按小时频控；`always` 每次启动展示。
 - `info`、`warning`、`critical` 使用不同的 TUI 强调色；操作链接作为可见 HTTPS URL 展示。
-- 远端文案会删除终端控制字符并限制长度。操作链接只允许 `wukong.today` 及其子域名，或 `github.com/mutnpc/wukong-code`。
+- 远端文案会删除终端控制字符并限制长度。操作链接只允许 `wukong.today` 及其子域名，或 `github.com/wukong-code/wukong-code`。
 - 请求不附带 Wukong 登录 token、项目内容或个性化参数。服务端仍会看到普通 HTTPS 请求固有的 IP、User-Agent 等网络元数据。
 - `auto_install` 和 `WUKONG_CODE_NO_AUTO_UPDATE` 只控制更新通道，不关闭公告通道。当前没有单独的公告开关。
 

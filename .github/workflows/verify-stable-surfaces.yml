@@ -8,7 +8,7 @@ on:
         required: true
         type: string
       source_sha:
-        description: 'Exact 40-character commit in mutnpc/wukong_cli'
+        description: 'Exact 40-character commit in wukong-code/wukong_cli'
         required: true
         type: string
       promotion_run_id:
@@ -16,11 +16,11 @@ on:
         required: true
         type: string
       distribution_sha:
-        description: 'Exact deployed stable truth commit in mutnpc/wukong-code'
+        description: 'Exact deployed stable truth commit in wukong-code/wukong-code'
         required: true
         type: string
       website_sha:
-        description: 'Exact deployed stable Website commit in mutnpc/wukong_web'
+        description: 'Exact deployed stable Website commit in wukong-code/wukong_web'
         required: true
         type: string
 
@@ -43,9 +43,9 @@ jobs:
       PROMOTION_RUN_ID: ${{ inputs.promotion_run_id }}
       DISTRIBUTION_SHA: ${{ inputs.distribution_sha }}
       WEBSITE_SHA: ${{ inputs.website_sha }}
-      SOURCE_REPO: mutnpc/wukong_cli
-      RELEASE_REPO: mutnpc/wukong-code
-      WEBSITE_REPO: mutnpc/wukong_web
+      SOURCE_REPO: wukong-code/wukong_cli
+      RELEASE_REPO: wukong-code/wukong-code
+      WEBSITE_REPO: wukong-code/wukong_web
     steps:
       - name: Checkout exact private source tag
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
@@ -102,7 +102,7 @@ jobs:
       - name: Checkout exact deployed distribution truth
         uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
         with:
-          repository: mutnpc/wukong-code
+          repository: wukong-code/wukong-code
           ref: ${{ inputs.distribution_sha }}
           path: distribution
           token: ${{ github.token }}
@@ -132,6 +132,17 @@ jobs:
         run: |
           set -euo pipefail
           VERSION="${RELEASE_TAG#v}"
+          # Published provenance is immutable, including its pre-transfer repository names.
+          PROVENANCE_SOURCE_REPO="$SOURCE_REPO"
+          PROVENANCE_RELEASE_REPO="$RELEASE_REPO"
+          PROVENANCE_WEBSITE_REPO="$WEBSITE_REPO"
+          case "$RELEASE_TAG" in
+            v0.1.0|v0.1.1)
+              PROVENANCE_SOURCE_REPO="mutnpc/wukong_cli"
+              PROVENANCE_RELEASE_REPO="mutnpc/wukong-code"
+              PROVENANCE_WEBSITE_REPO="mutnpc/wukong_web"
+              ;;
+          esac
           RELEASE_JSON="$(gh release view "$RELEASE_TAG" --repo "$RELEASE_REPO" \
             --json tagName,isDraft,isPrerelease,isImmutable,assets)"
           test "$(jq -r .tagName <<<"$RELEASE_JSON")" = "$RELEASE_TAG"
@@ -149,11 +160,11 @@ jobs:
           jq -e \
             --arg releaseTag "$RELEASE_TAG" \
             --arg version "$VERSION" \
-            --arg sourceRepo "$SOURCE_REPO" \
+            --arg sourceRepo "$PROVENANCE_SOURCE_REPO" \
             --arg sourceSha "$SOURCE_SHA" \
-            --arg distributionRepo "$RELEASE_REPO" \
+            --arg distributionRepo "$PROVENANCE_RELEASE_REPO" \
             --arg distributionSha "$DISTRIBUTION_SHA" \
-            --arg websiteRepo "$WEBSITE_REPO" \
+            --arg websiteRepo "$PROVENANCE_WEBSITE_REPO" \
             --arg websiteSha "$WEBSITE_SHA" \
             '.releaseTag == $releaseTag
               and .version == $version

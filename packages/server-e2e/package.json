@@ -7,11 +7,11 @@
   "author": "Wukong Team",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mutnpc/wukong.git",
+    "url": "git+https://github.com/wukong-code/wukong_cli.git",
     "directory": "packages/server-e2e"
   },
   "bugs": {
-    "url": "https://github.com/mutnpc/wukong/issues"
+    "url": "https://github.com/wukong-code/wukong_cli/issues"
   },
   "type": "module",
   "imports": {

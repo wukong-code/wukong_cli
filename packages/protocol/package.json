@@ -7,11 +7,11 @@
   "author": "Wukong Team",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mutnpc/wukong_cli.git",
+    "url": "git+https://github.com/wukong-code/wukong_cli.git",
     "directory": "packages/protocol"
   },
   "bugs": {
-    "url": "https://github.com/mutnpc/wukong_cli/issues"
+    "url": "https://github.com/wukong-code/wukong_cli/issues"
   },
   "type": "module",
   "imports": {

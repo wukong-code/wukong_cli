@@ -15,12 +15,14 @@ significant time.
 - Discuss first for new user-visible behavior, refactors larger than ~100 lines,
   public API or compatibility changes, and bug fixes where the cause or fix is
   still unclear.
+- Follow [AGENTS.md](AGENTS.md) and the nearest directory guide for coding and
+  testing rules. `CLAUDE.md` imports the same instructions.
 
 ## Project Layout
 
 This is the Wukong Code pnpm monorepo. The most relevant entry points are:
 
-- `apps/wukong` — CLI / TUI (`@wukong/wukong`)
+- `apps/wukong` — CLI / TUI (`@wukong.today/code`)
 - `apps/vis` — session replay & debugging visualizer
 - `packages/node-sdk` — internal TypeScript SDK
 - `packages/agent-core`, `kosong`, `kaos`, `oauth`, `telemetry` — internal engine packages
@@ -33,7 +35,7 @@ For the full project map, see [AGENTS.md](AGENTS.md).
 Prerequisites: Node.js >= 24.15.0, pnpm 10.33.0, Git.
 
 ```sh
-git clone https://github.com/mutnpc/wukong_cli.git
+git clone https://github.com/wukong-code/wukong_cli.git
 cd wukong_cli
 pnpm install
 ```
@@ -41,7 +43,8 @@ pnpm install
 Useful scripts:
 
 - `pnpm dev:cli` — run the CLI in dev mode
-- `pnpm test` — run tests (vitest)
+- `pnpm test:related -- <source-path>` — scoped tests for day-to-day changes
+- `pnpm test` — full Vitest suite for CI or changes that justify a full local run
 - `pnpm typecheck` — TypeScript check (builds packages first)
 - `pnpm lint` — oxlint plus the agent-core module boundary guard
 - `pnpm lint:fix` — oxlint with auto-fix
@@ -84,6 +87,12 @@ Use the [PR template](.github/pull_request_template.md) when opening a feature
 pull request. PR titles must follow Conventional Commits; CI runs `pnpm lint`,
 `pnpm typecheck`, and `pnpm test` on every PR. Update internal docs in `docs/`
 when behavior changes.
+
+Describe the before/after behavior and relevant error paths. Record checks run,
+failures and material checks not run against the reviewed revision; distinguish
+local verification from live-provider, platform and release evidence.
+For release workflow changes, preserve exact-source, six-platform, immutable-asset
+and no-rebuild contracts, and keep publishing credentials away from untrusted PR code.
 
 ## Reporting Security Issues
 

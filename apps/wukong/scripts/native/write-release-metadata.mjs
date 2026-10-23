@@ -37,7 +37,7 @@ const metadata = {
   schemaVersion: 1,
   target,
   version: packageJson.version,
-  sourceRepository: process.env['GITHUB_REPOSITORY'] ?? 'mutnpc/wukong_cli',
+  sourceRepository: process.env['GITHUB_REPOSITORY'] ?? 'wukong-code/wukong_cli',
   sourceSha,
   profile,
   macosSignedAndNotarized: macosSignedAndNotarized === 'true',

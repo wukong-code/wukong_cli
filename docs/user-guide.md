@@ -1,7 +1,7 @@
 # Wukong Code 用户指南
 
 > 适用范围: 当前 `wukong_cli`；stable binary 为 `v0.1.1`
-> 更新时间: 2026-09-03
+> 更新时间: 2026-10-23（同步 telemetry 源码契约；stable 功能边界不变）
 > 定位: 给 Wukong 一个目标，通过 Goal → Write → Check → Review → Fix 循环直到没有 blocking finding。
 > 版本边界: `0.1.1` 延续 Free、local-first、BYOK 的 Trusted Local Loop，并增加可靠性与信任边界修复。完整多层 coverage schema、direct-shell content/PATH attestation 和价格数据库已后移。当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
 
@@ -9,8 +9,9 @@
 [0.1.1 Reliability And Trust Boundary](releases/0.1.1.md)。
 
 CLI telemetry 的现有 wire fields、唯一 endpoint、本地 7 天失败队列和 opt-out 方式见
-[CLI telemetry contract](operations/cli-telemetry.md)。远端 retention 当前没有公开、
-可验证的 contract，因此不能用这条数据流证明 0.1.0 cohort。
+[CLI telemetry contract](operations/cli-telemetry.md)。接收端源码只保留随机安装 ID、
+使用日期、版本、平台与架构，并实现 90 天清理；这不是任务完成或重复使用证据，
+不能用于证明 0.1.0 cohort。本次文档同步未重新验证生产部署和定时清理执行。
 
 ## 安装正式版
 
@@ -28,7 +29,7 @@ Windows 请从 [下载页](https://wukong.today/download) 获取对应的 x64 �
 ## 从源码运行
 
 ```bash
-git clone https://github.com/mutnpc/wukong_cli.git
+git clone https://github.com/wukong-code/wukong_cli.git
 cd wukong_cli
 pnpm install
 pnpm dev:cli
@@ -40,7 +41,7 @@ pnpm dev:cli
 pnpm -C apps/wukong run dev:cli-only --help
 ```
 
-公开下载仓库是 `mutnpc/wukong-code`。当前没有公开 Homebrew formula，也不发布旧的
+公开下载仓库是 `wukong-code/wukong-code`。当前没有公开 Homebrew formula，也不发布旧的
 `@wukong.today/wukong-cli` 包名。运行时代码能识别 Homebrew 安装来源，不代表当前
 存在可公开安装或升级的 formula。
 

@@ -267,7 +267,7 @@ describe('native release artifacts', () => {
             schemaVersion: 1,
             target: releaseTarget,
             version: '0.1.0-rc.1',
-            sourceRepository: 'mutnpc/wukong_cli',
+            sourceRepository: 'wukong-code/wukong_cli',
             sourceSha,
             profile: 'release',
             macosSignedAndNotarized: false,

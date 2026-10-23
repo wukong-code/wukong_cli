@@ -4,25 +4,25 @@
 
 ### Patch Changes
 
-- [`6d38888`](https://github.com/mutnpc/wukong_cli/commit/6d388880e508ed2f2936ad0de9385493c3f2226f) Thanks [@xxg1413](https://github.com/xxg1413)! - Support recursive `**/` glob segments (zero or more directories) in path matching, aligning with Python pathlib behavior.
+- [`6d38888`](https://github.com/wukong-code/wukong_cli/commit/6d388880e508ed2f2936ad0de9385493c3f2226f) Thanks [@xxg1413](https://github.com/xxg1413)! - Support recursive `**/` glob segments (zero or more directories) in path matching, aligning with Python pathlib behavior.
 
-- [`52826eb`](https://github.com/mutnpc/wukong_cli/commit/52826eb5d7b3007632db88970f849a839e01fe4c) Thanks [@xxg1413](https://github.com/xxg1413)! - Preserve Loop revisions, resumed usage, provider imports, and cross-workspace session boundaries without losing user configuration or importing context into the wrong project.
+- [`52826eb`](https://github.com/wukong-code/wukong_cli/commit/52826eb5d7b3007632db88970f849a839e01fe4c) Thanks [@xxg1413](https://github.com/xxg1413)! - Preserve Loop revisions, resumed usage, provider imports, and cross-workspace session boundaries without losing user configuration or importing context into the wrong project.
 
-- [`6d38888`](https://github.com/mutnpc/wukong_cli/commit/6d388880e508ed2f2936ad0de9385493c3f2226f) Thanks [@xxg1413](https://github.com/xxg1413)! - Keep plan mode active when resuming a session whose legacy plan record has no plan data, instead of silently reporting plan mode as off. Status now reflects the real plan-mode state rather than whether plan content exists.
+- [`6d38888`](https://github.com/wukong-code/wukong_cli/commit/6d388880e508ed2f2936ad0de9385493c3f2226f) Thanks [@xxg1413](https://github.com/xxg1413)! - Keep plan mode active when resuming a session whose legacy plan record has no plan data, instead of silently reporting plan mode as off. Status now reflects the real plan-mode state rather than whether plan content exists.
 
-- [`52826eb`](https://github.com/mutnpc/wukong_cli/commit/52826eb5d7b3007632db88970f849a839e01fe4c) Thanks [@xxg1413](https://github.com/xxg1413)! - Validate native upgrades from the actual previous stable release instead of a hard-coded historical version.
+- [`52826eb`](https://github.com/wukong-code/wukong_cli/commit/52826eb5d7b3007632db88970f849a839e01fe4c) Thanks [@xxg1413](https://github.com/xxg1413)! - Validate native upgrades from the actual previous stable release instead of a hard-coded historical version.
 
 - Fail closed on automatic updates, plugin downloads, archive extraction, and workspace check discovery while preserving atomic rollback and explainable provenance.
 
-- [`52826eb`](https://github.com/mutnpc/wukong_cli/commit/52826eb5d7b3007632db88970f849a839e01fe4c) Thanks [@xxg1413](https://github.com/xxg1413)! - Add an authenticated local web stub for REST, WebSocket, workspace, and first-message testing. Run `pnpm -C apps/wukong-web run dev:stub` to start it.
+- [`52826eb`](https://github.com/wukong-code/wukong_cli/commit/52826eb5d7b3007632db88970f849a839e01fe4c) Thanks [@xxg1413](https://github.com/xxg1413)! - Add an authenticated local web stub for REST, WebSocket, workspace, and first-message testing. Run `pnpm -C apps/wukong-web run dev:stub` to start it.
 
-- [`52826eb`](https://github.com/mutnpc/wukong_cli/commit/52826eb5d7b3007632db88970f849a839e01fe4c) Thanks [@xxg1413](https://github.com/xxg1413)! - Keep the bundled web client reliable across reconnects, permission changes, keyboard navigation, workspace updates, dialogs, and side chats.
+- [`52826eb`](https://github.com/wukong-code/wukong_cli/commit/52826eb5d7b3007632db88970f849a839e01fe4c) Thanks [@xxg1413](https://github.com/xxg1413)! - Keep the bundled web client reliable across reconnects, permission changes, keyboard navigation, workspace updates, dialogs, and side chats.
 
 ## 0.1.0
 
 ### Minor Changes
 
-- [`9ff7b42`](https://github.com/mutnpc/wukong_cli/commit/9ff7b4216debc6b1692dac2c94aeeb09493a4adc) Thanks [@xxg1413](https://github.com/xxg1413)! - Add a controllable Trusted Local Loop with editable preflight, enforceable usage limits, evidence-complete Gate outcomes, file attribution, and safe recovery. Run `wukong loop "<goal>" --dry-run` to review the contract.
+- [`9ff7b42`](https://github.com/wukong-code/wukong_cli/commit/9ff7b4216debc6b1692dac2c94aeeb09493a4adc) Thanks [@xxg1413](https://github.com/xxg1413)! - Add a controllable Trusted Local Loop with editable preflight, enforceable usage limits, evidence-complete Gate outcomes, file attribution, and safe recovery. Run `wukong loop "<goal>" --dry-run` to review the contract.
 
 ## 0.1.0-rc.1
 
@@ -34,9 +34,9 @@
 
 ### Patch Changes
 
-- [`89e09c5`](https://github.com/mutnpc/wukong_cli/commit/89e09c58da274cf899c263faf99dea3594e3d3b7) Thanks [@xxg1413](https://github.com/xxg1413)! - Honor `--skills-dir` in interactive sessions and clarify headless permission, resume, and merge-gate help.
+- [`89e09c5`](https://github.com/wukong-code/wukong_cli/commit/89e09c58da274cf899c263faf99dea3594e3d3b7) Thanks [@xxg1413](https://github.com/xxg1413)! - Honor `--skills-dir` in interactive sessions and clarify headless permission, resume, and merge-gate help.
 
-- [`9614b18`](https://github.com/mutnpc/wukong_cli/commit/9614b18e6472e1d22c5e759d031f159fe719d545) Thanks [@xxg1413](https://github.com/xxg1413)! - Keep provider setup available when remote catalogs fail with fallback catalogs for common providers, including GLM and Kimi.
+- [`9614b18`](https://github.com/wukong-code/wukong_cli/commit/9614b18e6472e1d22c5e759d031f159fe719d545) Thanks [@xxg1413](https://github.com/xxg1413)! - Keep provider setup available when remote catalogs fail with fallback catalogs for common providers, including GLM and Kimi.
 
 ## 0.0.21
 
@@ -54,9 +54,9 @@
 
 ### Patch Changes
 
-- [`44d06f0`](https://github.com/mutnpc/wukong_cli/commit/44d06f05e588b63f6a12bf538bdcd0bf9d11c480) Thanks [@xxg1413](https://github.com/xxg1413)! - Add strict local Verification Criteria discovery, explicit exact-digest selection, V3 contracts, and per-run consent for bounded reviewer input. Project, personal, monorepo package, explicitly trusted local, and read-only built-in reference sources are supported without executing Skill commands. All new V2/V3 reviewers use the same secret-filtering broker and durable Gate join. Use `/loop` to review criteria, source trust, input limits, cost, and the exact BYOK destination before starting.
+- [`44d06f0`](https://github.com/wukong-code/wukong_cli/commit/44d06f05e588b63f6a12bf538bdcd0bf9d11c480) Thanks [@xxg1413](https://github.com/xxg1413)! - Add strict local Verification Criteria discovery, explicit exact-digest selection, V3 contracts, and per-run consent for bounded reviewer input. Project, personal, monorepo package, explicitly trusted local, and read-only built-in reference sources are supported without executing Skill commands. All new V2/V3 reviewers use the same secret-filtering broker and durable Gate join. Use `/loop` to review criteria, source trust, input limits, cost, and the exact BYOK destination before starting.
 
-- [`ad67209`](https://github.com/mutnpc/wukong_cli/commit/ad67209c242e99deb0668d0eee6d809cc6d9c1e0) Thanks [@xxg1413](https://github.com/xxg1413)! - Give the Loop fresh reviewer a 24-step, five-minute Gate budget, reserve time
+- [`ad67209`](https://github.com/wukong-code/wukong_cli/commit/ad67209c242e99deb0668d0eee6d809cc6d9c1e0) Thanks [@xxg1413](https://github.com/xxg1413)! - Give the Loop fresh reviewer a 24-step, five-minute Gate budget, reserve time
   for its structured verdict, and show reviewer-specific recovery guidance when
   that dedicated budget is exhausted.
 

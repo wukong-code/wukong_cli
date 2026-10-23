@@ -4,7 +4,7 @@
 
 ### Patch Changes
 
-- [`6d38888`](https://github.com/mutnpc/wukong_cli/commit/6d388880e508ed2f2936ad0de9385493c3f2226f) Thanks [@xxg1413](https://github.com/xxg1413)! - Support recursive `**/` glob segments (zero or more directories) in path matching, aligning with Python pathlib behavior.
+- [`6d38888`](https://github.com/wukong-code/wukong_cli/commit/6d388880e508ed2f2936ad0de9385493c3f2226f) Thanks [@xxg1413](https://github.com/xxg1413)! - Support recursive `**/` glob segments (zero or more directories) in path matching, aligning with Python pathlib behavior.
 
 ## 0.1.7
 

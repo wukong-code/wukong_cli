@@ -1,8 +1,15 @@
 # Wukong CLI - TODO
 
-> 定位: 本文件是 `wukong_cli` 的执行层任务清单。方向与验收以 [ROADMAP.md](ROADMAP.md) 为准；`0.1.1` 已于 2026-09-03 正式发布，也是 `0.1.2` 的直接升级基线。真实用户 cohort 是发布后产品学习，不设置固定等待门槛；不包含隔离 worktree / Safe Promote。0.2.0 尚未批准开工。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究，不是当前实现依据。本文件只维护"现在做什么、做到哪了"，不重复定义方案。
+> 定位: 本文件是待讨论任务暂存池与历史进度参考，不是可自动执行的任务列表。方向以 [ROADMAP.md](ROADMAP.md) 为准；只有用户讨论确认、明确纳入具体版本文档的任务才可实施，checkbox、优先级与版本标题不授权开工。不得自行将本文件条目移入版本。`0.1.1` 是当前 stable，`0.1.2` 保留原已批准范围；新增 0.1.3 团队验收试点候选与 0.2.0/0.3.0 都需各自设计与范围批准。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
+
+## 本地 CLI 开源与服务收费方向（文档已确认，实际发布/实验未执行）
+
+见 [开源与服务收费路线](docs/business/open-source-and-service-strategy.md)：本地 CLI 及
+必要依赖、测试和文档开源，官网后端保持私有；先按次收取仓库接入/验收陪跑费，
+有主动复购后再验证固定范围月度服务。开源发布方案、最终许可证、服务合同与
+收款路径仍需确认，不新增自动执行 checkbox，也不扩张 0.1.2 已批准范围。
 
 ## ✅ 0.1.1 — Reliability And Trust Boundary（已发布）
 
@@ -30,7 +37,7 @@
 - [x] 重写 Web `CLAUDE.md`，修正公开 Loop 终态文案，并为官网与 local Web 固化浏览器 Golden Journey（2026-09-03；见 `docs/test/0.1.1-browser-golden-journeys.md`）
 - [x] 六平台 0.1.1 assets、0.1.0 → 0.1.1 升级与公开安装验收（2026-09-03；publish `33719487397`、promotion `33720931233`、production surfaces `33720991004`）
 
-## 📋 0.1.2 — First Success And Surface Simplification（未开工）
+## 📋 0.1.2 — First Success And Surface Simplification（工程维护进行中；功能未开工）
 
 > 方案、发布级别（`minor`）、兼容策略与完成定义见
 > [0.1.2 First Success And Surface Simplification](docs/design/0.1.2-first-success-and-surface-simplification.md)。
@@ -49,7 +56,7 @@
 - [ ] TUI core 从 13 个收敛到 8 个：把 `/permission`、`/model`、`/transform`、`/login`、`/logout` 降为 `advanced`
 - [ ] CLI 引入与 TUI 对齐的三级 tier；`wukong --help` 只列 `wukong`、`-p`、`provider`、`loop`、`doctor`、`upgrade`、`check`、`web`，并指向 `wukong help --all`
 - [ ] `export`、`review`、`roles`、`today`、`guard`、`judge`、`login`、`logout` 降为 advanced（保持可执行、可发现，不加 `hidden: true`）
-- [ ] 新增确定性聚合入口 `wukong check`；`verify`/`scan`/`proof`/`judge`/`guard` 只降级为兼容别名，行为不变
+- [ ] 新增确定性聚合入口 `wukong check`，明确 `reviewer: not_run`，检查通过不输出完整 Gate PASS；`verify`/`scan`/`proof`/`judge`/`guard` 只降级为兼容别名，行为不变
 - [ ] 命令契约回归：core 集合精确匹配、advanced/hidden 仍可执行、兼容别名退出码与输出同 0.1.1
 
 ### P0：账号与 Web 面（跨仓，见 `wukong_web/TODO.md`）
@@ -59,10 +66,10 @@
 
 ### P0：工程维护
 
-- [ ] 重记网站 `npm audit` 基线：2026-10-02 实测 15 项（1 critical `next` / 9 high / 5 moderate；2026-09-09 为 13 项），旧的“1 moderate / 3 high”已过期；按生产运行时、构建工具链、构建期传递、仅测试四类分别处置，禁止无审查 `--force`，生产 high 归零或记 owner/期限/缓解措施
-- [ ] 收口 `.github/workflows/ci.yml` 中 8 处 `actions/checkout@11d5960…`（v4/Node 20）到 v6；其余工作流已是 v6/v7。保持完整 SHA 固定与最小权限，回归 Web test/build、六平台发布与生产面验证
+- [ ] 按实际 lockfile 重记网站 `npm audit` 基线；2026-10-02 的 15 项（1 critical / 9 high / 5 moderate）与 2026-09-09 的 13 项都是历史记录，不是当前漏洞数。按生产运行时、构建工具链、构建期传递、仅测试四类处置，禁止无审查 `--force`，生产 high 归零或记 owner/期限/缓解措施
+- [ ] CI 工程维护完整验收：2026-10-23 本地已将 8 处 checkout 统一到 SHA-pinned v6，使用锁定 TypeScript，加入 PR 并发取消、main 保留和 CI/CD 时限，并统一仓库开发/审查提示词；工作流检查、20 条发布契约测试及类型检查通过。远端 CI、六平台发布与生产面仍待验收，不勾选整项
 
-- [ ] 已发布 optional telemetry 的接收端上线（2026-10-02 决定：为已发布的 optional CLI telemetry 补上接收端，但只统计安装数（独立 D1 `wukong-telemetry`，只存随机安装 ID、使用日期、版本和平台；不存任何事件内容；忽略账号令牌、不存 IP；最后使用 90 天后删除），不作 cohort 证据；实现位于 `wukong_web/workers/telemetry`，CLI 端无需改动）
+- [ ] 核验已实现的 optional telemetry 接收端生产部署、独立 D1 migration 和每日 90 天清理回执；源码位于 `wukong_web/workers/telemetry`，只保留安装 ID、使用日期、版本、平台与架构，不存事件内容、不关联账号或 IP，不作 cohort 证据（2026-10-23 只读复核源码，未复验生产，不标记完成）
 - [ ] CLI 统计只发最小使用信号：客户端不再上传事件名、工具、命令、时长和属性，只发随机安装 ID、版本和平台（服务端已只保留这些；旧版本仍会发送完整事件，由服务端收到即丢弃）
 
 ### 发布门槛（`minor`）
@@ -72,7 +79,18 @@
 - [ ] 六平台资产 + checksum + provenance + fresh install + 0.1.1 → 0.1.2 upgrade smoke
 - [ ] 中英文发布面同步：CHANGELOG、官网版本面、README、user-guide、docs 侧边栏（2026-10-02 核对：docs nav/sidebar 已含 0.1.1 与 0.1.2 Plan，0.1.2 发布时再加 0.1.2 条目）
 
+## 0.1.3 — Delivery Acceptance Pilot（候选索引，未开工）
+
+2026-10-23：整合收入验证路线。具体候选、服务边界和分阶段门槛见
+[0.1.3 Delivery Acceptance Pilot](docs/design/0.1.3-delivery-acceptance-pilot.md)。
+本节只链接已讨论的路线方向，不新增执行 checkbox；客户、目标版本、技术设计与
+合同需要确认后才可开工或收款。
+收费先从一个仓库、一次交付任务的按次服务开始，复购后再测试月度服务；第二笔
+按次订单不计月度续费。源码开源与服务验证可并行，不互相作为启动前置。
+
 ## 📋 0.2.0 — Codebase Reduction（需设计批准）
+
+以下保留为候选；按试点交付需要分批评审，完整瘦身不作为首次收入前置条件。
 
 - [ ] 分批拆 GoalMode、WukongTUI、useWukongWebClient 和 TUI goal command 的领域职责
 - [ ] 每批减少 agent-core boundary baseline，禁止新增或一次性重写 225 个既有豁免
@@ -80,9 +98,9 @@
 - [ ] local Web 若继续维护，从 canonical protocol schema 生成 wire types；否则进入 bugfix-only
 - [ ] 支持窗口和真实 upgrade 证据满足后，再移除 `@wukong/migration-legacy`
 
-## 🔒 0.3.0 — Evidence-gated Collaboration Pilot（未批准）
+## 🔒 0.3.0 — Evidence-gated Collaboration Product（未批准）
 
-- [ ] 只有重复使用、非关联付款和续费证据满足后，才批准 PR Check、shared policy、摘要审计、团队权限/预算和 Billing lifecycle
+- [ ] 0.1.3 试点取得非关联付款、重复使用、续费与交付毛利证据后，才另行评审共享 policy、审批/摘要审计、团队权限/预算和完整 Billing lifecycle；最小 PR Gate 是 0.1.3 候选，不等待先取得续费
 - [ ] 保持 Free local BYOK Loop 与账号、entitlement 和 Web 故障完全解耦
 - [ ] 不优先做 hosted model、云端 Agent、`/schedule`、managed credits、更多 Dashboard 或公开 Checkout
 
@@ -347,8 +365,8 @@
 
 ## 🧭 已取代：原 0.2.0 Reliable Autonomy 候选（历史记录）
 
-> 2026-10-02 起，0.2.0 是 Codebase Reduction（见文件顶部），收费与协作候选归
-> 0.3.0（见文件顶部）。本节保留原 0.2.0 Reliable Autonomy 候选的版本记录：隔离
+> 2026-10-23：0.2.0 是按交付阻碍分批评审的 Codebase Reduction；0.1.3 是服务与
+> 最小 PR Gate 试点候选，0.3.0 是试点证据后的产品化评审。本节只保留原候选记录：隔离
 > worktree / Safe Promote 实验已经取消；依赖 Promote/lease/fencing 的旧 0.2.0
 > 文档只作历史研究，不能直接进入 checkbox 队列或对外承诺。
 
@@ -847,4 +865,4 @@
 
 ---
 
-**最后更新**: 2026-10-02（stable `0.1.1` 已于 2026-09-03 发布；0.1.2 已批准未开工；0.2.0/0.3.0 口径与 ROADMAP 统一）。此前：2026-08-08（stable `0.1.0` 已发布并完成 immutable assets、六平台 draft smoke、公开安装与生产版本面验收；真实 Windows repo、五来源真实 Resume、首次用户与 cohort 继续作为发布后验证，不设固定 14 天发布门槛）
+**最后更新**: 2026-10-23（整合收入验证路线，明确 check 与完整 Gate 的区别，刷新历史基线与候选索引；TODO 不构成执行授权，stable 仍为 `0.1.1`，0.1.2 原已批准范围保留）。此前：2026-10-02、2026-08-08；stable `0.1.0` 已发布，真实 Windows repo、五来源真实 Resume、首次用户与 cohort 继续作为发布后验证，不设固定 14 天发布门槛。

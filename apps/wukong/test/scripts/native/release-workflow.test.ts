@@ -1,3 +1,4 @@
+import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
@@ -23,6 +24,34 @@ function checkoutStepBlocks(source: string): string[] {
 }
 
 describe('native release workflow contract', () => {
+  it.each(['v0.1.0', 'v0.1.1', 'v0.1.2', 'v0.2.0'])(
+    'preserves immutable pre-transfer provenance only for published releases: %s',
+    async (tag) => {
+      const source = await workflow('.github/workflows/verify-stable-surfaces.yml');
+      const step = source.slice(source.indexOf('- name: Revalidate immutable latest release and provenance'));
+      const start = step.indexOf('          PROVENANCE_SOURCE_REPO=');
+      const end = step.indexOf('          RELEASE_JSON=');
+      expect(start).toBeGreaterThan(0);
+      expect(end).toBeGreaterThan(start);
+      const script = step.slice(start, end).replace(/^ {10}/gm, '')
+        + '\nprintf "%s\\n" "$PROVENANCE_SOURCE_REPO" "$PROVENANCE_RELEASE_REPO" "$PROVENANCE_WEBSITE_REPO"';
+      const output = execFileSync('bash', ['-eu', '-c', script], {
+        encoding: 'utf8',
+        env: {
+          ...process.env,
+          RELEASE_TAG: tag,
+          SOURCE_REPO: 'wukong-code/wukong_cli',
+          RELEASE_REPO: 'wukong-code/wukong-code',
+          WEBSITE_REPO: 'wukong-code/wukong_web',
+        },
+      });
+      const owner = ['v0.1.0', 'v0.1.1'].includes(tag) ? 'mutnpc' : 'wukong-code';
+      expect(output.trim().split('\n')).toEqual(
+        ['wukong_cli', 'wukong-code', 'wukong_web'].map((name) => `${owner}/${name}`),
+      );
+    },
+  );
+
   it('disables persisted checkout credentials in every workflow checkout', async () => {
     for (const path of workflowPaths) {
       const blocks = checkoutStepBlocks(await workflow(path));
@@ -219,8 +248,8 @@ describe('native release workflow contract', () => {
     expect(source).toContain(
       'ref: ${{ needs.validate-source.outputs.distribution_sha }}',
     );
-    expect(source).not.toContain('repository: mutnpc/wukong-code\n          ref: main');
-    expect(source).not.toContain('repository: mutnpc/wukong_web');
+    expect(source).not.toContain('repository: wukong-code/wukong-code\n          ref: main');
+    expect(source).not.toContain('repository: wukong-code/wukong_web');
   });
 
   it('rejects stable commits already on production main before creating a draft', async () => {

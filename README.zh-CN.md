@@ -18,13 +18,14 @@ Wukong Code 是围绕一个主流程构建的终端 AI coding agent：
 检查发现，以及 local Web 修复。不新增顶层命令，不改变 Loop/Gate 语义，也不包含
 Cost Visibility 或 provider 费用估算。完整说明见 [v0.1.1 发布说明](docs/releases/0.1.1.md)。
 
-下一版本 0.1.2 First Success And Surface Simplification 范围已批准、尚未开工，见
+下一版本 0.1.2 First Success And Surface Simplification 已开始仓库工程维护，
+首次成功功能仍未开工、尚未发布，见
 [ROADMAP.md](ROADMAP.md)。
 
 ### v0.1.0
 
 `v0.1.0`（2026-08-08 发布）是第一个 Trusted Local Loop stable。immutable
-[`v0.1.0-rc.1`](https://github.com/mutnpc/wukong-code/releases/tag/v0.1.0-rc.1)
+[`v0.1.0-rc.1`](https://github.com/wukong-code/wukong-code/releases/tag/v0.1.0-rc.1)
 继续保留为候选证据快照。
 
 0.1.0 已收敛为一条可控、可恢复、可解释的本地单 Loop。当前候选已实现可执行的
@@ -68,7 +69,7 @@ session 与权限控制：
 ## 安装
 
 公开原生安装包由
-[`mutnpc/wukong-code`](https://github.com/mutnpc/wukong-code) 分发。
+[`wukong-code/wukong-code`](https://github.com/wukong-code/wukong-code) 分发。
 
 ```sh
 curl -fsSL https://wukong.today/install.sh | sh
@@ -192,7 +193,7 @@ provider。
 - pnpm `10.33.0`
 
 ```sh
-git clone https://github.com/mutnpc/wukong_cli.git
+git clone https://github.com/wukong-code/wukong_cli.git
 cd wukong_cli
 pnpm install
 pnpm dev:cli
@@ -222,3 +223,8 @@ Wukong Code 是专注 AI coding Loop 控制与确定性验证的独立产品。
 ## 许可证
 
 本软件为专有内部软件，详见 [LICENSE](LICENSE)。
+
+路线已确认：开源可独立使用的本地 CLI，官网与运营后端保持私有。实际源码公开与
+许可证迁移尚未执行，当前许可证继续适用。收费先从按次仓库接入/验收陪跑开始，
+有主动复购后再验证固定范围月度服务，详见
+[开源与服务收费路线](docs/business/open-source-and-service-strategy.md)。

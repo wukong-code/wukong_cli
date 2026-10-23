@@ -5,14 +5,14 @@
   "description": "Execution environment abstraction for AI agent applications",
   "license": "MIT",
   "author": "Wukong Team",
-  "homepage": "https://github.com/mutnpc/wukong/tree/main/packages/kaos#readme",
+  "homepage": "https://github.com/wukong-code/wukong_cli/tree/main/packages/kaos#readme",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/mutnpc/wukong.git",
+    "url": "git+https://github.com/wukong-code/wukong_cli.git",
     "directory": "packages/kaos"
   },
   "bugs": {
-    "url": "https://github.com/mutnpc/wukong/issues"
+    "url": "https://github.com/wukong-code/wukong_cli/issues"
   },
   "keywords": [
     "wukong",

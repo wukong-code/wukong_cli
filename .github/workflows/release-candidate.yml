@@ -13,6 +13,9 @@ concurrency:
   group: native-release-candidate-${{ inputs.source_ref }}
   cancel-in-progress: true
 
+permissions:
+  contents: read
+
 jobs:
   native-artifacts:
     name: Build native release candidate
