@@ -1,101 +1,49 @@
 # Wukong Code
 
-[Documentation](docs/README.md) · [中文](README.zh-CN.md) · [Download](https://wukong.today/download)
+> **Your AI coding agent says it's done. Wukong makes it prove it.**
 
-> **Give Wukong a goal. It loops until the change is ready.**
+**Free · MIT · Bring your own API key · macOS / Linux / Windows**
 
-Wukong Code is a terminal AI coding agent built around one workflow:
-**Goal → Write → Check → Review → Fix**.
-
-Give `/loop` a goal. Wukong works on the change, runs the repository's real
-checks, reviews the result from a fresh read-only context, and fixes blocking
-findings against the same goal.
-
-## Current release: v0.1.2
-
-`v0.1.2` (published 2026-10-24) is the stable binary selected by the default
-installer. It is the open-source edition on top of 0.1.1: the repository is
-public under the MIT license, npm releases carry public provenance, and every
-embedded feedback, changelog, installer, and announcement link now points at
-the wukong-code organization and wukong.today. It adds no top-level commands
-and does not change Loop/Gate semantics. See the
-[v0.1.2 release notes](docs/releases/0.1.2.md).
-
-The next version, 0.1.2 First Success And Surface Simplification, has started
-repository engineering maintenance; its first-success features are not yet
-implemented or released. See [ROADMAP.md](ROADMAP.md).
-
-### v0.1.0
-
-`v0.1.0` (published 2026-08-08) was the first Trusted Local Loop stable. The immutable
-[`v0.1.0-rc.1`](https://github.com/wukong-code/wukong-code/releases/tag/v0.1.0-rc.1)
-prerelease remains available as the candidate evidence snapshot.
-
-The 0.1.0 target is deliberately narrow: one controllable, recoverable, and
-explainable local Loop. The development checkout now implements enforceable
-provider-call/token limits, a versioned no-check decision,
-pre-existing-versus-Wukong file attribution, terminal usage/next actions, and
-automated compatibility/release smoke coverage. Its six-platform candidate
-build, public assets, pinned fresh installs, `0.0.22` upgrades, state recovery,
-checksums, provenance, and production release-surface verification have passed
-for the published stable. The opt-in cohort and real-user flows continue after
-release as product-learning evidence; there is no fixed 14-day waiting gate.
-Full multi-layer coverage schemas and direct-shell content/PATH attestation
-remain deferred rather than release blockers. Wukong does not maintain a
-provider pricing database or estimate provider charges.
-
-Version `0.0.22` keeps provider setup usable when the primary remote catalog is down and
-clarifies the CLI's session and permission controls:
-
-- provider discovery falls back from the maintained catalog to models.dev when
-  the primary service is unavailable;
-- the source includes a final offline snapshot path, but the published 0.0.22
-  native archives omitted that snapshot because of a release-profile defect;
-- `-r, --resume` is the canonical CLI session-resume option;
-- help distinguishes guarded Auto, YOLO, Plan, headless `--yes`, and added
-  workspace access.
-
-See the [v0.1.0 release notes](docs/releases/0.1.0.md).
-
-## What Wukong does
-
-- **Loop until ready** — keep one goal and Finish Line fixed across write,
-  check, review, and fix iterations.
-- **Run real checks** — use the repository's available tests, type checks,
-  lint, build, and project review policy.
-- **Review complete evidence** — pass bounded, secret-filtered evidence to an
-  independent reviewer without losing distinct findings.
-- **Reuse verification criteria** — explicitly select ordered qualitative
-  criteria discovered from trusted local Skills.
-- **Resume unfinished work** — continue local Wukong, Codex, Claude Code,
-  Cursor, Kimi Code, or Grok sessions as read-only imported context.
-- **Return clear outcomes** — a completed Gate ends as `PASS`, `NEEDS_WORK`,
-  or `ERROR`; `/loop stop` and a headless process interruption without a Gate
-  verdict are reported separately as `STOPPED_BY_USER`.
-- **Use your model provider** — configure the API key and model you want with
-  `wukong provider`.
-
-## Install
-
-Public native downloads are distributed from
-[`wukong-code/wukong-code`](https://github.com/wukong-code/wukong-code).
+Current release: **[v0.1.2](https://github.com/wukong-code/wukong-code/releases/tag/v0.1.2)** — the open-source edition.
 
 ```sh
 curl -fsSL https://wukong.today/install.sh | sh
-wukong --version
+wukong provider   # add your own model API key
+wukong            # then type: /loop add input validation to the signup form
 ```
 
-Upgrade an existing native installation:
+Give Wukong a goal. It writes the change, runs your project's own tests, type
+checks, lint, and build, reviews the result from a fresh read-only context, and
+fixes what fails. Within the limits you approve, it loops until the checks pass
+— or stops and tells you exactly what is blocking. A model saying "done" is
+never enough: only fresh check results plus an independent review produce
+`PASS`.
 
-```sh
-wukong upgrade
-```
+## Why Wukong
+
+- **"Done" means the checks passed.** A Loop ends in `PASS` only when your
+  repo's checks ran fresh and a separate review found nothing blocking.
+  Otherwise you get `NEEDS_WORK` with the reason, or `ERROR`. Never a silent
+  "looks good".
+- **You set the limits first.** Before the first edit, one editable Preflight
+  shows the goal, the checks, the Writer/Reviewer, and the call/token budget.
+  If progress stalls, Wukong stops and explains instead of burning your key.
+- **Pick up where another agent stopped.** Codex, Claude Code, Cursor, Kimi
+  Code, or Grok ran out mid-task? `/resume codex` (or `claude`, `cursor`,
+  `kimi`, `grok`) imports that session as read-only context and continues
+  against your repo as it is now.
+- **Your key, your provider.** Code, run state, and evidence stay on your
+  machine. Model requests go only to the provider you configure — no Wukong
+  hosted model, no account required.
+- **Wukong never ships on its own.** Even after `PASS`, Wukong never commits,
+  pushes, or publishes. You inspect the diff and deliver through your own
+  workflow.
 
 ## Quick start
 
 ```sh
-wukong provider
-wukong
+wukong provider   # configure a model provider and API key
+wukong            # start the TUI
 ```
 
 Inside the TUI:
@@ -104,116 +52,101 @@ Inside the TUI:
 /loop add input validation to the signup form
 ```
 
-For headless use, preview first and add the exact check, Gate, workspace, and
-review authorization flags printed by the dry-run. Missing decisions fail
-closed instead of silently starting:
+Wukong shows a Preflight summary — the Goal, Done-when and Must-not rules, the
+exact checks, permission mode, pre-existing Git changes, and the iteration,
+provider-call, and token ceilings. Everything is editable before anything runs;
+cancelling creates no run and makes no provider call.
+
+For headless use, preview first and add the exact authorization flags printed
+by the dry-run. Missing decisions fail closed instead of silently starting:
 
 ```sh
 wukong loop "add input validation to the signup form" --dry-run
 # Review “Headless start flags”, then rerun the same command with those flags.
 ```
 
-### From input to disposition
+## The Loop
 
-Before a Loop starts, one editable TUI Preflight summary shows the exact Goal,
-Done when, Must not rules, selected project checks or versioned no-check
-decision, Writer/Reviewer, sanitized Provider origin, pre-existing Git changes,
-permission mode, outbound input limits, approval order, result handling,
-iteration limit, provider-call ceilings, and optional token budget.
-Headless dry-run prints the same runtime facts and the exact flags needed to
-start. Security decisions remain separate approvals for local read, provider
-transmission, permission, and project-check execution. When there are risks,
-the default is to edit, inspect, or cancel; dangerous Continue is last.
-Cancellation creates no run and makes no provider call. A versioned no-check
-decision may cover eligible documentation/configuration work, but source
-changes without required checks fail closed as `NEEDS_WORK/checks_missing`.
+Every Loop works one user-owned goal:
 
-During execution, watch the current writer iteration, elapsed time, active tool
-or activity, calls/tokens/retries/remaining budget, and any real provider,
-permission, or check blocker. TUI
-`WRITE`/`CHECK`/`REVIEW` labels are activity hints; headless output currently
-reports writer iterations and running tools, and an internal reviewer is not
-always exposed as a distinct `REVIEW` phase. Model prose saying “done” is not a
-verified result.
+```
+Goal → Write → Check → Review → Fix → (repeat) → Gate
+```
 
-At the end, act on the deterministic terminal summary. It separates decisive
-evidence, pre-existing changes, files introduced/modified/deleted by the Loop,
-unknown attribution, checks, calls/tokens/retries/remaining budget, the primary
-blocker, and the safe Next action:
+1. **Write** the change.
+2. **Check** with the repository's own tests, type checks, lint, build, and
+   project review policy.
+3. **Review** from a fresh read-only context, with bounded, secret-filtered
+   evidence.
+4. **Fix** blocking findings against the same goal.
+5. **Gate** — a deterministic terminal verdict:
 
-- `PASS`: checks and the read-only reviewer passed. Inspect `git status --short`,
-  `git diff`, and `/loop status` or the review feedback for non-blocking
-  findings, then commit, push, or deliver through your own workflow.
-- `NEEDS_WORK`: read the primary blocker and Next action, then continue the Loop
-  or revise its Finish Line.
-- `ERROR`: provider, check, or local state did not produce a trustworthy result.
-  Repair the run conditions before retrying; this is neither code failure nor
-  `PASS`. If `provider_outcome_unknown` is present, first reconcile the request
-  ID/idempotency key with provider logs or billing and do not resume or retry
-  blindly.
-- `PAUSED`: TUI Ctrl-C or `/loop pause` parks the same Loop without a Gate
-  verdict. Workspace changes remain and `/loop resume` can continue it.
-- `STOPPED_BY_USER`: `/loop stop` or a headless process interruption stopped
-  the run without a Gate verdict. Inspect retained changes. `/loop stop`
-  discards the contract; a headless summary offers resume only when the
-  provider outcome is known.
+| Outcome | Meaning | Exit code |
+|---|---|---|
+| `PASS` | Fresh checks and the independent reviewer both passed | `0` |
+| `NEEDS_WORK` | A named blocker remains; read the Next action and continue | `1` |
+| `ERROR` | Provider, check, or local state cannot produce a trustworthy result | `2` |
+| `PAUSED` | TUI Ctrl-C or `/loop pause`; resumable, no Gate verdict | — |
+| `STOPPED_BY_USER` | `/loop stop` or a headless interruption; no Gate verdict | — |
 
-Cancelling at preflight creates no run. Auto permission denial inside a Loop is
-`NEEDS_WORK/permission_required`, not `STOPPED_BY_USER`. For automation, only a
-final durable `loop.result` outcome is a Gate verdict; a successful dry-run or
-another command exiting `0` is not `PASS`.
+Only a final durable `loop.result` maps to a Gate verdict. A successful
+dry-run, a plain `wukong -p` prompt, or another command exiting `0` is **not**
+`PASS`. Source changes without the required checks fail closed as
+`NEEDS_WORK/checks_missing`; an eligible versioned no-check decision for
+documentation/configuration work stays explicit and auditable.
 
-Wukong never commits, pushes, or publishes merely because a Loop returns `PASS`.
-
-Resume local work from another coding agent:
+Resume unfinished work — yours or another agent's:
 
 ```text
-/resume codex
-/resume claude
-/resume cursor
-/resume kimi
-/resume grok
+/resume          # local Wukong sessions
+/resume codex    # also: claude, cursor, kimi, grok
 ```
+
+Imported history is read-only context; Wukong re-checks the current workspace
+before continuing.
 
 ## Primary commands
 
 | Command | Description |
 |---|---|
 | `wukong` | Launch the interactive TUI |
-| `wukong -p <prompt>` | Run one non-interactive prompt; `COMPLETED` is not Loop `PASS` |
+| `wukong -p <prompt>` | Run one non-interactive prompt; ordinary success is not a Loop `PASS` |
 | `wukong provider` | Configure model providers and models |
 | `wukong loop <goal>` | Run write → check → review → fix against one goal |
 | `wukong review init` | Create `.wukong/review-policy.md` |
 | `wukong guard` | Inspect the command risk guard |
-| `wukong login` | Connect an optional Wukong account |
-| `wukong logout` | Revoke the account session and remove local credentials |
+| `wukong web` | Open the local Web UI (loopback-only daemon) |
+| `wukong login` / `wukong logout` | Optional Wukong account session |
 | `wukong doctor` | Validate local configuration |
 | `wukong upgrade` | Upgrade a native installation |
 
 Run `wukong --help` for the complete command and option list.
 
-`wukong logout` first attempts to revoke the stored refresh token at the
-account's configured OAuth host, then always proceeds with local token and
-managed-config cleanup. A confirmed response reports that the remote session
-was revoked. If the network, rate limit, or server leaves revocation unknown,
-the command still clears local credentials and warns that the server session
-may remain active, with `https://wukong.today/contact` as the next step for
-immediate invalidation. Repeating logout with no token is safe and idempotent.
-If local cleanup itself cannot finish, the command reports an error instead of
-claiming a successful logout.
-
 ## Local data and privacy
 
-Loop contracts, run state, evidence, findings, and imported session context stay
-on the local machine. `/feedback` sends only the text fields shown for
+Loop contracts, run state, evidence, findings, and imported session context
+stay on the local machine. `/feedback` sends only the text fields shown for
 confirmation. Model requests use the provider configured by the user.
+
+## Repository layout
+
+This monorepo holds the complete local CLI product:
+
+| Path | Contents |
+|---|---|
+| `apps/wukong` | The `wukong` CLI/TUI (`@wukong.today/code`) |
+| `apps/wukong-web` | Local Web UI served by the on-machine daemon |
+| `apps/vis` | Visualization tooling |
+| `packages/agent-core` | Loop engine, Gate evidence rules, tools, review |
+| `packages/kosong` | Provider/model chat layer |
+| `packages/protocol` | Wire protocol shared by CLI, server, and Web |
+| `packages/server` | Local daemon behind `wukong web` |
+| `packages/oauth`, `telemetry`, `node-sdk`, `acp-adapter`, … | Auth opt-in, opt-in telemetry, SDK, Agent Client Protocol, and support packages |
+| `docs/` | Release notes, design docs, and the user guide |
 
 ## Development
 
-Requirements:
-
-- Node.js `>=24.15.0`
-- pnpm `10.33.0`
+Requirements: Node.js `>=24.15.0`, pnpm `10.33.0`.
 
 ```sh
 git clone https://github.com/wukong-code/wukong_cli.git
@@ -222,16 +155,24 @@ pnpm install
 pnpm dev:cli
 ```
 
-Useful checks:
-
 ```sh
-pnpm typecheck
-pnpm test
-pnpm lint
-pnpm build
+pnpm typecheck   # build packages + typecheck everything
+pnpm test        # vitest across the workspace
+pnpm lint        # oxlint + boundary checks
+pnpm build       # build all packages and apps
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) for repository conventions.
+See [CONTRIBUTING.md](CONTRIBUTING.md) for repository conventions,
+[ROADMAP.md](ROADMAP.md) for direction, and [docs/](docs/) for design notes
+and release history.
+
+## Documentation
+
+- Website: [wukong.today](https://wukong.today)
+- Docs: [docs.wukong.today](https://docs.wukong.today) — getting started,
+  command reference, configuration
+- Downloads: [wukong.today/download](https://wukong.today/download)
+- Releases: [wukong-code/wukong-code](https://github.com/wukong-code/wukong-code/releases)
 
 ## Acknowledgments
 
@@ -246,8 +187,5 @@ deterministic verification.
 
 ## License
 
-This project is open source under the [MIT License](LICENSE). The website and
-operations backend remain private and are not part of this repository.
-The service path starts with a scoped, one-off repository onboarding and
-acceptance engagement, followed by monthly support only after repeat purchases.
-See the [open-source and service strategy](docs/business/open-source-and-service-strategy.md).
+[MIT](LICENSE) — open source as of v0.1.2. The website and operations backend
+are private and not part of this repository.
