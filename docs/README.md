@@ -7,12 +7,12 @@
 >
 > 当前版本说明：[`0.1.2 Open-Source Edition`](releases/0.1.2.md)
 
-0.1.1 延续[可控、可恢复、可解释的 Trusted Local Loop](design/0.1.0-trusted-local-loop.md)：
+0.1.2 延续[可控、可恢复、可解释的 Trusted Local Loop](design/0.1.0-trusted-local-loop.md)，并以 MIT 许可发布本地 CLI：
 Preflight usage 上限、no-check、文件归因、终态、恢复兼容和最小 Gate
 completeness/freshness 已实现并通过自动化；`v0.1.0` 六平台资产、公开
 安装/升级/恢复和生产版本面验收已完成。真实来源流程与 opt-in cohort 继续作为
 发布后产品学习，不设置固定等待门槛。完整多层 coverage schema 与 direct-shell
-attestation 后移。
+attestation 后移。官网后端、账号与运营服务保持私有。
 
 Wukong Code 的主流程是 **Goal → Write → Check → Review → Fix**。下方“已发布”
 描述当前 `0.1.2` stable；标成“开发 checkout”的命令和行为仍以当前源码为准。

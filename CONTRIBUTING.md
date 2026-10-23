@@ -1,6 +1,9 @@
-# Contributing to Wukong Code (Internal)
+# Contributing to Wukong Code
 
-This is the internal implementation repository for Wukong Code. All contributions must be made by team members with access to this repository.
+Wukong Code is an open-source local CLI under the MIT License. Contributions to the
+CLI, its local server/Web UI, packages, tests, and documentation are welcome.
+The website and operations backend live in a separate private repository and are
+outside this contribution guide.
 
 ## Before You Start
 
@@ -24,9 +27,9 @@ This is the Wukong Code pnpm monorepo. The most relevant entry points are:
 
 - `apps/wukong` — CLI / TUI (`@wukong.today/code`)
 - `apps/vis` — session replay & debugging visualizer
-- `packages/node-sdk` — internal TypeScript SDK
-- `packages/agent-core`, `kosong`, `kaos`, `oauth`, `telemetry` — internal engine packages
-- `docs/` — internal documentation
+- `packages/node-sdk` — TypeScript SDK
+- `packages/agent-core`, `kosong`, `kaos`, `oauth`, `telemetry` — engine packages
+- `docs/` — project documentation
 
 For the full project map, see [AGENTS.md](AGENTS.md).
 
@@ -72,7 +75,7 @@ Prefer the same conventional-commit style for PR titles.
 ## Changesets
 
 This repo uses [changesets](https://github.com/changesets/changesets) to manage
-internal versioning.
+release versioning.
 
 - Every PR that affects release artifacts (code, behavior, public API) should
   include a changeset.
