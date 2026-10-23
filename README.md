@@ -11,16 +11,15 @@ Give `/loop` a goal. Wukong works on the change, runs the repository's real
 checks, reviews the result from a fresh read-only context, and fixes blocking
 findings against the same goal.
 
-## Current release: v0.1.1
+## Current release: v0.1.2
 
-`v0.1.1` (published 2026-09-03) is the stable binary selected by the default
-installer. It is a reliability and trust-boundary patch on top of 0.1.0: Loop
-revision, headless limits, resumed usage, atomic Provider configuration,
-cross-workspace Resume, explicit `wukong upgrade`, bounded plugin installation,
-real workspace check discovery, and local Web fixes. It adds no top-level
-commands, does not change Loop/Gate semantics, and does not include Cost
-Visibility or provider charge estimates. See the
-[v0.1.1 release notes](docs/releases/0.1.1.md).
+`v0.1.2` (published 2026-10-24) is the stable binary selected by the default
+installer. It is the open-source edition on top of 0.1.1: the repository is
+public under the MIT license, npm releases carry public provenance, and every
+embedded feedback, changelog, installer, and announcement link now points at
+the wukong-code organization and wukong.today. It adds no top-level commands
+and does not change Loop/Gate semantics. See the
+[v0.1.2 release notes](docs/releases/0.1.2.md).
 
 The next version, 0.1.2 First Success And Surface Simplification, has started
 repository engineering maintenance; its first-success features are not yet

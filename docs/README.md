@@ -1,11 +1,11 @@
 # Wukong Code 文档
 
-> 当前 stable 版本：`0.1.1`
+> 当前 stable 版本：`0.1.2`
 >
 > 候选证据：[`0.1.0-rc.1`](https://github.com/wukong-code/wukong-code/releases/tag/v0.1.0-rc.1)
 > immutable prerelease 已通过六平台验收
 >
-> 当前版本说明：[`0.1.1 Reliability And Trust Boundary`](releases/0.1.1.md)
+> 当前版本说明：[`0.1.2 Open-Source Edition`](releases/0.1.2.md)
 
 0.1.1 延续[可控、可恢复、可解释的 Trusted Local Loop](design/0.1.0-trusted-local-loop.md)：
 Preflight usage 上限、no-check、文件归因、终态、恢复兼容和最小 Gate
@@ -15,15 +15,17 @@ completeness/freshness 已实现并通过自动化；`v0.1.0` 六平台资产、
 attestation 后移。
 
 Wukong Code 的主流程是 **Goal → Write → Check → Review → Fix**。下方“已发布”
-描述当前 `0.1.1` stable；标成“开发 checkout”的命令和行为仍以当前源码为准。
+描述当前 `0.1.2` stable；标成“开发 checkout”的命令和行为仍以当前源码为准。
 
-后续方向为本地 CLI 开源、官网后端私有，以及按次接入/验收陪跑 → 主动复购 →
-月度服务 → 证据驱动产品化。当前仍为专有许可，实际开源发布与服务实验未执行；
+后续方向为按次接入/验收陪跑 → 主动复购 → 月度服务 → 证据驱动产品化。本地
+CLI 已于 2026-10-24 以 MIT 许可开源（`v0.1.2`），官网后端保持私有，服务实验
+未执行；
 详见 [开源与服务收费路线](business/open-source-and-service-strategy.md)。
 
 ## 开始使用
 
 - [用户指南](user-guide.md)
+- [0.1.2 Open-Source Edition 发布说明](releases/0.1.2.md)
 - [0.1.1 Reliability And Trust Boundary 发布说明](releases/0.1.1.md)
 - [0.1.0 发布说明](releases/0.1.0.md)
 - [0.0.22 发布说明](releases/0.0.22.md)

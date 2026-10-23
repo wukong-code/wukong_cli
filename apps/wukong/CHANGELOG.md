@@ -1,5 +1,11 @@
 # @wukong.today/code
 
+## 0.1.2
+
+### Patch Changes
+
+- [`7f98071`](https://github.com/wukong-code/wukong_cli/commit/7f98071279738f96c9e45188328ee9896f0c2ae4) Thanks [@xxg1413](https://github.com/xxg1413)! - Update feedback, changelog, installer and announcement links after the repository migration.
+
 ## 0.1.1
 
 ### Patch Changes

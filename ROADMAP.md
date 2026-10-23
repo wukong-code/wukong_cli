@@ -1,6 +1,6 @@
 # Wukong Code Roadmap
 
-> 最后更新: 2026-10-23（确认本地 CLI 开源、官网后端私有与先按次服务的收入路线）
+> 最后更新: 2026-10-24（`v0.1.2` 开源发布版发布：组织迁移、MIT 许可与公开 provenance 落地；原 First Success 功能面顺延）
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 > 本次确认产品方向与路线图文档；新增试点的技术设计、具体实施范围和服务合同仍待确认，未开工。
 
@@ -234,7 +234,10 @@ minor/major 或专项任务关闭。发布级别写在版本设计文档头部�
 
 ### 下一版本与后续候选
 
-0.1.0 与 0.1.1 已发布；当前 checkout 开始维护 0.1.2 计划。旧设计中依赖 isolated
+0.1.0 与 0.1.1 已发布；`0.1.2` 于 2026-10-24 作为开源发布版（Open-Source
+Edition）发布：完成 mutnpc → wukong-code 组织迁移的链接修正、MIT 许可迁移与
+公开仓库 provenance，无命令/Gate 语义变化。原 0.1.2 First Success 功能设计
+顺延，与 0.1.3 候选范围一起评审。旧设计中依赖 isolated
 worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继续
 作为实现依据或对外承诺：
 
@@ -242,13 +245,13 @@ worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继�
 |---|---|---|
 | `0.1.0` | **已发布。** 可控、可恢复、可解释的 Trusted Local Loop：可编辑 Preflight、可信 no-check、调用/token 上限、三态 Gate verdict 与 STOPPED_BY_USER、文件归因、恢复兼容、最小 completeness/freshness、五来源 Resume、六平台安装升级和 public truth；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移 | immutable stable 资产通过 stage-verify-publish-exact、六平台 draft smoke、公开 URL provenance、固定安装、0.0.22 upgrade、恢复与生产版本面验收。25/20/15/7 cohort、首次用户理解和真实来源流程发布后继续收集，不设置固定 14 天等待；三个授权案例只阻断集中宣传 |
 | `0.1.1` | **当前 stable。** Reliability And Trust Boundary 补丁：保留 Plan/Loop/Resume/Provider/Web 修复，并关闭 Vis typecheck、更新与插件供应链、workspace checks 发现、根测试编排和空 workspace 问题；不新增顶层命令、不改变 Gate 语义 | 新增缺陷有负向回归；根 test/typecheck/lint/build 覆盖 local Web、vis-web、vis-server；更新不再静默安装；插件安装 fail closed；发布链路验证六平台 assets、0.1.0 upgrade、fresh install、恢复和公开版本面 |
-| `0.1.2` | [First Success And Surface Simplification](docs/design/0.1.2-first-success-and-surface-simplification.md)（`minor`）：首次 Provider 连通测试、可恢复 Preflight、可审核 run-plan、安装后真实下一步、命令默认面收敛、账号设备管理或导航隐藏、Web 旧 SaaS 应用层归档，以及 Web 依赖与 CI runtime 维护 | 不删除兼容别名；真实安装→Provider→Preflight→Loop Golden Journey；三个授权脱敏案例；所有隐藏入口仍可显式发现和调用；生产旧表只冻结不 DROP；生产依赖无未处置 high，Actions 不再触发 Node.js 20 弃用告警 |
+| `0.1.2` | **已发布（2026-10-24）。** Open-Source Edition：组织迁移链接修正（feedback/changelog/installer/announcements）、MIT 许可迁移、公开仓库与 npm provenance、开源前密钥与价格历史扫描；不新增顶层命令、不改变 Gate 语义。原 [First Success And Surface Simplification](docs/design/0.1.2-first-success-and-surface-simplification.md) 设计顺延至 0.1.3 候选评审 | 发布链路验证与 0.1.1 相同：stage-verify-publish-exact、六平台 draft smoke、公开 URL provenance、0.1.1 upgrade、fresh install 与生产版本面验收 |
 | `0.1.3` | [Delivery Acceptance Pilot](docs/design/0.1.3-delivery-acceptance-pilot.md)：建议目标版本，候选范围待评审。围绕一种客户/技术栈，验证需求到验收的映射、最小 GitHub PR Gate、显式分享的交付摘要和 Founding Team 服务试点 | 实施前批准技术设计与服务范围；代码验收覆盖 exact commit、负向证据、恢复兼容和授权发布。商业验证另记非关联付款、重复使用、支持成本与后续续费，不把服务付款当作软件订阅成立 |
 | `0.2.0` | Codebase Reduction：按试点交付需要分批处理超大协调器、boundary baseline 和核心/扩展边界；完整瘦身不阻断首次收入验证 | 先批准迁移设计和兼容策略；每次拆分保持 records、Gate、恢复和 SDK contract；旧命令别名至少经过一个 minor deprecation；真实迁移包只有在支持窗口结束后移除 |
 | `0.3.0` | Evidence-gated Collaboration Product：在试点证据成立后评审共享 versioned policy、审批/摘要审计、团队权限/预算与完整 Billing lifecycle | 先取得归因到重复工作流的非关联付款、重复使用、续费和交付毛利证据；Free local BYOK Loop 不受账号或 entitlement 故障影响。公开 Checkout 还需完整 Billing、权限与隐私验收 |
 
-已发布顺序是：0.0.22 → 0.1.0-rc.1 → 0.1.0 → 0.1.1。
-建议下一步是：0.1.2 首次成功 → 0.1.3 交付验收试点 → 经商业证据评审的 0.3.0 产品化。
+已发布顺序是：0.0.22 → 0.1.0-rc.1 → 0.1.0 → 0.1.1 → 0.1.2（开源发布版）。
+建议下一步是：0.1.3 交付验收试点（并入原 0.1.2 First Success 候选范围）→ 经商业证据评审的 0.3.0 产品化。
 客户访谈与现有能力陪跑可在 0.1.2 期间开展，不要求先完成新 binary。0.2.0 作为需
 独立批准的工程轨道，按实际阻碍分批推进，不再是团队试点的必经前置。
 0.1.3 的目标版本号、技术实施范围和报价需在开工前确认；0.3.0 不自动开工。
