@@ -222,7 +222,7 @@ micro_compaction = false
     expect(reloadedMainAgent?.tools.data().some((tool) => tool.name === 'CreateGoal')).toBe(true);
   });
 
-  // Regression for https://github.com/mutnpc/wukong/issues/988: during
+  // Regression for https://github.com/wukong-code/wukong_cli/issues/988: during
   // ACP `session/new` the tool kaos is the reverse-RPC bridge and the client
   // does not know the session yet, so reading `.wukong/local.toml` through
   // it rejects. The workspace local config is a local system file and must be

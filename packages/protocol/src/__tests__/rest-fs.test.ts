@@ -402,7 +402,7 @@ describe('fsGitStatusResponseSchema (W11.2)', () => {
       pullRequest: {
         number: 625,
         state: 'open' as const,
-        url: 'https://github.com/mutnpc/wukong/pull/625',
+        url: 'https://github.com/wukong-code/wukong_cli/pull/625',
       },
     };
     expect(fsGitStatusResponseSchema.parse(r)).toEqual(r);

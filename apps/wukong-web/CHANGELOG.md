@@ -16,4 +16,4 @@
 
 ### Patch Changes
 
-- [#1085](https://github.com/mutnpc/wukong/pull/1085) [`f1fad72`](https://github.com/mutnpc/wukong/commit/f1fad7222ccd3f66c1cae6c5b9c009230227cd2f) - Fix stuttery streaming in the web chat by coalescing rapid token updates into a single render per frame.
+- [#1085](https://github.com/wukong-code/wukong_cli/pull/1085) [`f1fad72`](https://github.com/wukong-code/wukong_cli/commit/f1fad7222ccd3f66c1cae6c5b9c009230227cd2f) - Fix stuttery streaming in the web chat by coalescing rapid token updates into a single render per frame.

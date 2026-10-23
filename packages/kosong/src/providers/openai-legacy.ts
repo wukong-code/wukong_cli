@@ -535,7 +535,7 @@ export class OpenAILegacyChatProvider implements ChatProvider {
     // Skip when the caller already pinned reasoning_effort via withGenerationKwargs —
     // their value would otherwise be silently overwritten below.
     // Skip for providers that do not support reasoning_effort (DeepSeek, Qwen, etc.).
-    // See: https://github.com/mutnpc/wukong/issues/1616
+    // See: https://github.com/wukong-code/wukong_cli/issues/1616
     if (
       reasoningEffort === undefined &&
       kwargs['reasoning_effort'] === undefined &&
