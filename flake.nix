@@ -172,7 +172,7 @@
 
             meta = {
               description = "Wukong CLI";
-              homepage = "https://github.com/WukongAI/wukong";
+              homepage = "https://github.com/wukong-code/wukong_cli";
               license = lib.licenses.mit;
               mainProgram = "wukong";
               platforms = systems;

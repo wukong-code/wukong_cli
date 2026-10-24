@@ -252,6 +252,57 @@ jobs:
             pnpm exec vitest run packages/verification/test/criteria.test.ts packages/agent-core/test/tools/goal-gate.test.ts --testTimeout=30000
           done
 
+  ci-gate:
+    name: CI gate
+    if: always()
+    needs:
+      - changes
+      - docs
+      - lint
+      - build
+      - test
+      - test-coverage
+      - test-install
+      - test-windows
+      - verification-criteria-cross-platform
+      - typecheck
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Require the checks for this trigger
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          REF: ${{ github.ref }}
+          DOCS_ONLY: ${{ needs.changes.outputs.docs_only }}
+          FULL_SUITE: ${{ needs.changes.outputs.full_suite }}
+          CHANGES_RESULT: ${{ needs.changes.result }}
+          DOCS_RESULT: ${{ needs.docs.result }}
+          LINT_RESULT: ${{ needs.lint.result }}
+          BUILD_RESULT: ${{ needs.build.result }}
+          TEST_RESULT: ${{ needs.test.result }}
+          COVERAGE_RESULT: ${{ needs.test-coverage.result }}
+          INSTALL_RESULT: ${{ needs.test-install.result }}
+          WINDOWS_RESULT: ${{ needs.test-windows.result }}
+          CRITERIA_RESULT: ${{ needs.verification-criteria-cross-platform.result }}
+          TYPECHECK_RESULT: ${{ needs.typecheck.result }}
+        run: |
+          set -euo pipefail
+          test "$CHANGES_RESULT" = success
+
+          if [[ "$FULL_SUITE" = true ]]; then
+            for result in "$BUILD_RESULT" "$TEST_RESULT" "$COVERAGE_RESULT" \
+              "$INSTALL_RESULT" "$WINDOWS_RESULT" "$CRITERIA_RESULT" "$TYPECHECK_RESULT"; do
+              test "$result" = success
+            done
+          elif [[ "$DOCS_ONLY" = true ]]; then
+            test "$DOCS_RESULT" = success
+          else
+            test "$LINT_RESULT" = success
+          fi
+
+          echo "CI gate passed for ${EVENT_NAME} on ${REF}."
+
   typecheck:
     needs: changes
     if: needs.changes.outputs.full_suite == 'true'
