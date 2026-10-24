@@ -9,7 +9,7 @@ to a local **server** over REST + WebSocket. Vue 3 + Vite + TypeScript.
 
 ```bash
 # 1) Against a REAL server (the server must be running and reachable)
-WEB_PORT=5197 WUKONG_SERVER_URL=http://192.168.97.91:58627 pnpm -C apps/wukong-web run dev
+WEB_PORT=5197 WUKONG_SERVER_URL=http://192.0.2.10:58627 pnpm -C apps/wukong-web run dev
 
 # 2) Offline / no server — a stub that fakes the server API + event stream
 WUKONG_STUB_WEB_URL=http://127.0.0.1:5175/#token=stub-local \

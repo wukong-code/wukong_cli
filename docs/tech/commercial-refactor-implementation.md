@@ -6,7 +6,7 @@
 >
 > 版本: v1.3
 > 日期: 2026-07-14
-> 对应商业方案: `docs/business/COMMERCIAL_REFACTOR_PLAN.md`
+> 对应商业方案: 已移出公开仓库，私有留存
 > 适用范围: `wukong_cli` 新 Kimi-code base；legacy 代码只作为迁移参考；web/计费不在本轮修改范围内。
 > 说明: §1–§8 记录已经实现的 v1 基线；0.0.12 的替换 contract 以 §9.3–§9.6 和 [Trust Loop v2](../design/verification-loop-v2.md) 为准。两者冲突时使用 v2。
 
