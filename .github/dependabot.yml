@@ -15,8 +15,3 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-  - package-ecosystem: npm
-    directory: "/apps/wukong"
-    schedule:
-      interval: weekly
-    open-pull-requests-limit: 5

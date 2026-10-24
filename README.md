@@ -95,6 +95,20 @@ check when package layout changes.
 
 See [CONTRIBUTING.md](CONTRIBUTING.md), the [CLI use and risk notice](docs/CLI-USE-AND-RISK.md), and the [documentation](docs/README.md).
 
+## Acknowledgments
+
+Wukong Code builds on and learns from many open projects, including:
+
+- [Kimi Code](https://github.com/MoonshotAI/kimi-code) — CLI, TUI, and agent base
+- [Pi](https://github.com/earendil-works/pi) — `@earendil-works/pi-tui` powers the interactive TUI
+- [Claude Code](https://github.com/anthropics/claude-code) — TUI chrome and loop patterns
+- [Grok Build](https://github.com/xai-org/grok-build) — goal-verifier and no-progress detection ideas
+- [Codex](https://github.com/openai/codex) and [Cursor](https://cursor.com) — local session formats that `/resume` interoperates with
+- [Prismor](https://github.com/PrismorSec/prismor) — command-safety research behind the runtime security gate
+
+Wukong Code is an independent product focused on AI coding Loop control and
+deterministic verification.
+
 ## License
 
 The local CLI and its source are available under the [MIT License](LICENSE).
