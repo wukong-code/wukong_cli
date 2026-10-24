@@ -83,12 +83,13 @@ pnpm dev:cli
 
 Wukong Code 在许多开源项目的基础上构建并借鉴工程经验，包括：
 
-- [Kimi Code](https://github.com/MoonshotAI/kimi-code) — CLI、TUI 与 agent 基础
-- [Pi](https://github.com/earendil-works/pi) — `@earendil-works/pi-tui` 提供交互式 TUI
-- [Claude Code](https://github.com/anthropics/claude-code) — TUI 布局与 loop 模式参考
-- [Grok Build](https://github.com/xai-org/grok-build) — goal verifier 与无进展检测思路
-- [Codex](https://github.com/openai/codex) 与 [Cursor](https://cursor.com) — `/resume` 兼容的本地会话格式
-- [Prismor](https://github.com/PrismorSec/prismor) — 运行时命令安全调研
+- [Kimi Code](https://github.com/MoonshotAI/kimi-code)
+- [Pi](https://github.com/earendil-works/pi)
+- [Claude Code](https://github.com/anthropics/claude-code)
+- [Grok Build](https://github.com/xai-org/grok-build)
+- [Codex](https://github.com/openai/codex)
+- [Cursor](https://cursor.com)
+- [Prismor](https://github.com/PrismorSec/prismor)
 
 Wukong Code 是专注 AI coding Loop 控制与确定性验证的独立产品。
 
