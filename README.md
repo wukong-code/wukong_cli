@@ -79,6 +79,20 @@ pnpm install
 pnpm dev:cli
 ```
 
+Nix users can use the pinned development environment and package:
+
+```sh
+nix develop
+nix build
+nix run
+node scripts/check-nix-workspace.mjs
+```
+
+The Nix package is a reproducible development/package path for the four
+supported Nix systems; it is separate from the six-platform native release
+pipeline. Update `flake.lock` deliberately and run the workspace consistency
+check when package layout changes.
+
 See [CONTRIBUTING.md](CONTRIBUTING.md), the [CLI use and risk notice](docs/CLI-USE-AND-RISK.md), and the [documentation](docs/README.md).
 
 ## License

@@ -1,0 +1,15 @@
+# These paths contain trust-boundary, release, or ownership-sensitive changes.
+# The repository owner maintains the public project; keep this file as a routing
+# map even when approval requirements are disabled for single-maintainer flow.
+
+/.github/workflows/ @wukong-code
+/.github/actions/ @wukong-code
+/flake.nix @wukong-code
+/flake.lock @wukong-code
+/pnpm-lock.yaml @wukong-code
+/install.sh @wukong-code
+/apps/wukong/scripts/native/ @wukong-code
+/LICENSE @wukong-code
+/SECURITY.md @wukong-code
+/THIRD_PARTY_NOTICES.md @wukong-code
+/SBOM.md @wukong-code
