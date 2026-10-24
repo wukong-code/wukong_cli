@@ -99,12 +99,13 @@ See [CONTRIBUTING.md](CONTRIBUTING.md), the [CLI use and risk notice](docs/CLI-U
 
 Wukong Code builds on and learns from many open projects, including:
 
-- [Kimi Code](https://github.com/MoonshotAI/kimi-code) — CLI, TUI, and agent base
-- [Pi](https://github.com/earendil-works/pi) — `@earendil-works/pi-tui` powers the interactive TUI
-- [Claude Code](https://github.com/anthropics/claude-code) — TUI chrome and loop patterns
-- [Grok Build](https://github.com/xai-org/grok-build) — goal-verifier and no-progress detection ideas
-- [Codex](https://github.com/openai/codex) and [Cursor](https://cursor.com) — local session formats that `/resume` interoperates with
-- [Prismor](https://github.com/PrismorSec/prismor) — command-safety research behind the runtime security gate
+- [Kimi Code](https://github.com/MoonshotAI/kimi-code)
+- [Pi](https://github.com/earendil-works/pi)
+- [Claude Code](https://github.com/anthropics/claude-code)
+- [Grok Build](https://github.com/xai-org/grok-build)
+- [Codex](https://github.com/openai/codex)
+- [Cursor](https://cursor.com)
+- [Prismor](https://github.com/PrismorSec/prismor)
 
 Wukong Code is an independent product focused on AI coding Loop control and
 deterministic verification.
