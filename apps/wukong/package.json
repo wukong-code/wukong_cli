@@ -88,7 +88,7 @@
     "@wukong/wukong-sdk": "workspace:^",
     "@wukong/wukong-telemetry": "workspace:^",
     "@wukong/wukong-web": "workspace:^",
-    "chalk": "^5.4.1",
+    "chalk": "^6.0.1",
     "cli-highlight": "^2.1.11",
     "commander": "^13.1.0",
     "pathe": "^2.0.3",
