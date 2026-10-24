@@ -46,7 +46,7 @@ jobs:
       website_sha: ${{ steps.contract.outputs.website_sha }}
     steps:
       - name: Checkout exact release tag
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ github.event_name == 'workflow_dispatch' && inputs.release_tag || github.ref }}
           fetch-depth: 0
@@ -152,14 +152,14 @@ jobs:
       IS_PRERELEASE: ${{ needs.validate-source.outputs.is_prerelease }}
     steps:
       - name: Checkout exact source
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.validate-source.outputs.release_tag }}
           path: source
           persist-credentials: false
 
       - name: Checkout public distribution truth
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: wukong-code/wukong-code
           ref: ${{ needs.validate-source.outputs.distribution_sha }}
@@ -168,7 +168,7 @@ jobs:
           persist-credentials: false
 
       - name: Download all six staged builds
-        uses: actions/download-artifact@3e5f45b2cfb9172054b4087a40e8e0b5a5461e7c # v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           pattern: wukong-native-release-*
           path: source/staging
@@ -400,7 +400,7 @@ jobs:
       WUKONG_CODE_BUILD_TARGET: ${{ matrix.target }}
     steps:
       - name: Checkout exact smoke implementation
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ needs.validate-source.outputs.release_tag }}
           path: source

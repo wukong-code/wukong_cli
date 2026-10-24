@@ -54,7 +54,7 @@ jobs:
       WEBSITE_REPO: wukong-code/wukong_web
     steps:
       - name: Checkout exact private source tag
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           ref: ${{ inputs.release_tag }}
           fetch-depth: 0
@@ -114,7 +114,7 @@ jobs:
             <<<"$JOBS" >/dev/null
 
       - name: Checkout exact public distribution truth
-        uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
           repository: wukong-code/wukong-code
           ref: ${{ inputs.distribution_sha }}
