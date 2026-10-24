@@ -79,7 +79,7 @@ pnpm install
 pnpm dev:cli
 ```
 
-See [CONTRIBUTING.md](CONTRIBUTING.md) and the [documentation](docs/README.md).
+See [CONTRIBUTING.md](CONTRIBUTING.md), the [CLI use and risk notice](docs/CLI-USE-AND-RISK.md), and the [documentation](docs/README.md).
 
 ## License
 
