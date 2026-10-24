@@ -90,7 +90,7 @@
     "@wukong/wukong-web": "workspace:^",
     "chalk": "^5.4.1",
     "cli-highlight": "^2.1.11",
-    "commander": "^13.1.0",
+    "commander": "^15.0.0",
     "pathe": "^2.0.3",
     "postject": "1.0.0-alpha.6",
     "semver": "^7.7.4",
