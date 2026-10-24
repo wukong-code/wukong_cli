@@ -46,10 +46,10 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@anthropic-ai/sdk": "^0.95.2",
-    "@google/genai": "^1.49.0",
-    "openai": "^6.34.0",
-    "zod": "^4.4.3",
+    "@anthropic-ai/sdk": "^1.1.0",
+    "@google/genai": "^2.30.0",
+    "openai": "^7.41.0",
+    "zod": "^4.6.7",
     "zod-to-json-schema": "^3.25.2"
   },
   "devDependencies": {
