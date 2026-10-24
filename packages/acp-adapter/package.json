@@ -40,7 +40,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "^0.23.0",
+    "@agentclientprotocol/sdk": "^2.0.0",
     "@wukong/agent-core": "workspace:^",
     "@wukong/kaos": "workspace:^",
     "@wukong/wukong-sdk": "workspace:^"
