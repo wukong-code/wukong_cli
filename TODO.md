@@ -6,12 +6,11 @@
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
-## 本地 CLI 开源与服务收费方向（文档已确认，实际发布/实验未执行）
+## 本地 CLI 开源方向
 
-见 开源与服务收费路线（已移至私有运营仓库）：本地 CLI 及
-必要依赖、测试和文档开源，官网后端保持私有；先按次收取仓库接入/验收陪跑费，
-有主动复购后再验证固定范围月度服务。开源发布方案、最终许可证、服务合同与
-收款路径仍需确认，不新增自动执行 checkbox，也不扩张 0.1.2 已批准范围。
+本地 CLI 及必要依赖、测试和文档开源（v0.1.2 已按 MIT 发布），官网后端保持私有。
+服务与商业化决策在私有运营仓库维护，不在本文件范围；不新增自动执行 checkbox，
+也不扩张 0.1.2 已批准范围。
 
 ## ✅ 0.1.1 — Reliability And Trust Boundary（已发布）
 
@@ -83,16 +82,13 @@
 
 ## 0.1.3 — Delivery Acceptance Pilot（候选索引，未开工）
 
-2026-10-23：整合收入验证路线。具体候选、服务边界和分阶段门槛见
+具体候选与分阶段范围见
 [0.1.3 Delivery Acceptance Pilot](docs/design/0.1.3-delivery-acceptance-pilot.md)。
-本节只链接已讨论的路线方向，不新增执行 checkbox；客户、目标版本、技术设计与
-合同需要确认后才可开工或收款。
-收费先从一个仓库、一次交付任务的按次服务开始，复购后再测试月度服务；第二笔
-按次订单不计月度续费。源码开源与服务验证可并行，不互相作为启动前置。
+本节只链接已讨论的路线方向，不新增执行 checkbox；目标版本与技术设计确认后才可开工。
 
 ## 📋 0.2.0 — Codebase Reduction（需设计批准）
 
-以下保留为候选；按试点交付需要分批评审，完整瘦身不作为首次收入前置条件。
+以下保留为候选；按交付需要分批评审。
 
 - [ ] 分批拆 GoalMode、WukongTUI、useWukongWebClient 和 TUI goal command 的领域职责
 - [ ] 每批减少 agent-core boundary baseline，禁止新增或一次性重写 225 个既有豁免
@@ -102,7 +98,7 @@
 
 ## 🔒 0.3.0 — Evidence-gated Collaboration Product（未批准）
 
-- [ ] 0.1.3 试点取得非关联付款、重复使用、续费与交付毛利证据后，才另行评审共享 policy、审批/摘要审计、团队权限/预算和完整 Billing lifecycle；最小 PR Gate 是 0.1.3 候选，不等待先取得续费
+- [ ] 0.1.3 验收流程稳定后，才另行评审共享 policy、审批/摘要审计与团队权限/预算；最小 PR Gate 是 0.1.3 候选
 - [ ] 保持 Free local BYOK Loop 与账号、entitlement 和 Web 故障完全解耦
 - [ ] 不优先做 hosted model、云端 Agent、`/schedule`、managed credits、更多 Dashboard 或公开 Checkout
 
@@ -541,10 +537,8 @@
 ## 历史候选：Pro PR Gate + Billing（已被取代）
 
 > 归档方案: [docs/design/historical-pro-pr-gate-billing.md](docs/design/historical-pro-pr-gate-billing.md)。这是历史研究清单，不是当前 TODO；它已被 0.1.0 Free Trusted Local Loop 与 0.2.0 Pro Reliable Autonomy 候选取代。
->
-> 2026-07-20 生产基线：8 个注册用户、1 个 activated Loop user、0 个 completed users。支付决策门槛尚未满足；公开 Checkout 默认关闭。
 
-历史方案曾假设把 PR Gate 作为唯一收费点；其用户门槛、工程阶段与 `$9/月` 价格只保留在归档文档中。这里不保留未完成 checkbox，避免自动任务扫描把它们当成当前 P0。
+历史方案曾假设把 PR Gate 作为唯一收费点；其用户门槛、工程阶段与价格只保留在归档文档中。这里不保留未完成 checkbox，避免自动任务扫描把它们当成当前 P0。
 
 ## ✅ 0.0.15 — Loop Reliability + First Success
 
@@ -674,7 +668,7 @@
 
 ### 历史商业化迁移说明
 
-支付、真实 Pro entitlement 和 GitHub PR 发布任务当时曾迁移到旧 0.1.0 历史候选。2026-07-25 的新决策将 0.1.0 定义为 Free Trusted Local Loop；付费只可能在 0.2.0 Reliable Autonomy 邀请制 Pilot 中重新批准，PR Gate 也不再是唯一购买理由。
+支付、真实 Pro entitlement 和 GitHub PR 发布任务当时曾迁移到旧 0.1.0 历史候选。2026-07-25 的新决策将 0.1.0 定义为 Free Trusted Local Loop，相关商业化假设不再构成版本承诺。
 
 ### 0.0.13 发布门槛
 
@@ -867,4 +861,4 @@
 
 ---
 
-**最后更新**: 2026-10-23（整合收入验证路线，明确 check 与完整 Gate 的区别，刷新历史基线与候选索引；TODO 不构成执行授权，stable 仍为 `0.1.1`，0.1.2 原已批准范围保留）。此前：2026-10-02、2026-08-08；stable `0.1.0` 已发布，真实 Windows repo、五来源真实 Resume、首次用户与 cohort 继续作为发布后验证，不设固定 14 天发布门槛。
+**最后更新**: 2026-10-24（路线收敛为技术路线，商业化决策移至私有运营仓库；明确 check 与完整 Gate 的区别，刷新历史基线与候选索引；TODO 不构成执行授权，stable 仍为 `0.1.1`，0.1.2 原已批准范围保留）。此前：2026-10-23、2026-10-02、2026-08-08；stable `0.1.0` 已发布，真实 Windows repo、五来源真实 Resume、首次用户与 cohort 继续作为发布后验证，不设固定 14 天发布门槛。
