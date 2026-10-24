@@ -5,9 +5,12 @@ on:
   push:
     branches:
       - main
+    tags:
+      - 'v*'
   workflow_dispatch:
 
-# Replace stale PR runs, while allowing main to finish a checkable CI run.
+# Tiered runs: pull requests and main pushes run the light checks only; the
+# full verification suite runs for release tags (v*) and manual dispatch.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -16,7 +19,88 @@ permissions:
   contents: read
 
 jobs:
+  changes:
+    name: Classify trigger and changed files
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: read
+    outputs:
+      docs_only: ${{ steps.filter.outputs.docs_only }}
+      full_suite: ${{ steps.filter.outputs.full_suite }}
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      - name: Classify changed files
+        id: filter
+        shell: bash
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          set -euo pipefail
+          # Release tags and manual dispatch always run the full suite.
+          if [[ "${{ github.event_name }}" == "workflow_dispatch" ]] \
+            || [[ "${GITHUB_REF}" == refs/tags/v* ]]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "full_suite=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          if [[ "${{ github.event_name }}" != "pull_request" ]]; then
+            echo "docs_only=false" >> "$GITHUB_OUTPUT"
+            echo "full_suite=false" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          FILES="$(git diff --name-only "origin/${BASE_REF}...HEAD")"
+          DOCS_ONLY=true
+          while IFS= read -r file; do
+            [[ -n "$file" ]] || continue
+            case "$file" in
+              *.md|docs/*|LICENSE*) ;;
+              *) DOCS_ONLY=false; break ;;
+            esac
+          done <<< "$FILES"
+          echo "docs_only=${DOCS_ONLY}" >> "$GITHUB_OUTPUT"
+          echo "full_suite=false" >> "$GITHUB_OUTPUT"
+          echo "Docs-only: ${DOCS_ONLY}"
+          echo "$FILES"
+
+  docs:
+    name: Docs-only acknowledgment
+    needs: changes
+    if: needs.changes.outputs.docs_only == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - run: echo "Docs-only pull request; the full verification suite runs at release time."
+
+  lint:
+    needs: changes
+    if: needs.changes.outputs.docs_only != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
+
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run lint
+      - run: pnpm run sherif
+
   build:
+    needs: changes
+    if: needs.changes.outputs.full_suite == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -38,6 +122,8 @@ jobs:
         run: pnpm -C apps/wukong run smoke
 
   test:
+    needs: changes
+    if: needs.changes.outputs.full_suite == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -60,6 +146,8 @@ jobs:
   # monorepo suite stays fast. Thresholds apply via CI=true in vitest.config.ts.
   # Reproduce locally: `pnpm test:coverage:gate -- --project cli`
   test-coverage:
+    needs: changes
+    if: needs.changes.outputs.full_suite == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -90,6 +178,8 @@ jobs:
           retention-days: 1
 
   test-install:
+    needs: changes
+    if: needs.changes.outputs.full_suite == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 20
 
@@ -106,6 +196,8 @@ jobs:
         run: bats tests/install.bats
 
   test-windows:
+    needs: changes
+    if: needs.changes.outputs.full_suite == 'true'
     runs-on: windows-latest
     timeout-minutes: 120
 
@@ -129,6 +221,8 @@ jobs:
 
   verification-criteria-cross-platform:
     name: Verification criteria (${{ matrix.os }})
+    needs: changes
+    if: needs.changes.outputs.full_suite == 'true'
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
@@ -158,27 +252,9 @@ jobs:
             pnpm exec vitest run packages/verification/test/criteria.test.ts packages/agent-core/test/tools/goal-gate.test.ts --testTimeout=30000
           done
 
-  lint:
-    runs-on: ubuntu-latest
-    timeout-minutes: 30
-
-    steps:
-      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
-        with:
-          persist-credentials: false
-
-      - uses: pnpm/action-setup@f520eceda224fe1a4aed5a2a27a194379a409996 # v6
-
-      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
-        with:
-          node-version-file: .nvmrc
-          cache: pnpm
-
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run lint
-      - run: pnpm run sherif
-
   typecheck:
+    needs: changes
+    if: needs.changes.outputs.full_suite == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
