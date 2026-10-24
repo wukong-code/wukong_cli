@@ -1,5 +1,7 @@
 # Verification CLI 自动化测试计划
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 > 日期: 2026-08-06
 > 范围: verification v1 兼容回归、Loop-first 状态机、0.1.0 Trusted Local Loop、native 候选与发布合同
 > 状态: 当前 stable 为 0.1.1（2026-09-03 发布，0.1.0 是其直接升级来源）。stable 0.1.0 已发布并通过资产、安装、升级和生产版本面验收；0.0.22 是 0.1.0 的直接升级基线

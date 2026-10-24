@@ -1,5 +1,7 @@
 # Pixel Mascot Design
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 > 状态: v3 已接入 TUI welcome。母版是 `apps/wukong/src/constant/mascot-data.json`，渲染入口是 `apps/wukong/src/tui/constant/welcome-art.ts`。
 
 ## 目标

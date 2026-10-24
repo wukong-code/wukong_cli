@@ -1,5 +1,7 @@
 # 0.1.0 之后候选：Loop-aware Runtime Security
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 > 状态：**DEFERRED / REQUIREMENTS ONLY**
 > 记录日期：2026-07-21
 > 最早重新评估时间：0.1.0 正式发布并完成验证之后

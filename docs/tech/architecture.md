@@ -1,5 +1,7 @@
 # Wukong Code 最新技术架构
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 > 版本: v2.1
 > 日期: 2026-07-07
 > 适用范围: `wukong_cli` 新 Kimi-code base

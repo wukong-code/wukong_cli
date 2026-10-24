@@ -1,10 +1,12 @@
 # 历史候选：Pro PR Gate 与 Billing
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 > 状态：HISTORICAL CANDIDATE / SUPERSEDED；本文件只保留 2026-07-20 的旧商业实验假设，不再占用 `0.1.0` 版本号。
 > 规划日期：2026-07-20
 > 一句话目标：保留完整的本地 BYOK Loop，用一个可验证的付费能力——把 Gate 结论安全地发布回 GitHub Pull Request——验证 Wukong 是否值得付费。
 > 当前路线（2026-10-23）：[ROADMAP](../../ROADMAP.md) / [0.1.3 交付验收试点候选](0.1.3-delivery-acceptance-pilot.md)。原 0.2.0 Reliable Autonomy 也已取代；完整 Billing 归试点证据之后的 0.3.0 产品化评审。本文旧阈值不再作为当前门槛。
-> 长期能力方向：[Wukong 能力体系与商业化原则](../business/WUKONG_CAPABILITY_MODEL.md)
+> 长期能力方向：Wukong 能力体系与商业化原则（已移至私有运营仓库）
 
 > 阅读边界：以下全部产品边界、Phase、发布门槛、价格和命令均是 2026-07-20 的条件性历史方案。即使正文保留设计语态，也不代表当前批准、排期或计划实施；实施范围以 ROADMAP 索引和用户确认的具体版本文档为准，TODO 不是自动执行清单。
 

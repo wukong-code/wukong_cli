@@ -1,32 +1,35 @@
-# Wukong Code 用户指南
+# Wukong Code User Guide
 
-> 适用范围: 当前 `wukong_cli`；stable binary 为 `v0.1.1`
-> 更新时间: 2026-10-23（同步 telemetry 源码契约；stable 功能边界不变）
-> 定位: 给 Wukong 一个目标，通过 Goal → Write → Check → Review → Fix 循环直到没有 blocking finding。
-> 版本边界: `0.1.1` 延续 Free、local-first、BYOK 的 Trusted Local Loop，并增加可靠性与信任边界修复。完整多层 coverage schema、direct-shell content/PATH attestation 和价格数据库已后移。当前没有付费计划、订阅 entitlement、团队规则或 PR gate 承诺。
+> Scope: the current `wukong_cli`; stable binary is `v0.1.2`.
+> Updated: 2026-10-24.
+> Idea: give Wukong a goal and let it loop through Goal → Write → Check → Review → Fix until no blocking finding remains.
+> Version boundary: `0.1.2` keeps the free, local-first, BYOK Trusted Local Loop and publishes the CLI source under MIT. Full multi-layer coverage schema, direct-shell content/PATH attestation, and a price database remain deferred. There is no paid plan, subscription entitlement, team policy, or PR-gate commitment.
 
-`0.1.1` 的功能、Web stub 使用方式、验证证据与发布完整性合同见
-[0.1.1 Reliability And Trust Boundary](releases/0.1.1.md)。
+See the [0.1.2 release notes](releases/0.1.2.md) for features, the local Web stub,
+verification evidence, and the release integrity contract.
 
-CLI telemetry 的现有 wire fields、唯一 endpoint、本地 7 天失败队列和 opt-out 方式见
-[CLI telemetry contract](operations/cli-telemetry.md)。接收端源码只保留随机安装 ID、
-使用日期、版本、平台与架构，并实现 90 天清理；这不是任务完成或重复使用证据，
-不能用于证明 0.1.0 cohort。本次文档同步未重新验证生产部署和定时清理执行。
+For the telemetry wire fields, the single endpoint, the local 7-day failure queue,
+and how to opt out, see the [CLI telemetry contract](operations/cli-telemetry.md).
+The receiver keeps only a random installation ID, days of use, version, platform,
+and architecture, with 90-day cleanup; it is not task-completion or reuse evidence.
 
-## 安装正式版
+## Install the stable release
 
-macOS 和 Linux：
+macOS and Linux:
 
 ```bash
 curl -fsSL https://wukong.today/install.sh | sh
 wukong --version
 ```
 
-安装器从公开 Release 下载对应平台的 native binary，并校验配套 SHA-256。0.0.12 native binary 升级到 0.0.13 时需要执行一次上述安装命令；从 0.0.13 开始，macOS 和 Linux native 安装可直接运行 `wukong upgrade`。
+The installer downloads the native binary for your platform from the public
+release and verifies the adjacent SHA-256. From 0.0.13 onward, native macOS and
+Linux installs can upgrade directly with `wukong upgrade`.
 
-Windows 请从 [下载页](https://wukong.today/download) 获取对应的 x64 或 ARM64 压缩包。
+On Windows, download the x64 or ARM64 archive from the
+[download page](https://wukong.today/download).
 
-## 从源码运行
+## Run from source
 
 ```bash
 git clone https://github.com/wukong-code/wukong_cli.git
@@ -35,125 +38,126 @@ pnpm install
 pnpm dev:cli
 ```
 
-只运行 CLI entrypoint：
+To run only the CLI entrypoint:
 
 ```bash
 pnpm -C apps/wukong run dev:cli-only --help
 ```
 
-公开下载仓库是 `wukong-code/wukong-code`。当前没有公开 Homebrew formula，也不发布旧的
-`@wukong.today/wukong-cli` 包名。运行时代码能识别 Homebrew 安装来源，不代表当前
-存在可公开安装或升级的 formula。
+The public download repository is `wukong-code/wukong-code`. There is no public
+Homebrew formula, and the old `@wukong.today/wukong-cli` package name is not
+published. The runtime recognizes a Homebrew install origin, which does not mean
+a public formula exists.
 
-## 5 分钟快速开始
+## Five-minute quick start
 
-### 1. 查看命令面
+### 1. See the command surface
 
 ```bash
 pnpm -C apps/wukong run dev:cli-only --help
 ```
 
-### 2. 启动交互式 TUI
+### 2. Start the interactive TUI
 
 ```bash
 pnpm dev:cli
 ```
 
-进入项目后，可以直接输入任务，例如：
+Inside a project you can type a task directly, for example:
 
 ```text
-帮我看一下这个项目的目录结构，说明主要模块各自负责什么。
+Look at this project's directory layout and explain what each main module owns.
 ```
 
-### 3. 执行一次非交互 prompt
+### 3. Run one non-interactive prompt
 
 ```bash
 pnpm -C apps/wukong run dev:cli-only -- -p "summarize this repository"
 ```
 
-当前开发分支的 `-p` 不只打印模型正文：它先显示 Run preflight，运行中显示 writer
-iteration 与活动 tool，最后输出 `run.summary`。`Outcome COMPLETED` 或退出 `0` 只表示
-这次普通 prompt 正常结束，不是 Loop `PASS`；摘要会明确 checks 是否执行、是否存在
-durable evidence、workspace 改动及 Next。若出现 `provider_outcome_unknown`，摘要不会
-提供 resume command；先核对 provider logs/billing，禁止盲目 resume 或 retry。
+`-p` prints a run preflight first, shows the writer iteration and active tool
+while running, and ends with `run.summary`. `Outcome COMPLETED` or exit code `0`
+only means an ordinary prompt finished normally — it is not a Loop `PASS`. The
+summary states whether checks ran, whether durable evidence exists, what changed
+in the workspace, and the next action. If you see
+`provider_outcome_unknown`, the summary will not offer a resume command; check
+the provider logs or billing first and do not blindly resume or retry.
 
-### 4. 管理 provider
+### 4. Manage providers
 
 ```bash
 pnpm -C apps/wukong run dev:cli-only -- provider --help
 ```
 
-TUI 中使用 `/provider` 配置模型服务商和 API Key。`/login` 只连接可选 Wukong 账号，不会提供或配置模型。
+Use `/provider` in the TUI to configure a model provider and API key. `/login`
+only connects the optional Wukong account; it does not provide or configure a model.
 
-可选账号使用同一组 CLI/TUI 入口：
+The optional account uses the same entrypoints:
 
 ```bash
 wukong login
 wukong logout
 ```
 
-`wukong logout`（TUI 中为 `/logout`）先用当前 credential slot 中的 refresh
-token 请求远端撤销，然后始终继续删除本地 token 和托管账号配置。HTTP 200 表示
-远端会话已确认撤销；网络失败、超时、限流或服务端错误时，远端状态显示为 unknown，
-但本地仍完成退出，并明确提示服务端会话可能仍有效。需要立即失效时按输出联系
-`https://wukong.today/contact`；不要把“本地已退出”误读成“远端已确认撤销”。
-没有 token 时重复执行不会发起撤销请求，也不会破坏 BYOK provider。若本地文件或
-配置因权限等原因无法清理，命令会失败并保留明确错误。
+`wukong logout` (`/logout` in the TUI) first attempts a remote revocation with
+the refresh token in the current credential slot, then always deletes the local
+token and managed account configuration. HTTP 200 means the remote session was
+confirmed revoked; on network failure, timeout, rate limiting, or a server error
+the remote state is reported as unknown while the local sign-out still completes,
+with a clear warning that the server-side session may remain valid. If it must be
+invalidated immediately, follow the contact link printed by the command
+(`https://wukong.today/contact`); do not read "signed out locally" as "revoked
+remotely". Running logout again without a token sends no revocation request and
+does not touch BYOK providers. If local files cannot be cleaned up, the command
+fails with an explicit error.
 
-Provider 目录默认先后读取：
+The provider catalog reads, in order:
 
 1. `https://modelpricelab.com/api.json`
 2. `https://models.dev/api.json`
 
-源码中存在最后使用离线 snapshot 的路径，但公开 `v0.0.22` native archive 因
-release-profile 缺陷没有嵌入该 snapshot。因此两个网络目录都不可用时，不能承诺
-公开 `v0.0.22` binary 的 `/provider` 或未指定 `--url` 的
-`wukong provider catalog` 仍可离线工作；应按明确错误恢复网络或提供可用 catalog。
-`0.1.0` release workflow 会嵌入同一确定性 snapshot，并在六平台 ZIP 中完成
-provider smoke；历史 `v0.0.22` archive 的缺陷不会被追溯改写。
-
-可通过环境变量替换首选目录：
+Override the preferred catalog with an environment variable:
 
 ```bash
 WUKONG_CODE_CATALOG_URL=https://catalog.example.com/api.json wukong provider catalog list
 ```
 
-显式传入 `--url` 时只访问指定地址，不会静默回退，便于验证私有目录：
+Passing `--url` explicitly contacts only that address with no silent fallback,
+which is useful for private catalogs:
 
 ```bash
 wukong provider catalog list --url https://catalog.example.com/api.json
 ```
 
-### 5. 校验配置
+### 5. Validate configuration
 
 ```bash
 pnpm -C apps/wukong run dev:cli-only -- doctor
 ```
 
-### 6. 预览第一个 Headless Loop
+### 6. Preview your first headless Loop
 
 ```bash
-pnpm -C apps/wukong run dev:cli-only -- loop "完成当前改动" --dry-run
+pnpm -C apps/wukong run dev:cli-only -- loop "finish the current change" --dry-run
 ```
 
-审查输出后，把列出的 exact checks、Gate、workspace 与 review 授权 flags 加回
-同一条命令。裸 headless 命令不会替用户接受这些决定。
+After reviewing the output, add the exact checks, Gate, workspace, and review
+authorization flags it lists back onto the same command. A bare headless command
+never accepts these decisions on your behalf.
 
-### 7. 创建项目 review policy
+### 7. Create a project review policy
 
 ```bash
 pnpm -C apps/wukong run dev:cli-only -- review init
 ```
 
-### 8. 为 finding 记录本地反馈
+### 8. Record local feedback for a finding
 
 ```bash
 pnpm -C apps/wukong run dev:cli-only -- review feedback <finding-id> accept
 ```
 
-### 9. 在 TUI 内启动 Loop
-
-交互式 TUI 内当前可用：
+### 9. Start a Loop inside the TUI
 
 ```text
 /loop <objective>
@@ -164,130 +168,155 @@ pnpm -C apps/wukong run dev:cli-only -- review feedback <finding-id> accept
 /loop stop
 ```
 
-以 `-` 开头的 objective 需要放在 `--` 后；未知参数会直接报错，不再被当作 objective。
+Objectives that start with `-` must come after `--`; unknown flags fail
+immediately instead of being treated as the objective.
 
-### 10. 启动受验证约束的 Loop
+### 10. Start a Loop with verification constraints
 
 ```bash
-wukong loop "修复失败测试" --max-iterations 5 --dry-run
-wukong loop "完成 API 改动" --model fast --review-model slow --dry-run
-wukong loop "完成 API 改动" --review-model reviewer --dry-run
-wukong loop "完成 API 改动" --done-when "兼容性测试通过" --constraint "不删除旧字段" --dry-run
+wukong loop "fix the failing tests" --max-iterations 5 --dry-run
+wukong loop "finish the API change" --model fast --review-model slow --dry-run
+wukong loop "finish the API change" --review-model reviewer --dry-run
+wukong loop "finish the API change" --done-when "compatibility tests pass" --constraint "do not remove old fields" --dry-run
 ```
 
-这些命令先生成提案；真正启动时必须把本次 dry-run 输出的 required flags 原样加回。
+These commands produce a proposal first; to actually start, you must add the
+required flags printed by the dry-run back to the same command.
 
-只有真实 Loop 最后的 durable `loop.result` 才把 `PASS=0`、`NEEDS_WORK=1`、
-`ERROR=2` 映射为 Gate verdict；headless SIGINT 为 `130`，表示 lifecycle interruption，
-不是 Gate verdict。`--dry-run` 成功也会退出 `0`，它输出的是
-`loop.finish_line.dry_run`，绝不能当作 `PASS`；参数校验、preflight 阻断和其他命令的
-退出码也不能套用该表。所有用户都可以直接运行本地 BYOK Loop，不要求登录，不设置
-Guest 试用或月度次数，也不请求 Wukong quota 服务。默认单次最多 10 轮，可用
-`--max-iterations` 调整；reviewer step/time 上限和 `/loop stop` 继续提供失控保护。
-`verify`、`scan`、`proof` 是内部检查层和高级诊断命令。
+Only the final durable `loop.result` of a real Loop maps `PASS=0`,
+`NEEDS_WORK=1`, `ERROR=2` to a Gate verdict; a headless SIGINT is `130` and
+means lifecycle interruption, not a verdict. A successful `--dry-run` also exits
+`0` while printing `loop.finish_line.dry_run` — never treat it as `PASS`, and do
+not apply this table to argument validation, preflight blocks, or other
+commands. Everyone can run local BYOK Loops directly: no login, no guest trial,
+no monthly cap, and no Wukong quota service. The default limit is 10 iterations,
+adjustable with `--max-iterations`; reviewer step/time ceilings and `/loop stop`
+remain the runaway protection. `verify`, `scan`, and `proof` are internal check
+layers and advanced diagnostics.
 
-#### 用户从输入到结果的完整流程
+#### From input to outcome
 
-普通输入只代表一次模型对话；模型回复本身不是项目已经完成或通过验证的证据。
-需要 Wukong 修改并验证项目时使用 `/loop <目标>` 或 `wukong loop <目标>`：
+An ordinary prompt is one model conversation; a model reply is not evidence that
+the project is done. Use `/loop <goal>` or `wukong loop <goal>` when you want
+Wukong to change and verify the project:
 
-1. **输入**：写清目标；最好补充 Done when 和 Must not。不要把 API Key、token
-   或密码写进 prompt。
-2. **启动前确认**：TUI 先在一份 Preflight 中显示成功条件、Must not 原文、逐项
-   checks、review criteria、Writer/Reviewer、脱敏 Provider origin、既有 dirty paths、
-   权限、出站范围/体积、审批顺序、结果处理、轮次上限、writer/reviewer
-   provider-call ceiling 和可选 token budget。Headless dry-run 列出同类运行事实与
-   required flags。
-   本地读取、Provider 传输、权限和项目 check 执行仍分别授权，避免一次确认静默扩权。
-   有风险时应先编辑、查看 dirty workspace 或取消；危险 Continue 固定在最后。
-   “Continue anyway”不放宽 Gate。只有 versioned policy 证明没有适用 executable
-   checks 时，文档/配置任务才能采用显式 no-check decision；source change 缺少本应
-   存在的 checks 会得到 `NEEDS_WORK/checks_missing`，不能得到 `PASS`。
-3. **执行中**：关注 writer iteration、累计耗时、当前 tool/activity、
-   calls/tokens/retries/remaining budget 和真实 blocker。
-   TUI 与 headless 现在读取同一个 runtime phase event：`WRITE` 代表 Writer 正在修改或
-   推进目标，`CHECK` 代表 frozen Gate checks 正在执行，`REVIEW` 代表 fresh reviewer
-   正在读取 bounded evidence；tool 名只作为 activity detail，不再决定 Gate phase。
-   相同输出或 blocker 不再无限重复；达到无进展条件会提前停止。
-4. **得到结果**：终态摘要由本地运行记录生成，而不是相信模型的结束文案。它应
-   显示可获得的 Gate 状态、writer iteration、Gate attempt、耗时、workspace、checks、
-   evidence、主要 blocker 与确定性的 Next。calls/tokens/retries/remaining 以及
-   pre-existing、Wukong introduced/modified/deleted 和 unknown 会按 durable record 分开
-   展示；无法证明的 token 或文件归因保持 `unavailable` / `unknown`，不能补写成
-   成功数据。Wukong 不估算 provider 费用。
-5. **结果后处理**：Wukong 不会因为 `PASS` 自动 commit、push 或发布。先检查
-   `git status --short`、`git diff`，并用 `/loop status` 或 review feedback 检查
-   non-blocking findings，再决定提交、继续 Loop、修改 Finish Line，或处理
-   provider/权限/外部依赖问题。
+1. **Input.** State the goal clearly, ideally with Done-when and Must-not rules.
+   Never put API keys, tokens, or passwords in a prompt.
+2. **Preflight confirmation.** The TUI shows one Preflight with the success
+   criteria, Must-not text, itemized checks, review criteria, writer/reviewer,
+   sanitized provider origin, pre-existing dirty paths, permissions, outbound
+   scope, approval order, result handling, iteration cap, provider-call
+   ceilings, and optional token budget. Headless dry-runs list the same facts
+   plus required flags. Local read, provider transmission, permissions, and
+   project-check execution are approved separately so one confirmation never
+   silently widens scope. Edit, inspect, or cancel when something looks risky;
+   the dangerous Continue is always last, and "Continue anyway" never relaxes
+   the Gate. Only a versioned no-check decision can cover a docs/config task
+   with no applicable executable checks; a source change missing required checks
+   ends `NEEDS_WORK/checks_missing`, never `PASS`.
+3. **During the run.** Watch the writer iteration, elapsed time, current
+   tool/activity, calls/tokens/retries/remaining budget, and real blockers.
+   TUI and headless share the same runtime phase events: `WRITE` means the
+   writer is editing, `CHECK` means frozen Gate checks are running, `REVIEW`
+   means the fresh reviewer is reading bounded evidence. Repeated identical
+   output or blockers stop; a no-progress condition ends the run early.
+4. **Outcome.** The terminal summary comes from the local run record, not from
+   the model's closing words. It shows the attainable Gate state, iterations,
+   attempts, duration, workspace, checks, evidence, main blocker, and a
+   deterministic next action. Pre-existing changes are separated from Wukong
+   introduced/modified/deleted and unknown attribution; unprovable token or file
+   attribution stays `unavailable`/`unknown`. Wukong does not estimate provider
+   cost.
+5. **After the outcome.** Wukong never commits, pushes, or publishes on `PASS`.
+   Check `git status --short` and `git diff`, review non-blocking findings via
+   `/loop status` or review feedback, then decide to commit, continue, adjust
+   the Finish Line, or fix provider/permission/external issues.
 
-| 终态 | 代表什么 | 用户下一步 |
+| Outcome | Meaning | Your next step |
 |---|---|---|
-| `PASS` | 冻结的本地 checks 与 reviewer Gate 均通过 | 审查 diff 和 non-blocking findings；确认无误后按自己的 Git/交付流程提交 |
-| `NEEDS_WORK` | 仍有 blocker、权限边界、轮次上限或无进展 | 先按 `Blocker` / `Next` 处理；再 `/loop resume`，或用更准确的 Finish Line 新建 Loop |
-| `ERROR` | provider、check、state 或运行时未形成可信结论 | 修复运行条件后重试；若有 `provider_outcome_unknown`，先核对 request/idempotency 与 provider logs/billing，禁止盲目重试 |
-| `PAUSED` | TUI Ctrl-C 或 `/loop pause` 暂停同一 contract，未产生 Gate verdict | 检查 workspace；确认安全后 `/loop resume` |
-| `STOPPED_BY_USER` | `/loop stop` 或 headless 中断停止运行，未产生 Gate verdict | 检查保留改动；`/loop stop` 后新建 Loop，headless 仅在 provider outcome 已知时 resume |
+| `PASS` | Frozen local checks and the reviewer Gate both passed | Review the diff and non-blocking findings; deliver through your own Git workflow |
+| `NEEDS_WORK` | A blocker, permission boundary, iteration cap, or no-progress stop remains | Handle the `Blocker`/`Next`; then `/loop resume`, or start a new Loop with a sharper Finish Line |
+| `ERROR` | Provider, checks, state, or runtime could not produce a trustworthy conclusion | Fix the run conditions and retry; for `provider_outcome_unknown`, reconcile request/idempotency IDs with provider logs or billing before any retry |
+| `PAUSED` | TUI Ctrl-C or `/loop pause` paused the contract; no verdict | Inspect the workspace; `/loop resume` when safe |
+| `STOPPED_BY_USER` | `/loop stop` or a headless interruption stopped the run; no verdict | Inspect kept changes; after `/loop stop` start a new Loop; headless resume only exists when the provider outcome is known |
 
-在 preflight 选择取消不会创建 run，也不产生上述结果。
+Cancelling during preflight creates no run and produces none of the outcomes above.
 
-0.0.19 的新 Loop 会先进入 Finish Line；当前开发 TUI 已将实际输入、运行设置、dirty workspace、出站边界与结果处理合并到最终 Preflight 汇总，但 distinct security approvals 仍分别执行。确认后才创建合同与 run。`--dry-run` 只生成完整提案、workspace challenge、warning digest 和 Gate approval digest，不创建信任授权、合同或 run。Headless 真正执行 discovered checks 时必须确认 dry-run 返回的精确 digest；`--yes`、Auto 或 YOLO 都不能代替。项目 check 会按当前 OS 权限运行可信 workspace 里的 shell，Wukong 会执行静态风险拦截，但不宣称提供完整 shell sandbox。没有适用 executable checks 时必须采用可审计的 versioned no-check decision；它只覆盖 policy 允许的文档/配置改动。source change 缺少必需 checks 时必须补充 checks 或按 `NEEDS_WORK/checks_missing` 的 `Next` 处理。
+The Loop enters the Finish Line first. The current TUI consolidates the actual
+input, run settings, dirty workspace, outbound boundaries, and result handling
+into the final Preflight, while distinct security approvals still run
+separately. `--dry-run` only generates the full proposal, workspace challenge,
+warning digest, and Gate approval digest — no trust grants, contract, or run.
+A real headless run must confirm the exact digests returned by the dry-run;
+`--yes`, Auto, or YOLO are not substitutes. Project checks run with your current
+OS permissions in a trusted workspace shell; Wukong applies static risk blocking
+but does not claim a complete shell sandbox.
 
-0.0.20 会在 Finish Line 的 **Review verification** 中列出本机现有
-Verification Skill 的 strict criteria sidecar。`○ suggested` 只表示
-versioned path/package 规则命中，不等于已选择；只有用户显式勾选并确认
-exact source、full provenance digest 和 flat order 后才会创建 V3 合同。
-同名 Skill 不再 first-wins，必须选择完整 identity。Skill Markdown 正文、
-commands、scripts、tools、hooks、MCP 和权限声明都不能进入 Gate。
+The Finish Line's **Review verification** step lists strict criteria sidecars
+from local Verification Skills. `○ suggested` only means a versioned
+path/package rule matched; a V3 contract is created only after you explicitly
+select entries with their exact source, provenance digest, and order. Skill
+Markdown bodies, commands, scripts, tools, hooks, MCP, and permission claims
+never enter the Gate.
 
-无论是否选择 Skill，新的 reviewer attempt 都先要求独立的本机 broker
-read trust，再逐 run 确认允许的输入范围、上限和实际 BYOK provider
-endpoint。允许的 changed/untracked/scope-matched 文件与脱敏 Gate evidence
-可能发送给该 provider，但不会上传给 Wukong Web/D1；`.env`、credential、
-session、trust store、log、binary/generated 路径会被 hard-exclusion policy 拒绝，
-内容过滤还会拦截可识别的 secret。过滤不能代替用户检查即将参与 review 的项目
-改动；目标 provider 自己的数据与留存政策仍然适用。Cancel、缺少 exact consent
-或 drift 时不会打开 provider connection。
+With or without a Skill, every reviewer attempt requires an independent local
+broker read trust, then per-run confirmation of allowed inputs, ceilings, and
+the actual BYOK provider endpoint. Allowed changed/untracked/scope-matched files
+and sanitized Gate evidence may go to that provider — never to Wukong Web/D1.
+`.env`, credential, session, trust-store, log, and binary/generated paths are
+hard-excluded, and a content filter blocks recognizable secrets. Filtering does
+not replace reviewing the changes being sent; the provider's own data and
+retention policies still apply. Cancel, missing exact consent, or drift keeps
+the provider connection closed.
 
-Headless 先查看同一协议：
+Preview the same protocol headlessly:
 
 ```bash
-wukong loop "完成 API 改动" --dry-run --output-format stream-json
+wukong loop "finish the API change" --dry-run --output-format stream-json
 ```
 
-文本 dry-run 会按当前仓库只列出真正需要的 **Headless start flags**，包括
-discovered-check 选择、Gate approval、必要时的 warning ack/project trust、短时
-broker challenge，以及本 run 的 provider-send consent。把这些 flags 加回同一条
-`wukong loop` 命令；不带授权的裸命令会 fail closed，而不是默认替用户同意。
+The text dry-run lists only the **headless start flags** this repository
+actually requires: discovered-check selection, Gate approval, warning
+acknowledgement or project trust when needed, the short-lived broker challenge,
+and provider-send consent for the run. Add those flags to the same
+`wukong loop` command; a bare command without authorization fails closed
+instead of assuming consent.
 
-只有 selection 非空时才提交返回的
-`--verification-catalog-digest` 与可重复
-`--verification-skill "<selection-id>@<provenance-digest>"`；无 selection
-继续创建 V2，并且必须省略 catalog CAS。实际启动还需 dry-run 返回的短时
-`--trust-review-subject` challenge 与 exact `--ack-review-subject`。`--yes`、
-Auto 或 YOLO 不能代替这些决定。
+Submit `--verification-catalog-digest` and the repeatable
+`--verification-skill "<selection-id>@<provenance-digest>"` only when the
+selection is non-empty; with no selection a V2 contract is created and the
+catalog CAS must be omitted. Starting also requires the dry-run's short-lived
+`--trust-review-subject` challenge and the exact `--ack-review-subject`.
 
-0.0.16 会在 Loop 创建时冻结用户 objective 和显式 completion criterion。Reviewer 每轮必须先处理上一轮 blocker；同一 blocker 连续两轮不变时只启动一次只读 strategist。策略后仍无进展会返回 `NEEDS_WORK/no_progress`，不会继续空转或偷偷增加迭代额度。
+The Loop freezes the objective and explicit completion criteria at creation.
+Each reviewer round must address the previous blocker; an unchanged blocker for
+two consecutive rounds triggers one read-only strategist. If there is still no
+progress, the Loop returns `NEEDS_WORK/no_progress` instead of spinning or
+quietly raising the iteration ceiling.
 
-### 11. 选择 Permission Mode
+### 11. Choose a permission mode
 
-- `manual`：需要时询问用户，适合交互式使用。
-- `auto`：不提问，但受 workspace、敏感目标、高风险 Bash 和 custom/MCP capability 边界约束；阻断发生在活动 Loop 内时，当前 run 以 `NEEDS_WORK/permission_required` 结束，而不是进入可直接 resume 的 `PAUSED`。
-- `yolo`：跳过普通 approval 的危险模式，但仍不能绕过用户 deny、安全 Hook、Plan guard、Role/profile allowlist 或只读分身上限。
+- `manual`: ask when needed; best for interactive use.
+- `auto`: no prompts, bounded by workspace, sensitive targets, high-risk Bash,
+  and custom/MCP capability rules. If a block happens inside an active Loop, the
+  run ends `NEEDS_WORK/permission_required` rather than a resumable `PAUSED`.
+- `yolo`: skips ordinary approvals but still cannot bypass user denies, safety
+  hooks, the Plan guard, role/profile allowlists, or read-only clone limits.
 
-Headless `-p` 默认使用受限 Auto。危险 headless 执行必须明确写出：
+Headless `-p` uses restricted Auto by default. Dangerous headless execution must
+be explicit:
 
 ```bash
 wukong -p "<task>" --yolo --yes
 ```
 
-上例只展示参数语法，不要原样复制到有未提交改动的 workspace；YOLO prompt 可能修改
-文件并执行命令。
+The example shows flag syntax only — do not paste it into a workspace with
+uncommitted changes; a YOLO prompt may modify files and run commands.
 
-单独 `--yes` 不再启用 YOLO。旧 `--auto-approve` 在一个兼容版本内仍映射到 YOLO，但会显示弃用和危险警告。
+`--yes` alone does not enable YOLO. The legacy `--auto-approve` still maps to
+YOLO for one compatible version with a deprecation and danger warning.
 
-### 12. 继续其他 Agent 的本地会话
-
-TUI 内使用统一入口：
+### 12. Continue another agent's local session
 
 ```text
 /resume
@@ -298,79 +327,99 @@ TUI 内使用统一入口：
 /resume grok
 ```
 
-`/resume` 默认只显示 Wukong 会话。只有显式使用 `codex`、`claude`、`cursor`、
-`kimi` 或 `grok` 参数时，才扫描对应 Agent 的本地会话。`/resume-codex`、
-`/resume-claude`、`/resume-cursor` 是兼容入口，不进入主命令列表；Kimi 与 Grok
-只使用规范 source 参数。
+`/resume` lists Wukong sessions only; the external sources are scanned only when
+named explicitly. `/resume-codex`, `/resume-claude`, and `/resume-cursor` remain
+compatibility aliases outside the main command list; Kimi and Grok use only the
+canonical source argument.
 
-Wukong session 会原生恢复；外部 session 会通过内置 Skill 读取本地 transcript，提取目标、已完成工作、未完成工作和最后请求，然后在 Wukong 中继续。该过程不会重启原 Agent、继承其权限或重放旧工具调用；继续前必须重新读取当前 workspace 与 Git 状态。
+Wukong sessions resume natively. External sessions are read through a built-in
+Skill that extracts the goal, finished work, unfinished work, and last request
+from the local transcript, then continues in Wukong. The process never restarts
+the original agent, inherits its permissions, or replays old tool calls; the
+current workspace and Git state are re-read before continuing.
 
-Welcome 最多建议一条当前 workspace、30 天内的外部会话，可在 `~/.wukong/tui.toml` 的 `[resume] foreign_suggestions = false` 中关闭；显式 `/resume <source>` 不受此开关影响。Session picker 支持搜索最近 100 个 Wukong session 的用户 prompt 摘要，每个 session 最多读取 128 KiB，并忽略 system、tool 和 synthetic 内容。
+Welcome suggests at most one external session from the current workspace within
+30 days; disable it with `[resume] foreign_suggestions = false` in
+`~/.wukong/tui.toml`. The session picker searches user-prompt summaries of the
+last 100 Wukong sessions, reads at most 128 KiB per session, and ignores
+system, tool, and synthetic content.
 
-## 当前 top-level commands
+## Current top-level commands
 
-| 命令 | 状态 | 用途 |
+| Command | Status | Purpose |
 |---|---|---|
-| `wukong` | 已实现 | 启动交互式 TUI |
-| `wukong -p <prompt>` | 已实现 | 执行一次 prompt 并输出结果 |
-| `wukong provider` | 已实现 | 配置 BYOK LLM provider、API Key 与默认模型 |
-| `wukong acp` | 已实现 | 以 Agent Client Protocol server 运行 |
-| `wukong server` | 已实现 | 启动本地 REST/WebSocket server |
-| `wukong web` | 已实现 | 打开本地 web UI |
-| `wukong verify` | 已实现 | 运行确定性检查并生成本地证据报告 |
-| `wukong scan` | 已实现 | 只读风险扫描 |
-| `wukong guard` | 已实现 | 本地 guard 状态、统计和命令风险阻断 |
-| `wukong proof` | 已实现 | 生成 Merge Proof Report（verify + scan 汇总） |
-| `wukong judge` | 已实现 | deterministic 合并判定（只审不写） |
-| `wukong loop` | 已实现 | headless Loop；支持 `--max-iterations`、`--every`、`--model`、`--review-model`、`--dry-run` |
-| `wukong review init` | 已实现 | 创建 `.wukong/review-policy.md` |
-| `wukong review feedback` | 已实现 | 将 finding 反馈追加到本地 JSONL，不上传源码或 reason |
-| `wukong review stats` | 已实现 | 查看本地反馈原始数量；样本少于 10 时隐藏质量比例 |
-| `wukong login` | 已实现 | 连接可选 Wukong 账号；不配置模型 |
-| `wukong logout` | 已实现 | 尽力撤销远端 refresh token，并始终清理本地账号凭据与托管配置 |
-| `wukong doctor` | 已实现 | 校验配置文件 |
-| `wukong export` | 已实现 | 导出 session ZIP |
-| `wukong vis` | 已实现 | 打开 session visualizer |
-| `wukong migrate` | 已实现 | 迁移 legacy wukong-cli 数据 |
-| `wukong upgrade` / `wukong update` | 已实现 | 升级 Wukong |
+| `wukong` | implemented | Start the interactive TUI |
+| `wukong -p <prompt>` | implemented | Run one prompt and print the result |
+| `wukong provider` | implemented | Configure the BYOK LLM provider, API key, and default model |
+| `wukong acp` | implemented | Run as an Agent Client Protocol server |
+| `wukong server` | implemented | Start the local REST/WebSocket server |
+| `wukong web` | implemented | Open the local web UI |
+| `wukong verify` | implemented | Run deterministic checks and write a local evidence report |
+| `wukong scan` | implemented | Read-only risk scan |
+| `wukong guard` | implemented | Local guard status, stats, and command risk blocking |
+| `wukong proof` | implemented | Merge Proof Report (verify + scan summary) |
+| `wukong judge` | implemented | Deterministic merge verdict (review only, no writes) |
+| `wukong loop` | implemented | Headless Loop with `--max-iterations`, `--every`, `--model`, `--review-model`, `--dry-run` |
+| `wukong review init` | implemented | Create `.wukong/review-policy.md` |
+| `wukong review feedback` | implemented | Append finding feedback to local JSONL; never uploads source or reasons |
+| `wukong review stats` | implemented | Show raw local feedback counts; quality ratios hidden below 10 samples |
+| `wukong login` | implemented | Connect the optional Wukong account; does not configure models |
+| `wukong logout` | implemented | Best-effort remote refresh-token revocation; always clears local account credentials |
+| `wukong doctor` | implemented | Validate configuration files |
+| `wukong export` | implemented | Export a session ZIP |
+| `wukong vis` | implemented | Open the session visualizer |
+| `wukong migrate` | implemented | Migrate legacy wukong-cli data |
+| `wukong upgrade` / `wukong update` | implemented | Upgrade Wukong |
 
-## 更新与 TUI 公告
+## Updates and TUI announcements
 
-- CLI 启动时会检查更新；默认允许受支持的包管理器在后台自动安装。可在 `/settings` → `Upgrade` 中关闭，或设置 `~/.wukong/tui.toml` 的 `[upgrade].auto_install = false`。
-- `wukong upgrade` / `wukong update` 会立即检查并安装最新版本，不再二次询问。native macOS/Linux 会校验 Release SHA-256 后原子替换当前二进制；native Windows 或无法识别的安装来源会回退到下载页。
-- 主 TUI 启动后会异步拉取一次公告，3 秒超时。失败不会阻塞 CLI，每次最多展示一条。
-- 公告支持客户端版本、时间范围、`once` / `cooldown` / `always` 频控和安全链接白名单。
-- `0.0.10` 及更早版本不能读取新公告地址，需要先通过更新通道升级。
+- The CLI checks for updates at startup; supported package managers may
+  auto-install in the background by default. Disable it in `/settings` →
+  `Upgrade` or set `[upgrade].auto_install = false` in `~/.wukong/tui.toml`.
+- `wukong upgrade` / `wukong update` checks and installs the latest version
+  immediately without a second prompt. Native macOS/Linux verifies the release
+  SHA-256 and atomically replaces the binary; native Windows or unrecognized
+  origins fall back to the download page.
+- After the main TUI mounts, one announcement is fetched asynchronously with a
+  3-second timeout. Failures never block the CLI; at most one announcement is
+  shown per launch.
+- Announcements support client versions, time ranges, `once` / `cooldown` /
+  `always` frequency control, and a safe-link allowlist.
 
-完整实现和发布边界见 [CLI 更新与公告契约](operations/updates-and-announcements.md)。
+See the [updates and announcements contract](operations/updates-and-announcements.md)
+for the full behavior.
 
-## 商业化命令状态
+## Verification command status
 
-这些命令是商业化重构目标。当前 P0 已完成本地命令行闭环：
+The local verification loop is complete for P0:
 
-| 命令 | 计划定位 | 技术方案 |
+| Command | Planned role | Status |
 |---|---|---|
-| `wukong verify` | 本地验证当前改动并生成证据报告 | 已实现 |
-| `wukong scan` | 只读风险扫描 | 已实现 |
-| `wukong guard` | 高风险命令确认/拦截 | 已实现，P0 不自动改 shell profile |
-| `wukong proof` | Merge Proof Report（verify + scan 汇总） | 已实现 |
-| `wukong judge` | deterministic 只审不写判定 | 已实现 |
-| `wukong loop` | 本机迭代 loop，直到检查与只读 reviewer 通过 | top-level 和 TUI 均已实现；返回结构化多 findings，只有 blocking finding 阻止 Loop |
-| `wukong review` | 项目 review policy 与本地 finding feedback | `init`、`feedback`、`stats` 已实现 |
-| `wukong_verify` agent tool | 让 agent 在完成前调用验证 | 已实现，作为 builtin tool 接入 agent-core |
-| `/verify`、`/scan`、`/guard`、`/goal`、`/proof`、`/judge`、`/loop` | TUI 内验证、扫描、guard 状态及 goal/loop 驱动 | 已实现 |
-| `wukong sync` | 云同步 | 等待新 base API 与本地数据模型对齐 |
-| `wukong today` | Local Loop Briefing：本地统计 + focus，不依赖网络 | 已实现；当前没有可见的 TUI `/today` 命令 |
+| `wukong verify` | Verify current changes locally with an evidence report | Implemented |
+| `wukong scan` | Read-only risk scan | Implemented |
+| `wukong guard` | Confirm/block high-risk commands | Implemented; P0 does not edit shell profiles |
+| `wukong proof` | Merge Proof Report (verify + scan) | Implemented |
+| `wukong judge` | Deterministic review-only verdict | Implemented |
+| `wukong loop` | Local loop until checks and the read-only reviewer pass | Implemented for CLI and TUI; structured multi-finding results, only blocking findings stop the Loop |
+| `wukong review` | Project review policy and local finding feedback | `init`, `feedback`, `stats` implemented |
+| `wukong_verify` agent tool | Let the agent verify before claiming done | Implemented as a builtin agent-core tool |
+| `/verify`, `/scan`, `/guard`, `/goal`, `/proof`, `/judge`, `/loop` | TUI equivalents | Implemented |
+| `wukong sync` | Cloud sync | Waiting for the new base API and local data model |
+| `wukong today` | Local Loop briefing: local stats + focus, no network | Implemented; no visible TUI `/today` command currently |
 
-详见 [商业化重构技术实现方案](tech/commercial-refactor-implementation.md)。
+Details: [commercial refactor implementation plan](tech/commercial-refactor-implementation.md)
+(internal engineering record, in Chinese).
 
-## 0.0.12 兼容性
+## 0.0.12 compatibility
 
-旧 `--until verify-pass`、`scan-clean` 和 `judge-pass` 参数仍被接受，并统一映射到 `proof-pass`。恢复 0.0.11 Goal records 时执行同样迁移；不会重写原始历史文件。完整行为和未来移除窗口见 [Goal 与 Loop 兼容矩阵](design/0.0.12-compatibility.md)。
+The legacy `--until verify-pass`, `scan-clean`, and `judge-pass` arguments are
+still accepted and map to `proof-pass`. Resuming 0.0.11 Goal records applies the
+same migration without rewriting history. See the
+[compatibility matrix](design/0.0.12-compatibility.md) (internal record, in Chinese).
 
-## 本地数据
+## Local data
 
-当前新 base 使用 `~/.wukong` 作为默认数据目录。配置和凭证的具体格式以代码为准，常见文件包括：
+The default data directory is `~/.wukong`. Common files:
 
 ```text
 ~/.wukong/config.toml
@@ -378,13 +427,13 @@ Welcome 最多建议一条当前 workspace、30 天内的外部会话，可在 `
 ~/.wukong/credentials/
 ```
 
-测试或调试时优先使用临时 home，避免污染真实配置：
+Prefer a temporary home for testing so real configuration stays clean:
 
 ```bash
 WUKONG_CODE_HOME=/tmp/wukong-test pnpm -C apps/wukong run dev:cli-only -- doctor
 ```
 
-## 开发校验
+## Development checks
 
 ```bash
 pnpm --filter @wukong.today/code run typecheck
@@ -392,11 +441,10 @@ pnpm -C apps/wukong run dev:cli-only --help
 pnpm -C apps/wukong run dev:cli-only -- login --help
 ```
 
-## 常见误区
+## Common misconceptions
 
-- `wukong verify`、`wukong guard`、`wukong scan` 是当前已实现命令。
-- `wukong_verify` 是内置 agent tool，不是 top-level shell command。
-- `/verify`、`/scan`、`/guard status`、`/proof`、`/judge`、`/goal`、`/loop` 是 TUI slash commands。
-- `wukong login --provider google --dev-email ...` 不是当前登录命令参数。
-- `wukong sync` 与 Companion `journey` 已从当前产品范围移除，不是待发现的隐藏命令。
-- 文档站 `/en/guides/*`、`/zh/guides/*` 页面当前没有对应源文件，不应作为发布入口宣传。
+- `wukong verify`, `wukong guard`, and `wukong scan` are implemented commands.
+- `wukong_verify` is a builtin agent tool, not a shell command.
+- `/verify`, `/scan`, `/guard status`, `/proof`, `/judge`, `/goal`, `/loop` are TUI slash commands.
+- `wukong login --provider google --dev-email ...` is not a current login argument.
+- `wukong sync` and the Companion `journey` are out of scope, not hidden commands.

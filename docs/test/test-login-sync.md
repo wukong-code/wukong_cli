@@ -1,5 +1,7 @@
 # 登录与同步历史验收记录
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 > 适用范围: `wukong_cli` 新 Kimi-code base
 > 当前状态: `wukong login` 只连接可选账号；模型 Key 由 `/provider` 配置。未闭环的 Web sync 和 Companion 数据面已于 2026-07-22 删除。
 > 本文件只保留历史验收背景，不是当前待实现 contract 或可直接运行的测试脚本。

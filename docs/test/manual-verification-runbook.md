@@ -1,5 +1,7 @@
 # 手工验证 Runbook（0.1.x 验证债务）
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 > 目的：把 TODO 中不能进 CI 的发布后验证项变成任何人 20–30 分钟可执行完的固定流程。
 > 执行结果按 TODO.md 对应条目勾选并注明日期；失败项按严重度走 ROADMAP 发布后事件处理。
 > 通用要求：全程用公开发布的 stable binary（`wukong --version` 记录版本），不用开发构建。
