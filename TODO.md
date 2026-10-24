@@ -1,12 +1,14 @@
 # Wukong CLI - TODO
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 > 定位: 本文件是待讨论任务暂存池与历史进度参考，不是可自动执行的任务列表。方向以 [ROADMAP.md](ROADMAP.md) 为准；只有用户讨论确认、明确纳入具体版本文档的任务才可实施，checkbox、优先级与版本标题不授权开工。不得自行将本文件条目移入版本。`0.1.2`（2026-10-24 发布）是当前 stable 的开源发布版（组织迁移 + MIT 许可，无功能面变化），原 First Success 功能面顺延与 0.1.3 候选一起评审；新增 0.1.3 团队验收试点候选与 0.2.0/0.3.0 都需各自设计与范围批准。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
 ## 本地 CLI 开源与服务收费方向（文档已确认，实际发布/实验未执行）
 
-见 [开源与服务收费路线](docs/business/open-source-and-service-strategy.md)：本地 CLI 及
+见 开源与服务收费路线（已移至私有运营仓库）：本地 CLI 及
 必要依赖、测试和文档开源，官网后端保持私有；先按次收取仓库接入/验收陪跑费，
 有主动复购后再验证固定范围月度服务。开源发布方案、最终许可证、服务合同与
 收款路径仍需确认，不新增自动执行 checkbox，也不扩张 0.1.2 已批准范围。

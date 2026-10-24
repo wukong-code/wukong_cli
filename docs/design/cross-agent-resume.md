@@ -1,5 +1,7 @@
 # 跨 Agent Session Resume 设计
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 > 状态：本地 discovery、来源 picker 和只读继续已实现
 > 版本：当前主干能力，不绑定支付版本
 > 最后更新：2026-08-06

@@ -1,5 +1,7 @@
 # `wukong today` 设计
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 > 当前实现只有顶层 `wukong today`。本文中旧的 `/today` 示例是历史候选交互，
 > 不属于 0.0.22 的可见 TUI command surface。
 

@@ -1,5 +1,7 @@
 # DeepSeek V4 适配优化方案
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 ## 背景
 
 Wukong CLI 通过 `packages/kosong/src/providers/openai-legacy.ts` 中的 `OpenAILegacyChatProvider`，走 OpenAI 兼容 Chat Completions 协议接入 DeepSeek V4。当前对 DeepSeek V4 的支持存在三个层面的不足：**模型能力识别缺失**、**reasoning_effort 参数兼容性错误**、**上下文窗口等默认值无感知**。

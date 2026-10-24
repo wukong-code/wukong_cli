@@ -1,5 +1,7 @@
 # Wukong Code Roadmap
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 > 最后更新: 2026-10-24（`v0.1.2` 开源发布版发布：组织迁移、MIT 许可与公开 provenance 落地；原 First Success 功能面顺延）
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 > 本次确认产品方向与路线图文档；新增试点的技术设计、具体实施范围和服务合同仍待确认，未开工。
@@ -13,13 +15,13 @@ revision、Resume、Provider、Web、更新、插件供应链和 workspace check
 
 本地 CLI 已于 v0.1.2 按 MIT 许可公开，官网后端保持私有；三个仓库已迁入
 `wukong-code` 组织，本地远程与仓库链接已更新。收费从一次明确范围的仓库接入/验收陪跑服务开始，
-有复购后再验证月度服务。具体边界见 [开源与服务收费路线](docs/business/open-source-and-service-strategy.md)。
+有复购后再验证月度服务。具体边界见 开源与服务收费路线（已移至私有运营仓库）。
 
 当前版本真相源：
 
 - [0.1.1 Reliability And Trust Boundary](docs/releases/0.1.1.md)
 - [0.1.2 First Success And Surface Simplification](docs/design/0.1.2-first-success-and-surface-simplification.md)
-- [本地 CLI 开源与服务收费路线](docs/business/open-source-and-service-strategy.md)：CLI 已按 MIT 发布，官网后端私有；服务实验未执行。
+- 本地 CLI 开源与服务收费路线（已移至私有运营仓库）：CLI 已按 MIT 发布，官网后端私有；服务实验未执行。
 - [0.0.18 Loop-First Simplification](docs/design/0.0.18-loop-first-simplification.md)
 - [0.0.19 Explicit Finish Line](docs/design/0.0.19-explicit-finish-line.md)
 - [0.0.20 Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md)
@@ -43,8 +45,8 @@ revision、Resume、Provider、Web、更新、插件供应链和 workspace check
 
 - [已取代：0.2.0 Pro Reliable Autonomy](docs/design/0.2.0-pro-reliable-autonomy.md)（含 [Bounded Parallel Loop](docs/design/0.2.0-bounded-parallel-loop.md) 与 [Local Loop Supervisor](docs/design/0.2.0-local-loop-supervisor.md) 组件；0.2.0 现为 Codebase Reduction）
 - [已取消：0.0.21 Isolated Loop Worktrees](docs/design/0.0.21-isolated-loop-worktrees.md)
-- [商业化与产品重构方案](docs/business/COMMERCIAL_REFACTOR_PLAN.md)
-- [Wukong 能力体系与商业化原则](docs/business/WUKONG_CAPABILITY_MODEL.md)
+- 商业化与产品重构方案（已移至私有运营仓库）
+- Wukong 能力体系与商业化原则（已移至私有运营仓库）
 - [商业化重构技术实现方案](docs/tech/commercial-refactor-implementation.md)
 - [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md)
 - [0.0.16 Loop Convergence](docs/design/0.0.16-loop-convergence.md)

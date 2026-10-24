@@ -1,5 +1,7 @@
 # 0.0.13 Review Learning Loop
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 > 状态：已随 `0.0.13` 发布
 > 目标版本：`0.0.13`
 > 最后更新：2026-07-16

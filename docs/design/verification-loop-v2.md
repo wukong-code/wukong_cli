@@ -1,5 +1,7 @@
 # 0.0.12 Loop-first 开发闭环
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 > 状态：0.0.12 已实现
 > 目标版本：`0.0.12`
 > 最后更新：2026-07-16

@@ -1,5 +1,7 @@
 # Wukong Code 产品设计文档
 
+> Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
+
 > 版本: v1.3
 > 日期: 2026-07-16
 > 状态: 目标设计文档，不代表所有命令已实现。
@@ -147,7 +149,7 @@ Continue? [y/N]
 
 ## 6. Wukong 能力体系
 
-品牌能力、产品术语、权限不变量和商业分层统一以 [Wukong 能力体系与商业化原则](../business/WUKONG_CAPABILITY_MODEL.md) 为准。本文不再维护第二份能力映射。
+品牌能力、产品术语、权限不变量和商业分层统一以 Wukong 能力体系与商业化原则（已移至私有运营仓库） 为准。本文不再维护第二份能力映射。
 
 设计摘要：
 
