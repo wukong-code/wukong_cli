@@ -17,10 +17,10 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "sinon"
         update-types: ["version-update:semver-major"]
+      # Lint toolchain: minor bumps also break type-aware lint (tsgolint crash);
+      # upgrade oxlint/oxlint-tsgolint together as a deliberate change.
       - dependency-name: "oxlint"
-        update-types: ["version-update:semver-major"]
       - dependency-name: "oxlint-tsgolint"
-        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
