@@ -62,7 +62,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
-    "@types/yazl": "^2.4.6",
+    "@types/yazl": "^3.3.1",
     "@wukong/agent-core": "workspace:^",
     "@wukong/build-support": "workspace:*",
     "@wukong/kaos": "workspace:^",
