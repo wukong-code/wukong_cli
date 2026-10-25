@@ -10,6 +10,17 @@ updates:
         dependency-type: production
       development-dependencies:
         dependency-type: development
+    ignore:
+      # Breaking majors that need a manual migration; minor/patch updates still flow.
+      - dependency-name: "@agentclientprotocol/sdk"
+      - dependency-name: "typescript"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "sinon"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "oxlint"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "oxlint-tsgolint"
+        update-types: ["version-update:semver-major"]
   - package-ecosystem: github-actions
     directory: "/"
     schedule:
