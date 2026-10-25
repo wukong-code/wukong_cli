@@ -94,13 +94,13 @@
     "@types/picomatch": "^4.0.3",
     "@types/proper-lockfile": "^4.1.4",
     "@types/regexp.escape": "^2.0.0",
-    "@types/retry": "0.12.0",
-    "@types/sinon": "^21.0.1",
+    "@types/retry": "0.12.5",
+    "@types/sinon": "^22.0.1",
     "@types/tar": "^7.0.87",
-    "@types/yauzl": "^2.10.3",
-    "@types/yazl": "^2.4.6",
+    "@types/yauzl": "^3.4.0",
+    "@types/yazl": "^3.3.1",
     "@wukong/build-support": "workspace:*",
-    "sinon": "^22.0.0",
+    "sinon": "^22.1.0",
     "yazl": "^3.3.1"
   }
 }
