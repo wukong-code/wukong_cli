@@ -23,7 +23,7 @@ Resume 或 provider 行为；当前进程的内存 buffer 会清空，`~/.wukong
 每个 request 只有 `user_id` 和 `events` 两个顶层字段。`user_id` 是
 `kfc_device_id_` 加随机安装 ID，不是 hostname、硬件 ID 或 OS device ID。
 
-自 2026-10-25 起，客户端每批只上传**一条最小信号**，不包含其他任何内容。每批
+自 2026-10-28 起，客户端每批只上传**一条最小信号**，不包含其他任何内容。每批
 压缩为一条记录，字段只有：
 
 - `event`：固定名称 `kfc_signal`；

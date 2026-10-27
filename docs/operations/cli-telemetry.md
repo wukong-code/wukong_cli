@@ -25,7 +25,7 @@ Every request has two top-level fields: `user_id` and `events`. `user_id` is
 `kfc_device_id_` plus a random installation ID — not a hostname, hardware ID, or
 OS device ID.
 
-Since 2026-10-25 the client uploads **one minimal signal per batch** and nothing
+Since 2026-10-28 the client uploads **one minimal signal per batch** and nothing
 else. Each batch collapses to a single record with exactly:
 
 - `event`: the fixed name `kfc_signal`;
