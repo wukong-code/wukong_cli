@@ -6,7 +6,7 @@
 
 ## Opt-out and endpoint
 
-The CLI sends product events to exactly one endpoint:
+The CLI sends a minimal usage signal to exactly one endpoint:
 
 ```text
 POST https://telemetry-logs.wukong.today/v1/event
@@ -23,44 +23,24 @@ in-memory buffer for the current process is cleared and the failure queue at
 
 Every request has two top-level fields: `user_id` and `events`. `user_id` is
 `kfc_device_id_` plus a random installation ID — not a hostname, hardware ID, or
-OS device ID. Each expanded event contains only:
+OS device ID.
 
-- `event_id`: a random 128-bit hex ID;
-- `device_id`, `session_id`: random local identifiers, possibly `null`;
-- `event`: a fixed `kfc_` prefix plus a lifecycle event name;
-- `timestamp`: Unix seconds;
-- `context_app_name`, `context_version`, `context_runtime`, `context_platform`,
-  `context_arch`, `context_ui_mode`;
-- `property_*`: boolean, finite number, string, `null`, or `undefined` values
-  passed at the call site.
+Since 2026-10-28 the client uploads **one minimal signal per batch** and nothing
+else. Each batch collapses to a single record with exactly:
 
-Current property names group by purpose:
+- `event`: the fixed name `kfc_signal`;
+- `timestamp`: Unix seconds of the most recent activity in the batch;
+- `context_version`: the CLI version;
+- `context_platform`: the OS platform;
+- `context_arch`: the CPU architecture (each possibly `null`).
 
-- lifecycle/outcome: `actor`, `status`, `outcome`, `reason`, `reason_code`,
-  `error_type`, `retryable`, `duration_ms`;
-- Loop/Goal: `iterations`, `iteration`, `turns_used`, `tokens_used`,
-  `wall_clock_ms`, `criteria_count`, `contract_source`,
-  `contract_schema_version`, `blocker_count`, `gate_outcome`,
-  `strategist_outcome`, `has_token_budget`, `has_turn_budget`,
-  `has_wall_clock_budget`;
-- provider/runtime class: `provider`, `provider_type`, `protocol`, `method`,
-  `status_code`, `input_tokens`, `limit`;
-- command/tool control: `command`, `tool_name`, `policy_name`,
-  `permission_mode`, `decision`, `approval_surface`, `result`, `has_feedback`,
-  `session_cache_written`, `dup_type`, `repeat_count`, `action`, `at_step`,
-  `step_no`, `turn_id`;
-- UI/config: `enabled`, `theme`, `direction`, `source`, `mode`, `to_mode`,
-  `auto_install`, `changed`, `kind`, `parts`;
-- bounded counts/performance: `count`, `server_count`, `failed_count`,
-  `total_count`, `allowed_tool_count`, `capability_mode`, `profile_category`,
-  `run_in_background`, `recurring`, `coalesced_count`, `stale`, `buffered`, plus
-  compaction token/count/threshold numbers;
-- media upload: `mime_type`, `size_bytes` (never media bytes or paths).
-
-The transport drops non-primitive properties; the client additionally drops
-`model`, `alias`, and `args_hash` centrally so no model identity or correlatable
-hash derived from tool arguments is sent. Context contains no model, terminal,
-locale, OS version, or Node version.
+Event names, tools, commands, durations, `property_*` values, `event_id`,
+`device_id`, and `session_id` are never uploaded. Internal `track()` call sites
+still exist in the source, but the transport minimizes every outbound batch —
+including retries of the local failure queue — before anything leaves the
+device. Older released clients still send their previously documented full
+event payloads; the receiver accepts them and discards everything beyond the
+minimal fields (see retention below).
 
 ## Explicitly never sent
 

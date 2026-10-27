@@ -67,11 +67,11 @@
 
 ### P0：工程维护
 
-- [ ] 按实际 lockfile 重记网站 `npm audit` 基线；2026-10-02 的 15 项（1 critical / 9 high / 5 moderate）与 2026-09-09 的 13 项都是历史记录，不是当前漏洞数。按生产运行时、构建工具链、构建期传递、仅测试四类处置，禁止无审查 `--force`，生产 high 归零或记 owner/期限/缓解措施
-- [ ] CI 工程维护完整验收：2026-10-23 本地已将 8 处 checkout 统一到 SHA-pinned v6，使用锁定 TypeScript，加入 PR 并发取消、main 保留和 CI/CD 时限，并统一仓库开发/审查提示词；工作流检查、20 条发布契约测试及类型检查通过。远端 CI、六平台发布与生产面仍待验收，不勾选整项
+- [x] 按实际 lockfile 重记网站 `npm audit` 基线（2026-10-25 复验：**23 项 = 2 critical / 14 high / 7 moderate**，替代 2026-10-02 的 15 项与 2026-09-09 的 13 项历史快照；四类处置与 owner/期限已记录于 `wukong_web/TODO.md`，生产项 `next`/`@opennextjs/cloudflare`/`zod` 升级待部署窗口）
+- [ ] CI 工程维护完整验收：2026-10-23 本地已将 8 处 checkout 统一到 SHA-pinned v6，使用锁定 TypeScript，加入 PR 并发取消、main 保留和 CI/CD 时限，并统一仓库开发/审查提示词；工作流检查、20 条发布契约测试及类型检查通过。远端 CI、六平台发布与生产面仍待验收，不勾选整项（2026-10-28 更新：远端 CI 已随 PR #20–#30 多次全绿；六平台发布与生产面验收待下一次版本发布时执行）
 
-- [ ] 核验已实现的 optional telemetry 接收端生产部署、独立 D1 migration 和每日 90 天清理回执；源码位于 `wukong_web/workers/telemetry`，只保留安装 ID、使用日期、版本、平台与架构，不存事件内容、不关联账号或 IP，不作 cohort 证据（2026-10-23 只读复核源码，未复验生产，不标记完成）
-- [ ] CLI 统计只发最小使用信号：客户端不再上传事件名、工具、命令、时长和属性，只发随机安装 ID、版本和平台（服务端已只保留这些；旧版本仍会发送完整事件，由服务端收到即丢弃）
+- [x] 核验已实现的 optional telemetry 接收端生产部署、独立 D1 migration 和每日 90 天清理回执（2026-10-28 生产只读核验：D1 `wukong-telemetry` 仅 `telemetry_installs`/`telemetry_active_days` 两表，只含安装 ID/日期/版本/平台/架构，无事件内容列；2 installs/9 active days、无 >90 天残留、每日 cron 已配置，每日清理回执由 cron 配置与零残留推证）
+- [x] CLI 统计只发最小使用信号（2026-10-28：`packages/telemetry` 传输层把每批压缩为单条 `kfc_signal`——安装 ID/版本/平台/架构，事件名、工具、命令、时长、属性、session id 一律不出站；en/zh telemetry 契约文档同步；包内 61 项测试通过）
 
 ### 发布门槛（`minor`）
 
@@ -171,7 +171,7 @@
 - [ ] 至少一个 Windows 实际 repo 完成同一 blocker → fix → full rerun → PASS 用户流程（流程见 [manual-verification-runbook](docs/test/manual-verification-runbook.md) A 节）
 - [x] provider 覆盖 valid、invalid key、model not found、rate limit、timeout 和 outcome unknown；首次成功可归因 install/provider/Preflight/Loop/Gate/stop（2026-08-06）
 - [x] API compatibility、migration/log-security、frontend/design、monorepo package criteria 完成 deterministic trigger/non-trigger、adversarial path、package-root 与重复稳定 eval；本地 Gate/criteria 矩阵连续 3 次 43/43，CI 在 macOS/Linux/Windows 重复同一矩阵（2026-08-07）
-- [ ] Codex、Claude Code、Cursor、Kimi Code、Grok 各完成 picker → editable Goal → Preflight → Loop → terminal/recovery smoke（流程见 [manual-verification-runbook](docs/test/manual-verification-runbook.md) B 节）
+- [ ] Codex、Claude Code、Cursor、Kimi Code、Grok 各完成 picker → editable Goal → Preflight → Loop → terminal/recovery smoke（流程见 [manual-verification-runbook](docs/test/manual-verification-runbook.md) B 节；2026-10-28 前提核验：本机有 codex/claude/grok 真实会话，无 cursor 与 kimi-code 会话目录，且 picker 流程需交互式 TUI，待补齐来源与人工执行）
 - [ ] 首次用户不读内部文档也能理解 Finish Line、workspace 权限、provider-visible input、Gate verdict、STOPPED_BY_USER、文件归因、budget 和 next action
 - [x] targeted/full test、typecheck、lint、build、sherif、package lint 与本地 native installer/ZIP validator 通过（2026-08-06）
 - [x] 当前候选在 clean checkout 连续三次保持 check order、terminal 和 reason code，并完成 docs/installer 全量候选验收（2026-08-08；exact-source CI runs `31241684998`、`31245877736`、`31245881849`；公开资产/installer 回读 `31244905074`）
@@ -268,10 +268,10 @@
 - [x] Codex/Claude Code/Cursor/Kimi Code/Grok Resume 只生成可编辑 objective 草稿，不自动冻结 completion criterion（2026-07-25）
 - [x] imported transcript 中的 `/loop`、`--check`、shell 或成功描述不能获得执行权/验收权（2026-07-25）
 - [ ] macOS/Linux/Windows 覆盖 quoting、Unicode、timeout、cancel、process-tree kill、contract restore
-- [ ] 同一 fresh fixture 连续至少 3 次保持 check 顺序、终态和 reason code 稳定
-- [ ] Kimi Code、Grok 各完成真实本机 picker → handoff → editable contract → Loop → workspace re-check smoke
-- [ ] CLI 与 Web `/api/v1/feedback` 使用共享 versioned contract fixture
-- [ ] 共享隐私负向 fixture 拒绝日志、源码、prompt、路径、session 和附件字段
+- [x] 同一 fresh fixture 连续至少 3 次保持 check 顺序、终态和 reason code 稳定（2026-10-28：stable 0.1.2 binary + GLM-5.2，npm-test seeded-bug fixture 三轮全新副本，check 顺序均为 [npm run test]、1/1 通过、终态均 NEEDS_WORK、reason 均为 bounded review input insufficient、修复均真实生效；附带发现：checks 全过但未提供独立 Done when 时 reviewer 判定输入不足，fail-closed 行为三轮一致）
+- [ ] Kimi Code、Grok 各完成真实本机 picker → handoff → editable contract → Loop → workspace re-check smoke（2026-10-28 前提核验：本机有 `~/.grok/sessions` 但无 `~/.kimi-code`，且需交互式 TUI；待装 Kimi Code 并产生真实会话后执行）
+- [x] CLI 与 Web `/api/v1/feedback` 使用共享 versioned contract fixture（2026-10-28：`feedback-contract.v1.json` 双仓同字节；CLI `packages/oauth/test/feedback-contract.test.ts` 与 Web `test/api/feedback-contract.test.ts` 各 5 项契约测试通过）
+- [x] 共享隐私负向 fixture 拒绝日志、源码、prompt、路径、session 和附件字段（2026-10-28：33 个禁止字段经 Web zod strict 全部 400 拒绝并断言不落库；CLI 侧断言出站键 ⊆ 契约字段且不含任何禁止字段）
 
 ### 发布验收记录与发布后验证债务
 

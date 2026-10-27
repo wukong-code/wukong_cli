@@ -6,7 +6,7 @@
 
 ## 开关与 endpoint
 
-CLI 只向以下 endpoint 发送 product event：
+CLI 只向以下 endpoint 发送最小使用信号：
 
 ```text
 POST https://telemetry-logs.wukong.today/v1/event
@@ -21,41 +21,22 @@ Resume 或 provider 行为；当前进程的内存 buffer 会清空，`~/.wukong
 ## Wire fields
 
 每个 request 只有 `user_id` 和 `events` 两个顶层字段。`user_id` 是
-`kfc_device_id_` 加随机安装 ID，不是 hostname、硬件 ID 或 OS device ID。每个 event
-展开后只包含：
+`kfc_device_id_` 加随机安装 ID，不是 hostname、硬件 ID 或 OS device ID。
 
-- `event_id`：随机 128-bit hex ID；
-- `device_id`、`session_id`：随机本地标识，可为 `null`；
-- `event`：固定 `kfc_` 前缀加 lifecycle event 名；
-- `timestamp`：Unix seconds；
-- `context_app_name`、`context_version`、`context_runtime`、`context_platform`、
-  `context_arch`、`context_ui_mode`；
-- `property_*`：调用点传入的 boolean、finite number、string、`null` 或 `undefined`。
+自 2026-10-28 起，客户端每批只上传**一条最小信号**，不包含其他任何内容。每批
+压缩为一条记录，字段只有：
 
-当前源码中的 property 名按用途分为：
+- `event`：固定名称 `kfc_signal`；
+- `timestamp`：批内最近一次活动的 Unix seconds；
+- `context_version`：CLI 版本；
+- `context_platform`：OS 平台；
+- `context_arch`：CPU 架构（各字段可为 `null`）。
 
-- lifecycle/outcome：`actor`、`status`、`outcome`、`reason`、`reason_code`、
-  `error_type`、`retryable`、`duration_ms`；
-- Loop/Goal：`iterations`、`iteration`、`turns_used`、`tokens_used`、
-  `wall_clock_ms`、`criteria_count`、`contract_source`、`contract_schema_version`、
-  `blocker_count`、`gate_outcome`、`strategist_outcome`、`has_token_budget`、
-  `has_turn_budget`、`has_wall_clock_budget`；
-- provider/runtime class：`provider`、`provider_type`、`protocol`、`method`、
-  `status_code`、`input_tokens`、`limit`；
-- command/tool control：`command`、`tool_name`、`policy_name`、`permission_mode`、
-  `decision`、`approval_surface`、`result`、`has_feedback`、`session_cache_written`、
-  `dup_type`、`repeat_count`、`action`、`at_step`、`step_no`、`turn_id`；
-- UI/config：`enabled`、`theme`、`direction`、`source`、`mode`、`to_mode`、
-  `auto_install`、`changed`、`kind`、`parts`；
-- bounded counts/performance：`count`、`server_count`、`failed_count`、`total_count`、
-  `allowed_tool_count`、`capability_mode`、`profile_category`、`run_in_background`、
-  `recurring`、`coalesced_count`、`stale`、`buffered`，以及 compaction 的 token/count/
-  threshold 数值；
-- media upload：`mime_type`、`size_bytes`（不含 media bytes 或 path）。
-
-传输层会丢弃非 primitive property；客户端还会集中丢弃 `model`、`alias` 和
-`args_hash`，避免发送模型身份或由 tool arguments 派生的可关联 hash。context 同样不含
-model、terminal、locale、OS version 或 Node version。
+事件名、工具、命令、时长、`property_*` 值、`event_id`、`device_id` 和
+`session_id` 一律不上传。源码中的 `track()` 调用点仍然存在，但传输层在任何
+数据离开设备之前——包括本地失败队列的重试——都会把每批压缩为最小信号。旧版本
+客户端仍会发送此前文档记录的完整事件；接收端接受但只保留最小字段（见下方
+retention），其余丢弃。
 
 ## 明确不发送
 
