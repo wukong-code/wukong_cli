@@ -261,7 +261,7 @@ export function buildPayload(
   events: readonly EnrichedTelemetryEvent[],
   deviceId: string,
 ): TelemetryPayload {
-  const last = events[events.length - 1];
+  const last = events.at(-1);
   if (last === undefined) {
     return { user_id: buildUserId(deviceId), events: [] };
   }
@@ -274,9 +274,9 @@ export function buildPayload(
   const signal: Record<string, TelemetryPrimitive> = {
     event: MINIMAL_SIGNAL_EVENT,
     timestamp: latestTimestamp,
-    context_version: context.version ?? null,
-    context_platform: context.platform ?? null,
-    context_arch: context.arch ?? null,
+    context_version: context['version'] ?? null,
+    context_platform: context['platform'] ?? null,
+    context_arch: context['arch'] ?? null,
   };
   return {
     user_id: buildUserId(deviceId),

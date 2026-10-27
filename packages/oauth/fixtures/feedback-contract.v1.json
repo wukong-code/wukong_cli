@@ -1,0 +1,89 @@
+{
+  "contract_version": 1,
+  "sync": "Keep byte-identical to wukong_web/test/fixtures/feedback-contract.v1.json. Bump contract_version on any change.",
+  "endpoint": "/api/v1/feedback",
+  "method": "POST",
+  "content_type": "application/json",
+  "max_body_bytes": 8192,
+  "idempotency_header": "Idempotency-Key",
+  "idempotency_key_format": "uuid",
+  "request": {
+    "additional_properties": false,
+    "required": {
+      "message": { "type": "string", "trim": true, "min_length": 1, "max_length": 4096 },
+      "category": {
+        "type": "string",
+        "enum": ["bug", "onboarding", "loop_result", "feature_request", "other"]
+      },
+      "version": { "type": "string", "pattern": "^\\d+\\.\\d+\\.\\d+(?:[-+][A-Za-z0-9.-]+)?$" },
+      "platform": { "type": "string", "enum": ["darwin", "linux", "win32"] },
+      "arch": { "type": "string", "enum": ["arm64", "x64"] }
+    },
+    "optional": {
+      "loop_outcome": { "type": "string", "enum": ["PASS", "NEEDS_WORK", "ERROR"], "nullable": true },
+      "reason_code": { "type": "string", "pattern": "^[a-z0-9_]{1,64}$", "nullable": true },
+      "contact": { "type": "string", "trim": true, "min_length": 1, "max_length": 320, "nullable": true }
+    }
+  },
+  "response_success": {
+    "status": 201,
+    "body": {
+      "feedback_id": { "type": "string", "pattern": "^fb_[A-Za-z0-9-]+$" },
+      "status": { "const": "received" }
+    }
+  },
+  "forbidden_fields": [
+    "log",
+    "logs",
+    "stdout",
+    "stderr",
+    "console",
+    "source",
+    "source_code",
+    "code",
+    "diff",
+    "patch",
+    "prompt",
+    "prompts",
+    "path",
+    "paths",
+    "file_path",
+    "file_paths",
+    "cwd",
+    "home",
+    "session",
+    "session_id",
+    "transcript",
+    "attachment",
+    "attachments",
+    "file",
+    "files",
+    "screenshot",
+    "image",
+    "media",
+    "evidence",
+    "api_key",
+    "token",
+    "secret",
+    "password"
+  ],
+  "valid_samples": [
+    {
+      "message": "The loop stopped with a clear reason after the checks failed.",
+      "category": "loop_result",
+      "version": "0.1.2",
+      "platform": "darwin",
+      "arch": "arm64",
+      "loop_outcome": "NEEDS_WORK",
+      "reason_code": "no_progress",
+      "contact": null
+    },
+    {
+      "message": "Install worked on Linux.",
+      "category": "onboarding",
+      "version": "0.1.2",
+      "platform": "linux",
+      "arch": "x64"
+    }
+  ]
+}
