@@ -249,13 +249,38 @@ export function buildUserId(deviceId: string): string {
   return USER_ID_PREFIX + deviceId;
 }
 
+/**
+ * One minimal usage signal per batch. The client uploads the install id,
+ * version, platform, and arch only — never event names, tools, commands,
+ * durations, properties, or session ids. The receiver keeps exactly these
+ * fields and discards everything else older clients still send.
+ */
+export const MINIMAL_SIGNAL_EVENT = 'kfc_signal';
+
 export function buildPayload(
   events: readonly EnrichedTelemetryEvent[],
   deviceId: string,
 ): TelemetryPayload {
+  const last = events[events.length - 1];
+  if (last === undefined) {
+    return { user_id: buildUserId(deviceId), events: [] };
+  }
+  const context =
+    typeof last.context === 'object' && last.context !== null ? last.context : {};
+  let latestTimestamp = last.timestamp;
+  for (const event of events) {
+    if (event.timestamp > latestTimestamp) latestTimestamp = event.timestamp;
+  }
+  const signal: Record<string, TelemetryPrimitive> = {
+    event: MINIMAL_SIGNAL_EVENT,
+    timestamp: latestTimestamp,
+    context_version: context.version ?? null,
+    context_platform: context.platform ?? null,
+    context_arch: context.arch ?? null,
+  };
   return {
     user_id: buildUserId(deviceId),
-    events: events.map((event) => flattenEvent(applyServerPrefix(event))),
+    events: [signal],
   };
 }
 
