@@ -38,7 +38,7 @@
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@fastify/multipart": "^10.1.5",
+    "@fastify/multipart": "^10.1.6",
     "@fastify/swagger": "^9.9.2",
     "@wukong/agent-core": "workspace:^",
     "@wukong/protocol": "workspace:^",
