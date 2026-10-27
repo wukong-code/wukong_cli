@@ -168,7 +168,7 @@
 ### RC 期间验证：真实项目、Provider 与用户理解
 
 - [x] Node、Python、Rust、Go 和 monorepo 的真实工具链 fixture 覆盖 blocker → fix → full rerun → PASS，以及 docs/config no-check、dirty workspace 和 tool missing（2026-08-06）
-- [ ] 至少一个 Windows 实际 repo 完成同一 blocker → fix → full rerun → PASS 用户流程（流程见 [manual-verification-runbook](docs/test/manual-verification-runbook.md) A 节）
+- [ ] 至少一个 Windows 实际 repo 完成同一 blocker → fix → full rerun → PASS 用户流程（流程见 [manual-verification-runbook](docs/test/manual-verification-runbook.md) A 节；2026-10-28 前提核验：本机为 macOS，无 Windows 实机/VM，待具备后执行）
 - [x] provider 覆盖 valid、invalid key、model not found、rate limit、timeout 和 outcome unknown；首次成功可归因 install/provider/Preflight/Loop/Gate/stop（2026-08-06）
 - [x] API compatibility、migration/log-security、frontend/design、monorepo package criteria 完成 deterministic trigger/non-trigger、adversarial path、package-root 与重复稳定 eval；本地 Gate/criteria 矩阵连续 3 次 43/43，CI 在 macOS/Linux/Windows 重复同一矩阵（2026-08-07）
 - [ ] Codex、Claude Code、Cursor、Kimi Code、Grok 各完成 picker → editable Goal → Preflight → Loop → terminal/recovery smoke（流程见 [manual-verification-runbook](docs/test/manual-verification-runbook.md) B 节；2026-10-28 前提核验：本机有 codex/claude/grok 真实会话，无 cursor 与 kimi-code 会话目录，且 picker 流程需交互式 TUI，待补齐来源与人工执行）
@@ -277,7 +277,7 @@
 
 - [x] identity/lineage、warning ack、trust、exact approval、inline-secret、provenance、anti-weakening、attempt join、continuation targeted tests 通过（2026-07-25）
 - [x] 全仓 test、typecheck、lint、docs build、bundle/native SEA smoke 通过（2026-07-25；9303 tests passed，8 files/48 tests skipped，2 todo）
-- [ ] Node/Python/Rust/Go blocker → fix → full rerun → PASS 与 monorepo 检查发现回归通过
+- [ ] Node/Python/Rust/Go blocker → fix → full rerun → PASS 与 monorepo 检查发现回归通过（2026-10-28 检查发现回归已验：Node `npm run test`、Rust `cargo test`、Python `python3 -m pytest`（pyproject 含 pytest 配置时；无配置时 fail-closed 需显式确认）、pnpm monorepo 根 + `packages/api`/`packages/app` 成员均正确发现且命令前缀正确；损坏 manifest 以 `project_check_discovery_failed` 清晰 fail-closed。Go 本机无工具链待补；各语言完整 blocker → fix → PASS 真实 Loop 仍待执行）
 - [ ] script 同名弱化、future `exit 0`、未授权命令零 spawn、evidence join corruption、NEEDS_WORK → continuation → PASS 真实 E2E 通过
 - [ ] trust once → expiry、remember → revoke、Headless signed challenge + approval CAS、warning ack edit 后失效、review-policy drift → restore-or-revise 真实 E2E 通过
 - [ ] 固定 5 名目标用户各完成一次脚本且看过后不排除/重试；4/5 正确解释 Finish Line/attempt/terminal，5/5 理解 workspace shell 未被完整 sandbox
@@ -611,7 +611,7 @@
 - [x] 修正 `Verify ✗ · Proof BLOCKED` 误导语义，收敛为可解释 Gate 状态（2026-07-18，已发布）
 - [x] 区分检查未执行、检查失败、无项目检查、高风险复核和 reviewer blocker（2026-07-18，已发布）
 - [x] 保持 Footer 窄终端对齐与截断测试（2026-07-18，已发布）
-- [ ] 补一次真实 TUI `/loop` 人工 smoke，确认 transcript 仍保留高级诊断细节（流程见 [manual-verification-runbook](docs/test/manual-verification-runbook.md) C 节）
+- [ ] 补一次真实 TUI `/loop` 人工 smoke，确认 transcript 仍保留高级诊断细节（流程见 [manual-verification-runbook](docs/test/manual-verification-runbook.md) C 节；2026-10-28：需交互式 TUI 人工执行——同日三轮真实 headless Loop 已验证终态/检查/证据面，transcript 细节保留检查仍待人工）
 
 ### P1：真实项目检查
 
