@@ -23,6 +23,7 @@ import {
   applyServerPrefix,
   buildPayload,
   clearTelemetryDiskQueue,
+  flattenEvent,
 } from '../src/transport';
 import type { EnrichedTelemetryEvent, TelemetryEvent, TelemetryTransport } from '../src/types';
 
@@ -277,31 +278,62 @@ describe('EventSink', () => {
 });
 
 describe('payload assembly', () => {
-  it('adds server event prefix, payload user id, and flattened fields', () => {
-    const payload = buildPayload([sampleEvent('started')], 'device-1');
+  it('uploads one minimal signal without any event details', () => {
+    const events = [
+      sampleEvent('started'),
+      { ...sampleEvent('completed'), timestamp: 456, properties: { command: 'pnpm test' } },
+      sampleEvent('kfc_started'),
+    ];
+
+    const payload = buildPayload(events, 'device-1');
 
     expect(payload.user_id).toBe('kfc_device_id_device-1');
-    expect(payload.events[0]).toMatchObject({
-      event_id: 'event-1',
-      device_id: 'device-1',
-      session_id: 'session-1',
-      event: `${SERVER_EVENT_PREFIX}started`,
-      property_resumed: false,
-      property_count: 2,
+    expect(payload.events).toHaveLength(1);
+    expect(payload.events[0]).toEqual({
+      event: 'kfc_signal',
+      timestamp: 456,
       context_version: '1.2.3',
-      context_runtime: 'node',
+      context_platform: null,
+      context_arch: null,
     });
-    expect(payload.events[0]).not.toHaveProperty('properties');
-    expect(payload.events[0]).not.toHaveProperty('context');
   });
 
-  it('does not double-prefix already-prefixed events', () => {
-    const payload = buildPayload([sampleEvent('kfc_started')], 'device-1');
+  it('keeps the batch minimization for null or missing context fields', () => {
+    const event = {
+      ...sampleEvent('started'),
+      context: { version: null, platform: 'darwin', arch: 'arm64' },
+    } as unknown as EnrichedTelemetryEvent;
 
-    expect(payload.events[0]?.['event']).toBe('kfc_started');
+    const payload = buildPayload([event], 'device-1');
+
+    expect(payload.events[0]).toEqual({
+      event: 'kfc_signal',
+      timestamp: 123,
+      context_version: null,
+      context_platform: 'darwin',
+      context_arch: 'arm64',
+    });
   });
 
-  it('rejects nested property values before outbound send', () => {
+  it('never includes event names, ids, or properties in the outbound payload', () => {
+    const payload = buildPayload([sampleEvent('crash')], 'device-1');
+    const record = JSON.stringify(payload.events[0]);
+
+    expect(record).not.toContain('crash');
+    expect(record).not.toContain('event-1');
+    expect(record).not.toContain('session-1');
+    expect(record).not.toContain('property_');
+    expect(record).not.toContain('device_id');
+  });
+
+  it('returns an empty event list for an empty batch', () => {
+    expect(buildPayload([], 'device-1')).toEqual({
+      user_id: 'kfc_device_id_device-1',
+      events: [],
+    });
+  });
+
+  it('flattenEvent rejects nested property values', () => {
     const event = {
       ...sampleEvent('bad'),
       properties: {
@@ -309,10 +341,10 @@ describe('payload assembly', () => {
       },
     } as unknown as EnrichedTelemetryEvent;
 
-    expect(() => buildPayload([event], 'device-1')).toThrow(/property.nested/);
+    expect(() => flattenEvent(event)).toThrow(/property.nested/);
   });
 
-  it('rejects nested context and array property values before outbound send', () => {
+  it('flattenEvent rejects nested context and array property values', () => {
     const nestedContext = {
       ...sampleEvent('bad_context'),
       context: {
@@ -326,11 +358,11 @@ describe('payload assembly', () => {
       },
     } as unknown as EnrichedTelemetryEvent;
 
-    expect(() => buildPayload([nestedContext], 'device-1')).toThrow(/context.nested/);
-    expect(() => buildPayload([arrayProperty], 'device-1')).toThrow(/property.list/);
+    expect(() => flattenEvent(nestedContext)).toThrow(/context.nested/);
+    expect(() => flattenEvent(arrayProperty)).toThrow(/property.list/);
   });
 
-  it('passes null primitive values through and leaves the input event untouched', () => {
+  it('flattenEvent passes null primitive values through and leaves the input event untouched', () => {
     const event = {
       ...sampleEvent('nullable'),
       properties: {
@@ -340,10 +372,10 @@ describe('payload assembly', () => {
     const originalProperties = event.properties;
     const originalContext = event.context;
 
-    const payload = buildPayload([event], 'device-1');
+    const flattened = flattenEvent(event);
 
-    expect(payload.events[0]).toMatchObject({
-      event: 'kfc_nullable',
+    expect(flattened).toMatchObject({
+      event: 'nullable',
       property_empty: null,
     });
     expect(event.properties).toBe(originalProperties);
@@ -534,7 +566,8 @@ describe('AsyncTransport', () => {
 
     const init = requestInitFrom(fetchImpl);
     const payload = JSON.parse(init.body as string) as { events: Array<{ event: string }> };
-    expect(payload.events[0]?.['event']).toBe('kfc_from_disk');
+    expect(payload.events[0]?.['event']).toBe('kfc_signal');
+    expect(payload.events[0]?.['event']).not.toContain('from_disk');
     expect(() => statSync(file)).toThrow();
   });
 
@@ -631,7 +664,7 @@ describe('AsyncTransport', () => {
     expect(file).not.toContain('kfc_first');
   });
 
-  it('does not create a disk file for an empty batch or a schema violation', async () => {
+  it('does not create a disk file for an empty batch; nested fields are minimized', async () => {
     const homeDir = await tempHome();
     const fetchImpl = vi.fn(async () => new Response('', { status: 200 }));
     const transport = new AsyncTransport({
@@ -642,6 +675,10 @@ describe('AsyncTransport', () => {
     });
 
     transport.saveToDisk([]);
+    await transport.send([]);
+    expect(fetchImpl).not.toHaveBeenCalled();
+    expect(() => statSync(join(homeDir, 'telemetry'))).toThrow();
+
     await transport.send([
       {
         ...sampleEvent('bad_schema'),
@@ -649,8 +686,14 @@ describe('AsyncTransport', () => {
       } as unknown as EnrichedTelemetryEvent,
     ]);
 
-    expect(fetchImpl).not.toHaveBeenCalled();
-    expect(() => statSync(join(homeDir, 'telemetry'))).toThrow();
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    const init = requestInitFrom(fetchImpl);
+    const payload = JSON.parse(init.body as string) as {
+      events: Array<Record<string, unknown>>;
+    };
+    expect(payload.events).toHaveLength(1);
+    expect(JSON.stringify(payload.events[0])).not.toContain('bad_schema');
+    expect(JSON.stringify(payload.events[0])).not.toContain('property_');
   });
 });
 
@@ -705,12 +748,16 @@ describe('telemetry bootstrap', () => {
     expect(fetchImpl).toHaveBeenCalledTimes(1);
     const init = requestInitFrom(fetchImpl);
     const payload = JSON.parse(init.body as string) as {
-      events: Array<{ event: string; session_id: string }>;
+      user_id: string;
+      events: Array<Record<string, unknown>>;
     };
+    expect(payload.user_id).toBe('kfc_device_id_dev');
+    expect(payload.events).toHaveLength(1);
     expect(payload.events[0]).toMatchObject({
-      event: 'kfc_before_init',
-      session_id: 'ses',
+      event: 'kfc_signal',
+      context_version: '1.2.3',
     });
+    expect(payload.events[0]).not.toHaveProperty('session_id');
   });
 
   it('flushes the singleton synchronously to disk fallback', async () => {
