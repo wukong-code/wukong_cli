@@ -62,7 +62,7 @@ function ctx<Input>(args: Input, inputSignal: AbortSignal = signal) {
   return { turnId: '0', toolCallId: 'call_1', args, signal: inputSignal };
 }
 
-function makeStore(): {
+function makeStore(cwd: string = process.cwd()): {
   readonly goals: GoalMode;
   readonly records: AgentRecord[];
   readonly events: Array<{ readonly type: string; readonly phase?: string }>;
@@ -76,7 +76,7 @@ function makeStore(): {
     telemetry: { track: () => {} },
     context: { appendSystemReminder: () => {} },
     config: {
-      cwd: process.cwd(),
+      cwd,
       modelAlias: 'writer-model',
     },
     permission: { mode: 'manual' },
@@ -1266,5 +1266,146 @@ describe('UpdateGoalTool 0.0.20 verification gate', () => {
     expect(result.stopTurn).toBe(true);
     expect(result.output).toContain('configured interval');
     expect(goals.getGoal().goal).toMatchObject({ status: 'active', minIntervalMs: 60_000 });
+  });
+
+  it('rejects a gate approval whose frozen check snapshot was tampered with', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'wukong-gate-cas-'));
+    try {
+      const { goals } = makeStore();
+      const objective = 'ship the change';
+      const finishLine = await buildFinishLine({
+        cwd,
+        objective,
+        completionCriterion: 'The frozen check passes.',
+        explicitChecks: [CHECK_COMMAND],
+        includeDiscoveredChecks: false,
+      });
+      if (!finishLine.ok) throw new Error(JSON.stringify(finishLine.failure));
+      const tamperedApproval = {
+        ...finishLine.proposal.gateApproval,
+        orderedChecks: finishLine.proposal.gateApproval.orderedChecks.map((check) => ({
+          ...check,
+          commandDigest: 'sha256:0000000000000000000000000000000000000000000000000000000000000000',
+        })),
+      };
+
+      await expect(goals.createGoal({
+        objective,
+        completionCriterion: finishLine.proposal.completionCriterion,
+        stopCondition: 'proof-pass',
+        loopContract: {
+          schemaVersion: 2,
+          objective,
+          completionCriterion: finishLine.proposal.completionCriterion,
+          constraints: finishLine.proposal.constraints,
+          finishLineReview: {
+            ...finishLine.proposal.finishLineReview,
+            acknowledgedWarningIds:
+              finishLine.proposal.finishLineReview.warnings.map((warning) => warning.id),
+          },
+          workspaceIdentity: finishLine.proposal.workspaceIdentity,
+          workspaceTrust: finishLine.proposal.workspaceTrust,
+          gateApproval: tamperedApproval,
+          gatePlan: finishLine.proposal.gatePlan,
+          reviewPolicy: finishLine.proposal.reviewPolicy,
+          reviewSettings: makeReviewSettings(
+            finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+          ),
+          source: 'user',
+        },
+      })).rejects.toMatchObject({
+        code: ErrorCodes.REQUEST_INVALID,
+        message: expect.stringContaining('approval check snapshot is invalid'),
+      });
+      expect(mocks.runProof).not.toHaveBeenCalled();
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
+  });
+
+  it('refuses resume with zero spawn when a frozen package-script check is weakened', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'wukong-gate-weakened-'));
+    try {
+      await writeFile(
+        join(cwd, 'package.json'),
+        JSON.stringify({ name: 'gate-weakened', private: true, scripts: { test: 'vitest run' } }),
+      );
+      const { goals, records } = makeStore(cwd);
+      const objective = 'ship the change';
+      const finishLine = await buildFinishLine({
+        cwd,
+        objective,
+        completionCriterion: 'The frozen project check passes.',
+        includeDiscoveredChecks: true,
+      });
+      if (!finishLine.ok) throw new Error(JSON.stringify(finishLine.failure));
+      expect(finishLine.proposal.gatePlan.requiredChecks.length).toBeGreaterThan(0);
+
+      await goals.createGoal({
+        objective,
+        completionCriterion: finishLine.proposal.completionCriterion,
+        stopCondition: 'proof-pass',
+        loopContract: {
+          schemaVersion: 2,
+          objective,
+          completionCriterion: finishLine.proposal.completionCriterion,
+          constraints: finishLine.proposal.constraints,
+          finishLineReview: {
+            ...finishLine.proposal.finishLineReview,
+            acknowledgedWarningIds:
+              finishLine.proposal.finishLineReview.warnings.map((warning) => warning.id),
+          },
+          workspaceIdentity: finishLine.proposal.workspaceIdentity,
+          workspaceTrust: finishLine.proposal.workspaceTrust,
+          gateApproval: finishLine.proposal.gateApproval,
+          gatePlan: finishLine.proposal.gatePlan,
+          reviewPolicy: finishLine.proposal.reviewPolicy,
+          reviewSettings: makeReviewSettings(
+            finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+          ),
+          source: 'user',
+        },
+      });
+
+      // Drive the Loop to a durable same-contract NEEDS_WORK terminal.
+      goals.recordLoopResult({
+        schemaVersion: 2,
+        status: 'NEEDS_WORK',
+        reasonCode: 'permission_required',
+        summary: 'Approval is required before the frozen check can rerun.',
+        checks: [],
+        blockers: [],
+      });
+      await goals.markBlocked(
+        { reason: 'loop:NEEDS_WORK:permission_required:Approval required.' },
+        'system',
+      );
+      expect(goals.getGoal().goal).toMatchObject({
+        status: 'blocked',
+        loopTerminal: { continuationPolicy: { mode: 'same-contract' } },
+      });
+
+      const actual =
+        await vi.importActual<typeof import('@wukong/verification')>('@wukong/verification');
+      mocks.validateFrozenGatePlan.mockImplementation(
+        actual.validateFrozenGatePlan as typeof mocks.validateFrozenGatePlan,
+      );
+      // Weaken the same-name script after the plan was frozen.
+      await writeFile(
+        join(cwd, 'package.json'),
+        JSON.stringify({ name: 'gate-weakened', private: true, scripts: { test: 'exit 0' } }),
+      );
+
+      const spawn = vi.fn();
+      await expect(goals.resumeGoal(
+        makeReviewSettings(finishLine.proposal.workspaceIdentity.workspaceIdentityDigest),
+      )).rejects.toMatchObject({ code: ErrorCodes.GOAL_NOT_RESUMABLE });
+
+      expect(spawn).not.toHaveBeenCalled();
+      expect(mocks.runProof).not.toHaveBeenCalled();
+      expect(records.some((record) => record.type === 'loop.gate-attempt.create')).toBe(false);
+    } finally {
+      await rm(cwd, { recursive: true, force: true });
+    }
   });
 });

@@ -1,3 +1,4 @@
+import { spawn } from 'node:child_process';
 import { join } from 'node:path';
 
 import {
@@ -155,4 +156,51 @@ describe('packaged reference verification criteria', () => {
         JSON.stringify(catalog.suggestions)))).toHaveLength(1);
     });
   }
+});
+
+describe('packaged reference verification criteria — fresh-process determinism', () => {
+  it('three separate processes compute the identical digest and suggestion order', async () => {
+    const repoRoot = join(import.meta.dirname, '..', '..', '..', '..');
+    const tsxCli = join(repoRoot, 'node_modules', 'tsx', 'dist', 'cli.mjs');
+    const script = join(import.meta.dirname, 'fixtures', 'print-criteria-catalog.mts');
+    const cwd = join(repoRoot, 'apps', 'wukong');
+    const runOnce = (): Promise<string> =>
+      new Promise<string>((resolve, reject) => {
+        const child = spawn(process.execPath, [tsxCli, script], { cwd });
+        let out = '';
+        let err = '';
+        child.stdout.on('data', (chunk) => {
+          out += chunk;
+        });
+        child.stderr.on('data', (chunk) => {
+          err += chunk;
+        });
+        child.on('error', reject);
+        child.on('close', (code) => {
+          if (code === 0) {
+            resolve(out);
+          } else {
+            reject(new Error(`child exited with ${String(code)}: ${err}`));
+          }
+        });
+      });
+
+    const outputs = await Promise.all([runOnce(), runOnce(), runOnce()]);
+
+    expect(new Set(outputs)).toHaveLength(1);
+    const parsed = JSON.parse(outputs[0]!) as { catalogDigest: string };
+
+    const assetDigest = await digestVerificationCriteriaAssetRoot(root);
+    const inProcess = await discoverVerificationCriteriaCatalog({
+      workspaceRoot: import.meta.dirname,
+      roots: [{ kind: 'builtin', root, version: '0.0.20-test', assetDigest }],
+      changedPaths: [
+        'src/api/users.ts',
+        'migrations/001_add_user.sql',
+        'src/logging/redact.ts',
+        'src/components/Button.tsx',
+      ],
+    });
+    expect(parsed.catalogDigest).toBe(inProcess.catalogDigest);
+  }, 45_000);
 });
