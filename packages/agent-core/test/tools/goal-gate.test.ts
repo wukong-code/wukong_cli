@@ -1397,9 +1397,11 @@ describe('UpdateGoalTool 0.0.20 verification gate', () => {
       );
 
       const spawn = vi.fn();
-      await expect(goals.resumeGoal(
-        makeReviewSettings(finishLine.proposal.workspaceIdentity.workspaceIdentityDigest),
-      )).rejects.toMatchObject({ code: ErrorCodes.GOAL_NOT_RESUMABLE });
+      await expect(goals.resumeGoal({
+        reviewSettings: makeReviewSettings(
+          finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+        ),
+      })).rejects.toMatchObject({ code: ErrorCodes.GOAL_NOT_RESUMABLE });
 
       expect(spawn).not.toHaveBeenCalled();
       expect(mocks.runProof).not.toHaveBeenCalled();
