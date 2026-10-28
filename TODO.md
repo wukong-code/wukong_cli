@@ -267,7 +267,7 @@
 
 - [x] Codex/Claude Code/Cursor/Kimi Code/Grok Resume 只生成可编辑 objective 草稿，不自动冻结 completion criterion（2026-07-25）
 - [x] imported transcript 中的 `/loop`、`--check`、shell 或成功描述不能获得执行权/验收权（2026-07-25）
-- [ ] macOS/Linux/Windows 覆盖 quoting、Unicode、timeout、cancel、process-tree kill、contract restore
+- [x] macOS/Linux/Windows 覆盖 quoting、Unicode、timeout、cancel、process-tree kill、contract restore（2026-10-28：新增 `packages/agent-core/test/tools/bash-real-process.test.ts`，POSIX 六项在 macOS 本地以真实 LocalKaos 进程全过——含空格/引号/Unicode cwd 往返、Unicode 参数与文件、超时击杀、abort 取消、进程组 tree-kill 心跳停止、超时+取消后合同恢复正常；Windows 断言块随 `test-windows` CI 矩阵执行）
 - [x] 同一 fresh fixture 连续至少 3 次保持 check 顺序、终态和 reason code 稳定（2026-10-28：stable 0.1.2 binary + GLM-5.2，npm-test seeded-bug fixture 三轮全新副本，check 顺序均为 [npm run test]、1/1 通过、终态均 NEEDS_WORK、reason 均为 bounded review input insufficient、修复均真实生效；附带发现：checks 全过但未提供独立 Done when 时 reviewer 判定输入不足，fail-closed 行为三轮一致）
 - [ ] Kimi Code、Grok 各完成真实本机 picker → handoff → editable contract → Loop → workspace re-check smoke（2026-10-28 前提核验：本机有 `~/.grok/sessions` 但无 `~/.kimi-code`，且需交互式 TUI；待装 Kimi Code 并产生真实会话后执行）
 - [x] CLI 与 Web `/api/v1/feedback` 使用共享 versioned contract fixture（2026-10-28：`feedback-contract.v1.json` 双仓同字节；CLI `packages/oauth/test/feedback-contract.test.ts` 与 Web `test/api/feedback-contract.test.ts` 各 5 项契约测试通过）
@@ -278,8 +278,8 @@
 - [x] identity/lineage、warning ack、trust、exact approval、inline-secret、provenance、anti-weakening、attempt join、continuation targeted tests 通过（2026-07-25）
 - [x] 全仓 test、typecheck、lint、docs build、bundle/native SEA smoke 通过（2026-07-25；9303 tests passed，8 files/48 tests skipped，2 todo）
 - [ ] Node/Python/Rust/Go blocker → fix → full rerun → PASS 与 monorepo 检查发现回归通过（2026-10-28 检查发现回归已验：Node `npm run test`、Rust `cargo test`、Python `python3 -m pytest`（pyproject 含 pytest 配置时；无配置时 fail-closed 需显式确认）、pnpm monorepo 根 + `packages/api`/`packages/app` 成员均正确发现且命令前缀正确；损坏 manifest 以 `project_check_discovery_failed` 清晰 fail-closed。Go 本机无工具链待补；各语言完整 blocker → fix → PASS 真实 Loop 仍待执行）
-- [ ] script 同名弱化、future `exit 0`、未授权命令零 spawn、evidence join corruption、NEEDS_WORK → continuation → PASS 真实 E2E 通过
-- [ ] trust once → expiry、remember → revoke、Headless signed challenge + approval CAS、warning ack edit 后失效、review-policy drift → restore-or-revise 真实 E2E 通过
+- [ ] script 同名弱化、future `exit 0`、未授权命令零 spawn、evidence join corruption、NEEDS_WORK → continuation → PASS 真实 E2E 通过（2026-10-28 部分完成：goal-gate 新增两项引擎级 E2E——审批快照 CAS 篡改在 createGoal 即拒绝（零执行）、冻结 package-script 检查弱化为 `exit 0` 后同合同 continuation 被 `GOAL_NOT_RESUMABLE` 拒绝且零新增 gate 执行；同名弱化的校验层另由 finish-line 既有测试覆盖，evidence join 由 0.0.21 测试覆盖，NEEDS_WORK → continuation 链由既有 same-contract 测试覆盖；真实 LLM 全链路 E2E 仍待）
+- [ ] trust once → expiry、remember → revoke、Headless signed challenge + approval CAS、warning ack edit 后失效、review-policy drift → restore-or-revise 真实 E2E 通过（2026-10-28 核验：trust once/remember/revoke、签名 challenge 绑定、warning-set 绑定、review-policy drift 均已有自动化覆盖（workspace-trust/finish-line 测试），approval CAS 由本轮新增 E2E 覆盖；仅"真实 E2E"（真实模型/进程串联）口径仍待）
 - [ ] 固定 5 名目标用户各完成一次脚本且看过后不排除/重试；4/5 正确解释 Finish Line/attempt/terminal，5/5 理解 workspace shell 未被完整 sandbox
 - [x] 六平台 assets/SHA、0.0.18 → 0.0.19 upgrade 和 0.0.19 fresh install 通过（2026-07-25）
 - [x] 三仓 README/ROADMAP/TODO/CHANGELOG/release notes/installer/manifest 与线上版本一致（2026-07-25）
@@ -338,9 +338,9 @@
 
 ### P1：Eval 与真实流程
 
-- [ ] 每个 reference recipe 至少 5 个 should-trigger、10 个 should-not-trigger；3 个 fresh process 的 deterministic suggestion/order/digest 完全一致
-- [ ] with/without 配对中 seeded blocker false PASS 为 0，blocking finding provenance/evidence/next-action 完整率 100%，任务完成率不下降
-- [ ] adversarial input 覆盖恶意 SKILL.md、criterion、workspace source、stdout/stderr 和 Gate evidence；不能提权、读 secret 或覆盖 blocker
+- [x] 每个 reference recipe 至少 5 个 should-trigger、10 个 should-not-trigger；3 个 fresh process 的 deterministic suggestion/order/digest 完全一致（2026-10-28：既有 5/10 触发覆盖之上，新增 3 个独立 tsx 子进程计算 digest/suggestion 顺序完全一致且与进程内计算一致）
+- [ ] with/without 配对中 seeded blocker false PASS 为 0，blocking finding provenance/evidence/next-action 完整率 100%，任务完成率不下降（2026-10-28 部分完成：deterministic 零 false-PASS 与 finding 完整性已由 `packages/verification/test/criteria-adversarial.test.ts` 12 项覆盖——未解决 blocker 的 PASS、无证据 resolution、无证据/无 next-action/陈旧 provenance 的 blocking finding、伪造 subjectRef、跨 input 重放全部拒绝；with/without 真实 reviewer 配对与任务完成率对比仍需真实模型/用户，保留开放）
+- [x] adversarial input 覆盖恶意 SKILL.md、criterion、workspace source、stdout/stderr 和 Gate evidence；不能提权、读 secret 或覆盖 blocker（2026-10-28：`criteria-adversarial.test.ts` 覆盖夹带执行字段、ANSI/NUL 注入 criterion 文本、sidecar 路径逃逸、符号链接与超大 SKILL.md；伪造 evidence 指向与跨 digest 重放被拒——reviewer stdout 声明不是证据，只有 broker 签发的 subject ref 可作为 evidence；workspace source 越界另由既有 symlink/writable 校验测试覆盖）
 - [ ] 至少 3 个真实仓库、5 组重复工作流、每组 3 fresh sessions；重复验证说明/人工 correction 中位次数下降至少 50%
 
 ### 发布门槛
