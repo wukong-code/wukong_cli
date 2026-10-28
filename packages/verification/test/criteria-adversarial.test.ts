@@ -176,7 +176,7 @@ describe('adversarial reviewer verdicts', () => {
       readonly status?: FreshCriteriaVerdictV1['status'];
       readonly findings?: readonly FreshReviewerFindingV1[];
       readonly criterionStatus?: 'satisfied' | 'unsatisfied';
-      readonly blockerStatus?: 'resolved' | 'open';
+      readonly blockerStatus?: 'resolved' | 'still-open';
       readonly blockerEvidence?: boolean;
       readonly criterionProvenanceDigest?: string;
       readonly expectedDigestOverride?: string;
@@ -273,7 +273,7 @@ describe('adversarial reviewer verdicts', () => {
     const fixture = await buildFixture();
 
     const result = validateFreshCriteriaVerdict(
-      fixture.makeVerdict({ blockerStatus: 'open' as 'resolved' }),
+      fixture.makeVerdict({ blockerStatus: 'still-open' }),
       fixture.options,
     );
 
