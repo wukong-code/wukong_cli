@@ -1410,4 +1410,66 @@ describe('UpdateGoalTool 0.0.20 verification gate', () => {
       await rm(cwd, { recursive: true, force: true });
     }
   });
+
+  it('refuses a legacy V2 resume without fresh consent and resumes additively with it', async () => {
+    const { goals, records } = makeStore();
+    // Create the V2 Loop WITHOUT run review settings, like a pre-binding legacy run.
+    const finishLine = await buildFinishLine({
+      cwd: process.cwd(),
+      objective: 'ship the change',
+      completionCriterion: 'The frozen check and every acceptance criterion pass.',
+      explicitChecks: [CHECK_COMMAND],
+      includeDiscoveredChecks: false,
+    });
+    if (!finishLine.ok) throw new Error(JSON.stringify(finishLine.failure));
+    await goals.createGoal({
+      objective: 'ship the change',
+      completionCriterion: finishLine.proposal.completionCriterion,
+      stopCondition: 'proof-pass',
+      loopContract: {
+        schemaVersion: 2,
+        objective: 'ship the change',
+        completionCriterion: finishLine.proposal.completionCriterion,
+        constraints: finishLine.proposal.constraints,
+        finishLineReview: {
+          ...finishLine.proposal.finishLineReview,
+          acknowledgedWarningIds:
+            finishLine.proposal.finishLineReview.warnings.map((warning) => warning.id),
+        },
+        workspaceIdentity: finishLine.proposal.workspaceIdentity,
+        workspaceTrust: finishLine.proposal.workspaceTrust,
+        gateApproval: finishLine.proposal.gateApproval,
+        gatePlan: finishLine.proposal.gatePlan,
+        reviewPolicy: finishLine.proposal.reviewPolicy,
+        source: 'user',
+      },
+    });
+    await goals.pauseActiveGoal({ reason: 'paused before consent' }, 'user');
+    const attemptCountBefore = records.filter(
+      (record) => record.type === 'loop.gate-attempt.create',
+    ).length;
+    const spawn = vi.fn();
+
+    await expect(goals.resumeGoal()).rejects.toMatchObject({
+      code: ErrorCodes.GOAL_NOT_RESUMABLE,
+      message: expect.stringContaining('fresh broker trust'),
+    });
+
+    expect(spawn).not.toHaveBeenCalled();
+    expect(mocks.runProof).not.toHaveBeenCalled();
+    expect(
+      records.filter((record) => record.type === 'loop.gate-attempt.create').length,
+    ).toBe(attemptCountBefore);
+
+    const resumed = await goals.resumeGoal({
+      reviewSettings: makeReviewSettings(
+        finishLine.proposal.workspaceIdentity.workspaceIdentityDigest,
+      ),
+    });
+
+    expect(resumed).toMatchObject({ status: 'active' });
+    expect(
+      records.filter((record) => record.type === 'loop.gate-attempt.create').length,
+    ).toBe(attemptCountBefore);
+  });
 });

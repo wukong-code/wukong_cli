@@ -76,7 +76,7 @@
 ### 发布门槛（`minor`）
 
 - [ ] 三个授权脱敏真实案例覆盖 install→provider test→Preflight→Loop→Gate，其中一个经 `/resume` 导入、一个以 NEEDS_WORK 或 STOPPED_BY_USER 结束
-- [ ] 全量自动化 + typecheck/lint/build/sherif/publint/attw；0.1.1 records 与 session 恢复兼容回归
+- [ ] 全量自动化 + typecheck/lint/build/sherif/publint/attw；0.1.1 records 与 session 恢复兼容回归（2026-10-30 本地全量通过：9876 tests / 735 files 0 失败、typecheck 0 错、lint 0 错、sherif 通过、publint+attw 通过、build:packages 随 typecheck 完成；作为 0.1.2 功能版发布门槛在发布时复跑）
 - [ ] 六平台资产 + checksum + provenance + fresh install + 0.1.1 → 0.1.2 upgrade smoke
 - [ ] 中英文发布面同步：CHANGELOG、官网版本面、README、user-guide、docs 侧边栏（2026-10-02 核对：docs nav/sidebar 已含 0.1.1 与 0.1.2 Plan，0.1.2 发布时再加 0.1.2 条目）
 
@@ -351,8 +351,8 @@
 - [x] 六平台 SEA/native smoke 通过（2026-07-25；RC run `30150571870`）
 - [x] installer 使用公开 `wukong-code` release、Windows exact `win32-*` asset 名，并兼容 `sha256sum`/`shasum`；本地 Bats 9/9 通过（2026-07-25）
 - [ ] 至少完成 API compatibility、migration/log-security、frontend/design、monorepo package 四类真实 criteria
-- [ ] 无 Skill 新建 V2 的 TUI/Headless brokered reviewer E2E；遗留 V1 未确认时零 attempt、确认后 Revised V2；遗留 active V2 接受 consent 后 additive 恢复，以及拒绝后零 provider/出站/状态漂移 E2E
-- [ ] Skill/selected-ref/subject drift、contract-creation catalog CAS、provider consent、workspace/Gate-evidence secret exclusion、subject/evidence limit、irrelevant task、model hint isolation 和 reviewer capability 负向 E2E 通过
+- [ ] 无 Skill 新建 V2 的 TUI/Headless brokered reviewer E2E；遗留 V1 未确认时零 attempt、确认后 Revised V2；遗留 active V2 接受 consent 后 additive 恢复，以及拒绝后零 provider/出站/状态漂移 E2E（2026-10-30 部分完成：goal-gate 新增 legacy V2 E2E——无 review-settings 绑定的 paused V2 run 不带 consent resume 被 `GOAL_NOT_RESUMABLE`/`fresh broker trust` 拒绝且零 gate 执行/零 reviewer spawn，补 fresh consent 后 additive 恢复为 active；V1 零 attempt 由既有 'blocks a legacy V1 Loop' 测试覆盖；TUI 确认 Revised V2 与完整 headless 链路仍待）
+- [ ] Skill/selected-ref/subject drift、contract-creation catalog CAS、provider consent、workspace/Gate-evidence secret exclusion、subject/evidence limit、irrelevant task、model hint isolation 和 reviewer capability 负向 E2E 通过（2026-10-30 部分完成：loop-preflight 新增 catalog CAS 用例——用陈旧 catalog digest 重放 Skill selection 被 `verification_catalog_changed` 拒绝；selected-ref drift/provider consent/revoke/prompt-injection 由 goal-gate 既有测试覆盖，secret exclusion/limits 由 verification 既有测试覆盖；irrelevant task 与 model hint isolation 的 E2E 仍待）
 - [ ] 固定 5 名新用户各一次且看过后不排除/重试；4/5 区分 suggested/selected/model hint/order，5/5 找到 source/digest/input exclusions/cost、指出 actual BYOK provider/endpoint、理解允许内容会出站但不上传给 Wukong，并能 Cancel 后保持零 run/connection/出站
 - [x] README/ROADMAP/TODO/CHANGELOG/release notes 同步 existing-Skills/criteria-only/provider-consent 边界（2026-07-25）
 - [x] fresh install、0.0.19 → 0.0.20 upgrade、六平台 assets/SHA、installer、manifest、GitHub Release 和 `wukong --version` 完全一致（2026-07-25；production deployment `7914837c-b547-45f2-982a-2a459b2c9677`）
