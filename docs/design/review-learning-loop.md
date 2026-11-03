@@ -30,7 +30,7 @@ Review Learning Loop 的目标不是让模型自动改自己的 prompt，而是�
 1. reviewer 提出的哪些问题真的被用户接受？
 2. 哪些是项目特有规则，值得在后续任务中复用？
 3. 哪些是反复出现的误报？
-4. 用户是否愿意为更强 reviewer 和长期学习付费？
+4. 经过人工确认的反馈能否在后续任务中复用？
 
 ## 2. 0.0.12 基线与当前缺口
 
@@ -179,24 +179,11 @@ interface ReviewFeedbackEvent {
 
 样本少于 10 条有反馈 findings 时只显示原始数量，不输出质量百分比结论。不能用“模型生成了更多 comments”作为质量提升证据。
 
-## 9. 历史 Free、Pro 与 Team 矩阵（已废弃）
+## 9. 已发布产品边界
 
-下表只保留 0.0.13 当时的产品假设用于追溯，不代表当前版本、价格或路线。
-当前 0.1.0 是 Free Trusted Local Loop，没有 Pro、Team、Checkout 或付费发布能力。
-
-| 能力 | 0.0.13 Free | 0.1.0 Pro | 0.1.0+ Team |
-|---|---|---|---|
-| fresh-context 基础 reviewer | 有，随 Loop | 有 | 有 |
-| 结构化 findings | 有 | 有 | 有 |
-| 本地 project review policy | 有 | 有 | 共享/受控版本 |
-| 本地人工 feedback | 有 | 有 | GitHub/TUI/团队 feedback |
-| 基础本地统计 | 有 | 有 | 团队趋势与审计 |
-| 独立 `--review-model` | 实验，BYOK | 有，BYOK 或未来 managed option | org policy / managed option |
-| 自动 policy improver | 无 | 后续评估 | 定时运行 + 审批流 |
-| GitHub PR comment/status | 无 | 0.1.0：本地预览 Free、发布 Pro | 组织级集成后续 |
-| 自动学习 PR 讨论串 | 无 | 无 | 后续，显式授权 |
-
-0.0.13 实际只发布了 Free 列。2026-07-20 曾把 0.1.0 收窄为 PR Gate publish + Billing；该假设现已[归档](historical-pro-pr-gate-billing.md)。2026-07-25 起，0.1.0 是 Free Trusted Local Loop，付费只作为 0.2.0 Reliable Autonomy 候选，仍需另行验证和批准。
+0.0.13 实际发布的是免费/BYOK reviewer、结构化 findings、本地 policy、人工
+feedback、基础统计和实验性的独立 `--review-model`。这些本地能力不依赖付费
+entitlement。历史商业权益矩阵已移至私有归档，不作为当前能力或路线承诺。
 
 ## 10. 0.0.13 实现顺序
 
@@ -215,7 +202,7 @@ interface ReviewFeedbackEvent {
 
 1. 输出本地 feedback 原始数量和分类。
 2. 少于 10 条反馈时不输出质量百分比。
-3. 记录 upgrade intent，但不创建 Checkout、订阅或付费 entitlement。
+3. 保持本地反馈与账号、Checkout、订阅或付费 entitlement 解耦。
 
 ### 延后到 0.1.0+
 

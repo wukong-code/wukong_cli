@@ -2,7 +2,7 @@
 
 > Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
 
-> 定位: 本文件是待讨论任务暂存池与历史进度参考，不是可自动执行的任务列表。方向以 [ROADMAP.md](ROADMAP.md) 为准；只有用户讨论确认、明确纳入具体版本文档的任务才可实施，checkbox、优先级与版本标题不授权开工。不得自行将本文件条目移入版本。`0.1.2`（2026-10-24 发布）是当前 stable 的开源发布版（组织迁移 + MIT 许可，无功能面变化），原 First Success 功能面顺延与 0.1.3 候选一起评审；新增 0.1.3 团队验收试点候选与 0.2.0/0.3.0 都需各自设计与范围批准。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究。
+> 定位: 本文件是待讨论任务暂存池与历史进度参考，不是可自动执行的任务列表。方向以 [ROADMAP.md](ROADMAP.md) 为准；只有用户讨论确认、明确纳入具体版本文档的任务才可实施，checkbox、优先级与版本标题不授权开工。不得自行将本文件条目移入版本。`0.1.2`（2026-10-24 发布）是当前 stable 的开源发布版（组织迁移 + MIT 许可，无功能面变化），原 First Success 功能保留参考，不整批继承为 0.1.3；新增 0.1.3 团队验收试点候选与 0.2.0/0.3.0 都需各自设计与范围批准。现有自动化基线参考 [测试计划](docs/test/verification-cli-test-plan.md)。旧 commercial/PR Gate 文档只作历史研究。
 > Web 侧任务见 `wukong_web/TODO.md`。
 > 更新规则: 每完成一项勾选并注明日期；口径变更时先改 ROADMAP/设计方案，再同步本文件。
 
@@ -14,7 +14,7 @@
 
 ## ✅ 0.1.1 — Reliability And Trust Boundary（已发布）
 
-> 说明：[0.1.1 发布说明](docs/releases/0.1.1.md)。补丁版本继续
+> 说明：[0.1.1 发布说明](docs/zh/releases/0.1.1.md)。补丁版本继续
 > Free、local-first、BYOK；不新增命令、不改变 Loop/Gate 语义，不包含 Cost
 > Visibility。`0.1.1` 已通过不可变资产、升级、恢复和 production version
 > surfaces 的 exact-SHA 验收。
@@ -38,13 +38,17 @@
 - [x] 重写 Web `CLAUDE.md`，修正公开 Loop 终态文案，并为官网与 local Web 固化浏览器 Golden Journey（2026-09-03；见 `docs/test/0.1.1-browser-golden-journeys.md`）
 - [x] 六平台 0.1.1 assets、0.1.0 → 0.1.1 升级与公开安装验收（2026-09-03；publish `33719487397`、promotion `33720931233`、production surfaces `33720991004`）
 
-## 📋 0.1.2 — First Success And Surface Simplification（工程维护进行中；功能未开工）
+## 📋 原 0.1.2 First Success 设计（保留参考；开源版已发布）
 
 > 方案、发布级别（`minor`）、兼容策略与完成定义见
 > [0.1.2 First Success And Surface Simplification](docs/design/0.1.2-first-success-and-surface-simplification.md)。
 > 本节只记录执行进度，不重复定义方案。现状实测见该文档第 1 节（2026-09-09）。
 
-### P0：首次成功路径
+> 2026-11-02：项目负责人确认真实用户首次使用已跑通。以下未实现功能不代表用户
+> 尚未跑通，不整批继承为 0.1.3；具体实施须另行确认。案例公开、跨平台/来源验证
+> 与 cohort 人数要求分别保留，不因本次确认自动勾选。
+
+### 原 P0：首次成功改进候选
 
 - [ ] `install.sh`、npm postinstall、`wukong doctor` 由同一份常量输出 `cd project → wukong → /provider → /loop`，并有三处一致性回归（`install.sh` 已达标，另两处未对齐）
 - [ ] 新增 `wukong provider test [providerId]` 与 TUI `/provider` 等价动作，区分 `ok`/`auth-failed`/`not-found`/`network`/`timeout`/offline，不打印 key、endpoint query 或响应体
@@ -63,19 +67,19 @@
 ### P0：账号与 Web 面（跨仓，见 `wukong_web/TODO.md`）
 
 - [ ] Dashboard 只保留真实 Connected CLI sessions/last used/单设备 revoke；数据未就绪时从主导航隐藏 Dashboard/Plan（隐藏而非删路由）
-- [ ] 三个授权脱敏真实案例就绪后再替换动画式 PASS，且至少一个案例展示非 PASS 终态
+公开演示须取得展示授权并来自真实结果，不能以动画式 PASS 冒充验证证据；材料与执行进度由私有运营记录维护。
 
 ### P0：工程维护
 
-- [x] 按实际 lockfile 重记网站 `npm audit` 基线（2026-10-25 复验：**23 项 = 2 critical / 14 high / 7 moderate**，替代 2026-10-02 的 15 项与 2026-09-09 的 13 项历史快照；四类处置与 owner/期限已记录于 `wukong_web/TODO.md`，生产项 `next`/`@opennextjs/cloudflare`/`zod` 升级待部署窗口）
+官网依赖审计、生产处置和部署进度由官网私有仓库独立维护，不作为 CLI 已交付能力。
 - [ ] CI 工程维护完整验收：2026-10-23 本地已将 8 处 checkout 统一到 SHA-pinned v6，使用锁定 TypeScript，加入 PR 并发取消、main 保留和 CI/CD 时限，并统一仓库开发/审查提示词；工作流检查、20 条发布契约测试及类型检查通过。远端 CI、六平台发布与生产面仍待验收，不勾选整项（2026-10-28 更新：远端 CI 已随 PR #20–#30 多次全绿；六平台发布与生产面验收待下一次版本发布时执行）
 
-- [x] 核验已实现的 optional telemetry 接收端生产部署、独立 D1 migration 和每日 90 天清理回执（2026-10-28 生产只读核验：D1 `wukong-telemetry` 仅 `telemetry_installs`/`telemetry_active_days` 两表，只含安装 ID/日期/版本/平台/架构，无事件内容列；2 installs/9 active days、无 >90 天残留、每日 cron 已配置，每日清理回执由 cron 配置与零残留推证）
+Optional telemetry 的公开字段、退出方式与保留期限见 [隐私契约](docs/operations/cli-telemetry.md)；生产数据库、部署核验与实际统计在私有运营记录维护。
 - [x] CLI 统计只发最小使用信号（2026-10-28：`packages/telemetry` 传输层把每批压缩为单条 `kfc_signal`——安装 ID/版本/平台/架构，事件名、工具、命令、时长、属性、session id 一律不出站；en/zh telemetry 契约文档同步；包内 61 项测试通过）
 
 ### 发布门槛（`minor`）
 
-- [ ] 三个授权脱敏真实案例覆盖 install→provider test→Preflight→Loop→Gate，其中一个经 `/resume` 导入、一个以 NEEDS_WORK 或 STOPPED_BY_USER 结束
+- [ ] 功能若获批，真实用户路径覆盖 install→provider test→Preflight→Loop→Gate、`/resume` 导入和非 PASS 终态；公开展示须另有授权。
 - [ ] 全量自动化 + typecheck/lint/build/sherif/publint/attw；0.1.1 records 与 session 恢复兼容回归（2026-10-30 本地全量通过：9876 tests / 735 files 0 失败、typecheck 0 错、lint 0 错、sherif 通过、publint+attw 通过、build:packages 随 typecheck 完成；作为 0.1.2 功能版发布门槛在发布时复跑）
 - [ ] 六平台资产 + checksum + provenance + fresh install + 0.1.1 → 0.1.2 upgrade smoke
 - [ ] 中英文发布面同步：CHANGELOG、官网版本面、README、user-guide、docs 侧边栏（2026-10-02 核对：docs nav/sidebar 已含 0.1.1 与 0.1.2 Plan，0.1.2 发布时再加 0.1.2 条目）
@@ -84,7 +88,9 @@
 
 具体候选与分阶段范围见
 [0.1.3 Delivery Acceptance Pilot](docs/design/0.1.3-delivery-acceptance-pilot.md)。
-本节只链接已讨论的路线方向，不新增执行 checkbox；目标版本与技术设计确认后才可开工。
+2026-11-02 范围评审建议：优先验证本地交付摘要；条件映射先用现有能力，PR 自动
+写回暂缓。真实用户首次使用已跑通；原 First Success 不整批继承。
+本节不新增执行 checkbox；建议不等于实施批准，目标版本与技术设计确认后才可开工。
 
 ## 📋 0.2.0 — Codebase Reduction（需设计批准）
 
@@ -168,22 +174,19 @@
 ### RC 期间验证：真实项目、Provider 与用户理解
 
 - [x] Node、Python、Rust、Go 和 monorepo 的真实工具链 fixture 覆盖 blocker → fix → full rerun → PASS，以及 docs/config no-check、dirty workspace 和 tool missing（2026-08-06）
-- [ ] 至少一个 Windows 实际 repo 完成同一 blocker → fix → full rerun → PASS 用户流程（流程见 [manual-verification-runbook](docs/test/manual-verification-runbook.md) A 节；2026-10-28 前提核验：本机为 macOS，无 Windows 实机/VM，待具备后执行）
+- [ ] 至少一个 Windows 实际 repo 完成同一 blocker → fix → full rerun → PASS 用户流程（流程见 [manual-verification-runbook](docs/test/manual-verification-runbook.md) A 节；需 Windows 实机或 VM 执行，保留待验状态）
 - [x] provider 覆盖 valid、invalid key、model not found、rate limit、timeout 和 outcome unknown；首次成功可归因 install/provider/Preflight/Loop/Gate/stop（2026-08-06）
 - [x] API compatibility、migration/log-security、frontend/design、monorepo package criteria 完成 deterministic trigger/non-trigger、adversarial path、package-root 与重复稳定 eval；本地 Gate/criteria 矩阵连续 3 次 43/43，CI 在 macOS/Linux/Windows 重复同一矩阵（2026-08-07）
-- [ ] Codex、Claude Code、Cursor、Kimi Code、Grok 各完成 picker → editable Goal → Preflight → Loop → terminal/recovery smoke（流程见 [manual-verification-runbook](docs/test/manual-verification-runbook.md) B 节；2026-10-28 前提核验：本机有 codex/claude/grok 真实会话，无 cursor 与 kimi-code 会话目录，且 picker 流程需交互式 TUI，待补齐来源与人工执行）
+- [ ] Codex、Claude Code、Cursor、Kimi Code、Grok 各完成 picker → editable Goal → Preflight → Loop → terminal/recovery smoke（流程见 [manual-verification-runbook](docs/test/manual-verification-runbook.md) B 节；需各来源的真实会话与交互式 TUI，保留待验状态）
 - [ ] 首次用户不读内部文档也能理解 Finish Line、workspace 权限、provider-visible input、Gate verdict、STOPPED_BY_USER、文件归因、budget 和 next action
 - [x] targeted/full test、typecheck、lint、build、sherif、package lint 与本地 native installer/ZIP validator 通过（2026-08-06）
 - [x] 当前候选在 clean checkout 连续三次保持 check order、terminal 和 reason code，并完成 docs/installer 全量候选验收（2026-08-08；exact-source CI runs `31241684998`、`31245877736`、`31245881849`；公开资产/installer 回读 `31244905074`）
 
-### 发布后真实用户与产品验证（不阻塞 0.1.0 binary）
+### 发布后验证与隐私
 
-- [ ] 25 名 opt-in 全部进入分母；20 名无实时指导完成 install/upgrade + provider smoke + executable Preflight；15 名首次真实 PASS；7 名主动完成第二个不同 Goal PASS（2026-08-08 决策：发布后继续收集，不设固定 14 天等待门槛）
-- [x] 私有 cohort ledger 只记录最小时间、exit stage/reason、理解、repeat、cost/latency 接受度和反馈引用；不记录源码、路径、Goal、prompt、transcript、evidence 或 credential；仓库外 fail-closed ledger、聚合 gate audit 与 purge 工具已在 `wukong_web` 实现并通过自动化，并已为 `v0.1.0-rc.1` 初始化空 ledger（2026-08-08；没有伪造用户或 Gate 证据）
-- [ ] stable 发布满 90 天后实际删除 participant-level cohort 记录，并用 purge audit 验证只保留不含个人数据的发布级汇总
-- [ ] 已有 API Key 时 fresh install 到 executable Preflight 中位数 ≤5 分钟、P90 ≤15 分钟；到达 terminal 的用户至少 80% 能解释结果、evidence、保留改动和 next action
-- [ ] 发布后持续监测 false PASS、pre-existing state loss、workspace 外写入、静默重复 provider request、privacy/consent violation 和不可恢复状态；严重事件单独发补丁，不重算固定等待窗口
-- [ ] 3 个脱敏授权案例只作为正式宣传/launch gate，不阻塞 binary correctness
+用户研究、展示授权和运营执行记录在私有仓库维护，不阻塞 binary correctness。研究仅在明确同意下进行，不记录源码、路径、Goal、prompt、transcript、evidence 或 credential。
+
+- [ ] 持续监测 false PASS、pre-existing state loss、workspace 外写入、静默重复 provider request、privacy/consent violation 和不可恢复状态；严重事件单独发补丁。
 
 ### 正式 0.1.0 技术发布门槛
 
@@ -269,7 +272,7 @@
 - [x] imported transcript 中的 `/loop`、`--check`、shell 或成功描述不能获得执行权/验收权（2026-07-25）
 - [x] macOS/Linux/Windows 覆盖 quoting、Unicode、timeout、cancel、process-tree kill、contract restore（2026-10-28：新增 `packages/agent-core/test/tools/bash-real-process.test.ts`，POSIX 六项在 macOS 本地以真实 LocalKaos 进程全过——含空格/引号/Unicode cwd 往返、Unicode 参数与文件、超时击杀、abort 取消、进程组 tree-kill 心跳停止、超时+取消后合同恢复正常；Windows 断言块随 `test-windows` CI 矩阵执行）
 - [x] 同一 fresh fixture 连续至少 3 次保持 check 顺序、终态和 reason code 稳定（2026-10-28：stable 0.1.2 binary + GLM-5.2，npm-test seeded-bug fixture 三轮全新副本，check 顺序均为 [npm run test]、1/1 通过、终态均 NEEDS_WORK、reason 均为 bounded review input insufficient、修复均真实生效；附带发现：checks 全过但未提供独立 Done when 时 reviewer 判定输入不足，fail-closed 行为三轮一致）
-- [ ] Kimi Code、Grok 各完成真实本机 picker → handoff → editable contract → Loop → workspace re-check smoke（2026-10-28 前提核验：本机有 `~/.grok/sessions` 但无 `~/.kimi-code`，且需交互式 TUI；待装 Kimi Code 并产生真实会话后执行）
+- [ ] Kimi Code、Grok 各完成真实本机 picker → handoff → editable contract → Loop → workspace re-check smoke（需 Kimi Code 与 Grok 的真实会话及交互式 TUI，保留待验状态）
 - [x] CLI 与 Web `/api/v1/feedback` 使用共享 versioned contract fixture（2026-10-28：`feedback-contract.v1.json` 双仓同字节；CLI `packages/oauth/test/feedback-contract.test.ts` 与 Web `test/api/feedback-contract.test.ts` 各 5 项契约测试通过）
 - [x] 共享隐私负向 fixture 拒绝日志、源码、prompt、路径、session 和附件字段（2026-10-28：33 个禁止字段经 Web zod strict 全部 400 拒绝并断言不落库；CLI 侧断言出站键 ⊆ 契约字段且不含任何禁止字段）
 
@@ -277,7 +280,7 @@
 
 - [x] identity/lineage、warning ack、trust、exact approval、inline-secret、provenance、anti-weakening、attempt join、continuation targeted tests 通过（2026-07-25）
 - [x] 全仓 test、typecheck、lint、docs build、bundle/native SEA smoke 通过（2026-07-25；9303 tests passed，8 files/48 tests skipped，2 todo）
-- [ ] Node/Python/Rust/Go blocker → fix → full rerun → PASS 与 monorepo 检查发现回归通过（2026-10-28 检查发现回归已验：Node `npm run test`、Rust `cargo test`、Python `python3 -m pytest`（pyproject 含 pytest 配置时；无配置时 fail-closed 需显式确认）、pnpm monorepo 根 + `packages/api`/`packages/app` 成员均正确发现且命令前缀正确；损坏 manifest 以 `project_check_discovery_failed` 清晰 fail-closed。Go 本机无工具链待补；各语言完整 blocker → fix → PASS 真实 Loop 仍待执行）
+- [ ] Node/Python/Rust/Go blocker → fix → full rerun → PASS 与 monorepo 检查发现回归通过（2026-10-28 检查发现回归已验：Node `npm run test`、Rust `cargo test`、Python `python3 -m pytest`（pyproject 含 pytest 配置时；无配置时 fail-closed 需显式确认）、pnpm monorepo 根 + `packages/api`/`packages/app` 成员均正确发现且命令前缀正确；损坏 manifest 以 `project_check_discovery_failed` 清晰 fail-closed。Go 工具链验证待完成；各语言完整 blocker → fix → PASS 真实 Loop 仍待执行）
 - [ ] script 同名弱化、future `exit 0`、未授权命令零 spawn、evidence join corruption、NEEDS_WORK → continuation → PASS 真实 E2E 通过（2026-10-28 部分完成：goal-gate 新增两项引擎级 E2E——审批快照 CAS 篡改在 createGoal 即拒绝（零执行）、冻结 package-script 检查弱化为 `exit 0` 后同合同 continuation 被 `GOAL_NOT_RESUMABLE` 拒绝且零新增 gate 执行；同名弱化的校验层另由 finish-line 既有测试覆盖，evidence join 由 0.0.21 测试覆盖，NEEDS_WORK → continuation 链由既有 same-contract 测试覆盖；真实 LLM 全链路 E2E 仍待）
 - [ ] trust once → expiry、remember → revoke、Headless signed challenge + approval CAS、warning ack edit 后失效、review-policy drift → restore-or-revise 真实 E2E 通过（2026-10-28 核验：trust once/remember/revoke、签名 challenge 绑定、warning-set 绑定、review-policy drift 均已有自动化覆盖（workspace-trust/finish-line 测试），approval CAS 由本轮新增 E2E 覆盖；仅"真实 E2E"（真实模型/进程串联）口径仍待）
 - [ ] 固定 5 名目标用户各完成一次脚本且看过后不排除/重试；4/5 正确解释 Finish Line/attempt/terminal，5/5 理解 workspace shell 未被完整 sandbox
@@ -534,11 +537,9 @@
 
 - 支付、GitHub PR 写入、entitlement、Team、managed reviewer、云端 `/schedule`、`/ship`、Hosted Report、同步闭环、默认多 reviewer、`--agent` judge mode、Role/Agent 市场、mascot 与 welcome 动画均不进入 0.0.17。
 
-## 历史候选：Pro PR Gate + Billing（已被取代）
+## 历史商业方案
 
-> 归档方案: [docs/design/historical-pro-pr-gate-billing.md](docs/design/historical-pro-pr-gate-billing.md)。这是历史研究清单，不是当前 TODO；它已被 0.1.0 Free Trusted Local Loop 与 0.2.0 Pro Reliable Autonomy 候选取代。
-
-历史方案曾假设把 PR Gate 作为唯一收费点；其用户门槛、工程阶段与价格只保留在归档文档中。这里不保留未完成 checkbox，避免自动任务扫描把它们当成当前 P0。
+已取消的收费与 Billing 研究在私有运营仓库归档，不构成当前技术版本或执行清单。
 
 ## ✅ 0.0.15 — Loop Reliability + First Success
 
@@ -688,7 +689,7 @@
 - [x] 用户结果只保留 PASS→0、NEEDS_WORK→1、ERROR→2；中断→130。历史 auth/quota→3 已随 0.0.17 的远程 Loop 准入移除（2026-07-16；2026-07-22 更新）
 - [x] 默认停止条件统一为 `proof-pass`；旧停止条件进入时统一归一化（2026-07-15）
 - [x] 只有顶层 Loop session 计额度；内部 verify/scan/proof 不重复计数（2026-07-16）
-- [x] Guest：1 个 Loop session、最多2轮；Free：10个 Loop sessions/月、每个最多5轮；第3次开始软提示 Pro，第10次后硬限制（2026-07-16）
+- [x] Guest：1 个 Loop session、最多2轮；Free：10个 Loop sessions/月、每个最多5轮；以上为已在 0.0.17 移除的历史行为（2026-07-16）
 - [x] 实现幂等 `/api/v1/loops/start`、`/api/v1/loops/complete` 与 `/api/v1/usages`；不实现 Checks、reservation、lease 或 AI credits（2026-07-16）
 - [x] 默认不生成 report/evidence；只有显式本地 `--save`/`--report` 才持久化（2026-07-16）
 
@@ -861,4 +862,4 @@
 
 ---
 
-**最后更新**: 2026-10-24（路线收敛为技术路线，商业化决策移至私有运营仓库；明确 check 与完整 Gate 的区别，刷新历史基线与候选索引；TODO 不构成执行授权，stable 仍为 `0.1.1`，0.1.2 原已批准范围保留）。此前：2026-10-23、2026-10-02、2026-08-08；stable `0.1.0` 已发布，真实 Windows repo、五来源真实 Resume、首次用户与 cohort 继续作为发布后验证，不设固定 14 天发布门槛。
+**最后更新**: 2026-11-03（分离公开技术待办与私有商业/运营记录；保留 2026-11-02 的使用进展及 0.1.3 范围建议）。当前 stable 为 `0.1.2` MIT 开源版；原 First Success 功能保留参考，未整批继承，TODO 不构成执行授权。

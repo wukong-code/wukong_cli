@@ -30,9 +30,15 @@ website and operations backend remain private.
 - [0.0.21 Loop Evidence Integrity](design/0.0.21-loop-evidence-integrity.md)
 - [Cross-Agent Session Resume](design/cross-agent-resume.md)
 
-Older design and research notes are internal engineering records kept in Chinese
-under [design/](design/), [tech/](tech/), and [test/](test/), plus the
-[Chinese documentation](zh/README.md).
+Older public technical design and research notes are kept in Chinese under
+[design/](design/), [tech/](tech/), and [test/](test/), plus the
+[Chinese documentation](zh/README.md). Business experiments, production usage
+statistics, and private website operations are maintained outside this public repository.
+
+Before adding or publishing root Markdown or documentation source files, review their public suitability,
+update [the document list](public-documents.json), and run
+`node scripts/check-public-docs.mjs`. The documentation build runs this check;
+removing a sidebar entry does not make a document private.
 
 ## Planning
 

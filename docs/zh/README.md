@@ -17,10 +17,8 @@ attestation 后移。官网后端、账号与运营服务保持私有。
 Wukong Code 的主流程是 **Goal → Write → Check → Review → Fix**。下方“已发布”
 描述当前 `0.1.2` stable；标成“开发 checkout”的命令和行为仍以当前源码为准。
 
-后续方向为按次接入/验收陪跑 → 主动复购 → 月度服务 → 证据驱动产品化。本地
-CLI 已于 2026-10-24 以 MIT 许可开源（`v0.1.2`），官网后端保持私有，服务实验
-未执行；
-详见 开源与服务收费路线（已移至私有运营仓库）。
+本地 CLI 已于 2026-10-24 以 MIT 许可开源（`v0.1.2`），官网后端保持私有。
+公开文档只维护使用方式、技术设计、兼容性和隐私合同；商业与运营材料独立私有留存。
 
 ## 开始使用
 
@@ -72,7 +70,7 @@ wukong upgrade
 
 ## 开发文档
 
-- [apps/wukong 开发指南](../apps/wukong/AGENTS.md)
+- [apps/wukong 开发指南](https://github.com/wukong-code/wukong_cli/blob/main/apps/wukong/AGENTS.md)
 - [技术架构](../tech/architecture.md)
-- [贡献指南](../CONTRIBUTING.md)
+- [贡献指南](https://github.com/wukong-code/wukong_cli/blob/main/CONTRIBUTING.md)
 - [执行层 TODO](../../TODO.md)

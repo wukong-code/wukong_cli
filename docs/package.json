@@ -8,7 +8,7 @@
   "type": "module",
   "scripts": {
     "dev": "vitepress dev",
-    "build": "vitepress build",
+    "build": "node ../scripts/check-public-docs.mjs && vitepress build",
     "preview": "vitepress preview"
   },
   "devDependencies": {
