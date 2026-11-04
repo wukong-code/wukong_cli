@@ -2,7 +2,8 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 export function checkPublicDocs(root) {
-  const allowed = new Set(JSON.parse(fs.readFileSync(path.join(root, 'docs/public-documents.json'), 'utf8')));
+  const reviewed = /** @type {string[]} */ (JSON.parse(fs.readFileSync(path.join(root, 'docs/public-documents.json'), 'utf8')));
+  const allowed = new Set(reviewed);
   const actual = new Set();
   const errors = [];
   const rules = [
