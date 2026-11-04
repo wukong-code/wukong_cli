@@ -2,7 +2,7 @@
 
 > Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
 
-> 最后更新: 2026-10-24（`v0.1.2` 开源发布版发布：组织迁移、MIT 许可与公开 provenance 落地；原 First Success 功能面顺延；商业化决策移至私有运营仓库，本文只保留技术路线）
+> 最后更新: 2026-11-02（记录真实用户首次使用已跑通；评审 0.1.3 候选，优先验证本地交付摘要，不整批承接 First Success）
 > 范围: `wukong_cli` 产品内核、`wukong_web` 托管产品、`wukong.today` 公开安装与官网路径。
 > 本次确认产品方向与路线图文档；新增候选版本的技术设计与具体实施范围仍待确认，未开工。
 
@@ -18,15 +18,15 @@ revision、Resume、Provider、Web、更新、插件供应链和 workspace check
 
 当前版本真相源：
 
-- [0.1.1 Reliability And Trust Boundary](docs/releases/0.1.1.md)
+- [0.1.1 Reliability And Trust Boundary](docs/zh/releases/0.1.1.md)
 - [0.1.2 First Success And Surface Simplification](docs/design/0.1.2-first-success-and-surface-simplification.md)
 - 开源与私有边界：CLI 已按 MIT 发布，官网后端私有；服务实验未执行（详细策略在私有运营仓库维护）。
 - [0.0.18 Loop-First Simplification](docs/design/0.0.18-loop-first-simplification.md)
 - [0.0.19 Explicit Finish Line](docs/design/0.0.19-explicit-finish-line.md)
 - [0.0.20 Reusable Verification Criteria](docs/design/0.0.20-reusable-verification-skills.md)
 - [0.0.21 Loop Evidence Integrity](docs/design/0.0.21-loop-evidence-integrity.md)
-- [0.0.21 Release Notes](docs/releases/0.0.21.md)
-- [0.0.22 Release Notes](docs/releases/0.0.22.md)
+- [0.0.21 Release Notes](docs/zh/releases/0.0.21.md)
+- [0.0.22 Release Notes](docs/zh/releases/0.0.22.md)
 - [0.1.0 Trusted Local Loop（已发布）](docs/design/0.1.0-trusted-local-loop.md)
 - [TODO.md](TODO.md)：待讨论项与历史进度参考，不是自动执行清单；优先级、checkbox 或版本标题均不构成实施授权
 - `wukong_web/TODO.md`：官网与托管产品的待讨论项与进度参考，位于 sibling web 仓库中
@@ -34,15 +34,19 @@ revision、Resume、Provider、Web、更新、插件供应链和 workspace check
 开工前以本索引确定方向，再核对用户已确认的具体版本文档。候选文档不是开工批准，
 不得自行将 TODO 条目移入版本范围。
 
+2026-11-02 项目负责人确认：**真实用户首次使用已经跑通**。后续评估重复使用与
+交接需求；首次使用改进功能未实现，不等于尚无用户跑通。此确认不自动证明特定
+平台/来源完整验收、人数指标、案例展示授权、留存或商业结果。
+
 更后版本候选（范围以下文“版本发布序列”为准）：
 
-- `0.1.3` [Delivery Acceptance Pilot](docs/design/0.1.3-delivery-acceptance-pilot.md)：建议目标版本；方向已确认、候选范围待评审，先在真实仓库验证需求到验收的映射。
+- `0.1.3` [Delivery Acceptance Pilot](docs/design/0.1.3-delivery-acceptance-pilot.md)：建议目标版本；已形成范围评审建议、待用户确认；优先验证本地交付摘要，验收映射先用现有能力，PR 自动写回暂缓。
 - `0.2.0` Codebase Reduction：需先批准迁移设计；按交付需要分批推进。
 - `0.3.0` Evidence-gated Collaboration Product：协作能力候选，在 0.1.3 验收流程稳定后另行评审。
 
 下列商业化或旧版本设计只作历史探索/追溯，不是当前执行真相源：
 
-- [已取代：0.2.0 Pro Reliable Autonomy](docs/design/0.2.0-pro-reliable-autonomy.md)（含 [Bounded Parallel Loop](docs/design/0.2.0-bounded-parallel-loop.md) 与 [Local Loop Supervisor](docs/design/0.2.0-local-loop-supervisor.md) 组件；0.2.0 现为 Codebase Reduction）
+- 历史商业方案已移至私有运营归档；公开技术研究保留 [Bounded Parallel Loop](docs/design/0.2.0-bounded-parallel-loop.md) 与 [Local Loop Supervisor](docs/design/0.2.0-local-loop-supervisor.md)，均已取消，不是当前版本承诺。
 - [已取消：0.0.21 Isolated Loop Worktrees](docs/design/0.0.21-isolated-loop-worktrees.md)
 - 商业化与产品重构方案（已移至私有运营仓库）
 - Wukong 能力体系与商业化原则（已移至私有运营仓库）
@@ -50,7 +54,7 @@ revision、Resume、Provider、Web、更新、插件供应链和 workspace check
 - [0.0.12 Trust Loop v2](docs/design/verification-loop-v2.md)
 - [0.0.16 Loop Convergence](docs/design/0.0.16-loop-convergence.md)
 - [0.0.17 Command Surface Reliability](docs/design/0.0.17-command-surface-reliability.md)
-- [历史候选：Pro PR Gate 与 Billing](docs/design/historical-pro-pr-gate-billing.md)
+- 历史收费与 Billing 实验在私有运营仓库归档，不属于公开技术路线。
 
 ## 产品判断
 
@@ -84,8 +88,8 @@ coding-agent 工作流的入口，Loop 是执行能力，Gate 是验收结论。
   私有留存。未来团队收费工作流的技术与许可边界由独立设计决定。
 - 开源核心无账号、无官网后端仍能使用 BYOK 跑通；不通过隐藏 Gate 实现、限制免费
   Loop 或 token 配额制造付费需求。
-- Apache-2.0 为优先评估选项，最终许可证、权属/第三方声明、公开源码与分发对应关系
-  及仓库发布方式另行确认。当前 README/许可证不得提前宣称已经开源。
+- 当前本地 CLI 已采用 MIT 并公开；第三方声明和源码/分发对应关系持续维护。未来
+  改用其他许可证需独立决策，不沿用开源前的 Apache-2.0 候选口径。
 
 本次只更新方向文档，不把源码公开或许可证修改自动加入 0.1.2 功能范围。
 
@@ -118,10 +122,10 @@ Wukong 当前只提供完整的本地 BYOK Loop。已发布能力与候选功能
 
 | 优先级 | 候选能力 | 验证目标 | 复用与边界 |
 |---|---|---|---|
-| P0 | Issue/需求 → 用户确认的验收条件 → 检查映射 | 减少需求遗漏和重复解释 | 复用 Goal、Done when、冻结合同；模型生成 Spec 必须人工确认，不另建任务管理器 |
-| P0 | 最小 GitHub PR Gate | 在现有 PR 流程中减少人工验收与返工 | 复用 Gate；绑定 exact commit 与完整 attempt，缺失、过期或未运行的证据不能 PASS |
-| P0 | 可追溯的交付摘要 | 交付与交接时能核对完成范围 | 展示未覆盖项；本地预览、脱敏和显式发布，不默认上传代码、prompt 或 transcript |
-| P1 | 真实 Demo、首次使用和案例 | 目标用户能看懂、安装并独立跑通 | 复用 0.1.2 上手路径；演示失败、修复、重跑和非 PASS，不用动画代替证据 |
+| 保留，先用现有能力 | 用户确认的验收条件 → 检查映射 | 验证是否实际减少遗漏与重复配置 | 先复用 Goal、Done when、Preflight 和冻结合同；确有表达缺口再评审自动化 |
+| 暂缓，另批设计 | GitHub PR Gate | 先验证手工附摘要是否足够 | 新增外部写入、权限、stale 和幂等恢复边界；不能随摘要功能自动纳入 |
+| 优先候选，待确认 | 本地交付摘要 | 先用人工摘要验证接收者能否核对交付范围 | 复用已有 Gate/attempt；确需自动化时仅本地预览与显式保存，不新增网络发布 |
+| 整理已有结果 | 真实演示与案例 | 首次使用已跑通，后续核对展示授权与重复使用 | 复用已有记录；不以公开案例尚未就绪否定已跑通事实 |
 | P1 | 真实环境中的可重复验收 | 下一次真实交付中能继续使用 | 首版用显式本地/用户 CI 执行；后台 runner 或自动触发需独立设计 |
 | 后续 | 共享规则、审批与审计 | 多团队共享同一 verification policy | 归 0.3.0；SSO、SLA、私有部署和云端 Agent 另行评审 |
 
@@ -161,7 +165,7 @@ Wukong 当前只提供完整的本地 BYOK Loop。已发布能力与候选功能
 ## 路线图原则
 
 1. 本地 BYOK `loop` 不受账号或月度额度限制；`verify`、`scan`、`proof` 是内部层和高级诊断命令。
-2. 不用人为额度制造升级压力；0.0.18 不新增 Web/D1 telemetry 产品指标后端（2026-10-02 决定：为已发布的 optional CLI telemetry 补上接收端，但只统计安装数（独立 D1 `wukong-telemetry`，只存随机安装 ID、使用日期、版本和平台；不存任何事件内容；忽略账号令牌、不存 IP；最后使用 90 天后删除），不作 cohort 证据）。用户主动 `/feedback` 是显式产品反馈，不是 telemetry。
+2. 不用人为额度制造升级压力；0.0.18 不新增 Web/D1 telemetry 产品指标后端（2026-10-02 决定：为已发布的 optional CLI telemetry 补上接收端，但只统计安装数（独立统计存储，只存随机安装 ID、使用日期、版本和平台；不存任何事件内容；忽略账号令牌、不存 IP；最后使用 90 天后删除），不作 cohort 证据）。用户主动 `/feedback` 是显式产品反馈，不是 telemetry。
 3. 用户自带 API Key；不对 BYOK token 加价或限制 Free 单 Loop。
 4. 当前只写恢复与 Gate 必需的本地 durable state，不默认生成报告或云端副本；不上传给 Wukong。模型所需内容只按 run-scoped consent 发送给 exact BYOK provider。本地导出由用户显式触发；未来 GitHub 摘要只在新版本范围获批、去密预览和 exact-target 授权后发布。
 5. 在 guard、redaction、audit、private runner 真正完成前，不宣传安全合规能力。
@@ -176,8 +180,8 @@ Wukong 当前只提供完整的本地 BYOK Loop。已发布能力与候选功能
 
 ## 版本发布序列
 
-2026-10-23：已开始 0.1.2 的 CI 工程维护和仓库开发/审查配置优化；首次成功功能
-仍未开工。本地配置检查与远端 CI/发布验收分开报告；运行时 Gate、许可证与仓库
+历史记录（2026-10-23）：当时已开始 0.1.2 的 CI 工程维护和仓库开发/审查配置优化；原新增首次成功功能
+尚未开工。当前 0.1.2 开源版已发布，且 2026-11-02 已确认真实用户首次使用跑通。本地配置检查与远端 CI/发布验收分开报告；运行时 Gate、许可证与仓库
 可见性不随这批协作配置改变。
 
 ### 发布分级（0.1.1 起生效）
@@ -231,15 +235,15 @@ worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继�
 
 | 版本 | 状态与目标 | 发布门槛 |
 |---|---|---|
-| `0.1.0` | **已发布。** 可控、可恢复、可解释的 Trusted Local Loop：可编辑 Preflight、可信 no-check、调用/token 上限、三态 Gate verdict 与 STOPPED_BY_USER、文件归因、恢复兼容、最小 completeness/freshness、五来源 Resume、六平台安装升级和 public truth；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移 | immutable stable 资产通过 stage-verify-publish-exact、六平台 draft smoke、公开 URL provenance、固定安装、0.0.22 upgrade、恢复与生产版本面验收。25/20/15/7 cohort、首次用户理解和真实来源流程发布后继续收集，不设置固定 14 天等待；三个授权案例只阻断集中宣传 |
-| `0.1.1` | **当前 stable。** Reliability And Trust Boundary 补丁：保留 Plan/Loop/Resume/Provider/Web 修复，并关闭 Vis typecheck、更新与插件供应链、workspace checks 发现、根测试编排和空 workspace 问题；不新增顶层命令、不改变 Gate 语义 | 新增缺陷有负向回归；根 test/typecheck/lint/build 覆盖 local Web、vis-web、vis-server；更新不再静默安装；插件安装 fail closed；发布链路验证六平台 assets、0.1.0 upgrade、fresh install、恢复和公开版本面 |
-| `0.1.2` | **已发布（2026-10-24）。** Open-Source Edition：组织迁移链接修正（feedback/changelog/installer/announcements）、MIT 许可迁移、公开仓库与 npm provenance、开源前密钥与价格历史扫描；不新增顶层命令、不改变 Gate 语义。原 [First Success And Surface Simplification](docs/design/0.1.2-first-success-and-surface-simplification.md) 设计顺延至 0.1.3 候选评审 | 发布链路验证与 0.1.1 相同：stage-verify-publish-exact、六平台 draft smoke、公开 URL provenance、0.1.1 upgrade、fresh install 与生产版本面验收 |
-| `0.1.3` | [Delivery Acceptance Pilot](docs/design/0.1.3-delivery-acceptance-pilot.md)：建议目标版本，候选范围待评审。围绕一种技术栈，验证需求到验收的映射、最小 GitHub PR Gate 与显式分享的交付摘要 | 实施前批准技术设计与实施范围；代码验收覆盖 exact commit、负向证据、恢复兼容和授权发布 |
+| `0.1.0` | **已发布。** 可控、可恢复、可解释的 Trusted Local Loop：可编辑 Preflight、可信 no-check、调用/token 上限、三态 Gate verdict 与 STOPPED_BY_USER、文件归因、恢复兼容、最小 completeness/freshness、五来源 Resume、六平台安装升级和 public truth；完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移 | immutable stable 资产通过 stage-verify-publish-exact、六平台 draft smoke、公开 URL provenance、固定安装、0.0.22 upgrade、恢复与生产版本面验收。真实来源流程和用户理解验证与 binary correctness 分开记录；运营研究与展示授权在私有仓库维护 |
+| `0.1.1` | **已发布。** Reliability And Trust Boundary 补丁：保留 Plan/Loop/Resume/Provider/Web 修复，并关闭 Vis typecheck、更新与插件供应链、workspace checks 发现、根测试编排和空 workspace 问题；不新增顶层命令、不改变 Gate 语义 | 新增缺陷有负向回归；根 test/typecheck/lint/build 覆盖 local Web、vis-web、vis-server；更新不再静默安装；插件安装 fail closed；发布链路验证六平台 assets、0.1.0 upgrade、fresh install、恢复和公开版本面 |
+| `0.1.2` | **已发布（2026-10-24）。** Open-Source Edition：组织迁移链接修正（feedback/changelog/installer/announcements）、MIT 许可迁移、公开仓库与发布 provenance、开源前密钥与价格历史扫描；不新增顶层命令、不改变 Gate 语义。原 [First Success And Surface Simplification](docs/design/0.1.2-first-success-and-surface-simplification.md) 设计顺延至 0.1.3 候选评审 | 发布链路验证与 0.1.1 相同：stage-verify-publish-exact、六平台 draft smoke、公开 URL provenance、0.1.1 upgrade、fresh install 与生产版本面验收 |
+| `0.1.3` | [Delivery Acceptance Pilot](docs/design/0.1.3-delivery-acceptance-pilot.md)：建议目标版本，范围评审建议待用户确认。优先验证本地交付摘要；验收映射先用现有 Goal/Done when/Preflight，PR 自动写回暂缓。首次使用已跑通，不整批继承原 First Success | 实施前批准技术设计与实施范围；代码验收覆盖 exact commit、负向证据、恢复兼容和授权发布 |
 | `0.2.0` | Codebase Reduction：按交付需要分批处理超大协调器、boundary baseline 和核心/扩展边界 | 先批准迁移设计和兼容策略；每次拆分保持 records、Gate、恢复和 SDK contract；旧命令别名至少经过一个 minor deprecation；真实迁移包只有在支持窗口结束后移除 |
 | `0.3.0` | Evidence-gated Collaboration Product：评审共享 versioned policy、审批/摘要审计与团队权限 | 0.1.3 验收流程稳定后另行批准；Free local BYOK Loop 不受账号或 entitlement 故障影响 |
 
 已发布顺序是：0.0.22 → 0.1.0-rc.1 → 0.1.0 → 0.1.1 → 0.1.2（开源发布版）。
-建议下一步是：0.1.3 交付验收试点（并入原 0.1.2 First Success 候选范围）→ 0.2.0
+建议下一步是：0.1.3 重复交付与本地摘要的最小候选评审（不整批并入原 First Success）→ 0.2.0
 结构精简与 0.3.0 协作能力另行评审。0.2.0 作为需独立批准的工程轨道，按实际阻碍
 分批推进。0.1.3 的目标版本号与技术实施范围需在开工前确认；0.3.0 不自动开工。
 0.0.22 是已发布的维护版本，不扩张 0.1.0 范围；若再出现生产 P0，只能另行
@@ -259,9 +263,9 @@ worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继�
 - Web 请求路径不再执行 schema DDL；旧 SaaS 表和列只冻结，应用层停止新增宠物、memory、achievement、invite、usage 等数据。
 - 重写会误导后续开发的 Web `CLAUDE.md`，公开文案明确 Loop 可能以 PASS、NEEDS_WORK、ERROR、PAUSED 或 STOPPED_BY_USER 结束。
 
-#### 0.1.2：首次成功与公开表面收敛
+#### 原 0.1.2 First Success 设计（未随开源版交付；保留参考）
 
-详细范围、发布级别、兼容策略与完成定义见 [0.1.2 First Success And Surface Simplification](docs/design/0.1.2-first-success-and-surface-simplification.md)。
+以下为原候选，不能作为已发布 0.1.2 的完成定义或自动继承为 0.1.3；参考 [0.1.2 First Success And Surface Simplification](docs/design/0.1.2-first-success-and-surface-simplification.md)。
 
 - installer 给出 `cd project → wukong → /provider → /loop` 的真实下一步。
 - Provider 增加显式连通测试；Preflight 可在取消、重启和修复配置后恢复。
@@ -275,9 +279,10 @@ worktree、Safe Promote 或 target Final Gate 的内容已经失效，不能继�
 
 #### 0.1.3：交付验收试点（候选范围）
 
-- 选定一个技术栈和反复发生的验收任务，在真实仓库中验证完整路径。
-- 需求/Issue 生成验收草案，用户确认后绑定检查与证据；生成 Spec 不等同完成。
-- 最小 PR Gate 和交付摘要接入一个真实仓库，先用显式启动或用户控制的 CI 验收，不预建通用云端 runner。
+- 真实用户首次使用已跑通；围绕下一次真实交付确认重复卡点与交接需求。
+- 条件映射先用现有 Goal、Done when、Preflight，不预先建设自动 Spec 生成器。
+- 优先用人工摘要验证交接价值；确需自动化时只评审读取已有运行、本地预览与显式保存。
+- GitHub PR Gate/自动写回暂缓，凭据、fork 输入、stale 与幂等恢复需独立设计。
 - 具体候选边界、用户路径与未决技术问题见 [0.1.3 Delivery Acceptance Pilot](docs/design/0.1.3-delivery-acceptance-pilot.md)。
 
 #### 0.2.0：按交付需要推进的结构精简
@@ -411,7 +416,7 @@ telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
 > 历史说明：以下是 0.0.12 发布时的额度设计。0.0.17 已删除 Guest、登录和月度 Loop 准入限制；当前只保留用户可控的本地单次运行安全上限。
 
 - 未登录：1 个 Loop session、最多 2 轮。
-- Free 账号：10 个 Loop sessions/月且每个最多 5 轮；第3次开始提示 Pro，第10次后硬限制。
+- Free 账号：10 个 Loop sessions/月且每个最多 5 轮；这些旧限制已在 0.0.17 移除。
 - 内部检查和直接运行高级诊断命令都不消耗额外额度。
 - BYOK 模型不增加另一套 AI credits；用户承担 provider token。
 - 参数校验失败和无法建立执行计划不扣额度。
@@ -650,8 +655,8 @@ telemetry event 或 Web/D1 metrics backend，现有 optional CLI telemetry 也
 - 0.0.22 只做 provider catalog resilience 与 CLI clarity 维护发布；不增加新的执行架构。
 - 0.1.0 规格已收敛：只稳定可控、可恢复、可解释的单 Loop；可编辑 Preflight、可信 no-check、provider-call/token 上限、文件归因、provider outcome、最小 Gate completeness/freshness、兼容恢复、五来源 Resume 与发布 workflow 已完成自动化，RC 六平台公开验收已通过。stable 只保留 exact-source、P0/release-blocking P1 清零、六平台资产/安装/升级/恢复与生产版本面门槛；opt-in cohort 发布后继续，不设固定 14 天等待。完整多层 coverage schema、direct-shell content/PATH attestation 与价格数据库后移。
 - 0.1.1 只做已存在体验的维护与可靠性修复；不包含 Cost Visibility、实时 pricing 查询、价格数据库或 reviewer 成本聚合。
-- 0.1.2 继续完成首次成功路径，当前已批准功能范围不扩张。
-- 0.1.3 候选围绕用户确认的验收条件、exact-commit PR Gate 和显式交付摘要验证团队需求；复用既有执行核，不把确定性检查通过包装成完整 Gate PASS。
+- 0.1.2 已按 MIT 发布；真实用户首次使用已跑通。原首次成功改进按重复使用中的实际阻碍重新评审，不整体顺延。
+- 0.1.3 候选优先验证本地交付摘要；用户确认的验收条件先复用现有能力，PR Gate 暂缓且另批设计。不把确定性检查通过包装成完整 Gate PASS。
 - 0.2.0 是 Codebase Reduction，需先批准迁移设计；按实际交付需要推进，不能继承已取消的 Promote/lease/fencing 设计。协作能力与订阅决策归 0.3.0 另行评审。
 - 公告与更新通道分离：公告 JSON 由 Web 静态文件维护，失败不阻塞 CLI。
 - `/report` 和 Hosted Report/上传路径保持删除；当前本地 Gate 结果只在已有显式保存能力下留档。未来脱敏交付摘要与 GitHub 发布是新的候选范围，必须先批准新文档，不复活旧上传路径。

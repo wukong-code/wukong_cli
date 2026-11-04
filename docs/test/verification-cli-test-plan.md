@@ -29,7 +29,7 @@
 以下真实使用证据仍未形成，但不再作为固定 14 天 binary 发布门槛：
 
 1. 至少一个 Windows 实际 repo 的完整 blocker → fix → rerun → PASS；
-2. 25/20/15/7 opt-in cohort、首次用户理解与重复使用。
+2. 用户能理解结果、权限与下一步；具体研究计划和执行记录在私有仓库维护。
 
 本次 live `models.dev` catalog 生成因网络超时未形成结论；不能把它记录为代码通过或
 失败。release-profile 使用确定性 snapshot 的构建和 ZIP smoke 已单独通过。

@@ -12,6 +12,7 @@ This is the **Wukong CLI monorepo**: a TypeScript codebase for the local-first t
 - Treat code, not documentation, as the source of truth. Unless the user explicitly says otherwise, do not read ordinary Markdown just to understand the implementation.
 - Before making code changes, read the relevant code and the most recent constraints, and follow the nearest `AGENTS.md` in the directory tree.
 - Keep changes focused. Do not slip in unrelated refactors along the way.
+- This repository is public. Keep business experiments, candidate pricing, production usage statistics, customer research, and private website operations in the private website repository. New root Markdown and documentation source files must be reviewed in `docs/public-documents.json`; run `node scripts/check-public-docs.mjs` before publishing documentation.
 - Preserve explicit user settings on configuration or recovery failures. Gate PASS requires the frozen checks and fresh reviewer; follow the relevant runtime contract when changing Loop behavior.
 - When committing, do not add any co-author attribution, and do not reveal the identity of the agent in commit messages, PR descriptions, or any explanatory text.
 

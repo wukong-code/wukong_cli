@@ -34,6 +34,9 @@ jobs:
           fetch-depth: 0
           persist-credentials: false
 
+      - name: Validate reviewed public documentation
+        run: node scripts/check-public-docs.mjs
+
       - name: Classify changed files
         id: filter
         shell: bash

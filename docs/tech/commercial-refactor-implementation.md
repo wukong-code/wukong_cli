@@ -8,7 +8,7 @@
 > 日期: 2026-07-14
 > 对应商业方案: 已移出公开仓库，私有留存
 > 适用范围: `wukong_cli` 新 Kimi-code base；legacy 代码只作为迁移参考；web/计费不在本轮修改范围内。
-> 说明: §1–§8 记录已经实现的 v1 基线；0.0.12 的替换 contract 以 §9.3–§9.6 和 [Trust Loop v2](../design/verification-loop-v2.md) 为准。两者冲突时使用 v2。
+> 说明: §1–§8 记录已经实现的 v1 基线；0.0.12 的本地替换 contract 见 §9 和 [Trust Loop v2](../design/verification-loop-v2.md)。历史官网与商业后台设计已私有归档，不再作为本地产品合同。
 
 ---
 
@@ -920,9 +920,10 @@ export interface GoalGateResult {
 
 ---
 
-## 9. 后续云端与商业化接入
+## 9. 本地数据与信任边界
 
-本节只定义 `wukong_cli` 需要预留的数据边界。具体 web/API/计费实现不在本轮 `wukong_cli` 修改范围内。
+本节保留本地数据、snapshot、配置信任和 evidence 兼容说明。官网商业后台的
+历史模型独立私有留存，不扩张本地 CLI 的执行或出站能力。
 
 ### 9.1 本地数据
 
@@ -934,123 +935,9 @@ P0 本地:
 ~/.wukong/guard/events.jsonl
 ```
 
-账号服务只记录 Loop quota 和最终 outcome:
-
-```mermaid
-sequenceDiagram
-  participant CLI as CLI
-  participant API as Loop API
-  participant DB as Usage Database
-
-  CLI->>API: reserve Loop usage + auth token
-  API->>DB: store reservation and outcome
-  API-->>CLI: quota status
-```
-
-### 9.2 建议外部数据实体
-
-```sql
-verification_reports(
-  id text primary key,
-  user_id text not null,
-  org_id text,
-  workspace_hash text not null,
-  repo_remote_hash text,
-  branch text,
-  commit_sha text,
-  status text not null,
-  changed_files_count integer not null,
-  commands_run integer not null,
-  failed_commands integer not null,
-  risks_found integer not null,
-  high_risks integer not null,
-  report_object_key text,
-  created_at text not null
-);
-
-guard_events(
-  id text primary key,
-  user_id text,
-  org_id text,
-  workspace_hash text,
-  command_hash text not null,
-  command_preview text not null,
-  risk_id text not null,
-  severity text not null,
-  action text not null,
-  triggered_by_agent integer not null,
-  created_at text not null
-);
-
-team_rules(
-  id text primary key,
-  org_id text not null,
-  rule_type text not null,
-  pattern text not null,
-  action text not null,
-  enabled integer not null,
-  created_at text not null,
-  updated_at text not null
-);
-```
-
-### 9.3 配额映射
-
-| Feature | Free | Pro | Team |
-|---|---|---|---|
-| Loop sessions | 10/month, max 5 iterations/session | server-configured higher cap | pooled/org policy（后续） |
-| local guard | unlimited | unlimited | team policy 可加强 |
-| advanced verify/scan/proof | unlimited | unlimited | CI/org policy |
-| BYOK reviewer | included in Loop | included | org policy |
-| team rules | no | no | yes |
-
-0.0.12 只保留 Loop sessions 一类用户额度。verify/scan/proof 无论由 Loop 内部调用还是高级用户直接调用，都不产生独立 usage。BYOK reviewer 包含在 Loop run 中，不增加 AI credits。完整 contract 见 [0.0.12 Trust Loop v2](../design/verification-loop-v2.md)。
-
-本地 evidence 文件不进入 Trust Run 主额度，也不阻塞默认 verdict。
-
-### 9.4 Trust Run 编排与 usage
-
-`@wukong/verification` 保持 quota/auth 无关；Loop orchestration 负责唯一 usage 边界。每个 Loop run 携带 `runId`、`origin`、`artifactMode`、writer `modelAlias` 和 `roleName`。内部检查和 reviewer 不单独调用 usage API。
-
-服务端 contract：
-
-| Endpoint | 作用 |
-|---|---|
-| `POST /api/v1/loops/start` | 幂等、原子地创建 Loop run 并增加 session used |
-| `POST /api/v1/loops/complete` | 按 `requestId` 幂等记录 terminal lifecycle、outcome 与实际迭代数 |
-| `GET /api/v1/usages` | 返回 Loop sessions 的 limit、used、recent lifecycle 和 reset timestamp |
-
-以上是 0.0.12 的历史已部署 contract；0.0.17 已移除本地 BYOK Loop 对远端 quota 的依赖。0.1.0 不新增 account/capability entitlement；0.2.0 若获批，统一 contract 以 [Pro Reliable Autonomy](../design/0.2.0-pro-reliable-autonomy.md) 为准。
-
-服务端新增：
-
-```sql
-trust_usage(
-  user_id text not null,
-  period_start text not null,
-  bucket text not null,
-  used integer not null default 0,
-  primary key (user_id, period_start, bucket)
-);
-
-trust_runs(
-  id text primary key,
-  user_id text not null,
-  command text not null,
-  idempotency_key text not null,
-  status text not null,
-  model_alias text,
-  role_name text,
-  actual_iterations integer,
-  duration_ms integer,
-  reason_code text,
-  created_at text not null,
-  completed_at text,
-  unique(user_id, idempotency_key)
-);
-```
-
-参数、project plan、model alias 与 role 在 `start` 前验证；start 成功后即计数，取消、失败或崩溃不退回。相同 `idempotency_key` 的 CLI 重试返回原 run，不重复增加 used。0.0.12 不实现 reservation、renew、release、offline lease 或额外 AI credit ledger。
+本地 verification 引擎保持 quota/auth 无关；本地 BYOK Loop 不依赖远端
+Loop quota。旧官网 usage、配额映射和后台数据模型已移至私有历史归档，
+不作为当前接口或实施依据。本地 evidence 文件不形成账号额度。
 
 ### 9.5 Snapshot、项目配置信任与 evidence 路径
 
@@ -1176,16 +1063,11 @@ pnpm -C apps/wukong run dev:cli-only -- loop "fix failing tests" --until verify-
 - `loop` 达到 max-iterations 时明确返回 `max-iterations` 状态，不假装成功。
 - `loop --every` 的轮间等待不会立即续轮，且 PASS、stop、cancel 后不存在遗留 cron task。
 
-### Milestone 5: 商业化接口
+### Milestone 5: 本地独立运行边界
 
-- CLI 登录状态下使用服务端 Loop quota。
-- CLI 默认不上传源码 diff 或本地 evidence。
-- 预留 Loop quota 和 guard usage quota 字段。
-
-验收:
-
-- 未登录时本地 verify 完整可用。
-- quota 服务失败不影响本地安全降级。
+- 默认不上传源码、diff 或本地 evidence。
+- 无账号时本地验证与 BYOK Loop 完整可用，不依赖官网 quota 服务。
+- 历史商业后台接口研究在私有仓库维护，不授权恢复已移除的远端额度。
 
 ---
 

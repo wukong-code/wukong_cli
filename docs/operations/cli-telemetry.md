@@ -68,7 +68,7 @@ flows outside this endpoint.
   stores no IP; a daily job deletes installations unused for 90 days and
   day-of-use records older than 90 days. Operations and deletion live in
   `wukong_web/docs/privacy-operations.md`. The data counts installations and
-  activity only and is not 25/20/15/7 cohort evidence.
+  activity only and does not prove task completion or repeat use.
 - Before 2026-10-02, `telemetry-logs.wukong.today` had no DNS record, so every
   event from released versions went undelivered and sat only in the local
   failure queue (7 days at most).

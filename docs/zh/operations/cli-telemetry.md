@@ -57,7 +57,7 @@ model identity、tool arguments、hostname、terminal details 或 hardware finge
   工具、命令、时长和全部 `property_*` 只用于校验格式，收到后即丢弃、从不落盘。它忽略
   CLI 为已登录用户附带的 `Authorization`，不保存 IP；每日定时任务删除最后使用超过 90 天
   的安装记录和 90 天前的使用日期。运维与删除流程见 `wukong_web/docs/privacy-operations.md`。
-  这些数据只用于统计安装与活跃数，不能当作 25/20/15/7 cohort 证据。
+  这些数据只用于统计安装与活跃数，不能用于证明任务完成或重复使用。
 - 2026-10-02 之前，`telemetry-logs.wukong.today` 没有 DNS 记录，所有已发布版本的事件都
   未送达，只停留在本地失败队列中（最多 7 天）。
 

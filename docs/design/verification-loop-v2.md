@@ -21,7 +21,7 @@
 3. 用户只看到 `PASS`、`NEEDS_WORK`、`ERROR` 三种最终状态。
 4. 真实命令失败不能被模型改成 PASS；模型审查可以把检查通过收紧为 NEEDS_WORK。
 5. 默认不生成 Report、不写 Evidence、不上传；只在用户明确要求时保存最终结果。
-6. 商业额度只围绕 Loop sessions 和迭代深度，不对本地规则命令分别收费。
+6. 旧 Loop session 记录保持兼容；当前本地 Loop 与规则命令不依赖账号额度。
 
 ## 2. 用户心智模型
 
@@ -211,9 +211,9 @@ Role Profiles 目前仍由实验开关控制：
 role_profiles = true
 ```
 
-## 9. Loop 额度与付费边界
+## 9. 历史 Loop 额度兼容
 
-> 历史决策记录：本节的 Guest/Free 数字仍描述 0.0.12 已发布 contract。2026-07-20 的 PR Gate 单点付费假设现已[归档](historical-pro-pr-gate-billing.md)；2026-07-25 起，0.1.0 是 Free Trusted Local Loop，0.2.0 才是 Reliable Autonomy 商业候选。
+> 历史兼容记录：下列 Guest/Free 数字描述 0.0.12 已发布 contract。0.0.17 已移除本地 BYOK Loop 的 Guest/账号月度准入限制；当前不按用户自己的 Loop 或 token 设置 Wukong quota。旧升级策略与商业候选另存私有归档。
 
 0.0.12 只设置一个用户可理解的额度：Loop sessions。
 
@@ -221,7 +221,6 @@ role_profiles = true
 |---|---:|---:|
 | 未登录试用 | 1 次总计 | 2 |
 | Free | 10 次/月 | 5 |
-| Pro Preview | 更高额度或 fair use | 更高上限 |
 
 计数规则：
 
@@ -230,15 +229,9 @@ role_profiles = true
 - 参数、role、model、project trust 在启动前失败不计数。
 - Loop start 成功后即计数；取消、失败或崩溃不退款，避免 reservation/lease 复杂度。
 - BYOK 模型 token 由用户承担，不新增 AI credits。
-- Free 用户从当月第3次开始看到 Pro 提示并记录 upgrade intent，第10次后才硬限制；提示不消耗额外额度。
 
-后续版本决策（2026-07-25 更新）：
-
-- 0.1.0：Free Trusted Local Loop，不设置服务端 Loop allowance 或付费 entitlement。
-- 0.2.0 候选：有界并行、显式 Detach、本机 Supervisor 与可选 Verified PR Gate；不对 BYOK token 加价。
-- managed reviewer、后台/云端 Loop、Team Role/Policy、组织 gate、审计和 private runner 继续后移。
-
-不把规则扫描、测试命令包装器或 Report 文件本身当作主要付费理由。
+当前本地 BYOK Loop 保持免费；模型 token 由用户直接向所选 provider 承担。
+本节保留旧记录计数兼容事实，不恢复旧准入限制或付费权益。
 
 ## 10. Snapshot、信任与反馈
 
