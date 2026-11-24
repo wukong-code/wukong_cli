@@ -1,18 +1,20 @@
 # Wukong Code Documentation
 
-> Current stable: `0.1.2` — the open-source release of the local CLI under MIT.
+> Current stable: `0.2.0` — Standalone Gate & Proof Foundation (`wukong init`, `wukong check`, `wukong gate`, `wukong summary`).
 >
 > Candidate evidence snapshot: [`0.1.0-rc.1`](https://github.com/wukong-code/wukong-code/releases/tag/v0.1.0-rc.1).
 
-0.1.2 continues the [controllable, recoverable, explainable Trusted Local Loop](design/0.1.0-trusted-local-loop.md)
-and publishes the local CLI under the MIT license. The command surface, Loop/Gate
-semantics, and the free local-first BYOK boundary are unchanged from 0.1.1. The
+0.2.0 builds on the [controllable, recoverable, explainable Trusted Local Loop](design/0.1.0-trusted-local-loop.md)
+with standalone verification & proof commands (`wukong init`, `wukong provider test`,
+`wukong check`, `wukong gate`, `wukong summary`), tiered CLI/TUI help, and single-confirm
+headless run-plans while keeping the MIT free, local-first, BYOK boundary unchanged. The
 website and operations backend remain private.
 
 ## Start here
 
 - [User Guide](user-guide.md)
 - [CLI Use and Risk Notice](CLI-USE-AND-RISK.md)
+- [0.2.0 Release Notes](releases/0.2.0.md)
 - [0.1.2 Release Notes](releases/0.1.2.md)
 - [Architecture](tech/architecture.md)
 - [Automated Test Plan](test/verification-cli-test-plan.md)

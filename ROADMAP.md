@@ -2,8 +2,8 @@
 
 > Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
 
-> 最后更新：2026-11-24（确立 PLG 全球化与路线 A：跨 Agent 独立验收与交付门禁层，版本序列自 `v0.2.0` 起步）
-> 当前已发布基线：`v0.1.2`（MIT Open-Source Edition；Free + local-first + BYOK）
+> 最后更新：2026-11-24（完成 `v0.2.0` 独立验收与交付证明基线开发与打包发布；PLG 全球化与路线 A 自 `v0.2.0` 起步）
+> 当前已发布基线：`v0.2.0`（Standalone Gate & Proof Foundation；MIT；Free + local-first + BYOK）
 > 范围：`wukong_cli` 开源本地 CLI 与核心引擎、`wukong-code` 公开分发与文档/Action；官网账号与托管 PR Gate 后端由私有 `wukong_web` 仓库维护。
 > 授权边界：本文件确定产品方向与版本规划；具体条目进入代码实施前须确认技术设计与变更范围。
 
@@ -100,14 +100,14 @@ Wukong Code 不与 Claude Code、Cursor、Codex 争夺“写代码主入口”�
 - **冻结为 bugfix-only**：`apps/wukong-web`（local Web UI）、`apps/vis`（Visualizer）、`today`、`roles`、`swarm` 仅做必要可靠性修复，不再投入新功能迭代。
 - **不做项**：云端托管写代码 Agent、`/schedule` 云端定时例程、模型代理转售、以“纯重构”阻塞业务发布的空转版本、百 Agent 蜂群与复杂桌面多任务看板。
 
-## 已发布基线简表（`v0.0.1` – `v0.1.2`）
+## 已发布基线简表（`v0.0.1` – `v0.2.0`）
 
 | 版本区间 | 主题与核心沉淀 |
 |---|---|
 | `0.0.1` – `0.0.11` | 交互式 TUI、`-p`、BYOK Provider 管理、`verify` / `scan` / `guard` / `proof` / `judge` / `goal` / `loop`、六平台原生二进制与升级链路 |
 | `0.0.12` – `0.0.18` | Loop-first 状态机、结构化多 finding review、`.wukong/review-policy.md`、Codex/Claude/Cursor/Kimi/Grok 跨 Agent Resume、文本 `/feedback` 与无配额本地 Loop |
 | `0.0.19` – `0.0.22` | Acceptance Contract 冻结合同、Evidence Broker 与严格 Verification Skills、Evidence Identity 修复、Provider Catalog 韧性 |
-| `0.1.0` – `0.1.1` | Trusted Local Loop（可编辑 Preflight、调用/token 上限、no-check、文件归因、跨平台可靠性与插件/更新供应链加固） |
-| `0.1.2`（当前稳定版） | MIT 开源发布版（2026-10-24）：完成组织迁移（`wukong-code`）、MIT 许可切换与发布 provenance |
+| `0.1.0` – `0.1.2` | Trusted Local Loop（可编辑 Preflight、调用/token 上限、no-check、文件归因、跨平台可靠性）、MIT 开源切换与发布 provenance |
+| `0.2.0`（当前稳定版） | Standalone Gate & Proof Foundation（2026-11-24）：`init` / `provider test` / `check` / `gate` / `summary`、三级命令面收敛与单确认 run-plan |
 
 > `v0.2.0` 之前的完整历史设计与归档研究保留在 Git 历史及 [设计归档索引](docs/design/design.md) 中。

@@ -40,6 +40,7 @@
   "docs/operations/updates-and-announcements.md",
   "docs/package.json",
   "docs/releases/0.1.2.md",
+  "docs/releases/0.2.0.md",
   "docs/tech/architecture.md",
   "docs/tech/commercial-refactor-implementation.md",
   "docs/tech/deepseek-v4-optimization.md",
@@ -67,5 +68,6 @@
   "docs/zh/releases/0.1.0.md",
   "docs/zh/releases/0.1.1.md",
   "docs/zh/releases/0.1.2.md",
+  "docs/zh/releases/0.2.0.md",
   "docs/zh/user-guide.md"
 ]

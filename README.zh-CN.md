@@ -13,7 +13,16 @@ wukong --version
 
 ## 开始使用
 
-先配置模型服务商，再启动 TUI：
+在项目中初始化检查与模型连通性，再运行离线快检或独立验收门禁：
+
+```sh
+cd your-project
+wukong init
+wukong check
+wukong gate
+```
+
+也可以直接配置 provider 后进入交互式 TUI：
 
 ```sh
 wukong provider
@@ -26,25 +35,35 @@ wukong
 /loop 为注册表单增加输入校验
 ```
 
-Wukong 会修改代码、运行仓库自己的检查、审查结果，并修复阻塞问题。Loop 最终会给出
-清晰的 `PASS`、`NEEDS_WORK` 或 `ERROR`。
+Wukong 会修改代码、运行仓库自己的检查、审查结果，并修复阻塞问题。Gate 或 Loop
+最终会给出清晰的 `PASS`、`NEEDS_WORK` 或 `ERROR`，并可通过 `wukong summary`
+生成脱敏 PR 交付证明卡（Delivery Proof Card）。
 
 ## Headless 模式
 
-先预览这次运行的检查、上限和授权要求：
+先生成包含单一确认摘要的 run-plan 预览：
 
 ```sh
-wukong loop "为注册表单增加输入校验" --dry-run
+wukong loop "为注册表单增加输入校验" --dry-run --plan-out .wukong/run-plan.json
 ```
 
-查看输出中的 **Headless start flags**，再把这些 flags 加回同一条命令执行。缺少明确
-决定时会安全退出，不会静默开始。
+核对后用单一 digest 启动运行（旧多项确认 flag 仍兼容）：
+
+```sh
+wukong loop --plan .wukong/run-plan.json --approve-plan <planDigest>
+```
+
+缺少明确决定时会安全退出，不会静默开始。
 
 ## 常用命令
 
 ```text
-wukong provider       配置模型服务商
+wukong init           探测工具链、生成 .wukong/ 配置并引导 provider 测试
+wukong check          离线运行项目检查与风险扫描（reviewer: not_run）
+wukong gate           运行确定性检查、风险扫描与独立上下文审查
+wukong summary        渲染脱敏 PR 交付证明卡
 wukong loop <goal>    运行 write → check → review → fix
+wukong provider       配置并测试模型服务商连通性
 wukong doctor         检查本地配置
 wukong upgrade        升级原生安装
 ```
@@ -59,7 +78,7 @@ wukong upgrade        升级原生安装
 /resume grok
 ```
 
-运行 `wukong --help` 查看完整命令列表。
+运行 `wukong --help` 查看核心命令，或运行 `wukong help --all` 查看完整命令列表。
 
 ## 隐私
 

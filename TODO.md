@@ -3,11 +3,11 @@
 > Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
 
 > 最后更新：2026-11-24
-> 当前已发布基线：`v0.1.2`（MIT 开源版）
+> 当前已发布基线：`v0.2.0`（Standalone Gate & Proof Foundation，MIT 开源版）
 > 方向真相源：[ROADMAP.md](ROADMAP.md)（PLG 全球化 + 路线 A：跨 Agent 独立验收与交付门禁层，自 `v0.2.0` 起步）
 > Web 侧任务见 `wukong_web/TODO.md`。本文件记录各版本待办，实施前按既定技术设计核对边界。
 
-## `v0.2.0` — Standalone Gate & Proof Foundation（Now）
+## `v0.2.0` — Standalone Gate & Proof Foundation（Released 2026-11-24）
 
 - [x] **仓库初始化向导 `wukong init`**：自动探测 Node/pnpm/Python/Rust/Go/monorepo 工具链，生成 `.wukong/checks.json` 与 `.wukong/review-policy.md`，并引导配置与校验 provider
 - [x] **Provider 连通测试 `wukong provider test [providerId]`**：显式发起最小探测，区分 `ok` / `auth-failed` / `not-found` / `network` / `timeout` / `offline`；绝不打印密钥、query 凭据或响应体
@@ -17,7 +17,7 @@
 - [x] **命令面三级 tier 收敛**：CLI `--help` 默认聚焦核心命令（`init` / `check` / `gate` / `summary` / `loop` / `provider` / `doctor` / `upgrade`）并指向 `wukong help --all`；TUI core 从 13 个收敛至 8 个；保留 `verify`/`scan`/`proof`/`judge`/`guard` 兼容别名及行为契约回归
 - [x] **Headless 单一确认 run-plan**：`--dry-run --plan-out <file>` 与 `--plan <file> --approve-plan <digest>` 替代 8 个摘要/挑战参数（旧参数兼容保留），补齐无 secret 负向测试
 - [x] **统一新手指引**：对齐 `install.sh`、npm postinstall 与 `wukong doctor` 的 `wukong init → wukong check → wukong gate` 下一步提示与回归测试
-- [ ] **`v0.2.0` 发布验收**：本地自动化门禁（全量单测、coverage gate、typecheck、lint、sherif、build/smoke、publint/attw、0.1.x 兼容回归、`bats tests/install.bats`）已在 `feat/v0.2.0` 通过；六平台 GitHub Release 构建/checksum/provenance/安装与升级 smoke 待正式打 tag 发布流程验证
+- [x] **`v0.2.0` 发布验收**：本地自动化门禁已全部通过，三仓库 `v0.2.0` 同步发布与六平台 GitHub Release 构建/晋升/生产表面验收在 `v0.2.0` 发布流程执行
 
 ## `v0.3.0` — Agent Ecosystem & CI Viral Loop（Next）
 
