@@ -42,6 +42,7 @@ describe('resolveTargetDeps', () => {
     expect(names).toContain('@mariozechner/clipboard');
     expect(names).toContain('@mariozechner/clipboard-darwin-universal');
     expect(names).toContain('koffi');
+    expect(names).toContain('@koromix/koffi-darwin-arm64');
   });
 
   it('picks the right clipboard subpackage per target', () => {
@@ -56,13 +57,22 @@ describe('resolveTargetDeps', () => {
     ).toContain('@mariozechner/clipboard-win32-arm64-msvc');
   });
 
-  it('encodes koffi native file path with target triplet', () => {
-    const linuxKoffi = resolveTargetDeps('linux-arm64').find((d) => d.resolvedName === 'koffi');
-    expect(linuxKoffi?.nativeFileRelatives).toEqual(['build/koffi/linux_arm64/koffi.node']);
-    const macKoffi = resolveTargetDeps('darwin-x64').find((d) => d.resolvedName === 'koffi');
-    expect(macKoffi?.nativeFileRelatives).toEqual(['build/koffi/darwin_x64/koffi.node']);
-    const winArmKoffi = resolveTargetDeps('win32-arm64').find((d) => d.resolvedName === 'koffi');
-    expect(winArmKoffi?.nativeFileRelatives).toEqual(['build/koffi/win32_arm64/koffi.node']);
+  it('picks the right koffi subpackage per target', () => {
+    expect(
+      resolveTargetDeps('linux-arm64').map((d) => d.resolvedName),
+    ).toContain('@koromix/koffi-linux-arm64');
+    expect(
+      resolveTargetDeps('darwin-x64').map((d) => d.resolvedName),
+    ).toContain('@koromix/koffi-darwin-x64');
+    expect(
+      resolveTargetDeps('win32-arm64').map((d) => d.resolvedName),
+    ).toContain('@koromix/koffi-win32-arm64');
+    expect(
+      resolveTargetDeps('linux-x64').map((d) => d.resolvedName),
+    ).toContain('@koromix/koffi-linux-x64');
+    expect(
+      resolveTargetDeps('win32-x64').map((d) => d.resolvedName),
+    ).toContain('@koromix/koffi-win32-x64');
   });
 
   it('throws on unsupported target', () => {
@@ -82,9 +92,15 @@ describe('nativeDeps registry shape', () => {
     expect(target?.parent).toBe('clipboard-host');
   });
 
-  it('has koffi (collect=js-and-native-file, parent=pi-tui)', () => {
+  it('has koffi host (collect=js-only, parent=null)', () => {
     const koffi = nativeDeps.find((d) => d.id === 'koffi');
-    expect(koffi?.collect).toBe('js-and-native-file');
-    expect(koffi?.parent).toBe('pi-tui');
+    expect(koffi?.collect).toBe('js-only');
+    expect(koffi?.parent).toBeNull();
+  });
+
+  it('has koffi-target (collect=native-files, parent=koffi)', () => {
+    const target = nativeDeps.find((d) => d.id === 'koffi-target');
+    expect(target?.collect).toBe('native-files');
+    expect(target?.parent).toBe('koffi');
   });
 });

@@ -1,5 +1,5 @@
 import { createHash } from 'node:crypto';
-import { existsSync, realpathSync } from 'node:fs';
+import { existsSync, readFileSync, realpathSync } from 'node:fs';
 import { readdir, readFile } from 'node:fs/promises';
 import { createRequire } from 'node:module';
 import { dirname, extname, isAbsolute, join, relative, resolve } from 'node:path';
@@ -17,9 +17,8 @@ export const NATIVE_TARGETS = Object.freeze(
     SUPPORTED_TARGETS.map((t) => {
       const deps = resolveTargetDeps(t);
       const clipboardTarget = deps.find((d) => d.id === 'clipboard-target')?.resolvedName;
-      const koffiNativeFile = deps.find((d) => d.id === 'koffi')?.nativeFileRelatives?.[0];
-      const koffiTriplet = koffiNativeFile?.match(/koffi\/([^/]+)\/koffi\.node$/)?.[1] ?? null;
-      return [t, { clipboardPackage: clipboardTarget, koffiTriplet }];
+      const koffiPackage = deps.find((d) => d.id === 'koffi-target')?.resolvedName;
+      return [t, { clipboardPackage: clipboardTarget, koffiPackage }];
     }),
   ),
 );
@@ -64,17 +63,40 @@ async function listFiles(root) {
   return files;
 }
 
+function resolvePackageJsonPath(requireFn, packageName) {
+  try {
+    return requireFn.resolve(`${packageName}/package.json`);
+  } catch (subpathError) {
+    // Fallback when a package's `exports` map omits `./package.json` (e.g. koffi@3.3.4).
+    let dir = dirname(requireFn.resolve(packageName));
+    while (true) {
+      const candidate = join(dir, 'package.json');
+      if (existsSync(candidate)) {
+        try {
+          if (JSON.parse(readFileSync(candidate, 'utf-8')).name === packageName) {
+            return candidate;
+          }
+        } catch {}
+      }
+      const parent = dirname(dir);
+      if (parent === dir) break;
+      dir = parent;
+    }
+    throw subpathError;
+  }
+}
+
 function resolvePackageRootGeneric(requireFromApp, packageName, parentPackageName, appRoot, target) {
   try {
-    return dirname(requireFromApp.resolve(`${packageName}/package.json`));
+    return dirname(resolvePackageJsonPath(requireFromApp, packageName));
   } catch (rootError) {
     if (parentPackageName !== null) {
       try {
         const parentPackageJsonPath = realpathSync(
-          requireFromApp.resolve(`${parentPackageName}/package.json`),
+          resolvePackageJsonPath(requireFromApp, parentPackageName),
         );
         const requireFromParent = createRequire(pathToFileURL(parentPackageJsonPath));
-        return dirname(requireFromParent.resolve(`${packageName}/package.json`));
+        return dirname(resolvePackageJsonPath(requireFromParent, packageName));
       } catch {}
     }
     fail(

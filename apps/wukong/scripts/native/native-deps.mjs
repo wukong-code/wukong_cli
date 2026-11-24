@@ -27,13 +27,13 @@ const clipboardSubpackageByTarget = Object.freeze({
   'win32-x64': '@mariozechner/clipboard-win32-x64-msvc',
 });
 
-const koffiTripletByTarget = Object.freeze({
-  'darwin-arm64': 'darwin_arm64',
-  'darwin-x64': 'darwin_x64',
-  'linux-arm64': 'linux_arm64',
-  'linux-x64': 'linux_x64',
-  'win32-arm64': 'win32_arm64',
-  'win32-x64': 'win32_x64',
+const koffiSubpackageByTarget = Object.freeze({
+  'darwin-arm64': '@koromix/koffi-darwin-arm64',
+  'darwin-x64': '@koromix/koffi-darwin-x64',
+  'linux-arm64': '@koromix/koffi-linux-arm64',
+  'linux-x64': '@koromix/koffi-linux-x64',
+  'win32-arm64': '@koromix/koffi-win32-arm64',
+  'win32-x64': '@koromix/koffi-win32-x64',
 });
 
 export function isSupportedTarget(target) {
@@ -69,19 +69,16 @@ export const nativeDeps = Object.freeze([
     parent: 'clipboard-host',
   },
   {
-    id: 'pi-tui',
-    name: () => '@earendil-works/pi-tui',
-    // pi-tui is bundled into main.cjs at build time — we don't collect it as
-    // a native dep, only register it so koffi can declare it as parent.
-    collect: 'virtual',
+    id: 'koffi',
+    name: () => 'koffi',
+    collect: 'js-only',
     parent: null,
   },
   {
-    id: 'koffi',
-    name: () => 'koffi',
-    collect: 'js-and-native-file',
-    parent: 'pi-tui',
-    nativeFileRelatives: (target) => [`build/koffi/${koffiTripletByTarget[target]}/koffi.node`],
+    id: 'koffi-target',
+    name: (target) => koffiSubpackageByTarget[target],
+    collect: 'native-files',
+    parent: 'koffi',
   },
 ]);
 

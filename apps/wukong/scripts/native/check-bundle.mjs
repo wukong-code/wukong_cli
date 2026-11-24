@@ -18,6 +18,8 @@ const optionalRuntimeRequires = new Set([
   'canvas',
   'chokidar',
   'cpu-features',
+  // `@acemir/cssom` (via `linkedom`) probes `require('cssstyle')` inside a guarded try/catch.
+  'cssstyle',
   'fast-json-stringify/lib/serializer',
   'fast-json-stringify/lib/validator',
   'utf-8-validate',
