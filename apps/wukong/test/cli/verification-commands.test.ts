@@ -5,6 +5,7 @@ import { join } from 'node:path';
 import { Command } from 'commander';
 import { describe, expect, it, vi } from 'vitest';
 import { createProgram } from '#/cli/commands';
+import { handleCheck, type CheckDeps } from '#/cli/sub/check';
 import { handleGuard, type GuardDeps } from '#/cli/sub/guard';
 import { handleJudge, type JudgeDeps } from '#/cli/sub/judge';
 import { handleProof, type ProofDeps } from '#/cli/sub/proof';
@@ -31,6 +32,8 @@ describe('verification command registration', () => {
     const program = createProgram('0.0.0', () => {}, () => {});
     const names = program.commands.map((command) => command.name());
 
+    expect(names).toContain('init');
+    expect(names).toContain('check');
     expect(names).toContain('verify');
     expect(names).toContain('scan');
     expect(names).toContain('proof');
@@ -42,6 +45,8 @@ describe('verification command registration', () => {
     expect(help).not.toMatch(/^\s+verify\b/m);
     expect(help).not.toMatch(/^\s+scan\b/m);
     expect(help).not.toMatch(/^\s+proof\b/m);
+    expect(help).toMatch(/^\s+init\b/m);
+    expect(help).toMatch(/^\s+check\b/m);
     expect(help).toMatch(/^\s+loop\b/m);
   });
 });
@@ -587,5 +592,197 @@ describe('handleGuard', () => {
     await expect(handleGuard(deps, { command: ['rm', '-rf', './tmp'] })).resolves.toBe(1);
     expect(stderr.chunks.join('')).toContain('Blocked high-risk command.');
     expect(stdout.chunks).toEqual([]);
+  });
+});
+
+describe('handleCheck', () => {
+  it('marks reviewer as not_run, does not write a report by default, and avoids claiming full Gate PASS', async () => {
+    const captured: VerificationOptions[] = [];
+    const stdout = writable();
+    const stderr = writable();
+    const deps: CheckDeps = {
+      cwd: () => '/workspace',
+      stdout: stdout.writer,
+      stderr: stderr.writer,
+      runVerification: async (options) => {
+        captured.push(options);
+        return {
+          status: 'passed',
+          cwd: '/workspace',
+          generatedAt: '2026-11-24T00:00:00.000Z',
+          changedFiles: [],
+          gitStatus: '',
+          diffStat: '',
+          selectedCommands: ['pnpm test'],
+          commandResults: [{
+            command: 'pnpm test',
+            status: 'passed',
+            exitCode: 0,
+            durationMs: 10,
+            stdout: 'ok',
+            stderr: '',
+          }],
+          risks: [],
+        };
+      },
+    };
+
+    await expect(handleCheck(deps, {})).resolves.toBe(0);
+    expect(captured[0]?.writeReport).toBe(false);
+    const output = stdout.chunks.join('');
+    expect(output).toContain('Status: passed');
+    expect(output).toContain('Reviewer: not_run');
+    expect(output).toContain('not a full Gate PASS');
+    expect(stderr.chunks).toEqual([]);
+
+    const jsonStdout = writable();
+    await expect(handleCheck({ ...deps, stdout: jsonStdout.writer }, { json: true })).resolves.toBe(0);
+    const json = JSON.parse(jsonStdout.chunks.join('')) as {
+      status: string;
+      reviewer: string;
+      fullGatePass: boolean;
+    };
+    expect(json.status).toBe('passed');
+    expect(json.reviewer).toBe('not_run');
+    expect(json.fullGatePass).toBe(false);
+  });
+
+  it('fails on failing commands, zero checks, or high-severity risks, and distinguishes medium risks with --strict', async () => {
+    const baseResult = {
+      cwd: '/workspace',
+      generatedAt: '2026-11-24T00:00:00.000Z',
+      changedFiles: [],
+      gitStatus: '',
+      diffStat: '',
+      selectedCommands: ['pnpm test'],
+      commandResults: [{
+        command: 'pnpm test',
+        status: 'passed' as const,
+        exitCode: 0,
+        durationMs: 10,
+        stdout: '',
+        stderr: '',
+      }],
+    };
+
+    await expect(
+      handleCheck(
+        {
+          cwd: () => '/workspace',
+          stdout: writable().writer,
+          stderr: writable().writer,
+          runVerification: async () => ({
+            ...baseResult,
+            status: 'failed',
+            commandResults: [{ ...baseResult.commandResults[0]!, status: 'failed', exitCode: 1 }],
+            risks: [],
+          }),
+        },
+        {},
+      ),
+    ).resolves.toBe(1);
+
+    await expect(
+      handleCheck(
+        {
+          cwd: () => '/workspace',
+          stdout: writable().writer,
+          stderr: writable().writer,
+          runVerification: async () => ({
+            ...baseResult,
+            status: 'failed',
+            selectedCommands: [],
+            commandResults: [],
+            risks: [{ id: 'commands.none_detected', severity: 'high', message: 'None' }],
+          }),
+        },
+        {},
+      ),
+    ).resolves.toBe(1);
+
+    const highRiskStdout = writable();
+    await expect(
+      handleCheck(
+        {
+          cwd: () => '/workspace',
+          stdout: highRiskStdout.writer,
+          stderr: writable().writer,
+          runVerification: async () => ({
+            ...baseResult,
+            status: 'warning',
+            risks: [{ id: 'file.secret_like_changed', severity: 'high', message: 'Secret file modified' }],
+          }),
+        },
+        { json: true },
+      ),
+    ).resolves.toBe(1);
+    expect(JSON.parse(highRiskStdout.chunks.join('')).status).toBe('failed');
+
+    const medDeps: CheckDeps = {
+      cwd: () => '/workspace',
+      stdout: writable().writer,
+      stderr: writable().writer,
+      runVerification: async () => ({
+        ...baseResult,
+        status: 'warning',
+        risks: [{ id: 'diff.debug_output_added', severity: 'medium', message: 'console.log added' }],
+      }),
+    };
+    await expect(handleCheck(medDeps, {})).resolves.toBe(0);
+    await expect(handleCheck(medDeps, { strict: true })).resolves.toBe(1);
+  });
+
+  it('forwards explicit --report path and returns 2 on unexpected errors', async () => {
+    const captured: VerificationOptions[] = [];
+    await expect(
+      handleCheck(
+        {
+          cwd: () => '/workspace',
+          stdout: writable().writer,
+          stderr: writable().writer,
+          runVerification: async (options) => {
+            captured.push(options);
+            return {
+              status: 'passed',
+              cwd: '/workspace',
+              generatedAt: '2026-11-24T00:00:00.000Z',
+              changedFiles: [],
+              gitStatus: '',
+              diffStat: '',
+              selectedCommands: ['pnpm test'],
+              commandResults: [{
+                command: 'pnpm test',
+                status: 'passed',
+                exitCode: 0,
+                durationMs: 10,
+                stdout: '',
+                stderr: '',
+              }],
+              risks: [],
+              reportPath: '/workspace/custom.md',
+            };
+          },
+        },
+        { report: 'custom.md' },
+      ),
+    ).resolves.toBe(0);
+    expect(captured[0]?.writeReport).toBe(true);
+    expect(captured[0]?.reportPath).toBe('custom.md');
+
+    const errBuf = writable();
+    await expect(
+      handleCheck(
+        {
+          cwd: () => '/workspace',
+          stdout: writable().writer,
+          stderr: errBuf.writer,
+          runVerification: async () => {
+            throw new Error('check exploded');
+          },
+        },
+        {},
+      ),
+    ).resolves.toBe(2);
+    expect(errBuf.chunks.join('')).toContain('check exploded');
   });
 });

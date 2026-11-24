@@ -4,9 +4,11 @@ import { Command, Option } from 'commander';
 
 import type { CLIOptions } from './options';
 import { registerAcpCommand } from './sub/acp';
+import { registerCheckCommand } from './sub/check';
 import { registerDoctorCommand } from './sub/doctor';
 import { registerExportCommand } from './sub/export';
 import { registerGuardCommand } from './sub/guard';
+import { registerInitCommand } from './sub/init';
 import { registerJudgeCommand } from './sub/judge';
 import { registerLoginCommand } from './sub/login';
 import { registerLogoutCommand } from './sub/logout';
@@ -106,6 +108,8 @@ export function createProgram(
     .addOption(new Option('--auto-approve').hideHelp());
 
   registerExportCommand(program);
+  registerInitCommand(program);
+  registerCheckCommand(program);
   registerProviderCommand(program);
   registerAcpCommand(program);
   registerServerCommand(program);

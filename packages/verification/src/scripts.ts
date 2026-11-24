@@ -30,6 +30,22 @@ const SKIPPED_DIRECTORIES = new Set([
 const MAX_PACKAGE_DEPTH = 4;
 const MAX_DISCOVERED_COMMANDS = 12;
 
+export type DetectedToolchain =
+  | 'node-pnpm'
+  | 'node-npm'
+  | 'node-yarn'
+  | 'node-bun'
+  | 'monorepo'
+  | 'python'
+  | 'rust'
+  | 'go';
+
+export interface ToolchainDetectionResult {
+  readonly toolchains: readonly DetectedToolchain[];
+  readonly commands: readonly VerificationCommand[];
+  readonly hasExistingChecksConfig: boolean;
+}
+
 export async function selectVerificationCommands(options: {
   readonly cwd: string;
   readonly commands?: readonly string[];
@@ -42,14 +58,48 @@ export async function selectVerificationCommands(options: {
   const configured = await readProjectChecks(options.cwd);
   if (configured.length > 0) return configured;
 
-  const packageJsonPath = join(options.cwd, 'package.json');
-  const packageManager = detectPackageManager(options.cwd);
-  const rootPackage = existsSync(packageJsonPath)
+  const detected = await detectProjectToolchain({
+    cwd: options.cwd,
+    includeBuild: options.includeBuild,
+  });
+  return [...detected.commands];
+}
+
+export async function detectProjectToolchain(options: {
+  readonly cwd: string;
+  readonly includeBuild?: boolean;
+}): Promise<ToolchainDetectionResult> {
+  const { cwd } = options;
+  const includeBuild = options.includeBuild === true;
+  const hasExistingChecksConfig = existsSync(join(cwd, '.wukong', 'checks.json'));
+  const packageJsonPath = join(cwd, 'package.json');
+  const hasRootPackageJson = existsSync(packageJsonPath);
+  const packageManager = detectPackageManager(cwd);
+  const rootPackage = hasRootPackageJson
     ? await readPackageJson(packageJsonPath)
     : {};
-  const workspacePackages = await discoverWorkspacePackages(options.cwd, rootPackage);
+  const workspacePatterns = await readWorkspacePatterns(cwd, rootPackage);
+  const workspacePackages = await discoverWorkspacePackagesFromPatterns(cwd, workspacePatterns);
+
+  const toolchains: DetectedToolchain[] = [];
+  if (hasRootPackageJson || workspacePackages.length > 0) {
+    toolchains.push(`node-${packageManager}`);
+  }
+  if (workspacePatterns.length > 0 || workspacePackages.length > 0) {
+    toolchains.push('monorepo');
+  }
+  if (hasPythonMarkers(cwd)) {
+    toolchains.push('python');
+  }
+  if (hasFile(cwd, 'Cargo.toml')) {
+    toolchains.push('rust');
+  }
+  if (hasFile(cwd, 'go.mod')) {
+    toolchains.push('go');
+  }
+
   const selected: VerificationCommand[] = [];
-  for (const scriptName of scriptSelection(options.includeBuild === true)) {
+  for (const scriptName of scriptSelection(includeBuild)) {
     if (rootPackage.scripts?.[scriptName] !== undefined) {
       selected.push({
         command: `${packageManager} run ${scriptName}`,
@@ -68,8 +118,27 @@ export async function selectVerificationCommands(options: {
       });
     }
   }
-  selected.push(...await discoverConfiguredLanguageChecks(options.cwd));
-  return deduplicateCommands(selected).slice(0, MAX_DISCOVERED_COMMANDS);
+  selected.push(...await discoverConfiguredLanguageChecks(cwd));
+  return {
+    toolchains,
+    commands: deduplicateCommands(selected).slice(0, MAX_DISCOVERED_COMMANDS),
+    hasExistingChecksConfig,
+  };
+}
+
+function hasPythonMarkers(cwd: string): boolean {
+  return (
+    hasFile(cwd, 'pyproject.toml')
+    || hasFile(cwd, 'pytest.ini')
+    || hasFile(cwd, 'setup.cfg')
+    || hasFile(cwd, 'setup.py')
+    || hasFile(cwd, 'tox.ini')
+    || hasFile(cwd, 'ruff.toml')
+    || hasFile(cwd, '.ruff.toml')
+    || hasFile(cwd, 'mypy.ini')
+    || hasFile(cwd, '.mypy.ini')
+    || hasFile(cwd, 'requirements.txt')
+  );
 }
 
 async function discoverConfiguredLanguageChecks(cwd: string): Promise<VerificationCommand[]> {
@@ -199,11 +268,13 @@ async function readProjectChecks(cwd: string): Promise<VerificationCommand[]> {
   });
 }
 
-async function discoverWorkspacePackages(cwd: string, rootPackage: PackageJson): Promise<Array<{
+async function discoverWorkspacePackagesFromPatterns(
+  cwd: string,
+  patterns: readonly string[],
+): Promise<Array<{
   readonly relativePath: string;
   readonly packageJson: PackageJson;
 }>> {
-  const patterns = await readWorkspacePatterns(cwd, rootPackage);
   if (patterns.length === 0) return [];
   const packagePaths: string[] = [];
   await walkForPackages(cwd, 0, packagePaths);
