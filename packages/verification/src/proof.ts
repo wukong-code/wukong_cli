@@ -22,6 +22,7 @@ export interface ProofOptions {
   readonly selectedCommands?: readonly VerificationCommand[];
   readonly retryOnWorkspaceChange?: boolean;
   readonly strict?: boolean;
+  readonly timeoutMs?: number;
   readonly writeReport?: boolean;
   readonly reportPath?: string;
   readonly signal?: AbortSignal;
@@ -134,6 +135,7 @@ async function runProofAttempt(cwd: string, options: ProofOptions): Promise<{
     cwd,
     selectedCommands,
     snapshot,
+    timeoutMs: options.timeoutMs,
     writeReport: false,
     signal: options.signal,
   });

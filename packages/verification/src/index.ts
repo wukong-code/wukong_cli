@@ -15,3 +15,4 @@ export * from './finish-line';
 export * from './criteria';
 export * from './review-subject';
 export * from './fresh-reviewer';
+export * from './gate-review';

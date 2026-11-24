@@ -34,6 +34,8 @@ describe('verification command registration', () => {
 
     expect(names).toContain('init');
     expect(names).toContain('check');
+    expect(names).toContain('gate');
+    expect(names).toContain('summary');
     expect(names).toContain('verify');
     expect(names).toContain('scan');
     expect(names).toContain('proof');
@@ -47,6 +49,8 @@ describe('verification command registration', () => {
     expect(help).not.toMatch(/^\s+proof\b/m);
     expect(help).toMatch(/^\s+init\b/m);
     expect(help).toMatch(/^\s+check\b/m);
+    expect(help).toMatch(/^\s+gate\b/m);
+    expect(help).toMatch(/^\s+summary\b/m);
     expect(help).toMatch(/^\s+loop\b/m);
   });
 });

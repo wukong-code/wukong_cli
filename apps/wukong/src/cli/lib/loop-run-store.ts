@@ -1,5 +1,5 @@
-import { chmod, readdir } from 'node:fs/promises';
-import { join } from 'node:path';
+import { chmod, readdir, realpath } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
 
 import { resolveWukongHome } from '@wukong/wukong-sdk';
 import { z } from 'zod';
@@ -213,6 +213,34 @@ export async function listActiveLoopRuns(): Promise<LoopRunRecord[]> {
   return (await listLoopRuns())
     .filter((record) => record.state === 'active')
     .toSorted((left, right) => right.startedAt.localeCompare(left.startedAt));
+}
+
+export async function listLoopRunsForSummary(
+  workspace?: string,
+): Promise<readonly LoopRunRecord[]> {
+  const targetWorkspace = workspace === undefined ? undefined : await canonicalWorkspace(workspace);
+  const runs = await listLoopRuns();
+  const matched: LoopRunRecord[] = [];
+  for (const record of runs) {
+    if (targetWorkspace !== undefined) {
+      if (record.workspace === undefined) continue;
+      if (await canonicalWorkspace(record.workspace) !== targetWorkspace) continue;
+    }
+    matched.push(record);
+  }
+  return matched.toSorted((left, right) => {
+    const leftTime = left.terminal?.finishedAt ?? left.startedAt;
+    const rightTime = right.terminal?.finishedAt ?? right.startedAt;
+    return rightTime.localeCompare(leftTime);
+  });
+}
+
+async function canonicalWorkspace(dir: string): Promise<string> {
+  try {
+    return await realpath(dir);
+  } catch {
+    return resolve(dir);
+  }
 }
 
 export async function readLoopRunForTests(runId: string): Promise<LoopRunRecord | undefined> {
