@@ -10,6 +10,7 @@ import {
 import type { Command } from 'commander';
 import { z } from 'zod';
 
+import { ONBOARDING_QUICKSTART_SUMMARY } from '#/constant/onboarding';
 import { getTuiConfigPath, parseTuiConfig } from '#/tui/config';
 
 interface WritableLike {
@@ -246,6 +247,7 @@ function formatSuccess(results: readonly CheckResult[]): string {
     checkedAny
       ? 'All checked config files are valid.'
       : 'No config files were found. Start `wukong` to create them, or pass an explicit path to check.',
+    ONBOARDING_QUICKSTART_SUMMARY,
     '',
   ].join('\n');
 }

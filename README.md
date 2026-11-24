@@ -13,7 +13,16 @@ wukong --version
 
 ## Start
 
-Configure your model provider, then open the TUI:
+Initialize checks and provider connectivity for your project, then run the gate or open the TUI:
+
+```sh
+cd your-project
+wukong init
+wukong check
+wukong gate
+```
+
+Or configure your model provider and open the interactive TUI:
 
 ```sh
 wukong provider
@@ -27,25 +36,34 @@ Inside the TUI, give Wukong a goal:
 ```
 
 Wukong writes the change, runs your repository's checks, reviews the result, and
-fixes blocking findings. A Loop ends with a clear `PASS`, `NEEDS_WORK`, or
-`ERROR` result.
+fixes blocking findings. A Gate or Loop ends with a clear `PASS`, `NEEDS_WORK`, or
+`ERROR` result, and `wukong summary` renders a sanitized PR-ready Delivery Proof Card.
 
 ## Headless mode
 
-Preview the exact checks, limits, and approvals first:
+Preview a single-confirm headless Loop run-plan first:
 
 ```sh
-wukong loop "add input validation to the signup form" --dry-run
+wukong loop "add input validation to the signup form" --dry-run --plan-out .wukong/run-plan.json
 ```
 
-Review the printed **Headless start flags**, then run the command again with those
-flags. Missing decisions fail closed instead of starting silently.
+Review the saved plan and approve all run-scoped gates with one command:
+
+```sh
+wukong loop --plan .wukong/run-plan.json --approve-plan <planDigest>
+```
+
+Missing decisions fail closed instead of starting silently.
 
 ## Useful commands
 
 ```text
-wukong provider       Configure a model provider
+wukong init           Detect toolchains, scaffold .wukong/, and set up provider
+wukong check          Run deterministic project checks and risk scan offline
+wukong gate           Run checks, scan, and fresh-context review (PASS/NEEDS_WORK/ERROR)
+wukong summary        Render a sanitized PR-ready Delivery Proof Card
 wukong loop <goal>    Run write → check → review → fix
+wukong provider       Configure and test model providers
 wukong doctor         Validate local configuration
 wukong upgrade        Upgrade a native installation
 ```
@@ -60,7 +78,7 @@ Resume unfinished work from another coding agent:
 /resume grok
 ```
 
-Run `wukong --help` for the complete command list.
+Run `wukong --help` for core commands or `wukong help --all` for the complete command list.
 
 ## Privacy
 

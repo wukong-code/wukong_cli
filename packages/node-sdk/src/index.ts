@@ -93,5 +93,13 @@ export type {
   WukongAuthSubmitFeedbackInput,
 } from '#/auth';
 
+export { runIsolatedReviewCompletion } from '#/isolated-review';
+export type {
+  IsolatedReviewCompletionOptions,
+  IsolatedReviewCompletionResult,
+  IsolatedReviewOAuthResolver,
+  IsolatedReviewTokenProvider,
+} from '#/isolated-review';
+
 export * from '#/events';
 export type * from '#/types';

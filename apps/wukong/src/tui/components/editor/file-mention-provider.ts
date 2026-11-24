@@ -16,6 +16,7 @@ const MAX_FALLBACK_SUGGESTIONS = 50;
 
 export interface SlashAutocompleteCommand extends SlashCommand {
   readonly aliases?: readonly string[];
+  readonly tier?: 'core' | 'advanced';
 }
 
 interface FsMentionCandidate {
@@ -124,6 +125,9 @@ export class FileMentionProvider implements AutocompleteProvider {
         const matches: SlashMatch[] = [];
 
         for (const cmd of this.slashCommands) {
+          if (tokens.length === 0 && cmd.tier === 'advanced') {
+            continue;
+          }
           const nameScore = scoreTokens(tokens, cmd.name);
           if (nameScore !== null) {
             matches.push({ cmd, score: nameScore, viaAlias: false, label: cmd.name });

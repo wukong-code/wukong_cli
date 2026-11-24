@@ -1054,3 +1054,5 @@ function toolsForCapabilityMode(
       : new Set([...readOnly, 'Bash']);
   return base.filter((tool) => allowed.has(tool));
 }
+
+export { ProviderManager } from './provider-manager';

@@ -38,6 +38,10 @@ import {
   resolveCatalogUrl,
   type CatalogResult,
 } from '#/built-in-catalog';
+import {
+  formatProviderTestResults,
+  testConfiguredProviders,
+} from '#/cli/lib/provider-test';
 import { createWukongCodeHostIdentity } from '#/cli/version';
 
 interface WritableLike {
@@ -50,6 +54,7 @@ export interface ProviderDeps {
   readonly stderr: WritableLike;
   readonly env: NodeJS.ProcessEnv;
   readonly exit: (code: number) => never;
+  readonly fetch?: typeof globalThis.fetch;
 }
 
 interface AddOptions {
@@ -192,6 +197,48 @@ export async function handleProviderList(
   }
   if (config.defaultModel !== undefined) {
     deps.stdout.write(`\nDefault model: ${config.defaultModel}\n`);
+  }
+}
+
+export interface ProviderTestCliOptions {
+  readonly json: boolean;
+  readonly timeoutSeconds?: number;
+  readonly offline?: boolean;
+}
+
+export async function handleProviderTest(
+  deps: ProviderDeps,
+  providerId: string | undefined,
+  opts: ProviderTestCliOptions,
+): Promise<void> {
+  const harness = deps.getHarness();
+  const run = await testConfiguredProviders(harness, {
+    providerId,
+    timeoutMs: opts.timeoutSeconds === undefined ? undefined : opts.timeoutSeconds * 1000,
+    offline: opts.offline,
+    env: deps.env,
+    fetch: deps.fetch,
+  });
+
+  if (run.missingProviderId !== undefined) {
+    deps.stderr.write(`Provider "${run.missingProviderId}" not found.\n`);
+    deps.exit(1);
+  }
+  if (run.results.length === 0) {
+    deps.stderr.write(
+      'No providers configured. Run `wukong` and use `/provider`, or run `wukong provider catalog add <providerId>`.\n',
+    );
+    deps.exit(1);
+  }
+
+  const allOk = run.results.every((result) => result.status === 'ok');
+  deps.stdout.write(
+    opts.json
+      ? `${JSON.stringify({ ok: allOk, results: run.results }, null, 2)}\n`
+      : formatProviderTestResults(run.results),
+  );
+  if (!allOk) {
+    deps.exit(1);
   }
 }
 
@@ -515,6 +562,36 @@ export function registerProviderCommand(parent: Command, deps?: Partial<Provider
       await runAction(resolved, () => handleProviderList(resolved, { json: options.json === true }));
     });
 
+  provider
+    .command('test [providerId]')
+    .description('Test connectivity and authentication for configured providers.')
+    .option('--timeout <seconds>', 'Timeout per probe in seconds.')
+    .option('--offline', 'Skip network probes and report offline status.', false)
+    .option('--json', 'Emit connectivity test results as JSON.', false)
+    .action(
+      async (
+        providerId: string | undefined,
+        options: { timeout?: string; offline?: boolean; json?: boolean },
+      ) => {
+        const resolved = resolveDeps(deps);
+        let timeoutSeconds: number | undefined;
+        if (options.timeout !== undefined) {
+          timeoutSeconds = parsePositiveInteger(options.timeout);
+          if (timeoutSeconds === undefined) {
+            resolved.stderr.write('error: --timeout must be a positive integer.\n');
+            resolved.exit(1);
+          }
+        }
+        await runAction(resolved, () =>
+          handleProviderTest(resolved, providerId, {
+            json: options.json === true,
+            timeoutSeconds,
+            offline: options.offline === true,
+          }),
+        );
+      },
+    );
+
   const catalog = provider
     .command('catalog')
     .description('Discover and import providers from a models.dev-compatible catalog.');
@@ -578,7 +655,16 @@ function resolveDeps(overrides: Partial<ProviderDeps> = {}): ProviderDeps {
     stderr: overrides.stderr ?? process.stderr,
     env: overrides.env ?? process.env,
     exit: overrides.exit ?? ((code: number) => process.exit(code)),
+    fetch: overrides.fetch,
   };
+}
+
+function parsePositiveInteger(value: string): number | undefined {
+  if (!/^[1-9]\d*$/u.test(value.trim())) {
+    return undefined;
+  }
+  const parsed = Number.parseInt(value.trim(), 10);
+  return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : undefined;
 }
 
 function resolveApiKey(flag: string | undefined, env: NodeJS.ProcessEnv): string | undefined {

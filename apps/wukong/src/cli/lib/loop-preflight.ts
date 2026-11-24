@@ -734,11 +734,17 @@ export function formatLoopDryRun(
   runSettings?: LoopRuntimeFacts & {
     readonly maxIterations?: number;
     readonly minIntervalMs?: number;
+    readonly runPlan?: {
+      readonly schemaVersion: number;
+      readonly planDigest: string;
+      readonly expiresAt: string;
+    };
   },
 ): string {
   const proposal = result.proposal;
+  const { runPlan, ...settingsOnly } = runSettings ?? {};
   const effectiveRuntime = {
-    ...runSettings,
+    ...settingsOnly,
     writerModel: runSettings?.writerModel ?? result.model,
     reviewerModel: runSettings?.reviewerModel ?? result.model,
     permission: runSettings?.permission ?? 'auto' as const,
@@ -746,6 +752,7 @@ export function formatLoopDryRun(
   return `${JSON.stringify({
     kind: 'loop.finish_line.dry_run',
     schemaVersion: 1,
+    ...(runPlan === undefined ? {} : { runPlan }),
     proposedContract: proposal,
     runSettings: effectiveRuntime,
     selectedChecks: proposal.gatePlan.requiredChecks.map((check) => ({

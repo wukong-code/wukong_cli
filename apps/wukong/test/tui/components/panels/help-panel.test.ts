@@ -30,6 +30,18 @@ describe('HelpPanelComponent', () => {
     expect(out).toMatch(/Slash commands/);
     expect(out).toMatch(/\/exit \(\/quit, \/q\)/);
     expect(out).toMatch(/Exit/);
+    expect(out).toContain('Run /help --all (or /help advanced) to see advanced tools.');
+  });
+
+  it('omits the advanced footer hint when rendering the advanced help view', () => {
+    const panel = new HelpPanelComponent({
+      tier: 'advanced',
+      commands: [cmd('model', 'Switch LLM model')],
+      onClose: () => {},
+    });
+    const out = strip(panel.render(80).join('\n'));
+    expect(out).toContain('advanced help');
+    expect(out).not.toContain('Run /help --all');
   });
 
   it('sorts unprefixed commands before skill commands and by name within each group', () => {

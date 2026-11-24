@@ -1,4 +1,6 @@
-import type { Command } from 'commander';
+import { resolve } from 'node:path';
+
+import { Option, type Command } from 'commander';
 import { createWukongHarness } from '@wukong/wukong-sdk';
 
 import {
@@ -9,6 +11,11 @@ import {
   runLoopPreflight,
   type LoopPreflightReady,
 } from '#/cli/lib/loop-preflight';
+import {
+  buildLoopRunPlan,
+  loadAndVerifyLoopRunPlan,
+  writeLoopRunPlan,
+} from '#/cli/lib/loop-run-plan';
 import { createWukongCodeHostIdentity } from '#/cli/version';
 import { parseLoopDuration } from '#/utils/duration';
 
@@ -23,6 +30,9 @@ export interface LoopCliOptions {
   readonly tokenBudget?: number;
   readonly minIntervalMs?: number;
   readonly dryRun?: boolean;
+  readonly planOut?: string;
+  readonly planFile?: string;
+  readonly approvePlanDigest?: string;
   readonly model?: string;
   readonly reviewModel?: string;
   readonly doneWhen?: string;
@@ -40,20 +50,31 @@ export interface LoopCliOptions {
   readonly acknowledgeReviewSubjectConsentDigest?: string;
 }
 
-export type RunLoopHandler = (options: LoopCliOptions) => void;
+export interface LoopInheritedGlobalOptions {
+  readonly session?: string;
+  readonly continue: boolean;
+  readonly yolo: boolean;
+  readonly yes: boolean;
+  readonly auto: boolean;
+  readonly outputFormat?: 'text' | 'stream-json';
+  readonly skillsDirs: readonly string[];
+  readonly addDirs: readonly string[];
+}
+
+export type RunLoopHandler = (options: LoopCliOptions, globals?: LoopInheritedGlobalOptions) => void;
 
 export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): void {
   parent
     .command('loop')
     .description('Run an AI coding Loop until the independent delivery gate passes.')
-    .argument('<objective>', 'The objective to iterate toward.')
+    .argument('[objective]', 'The objective to iterate toward (optional when --plan <file> is provided).')
     .option('--until <condition>', 'Advanced compatibility option. Loop always uses proof-pass.', 'proof-pass')
     .option('--max-iterations <n>', 'Maximum iterations before giving up.', '10')
     .option('--writer-call-limit <n>', 'Maximum writer provider requests for this Loop.')
     .option('--reviewer-call-limit <n>', 'Maximum reviewer provider requests for this Loop.')
     .option('--token-budget <n>', 'Maximum total Goal tokens for this Loop.')
     .option('--every <duration>', 'Optional minimum interval between iterations (e.g. 5m, 1h).')
-    .option('--model <model>', 'Writer model alias for this Loop session.')
+    .option('-m, --model <model>', 'Writer model alias for this Loop session.')
     .option('--review-model <model>', 'Independent reviewer model alias for this Loop.')
     .option('--done-when <criterion>', 'Optional user-confirmed completion criterion.')
     .option('--constraint <rule>', 'Must-not rule. Repeat for multiple rules.', collectOption, [])
@@ -69,7 +90,20 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
     .option('--trust-review-subject <challenge>', 'Exact short-lived local broker trust challenge from --dry-run.')
     .option('--ack-review-subject <digest>', 'Exact run-scoped BYOK review-subject consent digest from --dry-run.')
     .option('--dry-run', 'Validate arguments and print the planned loop without running it.', false)
-    .action(async (objective: string, raw: RawLoopOptions, command: Command) => {
+    .addOption(
+      new Option('--output-format <format>', 'Output format for dry-run or headless Loop mode. Defaults to text.')
+        .choices(['text', 'stream-json']),
+    )
+    .option('--plan-out <file>', 'Write a secret-free reviewable run-plan JSON during --dry-run.')
+    .option('--plan <file>', 'Load a saved run-plan JSON created with --dry-run --plan-out.')
+    .option('--approve-plan <digest>', 'Single digest confirming all approvals in --plan <file>.')
+    .addOption(new Option('--auto').hideHelp())
+    .addOption(new Option('-y, --yolo').hideHelp())
+    .addOption(new Option('--yes').hideHelp())
+    .addOption(new Option('--auto-approve').hideHelp())
+    .addOption(new Option('--skills-dir <dir>').argParser(collectOption).hideHelp())
+    .addOption(new Option('--add-dir <dir>').argParser(collectOption).hideHelp())
+    .action(async (objective: string | undefined, raw: RawLoopOptions, command: Command) => {
       for (const [flag, value] of [
         ['--writer-call-limit', raw.writerCallLimit],
         ['--reviewer-call-limit', raw.reviewerCallLimit],
@@ -93,6 +127,28 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
         process.stderr.write(`warning: --until ${raw.until} is deprecated; using proof-pass.\n`);
       }
       const inherited = command.optsWithGlobals<Record<string, unknown>>();
+      const parentOpts = command.parent?.opts<Record<string, unknown>>() ?? {};
+      const rawSession = inherited['session'] ?? inherited['resume'];
+      const session = rawSession === true ? '' : (rawSession as string | undefined);
+      const legacyAutoApprove = inherited['autoApprove'] === true;
+      const yolo = inherited['yolo'] === true || legacyAutoApprove;
+      const yes = inherited['yes'] === true || legacyAutoApprove;
+      const auto = inherited['auto'] === true || !yolo;
+      const parentSkills = (parentOpts['skillsDir'] as string[] | undefined) ?? [];
+      const localSkills = raw.skillsDir ?? [];
+      const parentAddDirs = (parentOpts['addDir'] as string[] | undefined) ?? [];
+      const localAddDirs = raw.addDir ?? [];
+      const outputFormat = inherited['outputFormat'] as 'text' | 'stream-json' | undefined;
+      const globals: LoopInheritedGlobalOptions = {
+        ...(session === undefined ? {} : { session }),
+        continue: inherited['continue'] === true || inherited['C'] === true,
+        yolo,
+        yes,
+        auto,
+        ...(outputFormat === undefined ? {} : { outputFormat }),
+        skillsDirs: [...parentSkills, ...localSkills],
+        addDirs: [...parentAddDirs, ...localAddDirs],
+      };
       const options: LoopCliOptions = {
         objective,
         until,
@@ -102,6 +158,9 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
         tokenBudget: parsePositiveInteger(raw.tokenBudget),
         minIntervalMs: everyResult.ms,
         dryRun: raw.dryRun === true,
+        planOut: raw.planOut,
+        planFile: raw.plan,
+        approvePlanDigest: raw.approvePlan,
         model: raw.model ?? (inherited['model'] as string | undefined),
         reviewModel: raw.reviewModel,
         doneWhen: raw.doneWhen,
@@ -136,7 +195,7 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
           const config = await harness.getConfig();
           const model = options.model ?? config.defaultModel;
           result = await runLoopPreflight({
-            objective,
+            objective: objective ?? '',
             completionCriterion: options.doneWhen,
             constraints: options.constraints,
             explicitChecks: options.checks,
@@ -161,10 +220,10 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
           process.exit(2);
           return;
         }
-        const outputFormat = inherited['outputFormat'];
+        const outputFormat = globals.outputFormat;
         const effectiveWriterModel = result.model;
         const effectiveReviewerModel = options.reviewModel ?? result.model;
-        const effectivePermission = inherited['yolo'] === true && inherited['yes'] === true
+        const effectivePermission = globals.yolo && globals.yes
           ? 'yolo' as const
           : 'auto' as const;
         const effectiveOptions: LoopCliOptions = {
@@ -172,6 +231,18 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
           model: effectiveWriterModel,
           reviewModel: effectiveReviewerModel,
         };
+        let savedPlan;
+        if (options.planOut !== undefined) {
+          savedPlan = buildLoopRunPlan(result, effectiveOptions);
+          await writeLoopRunPlan(resolve(process.cwd(), options.planOut), savedPlan);
+        }
+        const runPlanSummary = savedPlan === undefined
+          ? undefined
+          : {
+              schemaVersion: savedPlan.schemaVersion,
+              planDigest: savedPlan.planDigest,
+              expiresAt: savedPlan.expiresAt,
+            };
         process.stdout.write(
           outputFormat === 'stream-json'
             ? formatLoopDryRun(result, {
@@ -183,6 +254,7 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
                 reviewerModel: effectiveReviewerModel,
                 permission: effectivePermission,
                 minIntervalMs: options.minIntervalMs,
+                runPlan: runPlanSummary,
               })
             : `${formatLoopPlan(effectiveOptions)}\n`
               + `${formatLoopPreflightReady(result, options.maxIterations ?? 10, {
@@ -193,9 +265,34 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
                 reviewerProviderCallLimit: options.reviewerProviderCallLimit,
                 tokenBudget: options.tokenBudget,
               })}\n\n`
-              + `${formatHeadlessStartFlags(result)}\n`,
+              + formatHeadlessStartFlags(result)
+              + `${
+                savedPlan === undefined
+                  ? ''
+                  : `\n\nRun plan written: ${options.planOut ?? ''}\nApprove & start:  wukong loop --plan ${options.planOut ?? ''} --approve-plan ${savedPlan.planDigest}`
+              }\n`,
         );
         process.exit(0);
+        return;
+      }
+
+      if (options.planFile !== undefined) {
+        const verified = await loadAndVerifyLoopRunPlan({
+          filePath: resolve(process.cwd(), options.planFile),
+          approvePlanDigest: options.approvePlanDigest ?? '',
+          cwd: process.cwd(),
+        });
+        if (!verified.ok) {
+          process.stderr.write(`error: ${verified.message}\n`);
+          process.exit(2);
+          return;
+        }
+        if (onRun === undefined) {
+          process.stderr.write('error: Loop runner is unavailable in this build.\n');
+          process.exit(2);
+          return;
+        }
+        onRun(verified.loopOptions, globals);
         return;
       }
 
@@ -204,7 +301,7 @@ export function registerLoopCommand(parent: Command, onRun?: RunLoopHandler): vo
         process.exit(2);
         return;
       }
-      onRun(options);
+      onRun(options, globals);
     });
 }
 
@@ -216,6 +313,9 @@ interface RawLoopOptions {
   readonly tokenBudget?: string;
   readonly every?: string;
   readonly dryRun?: boolean;
+  readonly planOut?: string;
+  readonly plan?: string;
+  readonly approvePlan?: string;
   readonly model?: string;
   readonly reviewModel?: string;
   readonly doneWhen?: string;
@@ -231,6 +331,13 @@ interface RawLoopOptions {
   readonly verificationSkill: string[];
   readonly trustReviewSubject?: string;
   readonly ackReviewSubject?: string;
+  readonly outputFormat?: 'text' | 'stream-json';
+  readonly auto?: boolean;
+  readonly yolo?: boolean;
+  readonly yes?: boolean;
+  readonly autoApprove?: boolean;
+  readonly skillsDir?: string[];
+  readonly addDir?: string[];
 }
 
 type ValidationResult = { readonly kind: 'ok' } | { readonly kind: 'error'; readonly message: string };
@@ -244,10 +351,31 @@ export function parseEvery(raw: string | undefined): EveryResult {
 }
 
 export function validateLoopOptions(options: LoopCliOptions): ValidationResult {
-  if (options.objective === undefined || options.objective.trim().length === 0) {
+  const hasPlanFile = options.planFile !== undefined;
+  const hasApprovePlan =
+    options.approvePlanDigest !== undefined && options.approvePlanDigest.trim().length > 0;
+  if (options.planOut !== undefined && options.dryRun !== true) {
+    return { kind: 'error', message: '--plan-out requires --dry-run.' };
+  }
+  if (hasPlanFile && options.dryRun === true) {
+    return { kind: 'error', message: 'Cannot combine --plan with --dry-run.' };
+  }
+  if (hasPlanFile && options.planOut !== undefined) {
+    return { kind: 'error', message: 'Cannot combine --plan with --plan-out.' };
+  }
+  if (hasPlanFile !== hasApprovePlan) {
+    return { kind: 'error', message: '--plan and --approve-plan must be supplied together.' };
+  }
+  if (hasPlanFile && options.objective !== undefined && options.objective.trim().length > 0) {
+    return {
+      kind: 'error',
+      message: 'Cannot combine an explicit objective with --plan <file>; the objective comes from the plan.',
+    };
+  }
+  if (!hasPlanFile && (options.objective === undefined || options.objective.trim().length === 0)) {
     return { kind: 'error', message: 'Loop objective is required.' };
   }
-  if (options.objective.length > MAX_LOOP_OBJECTIVE_LENGTH) {
+  if (options.objective !== undefined && options.objective.length > MAX_LOOP_OBJECTIVE_LENGTH) {
     return { kind: 'error', message: `Loop objective is too long (max ${String(MAX_LOOP_OBJECTIVE_LENGTH)} characters).` };
   }
   if (
@@ -377,7 +505,7 @@ export function formatDuration(ms: number): string {
   return `${ms / 1_000}s`;
 }
 
-function collectOption(value: string, previous: string[]): string[] {
+function collectOption(value: string, previous: string[] = []): string[] {
   return [...previous, value];
 }
 

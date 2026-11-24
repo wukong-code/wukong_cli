@@ -1,5 +1,11 @@
 # @wukong.today/code
 
+## 0.2.0
+
+### Minor Changes
+
+- [`843ec9c`](https://github.com/wukong-code/wukong_cli/commit/843ec9c) / [`9e4c41a`](https://github.com/wukong-code/wukong_cli/commit/9e4c41a) / [`245f3fd`](https://github.com/wukong-code/wukong_cli/commit/245f3fd) - Add standalone project initialization (`wukong init`), provider connectivity checks (`wukong provider test`), deterministic quick-checks (`wukong check`), an independent fresh-context review gate (`wukong gate`), sanitized PR delivery summaries (`wukong summary`), tiered CLI/TUI help (`wukong help --all`, `/help --all`), single-confirm headless loop run-plans (`--dry-run --plan-out` / `--plan --approve-plan`), and aligned onboarding (`wukong init` → `wukong check` → `wukong gate`).
+
 ## 0.1.2
 
 ### Patch Changes

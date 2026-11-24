@@ -2,7 +2,11 @@ import { join } from 'node:path';
 
 import { describe, expect, it } from 'vitest';
 
-import { selectVerificationCommands, workspaceCommand } from '../src/scripts';
+import {
+  detectProjectToolchain,
+  selectVerificationCommands,
+  workspaceCommand,
+} from '../src/scripts';
 import { makeTempDir, writeJson, writeRepoFile } from './helpers';
 
 describe('selectVerificationCommands', () => {
@@ -248,6 +252,45 @@ describe('selectVerificationCommands', () => {
         definition: 'vitest run',
       },
       { command: 'go test ./...', source: 'project-inferred', sourceLocator: 'go.mod' },
+    ]);
+  });
+});
+
+describe('detectProjectToolchain', () => {
+  it('detects pnpm monorepo toolchains and workspace commands', async () => {
+    const cwd = await makeTempDir('wukong-toolchain-monorepo-');
+    await writeJson(join(cwd, 'package.json'), { private: true, scripts: { typecheck: 'tsc --noEmit' } });
+    await writeRepoFile(cwd, 'pnpm-lock.yaml', '');
+    await writeRepoFile(cwd, 'pnpm-workspace.yaml', 'packages:\n  - packages/*\n');
+    await writeRepoFile(cwd, 'packages/core/package.json', JSON.stringify({
+      scripts: { lint: 'eslint .', test: 'vitest run' },
+    }));
+
+    const result = await detectProjectToolchain({ cwd });
+
+    expect(result.toolchains).toEqual(['node-pnpm', 'monorepo']);
+    expect(result.hasExistingChecksConfig).toBe(false);
+    expect(result.commands.map((command) => command.sourceLocator)).toEqual([
+      'packages/core/package.json#scripts.lint',
+      'package.json#scripts.typecheck',
+      'packages/core/package.json#scripts.test',
+    ]);
+  });
+
+  it('detects python, rust, and go toolchains and ignores existing checks.json override during detection', async () => {
+    const cwd = await makeTempDir('wukong-toolchain-polyglot-');
+    await writeRepoFile(cwd, 'requirements.txt', 'pytest\n');
+    await writeRepoFile(cwd, 'Cargo.toml', '[package]\nname = "example"\nversion = "0.1.0"\n');
+    await writeRepoFile(cwd, 'go.mod', 'module example.test/project\n\ngo 1.24\n');
+    await writeRepoFile(cwd, '.wukong/checks.json', JSON.stringify({ commands: ['custom-cmd'] }));
+
+    const result = await detectProjectToolchain({ cwd });
+
+    expect(result.toolchains).toEqual(['python', 'rust', 'go']);
+    expect(result.hasExistingChecksConfig).toBe(true);
+    expect(result.commands.map((command) => command.command)).toEqual([
+      'cargo test',
+      'go test ./...',
     ]);
   });
 });

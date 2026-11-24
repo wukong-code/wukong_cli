@@ -105,6 +105,7 @@ import {
   findFirstResolvableWukong,
   isGlobalInstall,
   ownPackageRoot,
+  pmGlobalBinCommand,
   postinstallPaths,
 } from './postinstall/reach.mjs';
 import {
@@ -115,6 +116,7 @@ import {
 } from './postinstall/migrate.mjs';
 import {
   logForeignWukongInTheWay,
+  logFreshInstallQuickstart,
   logMigrationBlocked,
   logMigrationDone,
   logNewCliNotOnPath,
@@ -148,7 +150,15 @@ async function main() {
   // install` would have two; we must address all of them or the
   // survivor still shadows the new CLI.
   const detections = await detectLegacyShims(ownRoot, paths.detection);
-  if (detections.length === 0) return;
+  if (detections.length === 0) {
+    const reachability = await findFirstResolvableWukong(ownRoot, paths.reachability, [], []);
+    logFreshInstallQuickstart({
+      onPath: reachability.kind === 'own',
+      pm,
+      binHint: pmGlobalBinCommand(pm),
+    });
+    return;
+  }
 
   // Step 5: pre-flight classify every shim WITHOUT touching the
   // filesystem yet. The orchestrator decides abort-or-proceed against

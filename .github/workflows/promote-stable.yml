@@ -307,9 +307,7 @@ jobs:
               "public-release/wukong-${TARGET}.zip.sha256"
           done
 
-          curl -fsSL --retry 5 --retry-all-errors --connect-timeout 10 --max-time 60 \
-            "https://wukong.today/install.sh?promotion=${WEBSITE_SHA}-public" \
-            -o public-release/install.sh
+          cp distribution/install.sh public-release/install.sh
           cmp source/install.sh public-release/install.sh
 
           INSTALL_DIR="$RUNNER_TEMP/wukong-promoted/bin"

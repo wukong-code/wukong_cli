@@ -1,28 +1,25 @@
 # Wukong Code 文档
 
-> 当前 stable 版本：`0.1.2`
+> 当前 stable 版本：`0.2.0`（Standalone Gate & Proof Foundation）
 >
 > 候选证据：[`0.1.0-rc.1`](https://github.com/wukong-code/wukong-code/releases/tag/v0.1.0-rc.1)
 > immutable prerelease 已通过六平台验收
 >
-> 当前版本说明：[`0.1.2 Open-Source Edition`](releases/0.1.2.md)
+> 当前版本说明：[`0.2.0 Standalone Gate & Proof Foundation`](releases/0.2.0.md)
 
-0.1.2 延续[可控、可恢复、可解释的 Trusted Local Loop](../design/0.1.0-trusted-local-loop.md)，并以 MIT 许可发布本地 CLI：
-Preflight usage 上限、no-check、文件归因、终态、恢复兼容和最小 Gate
-completeness/freshness 已实现并通过自动化；`v0.1.0` 六平台资产、公开
-安装/升级/恢复和生产版本面验收已完成。真实来源流程与 opt-in cohort 继续作为
-发布后产品学习，不设置固定等待门槛。完整多层 coverage schema 与 direct-shell
-attestation 后移。官网后端、账号与运营服务保持私有。
+0.2.0 在[可控、可恢复、可解释的 Trusted Local Loop](../design/0.1.0-trusted-local-loop.md)基础上推出独立验收与交付证明主线命令
+（`wukong init`、`wukong provider test`、`wukong check`、`wukong gate`、`wukong summary`）、三级 CLI/TUI 命令面收敛以及无头单确认 run-plan，并保持 MIT 免费、本地优先、BYOK 边界不变。官网后端、账号与运营服务保持私有。
 
-Wukong Code 的主流程是 **Goal → Write → Check → Review → Fix**。下方“已发布”
-描述当前 `0.1.2` stable；标成“开发 checkout”的命令和行为仍以当前源码为准。
+Wukong Code 的主流程是 **Goal / Change → Check → Fresh Review → Proof Card (`PASS` / `NEEDS_WORK` / `ERROR`)**。下方“已发布”
+描述当前 `0.2.0` stable；标成“开发 checkout”的命令和行为仍以当前源码为准。
 
-本地 CLI 已于 2026-10-24 以 MIT 许可开源（`v0.1.2`），官网后端保持私有。
+本地 CLI 已以 MIT 许可开源（`v0.2.0`），官网后端保持私有。
 公开文档只维护使用方式、技术设计、兼容性和隐私合同；商业与运营材料独立私有留存。
 
 ## 开始使用
 
 - [用户指南](user-guide.md)
+- [0.2.0 Standalone Gate & Proof Foundation 发布说明](releases/0.2.0.md)
 - [0.1.2 Open-Source Edition 发布说明](releases/0.1.2.md)
 - [0.1.1 Reliability And Trust Boundary 发布说明](releases/0.1.1.md)
 - [0.1.0 发布说明](releases/0.1.0.md)
@@ -50,21 +47,17 @@ Wukong Code 的主流程是 **Goal → Write → Check → Review → Fix**。�
 ## 当前开发 checkout 的主要命令
 
 ```text
-wukong
-wukong -p
-wukong provider
+wukong init
+wukong check
+wukong gate
+wukong summary
 wukong loop
-wukong review
-wukong guard
-wukong login
-wukong logout
+wukong provider
 wukong doctor
-wukong export
-wukong vis
 wukong upgrade
 ```
 
-完整命令和参数以 `wukong --help` 为准。
+完整命令和参数以 `wukong --help` / `wukong help --all` 为准。
 公开 `0.1.1` 与历史 opt-in `0.1.0-rc.1` 的实际命令面分别以对应安装包中的
 `wukong --help` 为准。
 

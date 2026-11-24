@@ -125,7 +125,7 @@ export class HelpPanelComponent extends Container implements Focusable {
       }),
       ...(this.opts.tier === 'advanced'
         ? []
-        : ['', `  ${muted('Run /help advanced to see advanced tools.')}`]),
+        : ['', `  ${muted('Run /help --all (or /help advanced) to see advanced tools.')}`]),
       '',
       accent('─'.repeat(width)),
     ];
