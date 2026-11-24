@@ -9,8 +9,9 @@ on:
       - 'v*'
   workflow_dispatch:
 
-# Tiered runs: pull requests and main pushes run the light checks only; the
-# full verification suite runs for release tags (v*) and manual dispatch.
+# Tiered runs: docs-only PRs run docs validation; code PRs and main pushes run
+# lint, typecheck, build, and Linux test; release tags (v*) and manual dispatch
+# additionally run coverage, install smoke, Windows suite, and cross-platform criteria.
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
@@ -103,7 +104,7 @@ jobs:
 
   build:
     needs: changes
-    if: needs.changes.outputs.full_suite == 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -126,7 +127,7 @@ jobs:
 
   test:
     needs: changes
-    if: needs.changes.outputs.full_suite == 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -294,21 +295,23 @@ jobs:
           test "$CHANGES_RESULT" = success
 
           if [[ "$FULL_SUITE" = true ]]; then
-            for result in "$BUILD_RESULT" "$TEST_RESULT" "$COVERAGE_RESULT" \
-              "$INSTALL_RESULT" "$WINDOWS_RESULT" "$CRITERIA_RESULT" "$TYPECHECK_RESULT"; do
+            for result in "$LINT_RESULT" "$TYPECHECK_RESULT" "$BUILD_RESULT" "$TEST_RESULT" \
+              "$COVERAGE_RESULT" "$INSTALL_RESULT" "$WINDOWS_RESULT" "$CRITERIA_RESULT"; do
               test "$result" = success
             done
           elif [[ "$DOCS_ONLY" = true ]]; then
             test "$DOCS_RESULT" = success
           else
-            test "$LINT_RESULT" = success
+            for result in "$LINT_RESULT" "$TYPECHECK_RESULT" "$BUILD_RESULT" "$TEST_RESULT"; do
+              test "$result" = success
+            done
           fi
 
           echo "CI gate passed for ${EVENT_NAME} on ${REF}."
 
   typecheck:
     needs: changes
-    if: needs.changes.outputs.full_suite == 'true'
+    if: needs.changes.outputs.docs_only != 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
