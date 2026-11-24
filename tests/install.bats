@@ -88,6 +88,9 @@ teardown() {
     [[ "$output" == *"Installing Wukong Code latest for darwin-x64"* ]]
     [[ "$output" == *"wukong-code/releases/latest/download"* ]]
     [[ "$output" == *"Wukong Code installed to:"* ]]
+    [[ "$output" == *"wukong init"* ]]
+    [[ "$output" == *"wukong check"* ]]
+    [[ "$output" == *"wukong gate"* ]]
 }
 
 @test "respects WUKONG_INSTALL_DIR override" {

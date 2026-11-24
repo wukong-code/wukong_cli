@@ -1,5 +1,5 @@
-import { mkdir, mkdtemp, realpath, rm, writeFile } from 'node:fs/promises';
-import { tmpdir } from 'node:os';
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import { homedir, tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 
@@ -9,6 +9,12 @@ import {
   formatLoopPreflightReady,
   runLoopPreflight,
 } from '#/cli/lib/loop-preflight';
+import {
+  buildLoopRunPlan,
+  loadAndVerifyLoopRunPlan,
+  writeLoopRunPlan,
+} from '#/cli/lib/loop-run-plan';
+import { parseVerificationSkills } from '#/cli/sub/loop';
 
 describe('Loop preflight', () => {
   const homes: string[] = [];
@@ -522,5 +528,177 @@ describe('Loop preflight', () => {
         verificationCatalogDigest: selected.verificationCatalog.catalogDigest,
       },
     });
+  });
+
+  it('builds a secret-free run-plan producing identical headless contract digest and failing closed on tamper, wrong workspace, wrong digest, or expiry', async () => {
+    const cwd = await workspace();
+    const otherCwd = await workspace();
+    const skillDir = join(cwd, '.wukong', 'skills', 'review-api-contract');
+    await mkdir(join(skillDir, 'verification'), { recursive: true });
+    await writeFile(join(skillDir, 'SKILL.md'), [
+      '---',
+      'name: review-api-contract',
+      'description: Review API compatibility.',
+      'metadata:',
+      '  wukong.verification.criteria: verification/criteria.v1.json',
+      '---',
+      'Review API compatibility without executing commands.',
+    ].join('\n'));
+    await writeFile(
+      join(skillDir, 'verification', 'criteria.v1.json'),
+      JSON.stringify({
+        schemaVersion: 1,
+        kind: 'wukong.verification-criteria',
+        id: 'review-api-contract',
+        description: 'Review API compatibility.',
+        scope: { kind: 'project', paths: ['src/api/**'] },
+        criteria: [{
+          id: 'typed-failures',
+          text: 'API failures remain explicit and typed.',
+          evidence: 'Cite the handler and deterministic test evidence.',
+        }],
+      }),
+    );
+
+    const dryNone = await runLoopPreflight({
+      objective: 'keep API failures typed',
+      model: 'glm-5.2',
+      workspace: cwd,
+      reviewProvider: { providerId: 'test', endpoint: 'https://api.example.test' },
+      mode: 'tui-proposal',
+      getActiveGoal: async () => null,
+      discoverChecks: async () => ['echo ok'],
+    });
+    expect(dryNone.ready).toBe(true);
+    if (!dryNone.ready) return;
+
+    const entry = dryNone.verificationCatalog.entries[0]!;
+    const dryV3 = await runLoopPreflight({
+      objective: 'keep API failures typed',
+      model: 'glm-5.2',
+      workspace: cwd,
+      reviewProvider: { providerId: 'test', endpoint: 'https://api.example.test' },
+      mode: 'tui-proposal',
+      getActiveGoal: async () => null,
+      discoverChecks: async () => ['echo ok'],
+      verificationCatalogDigest: dryNone.verificationCatalog.catalogDigest,
+      verificationSkills: [{
+        selectionId: entry.selectionId,
+        provenanceDigest: entry.ref.provenanceDigest,
+      }],
+    });
+    expect(dryV3.ready).toBe(true);
+    if (!dryV3.ready) return;
+
+    const issuedAt = new Date('2026-11-24T12:00:00.000Z');
+    const plan = buildLoopRunPlan(
+      dryV3,
+      {
+        objective: 'keep API failures typed',
+        until: 'proof-pass',
+        maxIterations: 5,
+        model: 'glm-5.2',
+        reviewModel: 'glm-5.2',
+        acceptDiscoveredChecks: true,
+        checks: [],
+        constraints: [],
+      },
+      issuedAt,
+    );
+    const planPath = join(cwd, 'run-plan.json');
+    await writeLoopRunPlan(planPath, plan);
+
+    const rawPlan = await readFile(planPath, 'utf8');
+    expect(rawPlan).not.toContain(cwd);
+    expect(rawPlan).not.toContain(await realpath(cwd));
+    expect(rawPlan).not.toContain(homedir());
+    expect(rawPlan).not.toContain('YOUR_API_KEY');
+    expect(rawPlan).not.toContain('api.example.test');
+
+    const verified = await loadAndVerifyLoopRunPlan({
+      filePath: planPath,
+      approvePlanDigest: plan.planDigest,
+      cwd,
+      now: new Date('2026-11-24T12:05:00.000Z'),
+    });
+    expect(verified.ok).toBe(true);
+    if (!verified.ok) return;
+
+    const home = await mkdtemp(join(tmpdir(), 'wukong-plan-trust-'));
+    homes.push(home);
+    const prevHome = process.env['WUKONG_CODE_HOME'];
+    process.env['WUKONG_CODE_HOME'] = home;
+    try {
+      const viaPlan = await runLoopPreflight({
+        objective: verified.loopOptions.objective!,
+        completionCriterion: verified.loopOptions.doneWhen,
+        constraints: verified.loopOptions.constraints,
+        explicitChecks: verified.loopOptions.checks,
+        discoveredCheckDecision: verified.loopOptions.onlyExplicitChecks ? 'only-explicit' : 'accept',
+        model: verified.loopOptions.model,
+        workspace: cwd,
+        reviewProvider: { providerId: 'test', endpoint: 'https://api.example.test' },
+        mode: 'headless',
+        trustWorkspaceChallenge: verified.loopOptions.trustWorkspaceChallenge,
+        approveGatePlanDigest: verified.loopOptions.approveGatePlanDigest,
+        acknowledgeWarningSetDigest: verified.loopOptions.acknowledgeWarningSetDigest,
+        acknowledgeNoExecutableChecksDigest: verified.loopOptions.acknowledgeNoExecutableChecksDigest,
+        verificationCatalogDigest: verified.loopOptions.verificationCatalogDigest,
+        verificationSkills: parseVerificationSkills(verified.loopOptions.verificationSkills),
+        trustReviewSubjectChallenge: verified.loopOptions.trustReviewSubjectChallenge,
+        acknowledgeReviewSubjectConsentDigest: verified.loopOptions.acknowledgeReviewSubjectConsentDigest,
+        getActiveGoal: async () => null,
+        discoverChecks: async () => ['echo ok'],
+      });
+      expect(viaPlan.ready).toBe(true);
+      if (viaPlan.ready) {
+        expect(viaPlan.proposal.finishLineReview.finishLineDigest).toBe(
+          dryV3.proposal.finishLineReview.finishLineDigest,
+        );
+        expect(viaPlan.proposal.gateApproval.approvalSetDigest).toBe(
+          dryV3.proposal.gateApproval.approvalSetDigest,
+        );
+      }
+    } finally {
+      if (prevHome === undefined) delete process.env['WUKONG_CODE_HOME'];
+      else process.env['WUKONG_CODE_HOME'] = prevHome;
+    }
+
+    expect(
+      await loadAndVerifyLoopRunPlan({
+        filePath: planPath,
+        approvePlanDigest: `sha256:${'0'.repeat(64)}`,
+        cwd,
+        now: new Date('2026-11-24T12:05:00.000Z'),
+      }),
+    ).toMatchObject({ ok: false, reasonCode: 'plan_approval_mismatch' });
+
+    expect(
+      await loadAndVerifyLoopRunPlan({
+        filePath: planPath,
+        approvePlanDigest: plan.planDigest,
+        cwd: otherCwd,
+        now: new Date('2026-11-24T12:05:00.000Z'),
+      }),
+    ).toMatchObject({ ok: false, reasonCode: 'plan_workspace_mismatch' });
+
+    expect(
+      await loadAndVerifyLoopRunPlan({
+        filePath: planPath,
+        approvePlanDigest: plan.planDigest,
+        cwd,
+        now: new Date('2026-11-24T12:11:00.000Z'),
+      }),
+    ).toMatchObject({ ok: false, reasonCode: 'plan_expired' });
+
+    await writeFile(planPath, JSON.stringify({ ...plan, objective: 'tampered objective' }), 'utf8');
+    expect(
+      await loadAndVerifyLoopRunPlan({
+        filePath: planPath,
+        approvePlanDigest: plan.planDigest,
+        cwd,
+        now: new Date('2026-11-24T12:05:00.000Z'),
+      }),
+    ).toMatchObject({ ok: false, reasonCode: 'plan_tampered' });
   });
 });

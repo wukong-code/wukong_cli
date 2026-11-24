@@ -181,7 +181,7 @@ function warningHeading(text) {
  *     fs errors). Listed last so the user can see what to retry.
  */
 export function logMigrationDone(outcomes, pm) {
-  const reinstallCmd = pmGlobalInstallCommand(pm, '@wukong/wukong');
+  const reinstallCmd = pmGlobalInstallCommand(pm, '@wukong.today/code');
   const {
     renames,
     consolidates,
@@ -310,7 +310,49 @@ export function logMigrationDone(outcomes, pm) {
     );
   }
 
+  lines.push(
+    '',
+    pad('   Get started in a project:'),
+    pathInBox('cd YOUR_PROJECT && wukong init && wukong check && wukong gate'),
+  );
+
   emit(renderBox(lines));
+}
+
+export function renderFreshInstallQuickstart(options = {}) {
+  const onPath = options.onPath !== false;
+  const pm = options.pm ?? 'npm';
+  const binHint = options.binHint ?? pmGlobalBinCommand(pm);
+  const isWindows = process.platform === 'win32';
+  const pathFix = isWindows
+    ? `$env:Path = "$(${binHint});$env:Path"`
+    : pm === 'npm'
+      ? `export PATH="$(${binHint})/bin:$PATH"`
+      : `export PATH="$(${binHint}):$PATH"`;
+
+  const lines = [successHeading('Wukong Code installed'), ''];
+
+  if (!onPath) {
+    lines.push(
+      pad('   Add the global bin folder to your PATH first:'),
+      pathInBox(pathFix),
+      '',
+    );
+  }
+
+  lines.push(
+    pad('   Get started in a project:'),
+    pathInBox('cd YOUR_PROJECT'),
+    pathInBox('wukong init'),
+    pathInBox('wukong check'),
+    pathInBox('wukong gate'),
+  );
+
+  return renderBox(lines).join('\n');
+}
+
+export function logFreshInstallQuickstart(options = {}) {
+  emit(renderFreshInstallQuickstart(options).split('\n'));
 }
 
 /**
@@ -322,7 +364,7 @@ export function logMigrationDone(outcomes, pm) {
  */
 export function logMigrationBlocked(blocked, actionable, pm) {
   const isWindows = process.platform === 'win32';
-  const reinstallCmd = pmGlobalInstallCommand(pm, '@wukong/wukong');
+  const reinstallCmd = pmGlobalInstallCommand(pm, '@wukong.today/code');
 
   const lines = [
     warningHeading('Can\'t switch to the new wukong yet'),
@@ -384,7 +426,7 @@ export function logMigrationBlocked(blocked, actionable, pm) {
  * user can decide.
  */
 export function logForeignWukongInTheWay(foreignPath, pm) {
-  const reinstallCmd = pmGlobalInstallCommand(pm, '@wukong/wukong');
+  const reinstallCmd = pmGlobalInstallCommand(pm, '@wukong.today/code');
   emit(
     renderBox([
       warningHeading('Can\'t switch to the new wukong yet'),
@@ -426,7 +468,7 @@ export function logForeignWukongInTheWay(foreignPath, pm) {
 export function logNewCliNotOnPath(detection, pm) {
   const isWindows = process.platform === 'win32';
   const binCmd = pmGlobalBinCommand(pm);
-  const reinstallCmd = pmGlobalInstallCommand(pm, '@wukong/wukong');
+  const reinstallCmd = pmGlobalInstallCommand(pm, '@wukong.today/code');
 
   const newPathHint = isWindows
     ? `$env:Path = "$(${binCmd});$env:Path"`

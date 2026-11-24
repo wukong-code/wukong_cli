@@ -9,15 +9,15 @@
 
 ## `v0.2.0` — Standalone Gate & Proof Foundation（Now）
 
-- [ ] **仓库初始化向导 `wukong init`**：自动探测 Node/pnpm/Python/Rust/Go/monorepo 工具链，生成 `.wukong/checks.json` 与 `.wukong/review-policy.md`，并引导配置与校验 provider
-- [ ] **Provider 连通测试 `wukong provider test [providerId]`**：显式发起最小探测，区分 `ok` / `auth-failed` / `not-found` / `network` / `timeout` / `offline`；绝不打印密钥、query 凭据或响应体
-- [ ] **确定性快检入口 `wukong check`**：聚合运行项目检查与风险扫描，明确输出 `reviewer: not_run`，检查通过不冒充完整 Gate PASS
-- [ ] **独立验收入口 `wukong gate`**：支持脱离 `/loop` 直接对工作树 / `git diff` 执行 `checks + risk scan + fresh-context reviewer`，输出明确 `PASS` / `NEEDS_WORK` / `ERROR`
-- [ ] **脱敏交付证明卡 `wukong summary` / `wukong gate --summary`**：读取已有运行记录并预览/显式保存 PR-ready Markdown 摘要，如实标注未覆盖项，默认不含源码、diff、transcript、密钥与绝对 home 路径
-- [ ] **命令面三级 tier 收敛**：CLI `--help` 默认聚焦核心命令（`init` / `check` / `gate` / `summary` / `loop` / `provider` / `doctor` / `upgrade`）并指向 `wukong help --all`；TUI core 从 13 个收敛至 8 个；保留 `verify`/`scan`/`proof`/`judge`/`guard` 兼容别名及行为契约回归
-- [ ] **Headless 单一确认 run-plan**：`--dry-run --plan-out <file>` 与 `--plan <file> --approve-plan <digest>` 替代 8 个摘要/挑战参数（旧参数兼容保留），补齐无 secret 负向测试
-- [ ] **统一新手指引**：对齐 `install.sh`、npm postinstall 与 `wukong doctor` 的 `wukong init → wukong check → wukong gate` 下一步提示与回归测试
-- [ ] **`v0.2.0` 发布验收**：全量单测 + typecheck/lint/sherif/publint/attw + 0.1.x 记录兼容回归 + 六平台构建/checksum/provenance/安装与升级 smoke
+- [x] **仓库初始化向导 `wukong init`**：自动探测 Node/pnpm/Python/Rust/Go/monorepo 工具链，生成 `.wukong/checks.json` 与 `.wukong/review-policy.md`，并引导配置与校验 provider
+- [x] **Provider 连通测试 `wukong provider test [providerId]`**：显式发起最小探测，区分 `ok` / `auth-failed` / `not-found` / `network` / `timeout` / `offline`；绝不打印密钥、query 凭据或响应体
+- [x] **确定性快检入口 `wukong check`**：聚合运行项目检查与风险扫描，明确输出 `reviewer: not_run`，检查通过不冒充完整 Gate PASS
+- [x] **独立验收入口 `wukong gate`**：支持脱离 `/loop` 直接对工作树 / `git diff` 执行 `checks + risk scan + fresh-context reviewer`，输出明确 `PASS` / `NEEDS_WORK` / `ERROR`
+- [x] **脱敏交付证明卡 `wukong summary` / `wukong gate --summary`**：读取已有运行记录并预览/显式保存 PR-ready Markdown 摘要，如实标注未覆盖项，默认不含源码、diff、transcript、密钥与绝对 home 路径
+- [x] **命令面三级 tier 收敛**：CLI `--help` 默认聚焦核心命令（`init` / `check` / `gate` / `summary` / `loop` / `provider` / `doctor` / `upgrade`）并指向 `wukong help --all`；TUI core 从 13 个收敛至 8 个；保留 `verify`/`scan`/`proof`/`judge`/`guard` 兼容别名及行为契约回归
+- [x] **Headless 单一确认 run-plan**：`--dry-run --plan-out <file>` 与 `--plan <file> --approve-plan <digest>` 替代 8 个摘要/挑战参数（旧参数兼容保留），补齐无 secret 负向测试
+- [x] **统一新手指引**：对齐 `install.sh`、npm postinstall 与 `wukong doctor` 的 `wukong init → wukong check → wukong gate` 下一步提示与回归测试
+- [ ] **`v0.2.0` 发布验收**：本地自动化门禁（全量单测、coverage gate、typecheck、lint、sherif、build/smoke、publint/attw、0.1.x 兼容回归、`bats tests/install.bats`）已在 `feat/v0.2.0` 通过；六平台 GitHub Release 构建/checksum/provenance/安装与升级 smoke 待正式打 tag 发布流程验证
 
 ## `v0.3.0` — Agent Ecosystem & CI Viral Loop（Next）
 

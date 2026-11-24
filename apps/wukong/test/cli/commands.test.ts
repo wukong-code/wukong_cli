@@ -1,6 +1,10 @@
 import { describe, expect, it, vi } from 'vitest';
 
-import { createProgram } from '#/cli/commands';
+import {
+  CLI_CORE_COMMANDS,
+  createProgram,
+  formatAllCommandsHelp,
+} from '#/cli/commands';
 import type { CLIOptions } from '#/cli/options';
 
 function swallowOutput(program: ReturnType<typeof createProgram>): void {
@@ -20,14 +24,39 @@ describe('createProgram', () => {
     expect(program.version()).toBe('1.2.3');
   });
 
-  it('exposes login and logout as top-level account commands', () => {
+  it('focuses default help on core commands while keeping login/logout executable via help --all', async () => {
     const program = createProgram('1.2.3', () => {}, () => {});
     const commandNames = program.commands.map((command) => command.name());
-    const help = program.helpInformation();
+    const out: string[] = [];
+    program.exitOverride();
+    program.configureOutput({
+      writeOut: (chunk) => out.push(chunk),
+      writeErr: () => {},
+    });
+    program.outputHelp();
+    const help = out.join('');
+    const allHelp = formatAllCommandsHelp(program);
 
     expect(commandNames).toContain('login');
     expect(commandNames).toContain('logout');
-    expect(help).toMatch(/^\s+logout\s+Revoke the Wukong account session/mu);
+    for (const coreName of CLI_CORE_COMMANDS) {
+      expect(help).toMatch(new RegExp(`^\\s+${coreName}\\b`, 'mu'));
+    }
+    expect(help).toContain('wukong help --all');
+    expect(help).not.toMatch(/^\s+logout\s+/mu);
+    expect(help).not.toMatch(/^\s+login\s+/mu);
+    expect(allHelp).toContain('Advanced Commands:');
+    expect(allHelp).toContain('Diagnostics & Compatibility:');
+    expect(allHelp).toMatch(/^\s+logout\s+Revoke the Wukong account session/mu);
+    expect(allHelp).toMatch(/^\s+verify\b/mu);
+
+    out.length = 0;
+    await program.parseAsync(['node', 'wukong', 'help', '--all']);
+    expect(out.join('')).toContain('Advanced Commands:');
+
+    out.length = 0;
+    await program.parseAsync(['node', 'wukong', 'help', 'logout']);
+    expect(out.join('')).toContain('Revoke the Wukong account session');
   });
 
   it('shows canonical session, permission, and headless options', () => {

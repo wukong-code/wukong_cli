@@ -51,6 +51,7 @@ import {
   findBuiltInSlashCommand,
   isSlashCommandVisible,
   setExperimentalFeatures,
+  slashCommandTier,
   sortSlashCommands,
   slashCommandForDiscovery,
   transformArgumentCompletions,
@@ -396,12 +397,14 @@ export class WukongTUI {
   }
 
   private setupAutocomplete(): void {
-    const slashCommands: SlashAutocompleteCommand[] = this.getSlashCommands().map((cmd) => {
+    const slashCommands: SlashAutocompleteCommand[] = this.getSlashCommands('advanced').map((cmd) => {
       const completer = cmd.completeArgs;
+      const tier = slashCommandTier(cmd) === 'advanced' ? 'advanced' as const : 'core' as const;
       return {
         name: cmd.name,
         aliases: cmd.aliases,
         description: cmd.description,
+        tier,
         ...(cmd.argumentHint !== undefined ? { argumentHint: cmd.argumentHint } : {}),
         ...(cmd.name === 'transform'
           ? {

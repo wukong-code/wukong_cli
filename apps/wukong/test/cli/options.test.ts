@@ -400,6 +400,10 @@ describe('CLI options parsing', () => {
         .map((command) => command.name());
       expect(commandNames).toEqual([
         'export',
+        'init',
+        'check',
+        'gate',
+        'summary',
         'provider',
         'acp',
         'server',
@@ -419,6 +423,7 @@ describe('CLI options parsing', () => {
         'vis',
         'migrate',
         'upgrade',
+        'help',
       ]);
     });
   });

@@ -4,7 +4,13 @@ import { join } from 'node:path';
 
 import { Command } from 'commander';
 import { describe, expect, it, vi } from 'vitest';
-import { createProgram } from '#/cli/commands';
+import {
+  formatAllCommandsHelp,
+  createProgram,
+} from '#/cli/commands';
+import { resolveWorkspaceIdentity, selectVerificationCommands } from '@wukong/verification';
+import { handleInit, type InitDeps } from '#/cli/sub/init';
+import { handleSummary, type SummaryDeps } from '#/cli/sub/summary';
 import { handleCheck, type CheckDeps } from '#/cli/sub/check';
 import { handleGuard, type GuardDeps } from '#/cli/sub/guard';
 import { handleJudge, type JudgeDeps } from '#/cli/sub/judge';
@@ -44,14 +50,22 @@ describe('verification command registration', () => {
     expect(names).toContain('today');
     expect(names).toContain('guard');
     const help = program.helpInformation();
+    const allHelp = formatAllCommandsHelp(program);
     expect(help).not.toMatch(/^\s+verify\b/m);
     expect(help).not.toMatch(/^\s+scan\b/m);
     expect(help).not.toMatch(/^\s+proof\b/m);
+    expect(help).not.toMatch(/^\s+judge\b/m);
+    expect(help).not.toMatch(/^\s+guard\b/m);
     expect(help).toMatch(/^\s+init\b/m);
     expect(help).toMatch(/^\s+check\b/m);
     expect(help).toMatch(/^\s+gate\b/m);
     expect(help).toMatch(/^\s+summary\b/m);
     expect(help).toMatch(/^\s+loop\b/m);
+    expect(allHelp).toMatch(/^\s+judge\b/m);
+    expect(allHelp).toMatch(/^\s+guard\b/m);
+    expect(allHelp).toMatch(/^\s+verify\b/m);
+    expect(allHelp).toMatch(/^\s+scan\b/m);
+    expect(allHelp).toMatch(/^\s+proof\b/m);
   });
 });
 
@@ -788,5 +802,102 @@ describe('handleCheck', () => {
       ),
     ).resolves.toBe(2);
     expect(errBuf.chunks.join('')).toContain('check exploded');
+  });
+});
+
+describe('0.1.x compatibility regressions', () => {
+  it('preserves v0.1.x .wukong/checks.json and review-policy.md across selectVerificationCommands, init, and check', async () => {
+    const cwd = await mkdtemp(join(tmpdir(), 'wukong-compat-01x-'));
+    try {
+      const { mkdir, writeFile, rm } = await import('node:fs/promises');
+      await mkdir(join(cwd, '.wukong'), { recursive: true });
+      await writeFile(
+        join(cwd, '.wukong', 'checks.json'),
+        JSON.stringify({ commands: ['echo compat-ok'] }),
+        'utf8',
+      );
+      await writeFile(join(cwd, '.wukong', 'review-policy.md'), '# Legacy v0.1.x Policy\n', 'utf8');
+
+      const selected = await selectVerificationCommands({ cwd });
+      expect(selected).toEqual([
+        {
+          command: 'echo compat-ok',
+          source: 'project-config',
+          sourceLocator: '.wukong/checks.json#/commands/0',
+          definition: 'echo compat-ok',
+        },
+      ]);
+
+      const initDeps: InitDeps = {
+        cwd: () => cwd,
+        getHarness: () => ({
+          getConfig: vi.fn().mockResolvedValue({ providers: {}, models: {} }),
+        }) as unknown as ReturnType<InitDeps['getHarness']>,
+        stdout: writable().writer,
+        stderr: writable().writer,
+        env: {},
+      };
+      expect(await handleInit(initDeps, { json: true })).toBe(0);
+      expect(await readFile(join(cwd, '.wukong', 'review-policy.md'), 'utf8')).toBe(
+        '# Legacy v0.1.x Policy\n',
+      );
+      await rm(cwd, { recursive: true, force: true });
+    } finally {
+      // temp cleanup handled above
+    }
+  });
+
+  it('migrates and renders a v0.1.x loop-run record via wukong summary', async () => {
+    const { mkdir, writeFile, rm } = await import('node:fs/promises');
+    const cwd = await mkdtemp(join(tmpdir(), 'wukong-compat-summary-cwd-'));
+    const home = await mkdtemp(join(tmpdir(), 'wukong-compat-summary-home-'));
+    const prevHome = process.env['WUKONG_CODE_HOME'];
+    process.env['WUKONG_CODE_HOME'] = home;
+    try {
+      const legacyDir = join(home, 'usage', 'loop-runs');
+      await mkdir(legacyDir, { recursive: true });
+      await writeFile(
+        join(legacyDir, 'legacy-req-1.json'),
+        JSON.stringify({
+          version: 1,
+          requestId: 'legacy-req-1',
+          workspace: cwd,
+          state: 'synced',
+          startedAt: '2026-10-20T00:00:00.000Z',
+          terminal: {
+            status: 'completed',
+            outcome: 'PASS',
+            iterations: 3,
+            finishedAt: '2026-10-20T00:05:00.000Z',
+          },
+          sync: { attempts: 1 },
+        }),
+        'utf8',
+      );
+
+      const { listLoopRunsForSummary } = await import('#/cli/lib/loop-run-store');
+      const { inspectGit, createWorkspaceSnapshot } = await import('@wukong/verification');
+      const stdout = writable();
+      const summaryDeps: SummaryDeps = {
+        cwd: () => cwd,
+        homeDir: () => home,
+        stdout: stdout.writer,
+        stderr: writable().writer,
+        resolveWorkspaceIdentity,
+        inspectGit,
+        createSnapshot: createWorkspaceSnapshot,
+        readGateRun: async () => undefined,
+        listGateRuns: async () => [],
+        listLoopRuns: listLoopRunsForSummary,
+      };
+      expect(await handleSummary(summaryDeps, {})).toBe(0);
+      expect(stdout.chunks.join('')).toContain('`legacy-req-1`');
+      expect(stdout.chunks.join('')).toContain('`PASS`');
+    } finally {
+      if (prevHome === undefined) delete process.env['WUKONG_CODE_HOME'];
+      else process.env['WUKONG_CODE_HOME'] = prevHome;
+      await rm(cwd, { recursive: true, force: true });
+      await rm(home, { recursive: true, force: true });
+    }
   });
 });

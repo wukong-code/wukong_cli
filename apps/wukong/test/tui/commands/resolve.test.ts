@@ -5,7 +5,11 @@ import {
   slashBusyMessage,
   slashCommandBusyReason,
 } from '#/tui/commands/index';
-import { afterEach, describe, expect, it } from 'vitest';
+import {
+  executeSlashCommand,
+  type SlashCommandHost,
+} from '#/tui/commands/dispatch';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 
 function resolve(
   input: string,
@@ -356,5 +360,50 @@ describe('slash command busy helpers', () => {
     expect(slashCommandBusyReason({ isStreaming: false, isCompacting: true })).toBe('compacting');
     expect(slashBusyMessage('new', 'streaming')).toContain('Cannot /new while streaming');
     expect(slashBusyMessage('new', 'compacting')).toContain('Cannot /new while compacting');
+  });
+});
+
+describe('demoted commands and /help dispatch', () => {
+  afterEach(() => {
+    setExperimentalFeatures([]);
+  });
+
+  it('keeps permission, model, transform, login, and logout directly executable', () => {
+    for (const name of ['permission', 'model', 'login', 'logout']) {
+      expect(resolve(`/${name}`)).toMatchObject({ kind: 'builtin', name });
+    }
+    setExperimentalFeatures([{ id: 'role_profiles', enabled: true }]);
+    expect(resolve('/transform status')).toMatchObject({
+      kind: 'builtin',
+      name: 'transform',
+      args: 'status',
+    });
+  });
+
+  it('dispatches /help, /help --all, and /help advanced cleanly', async () => {
+    const showHelpPanel = vi.fn();
+    const showError = vi.fn();
+    const host = {
+      skillCommandMap: new Map(),
+      state: {
+        appState: { streamingPhase: 'idle', isCompacting: false, version: '0.2.0' },
+        ui: { requestRender: vi.fn() },
+      },
+      track: vi.fn(),
+      showHelpPanel,
+      showError,
+    } as unknown as SlashCommandHost;
+
+    await executeSlashCommand(host, '/help');
+    expect(showHelpPanel).toHaveBeenLastCalledWith('core');
+
+    await executeSlashCommand(host, '/help --all');
+    expect(showHelpPanel).toHaveBeenLastCalledWith('advanced');
+
+    await executeSlashCommand(host, '/help advanced');
+    expect(showHelpPanel).toHaveBeenLastCalledWith('advanced');
+
+    await executeSlashCommand(host, '/help unknown');
+    expect(showError).toHaveBeenCalledWith('Usage: /help [--all|advanced]');
   });
 });

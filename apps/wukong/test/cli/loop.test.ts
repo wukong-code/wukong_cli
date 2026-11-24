@@ -1,4 +1,8 @@
-import { describe, it, expect, vi } from 'vitest';
+import { mkdtemp, readFile, rm } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
+
+import { afterEach, describe, it, expect, vi } from 'vitest';
 
 import {
     formatDuration,
@@ -10,6 +14,17 @@ import {
 } from '#/cli/sub/loop';
 import { createProgram } from '#/cli/commands';
 import type { CLIOptions } from '#/cli/options';
+
+const loopTempDirs: string[] = [];
+
+afterEach(async () => {
+    while (loopTempDirs.length > 0) {
+        const dir = loopTempDirs.pop();
+        if (dir !== undefined) {
+            await rm(dir, { recursive: true, force: true });
+        }
+    }
+});
 
 vi.mock('@wukong/wukong-sdk', async (importOriginal) => {
     const actual = await importOriginal<typeof import('@wukong/wukong-sdk')>();
@@ -408,4 +423,189 @@ describe('loop command', () => {
             stderr.mockRestore();
         },
     );
+
+    it('rejects invalid --plan-out, --plan, and --approve-plan option combinations', () => {
+        expect(validateLoopOptions({
+            objective: 'fix',
+            until: 'proof-pass',
+            maxIterations: 3,
+            planOut: 'plan.json',
+        })).toMatchObject({ kind: 'error', message: expect.stringContaining('--dry-run') });
+
+        expect(validateLoopOptions({
+            objective: 'fix',
+            until: 'proof-pass',
+            maxIterations: 3,
+            dryRun: true,
+            planFile: 'plan.json',
+            approvePlanDigest: 'sha256:' + 'a'.repeat(64),
+        })).toMatchObject({ kind: 'error', message: expect.stringContaining('Cannot combine --plan with --dry-run') });
+
+        expect(validateLoopOptions({
+            until: 'proof-pass',
+            maxIterations: 3,
+            planFile: 'plan.json',
+        })).toMatchObject({ kind: 'error', message: expect.stringContaining('--approve-plan') });
+
+        expect(validateLoopOptions({
+            objective: 'extra objective',
+            until: 'proof-pass',
+            maxIterations: 3,
+            planFile: 'plan.json',
+            approvePlanDigest: 'sha256:' + 'a'.repeat(64),
+        })).toMatchObject({ kind: 'error', message: expect.stringContaining('Cannot combine an explicit objective') });
+    });
+
+    it('writes a single-confirm run-plan with --dry-run --plan-out and starts from --plan + --approve-plan', async () => {
+        const tempDir = await mkdtemp(join(tmpdir(), 'wukong-loop-plan-cli-'));
+        loopTempDirs.push(tempDir);
+        const planPath = join(tempDir, 'run-plan.json');
+
+        const dryRuns: unknown[] = [];
+        const dryStdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        const dryExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+        const prevCwd = process.cwd();
+        process.chdir(tempDir);
+        try {
+            const dryProgram = createProgram('0.0.0', (options) => dryRuns.push(options), () => {});
+            await dryProgram.parseAsync([
+                'node',
+                'wukong',
+                'loop',
+                'harden auth verification',
+                '--dry-run',
+                '--plan-out',
+                'run-plan.json',
+                '--model',
+                'fast',
+                '--check',
+                'echo ok',
+                '--only-explicit-checks',
+            ]);
+            expect(dryRuns).toHaveLength(0);
+            expect(dryExit).toHaveBeenCalledWith(0);
+
+            const dryOutput = dryStdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+            expect(dryOutput).toContain('--plan run-plan.json --approve-plan sha256:');
+            const rawPlanText = await readFile(planPath, 'utf8');
+            const parsedPlan = JSON.parse(rawPlanText) as { planDigest: string; objective: string };
+            expect(parsedPlan.objective).toBe('harden auth verification');
+            expect(rawPlanText).not.toContain(tempDir);
+            expect(rawPlanText).not.toContain('test-review');
+
+            dryStdout.mockRestore();
+            dryExit.mockRestore();
+
+            const runs: CLIOptions[] = [];
+            const runProgram = createProgram('0.0.0', (options) => runs.push(options), () => {});
+            await runProgram.parseAsync([
+                'node',
+                'wukong',
+                'loop',
+                '--plan',
+                'run-plan.json',
+                '--approve-plan',
+                parsedPlan.planDigest,
+            ]);
+            expect(runs).toHaveLength(1);
+            expect(runs[0]).toMatchObject({
+                plan: false,
+                prompt: 'harden auth verification',
+                model: 'fast',
+                headlessGoal: {
+                    kind: 'loop',
+                    objective: 'harden auth verification',
+                    checks: ['echo ok'],
+                    discoveredCheckDecision: 'only-explicit',
+                },
+            });
+
+            const badStderr = vi.spyOn(process.stderr, 'write').mockImplementation(() => true);
+            const badExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+            const badRuns: unknown[] = [];
+            const badProgram = createProgram('0.0.0', (options) => badRuns.push(options), () => {});
+            await badProgram.parseAsync([
+                'node',
+                'wukong',
+                'loop',
+                '--plan',
+                'run-plan.json',
+                '--approve-plan',
+                `sha256:${'f'.repeat(64)}`,
+            ]);
+            expect(badRuns).toHaveLength(0);
+            expect(badExit).toHaveBeenCalledWith(2);
+            expect(badStderr).toHaveBeenCalledWith(expect.stringContaining('--approve-plan digest does not match'));
+            badStderr.mockRestore();
+            badExit.mockRestore();
+        } finally {
+            process.chdir(prevCwd);
+            dryStdout.mockRestore();
+            dryExit.mockRestore();
+        }
+    });
+
+    it('forwards --output-format stream-json with --dry-run --plan-out and YOLO flags passed after loop', async () => {
+        const tempDir = await mkdtemp(join(tmpdir(), 'wukong-loop-flags-'));
+        loopTempDirs.push(tempDir);
+
+        const dryStdout = vi.spyOn(process.stdout, 'write').mockImplementation(() => true);
+        const dryExit = vi.spyOn(process, 'exit').mockImplementation(() => undefined as never);
+        const prevCwd = process.cwd();
+        process.chdir(tempDir);
+        try {
+            const dryProgram = createProgram('0.0.0', () => {}, () => {});
+            await dryProgram.parseAsync([
+                'node',
+                'wukong',
+                'loop',
+                'verify stream json run-plan',
+                '--dry-run',
+                '--output-format',
+                'stream-json',
+                '--plan-out',
+                'stream-plan.json',
+                '--only-explicit-checks',
+            ]);
+            expect(dryExit).toHaveBeenCalledWith(0);
+            const rawJson = dryStdout.mock.calls.map(([chunk]) => String(chunk)).join('');
+            const payload = JSON.parse(rawJson) as {
+                runPlan?: { schemaVersion: number; planDigest: string; expiresAt: string };
+            };
+            expect(payload.runPlan).toMatchObject({
+                schemaVersion: 1,
+                planDigest: expect.stringMatching(/^sha256:[a-f0-9]{64}$/),
+            });
+
+            dryStdout.mockRestore();
+            dryExit.mockRestore();
+
+            const runs: CLIOptions[] = [];
+            const yoloProgram = createProgram('0.0.0', (options) => runs.push(options), () => {});
+            await yoloProgram.parseAsync([
+                'node',
+                'wukong',
+                'loop',
+                'apply change',
+                '--yolo',
+                '--yes',
+                '--skills-dir',
+                './skills-a',
+                '--add-dir',
+                './extra-a',
+            ]);
+            expect(runs).toHaveLength(1);
+            expect(runs[0]).toMatchObject({
+                yolo: true,
+                yes: true,
+                auto: false,
+                skillsDirs: ['./skills-a'],
+                addDirs: ['./extra-a'],
+            });
+        } finally {
+            process.chdir(prevCwd);
+            dryStdout.mockRestore();
+            dryExit.mockRestore();
+        }
+    });
 });

@@ -35,6 +35,12 @@ describe('handleDoctor', () => {
     expect(deps.stdout.write).not.toHaveBeenCalledWith(
       expect.stringContaining('All checked config files are valid'),
     );
+    expect(deps.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining('wukong init'),
+    );
+    expect(deps.stdout.write).toHaveBeenCalledWith(
+      expect.stringContaining('wukong gate'),
+    );
   });
 
   it('validates existing config and tui files', async () => {

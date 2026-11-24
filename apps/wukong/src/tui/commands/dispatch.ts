@@ -175,7 +175,7 @@ export function dispatchInput(host: SlashCommandHost, text: string): void {
   host.sendNormalUserInput(text);
 }
 
-async function executeSlashCommand(host: SlashCommandHost, input: string): Promise<void> {
+export async function executeSlashCommand(host: SlashCommandHost, input: string): Promise<void> {
   const parsedCommand = parseSlashInput(input);
   const intent = resolveSlashCommandInput({
     input,
@@ -248,17 +248,19 @@ async function handleBuiltInSlashCommand(
     case 'exit':
       void host.stop();
       return;
-    case 'help':
-      if (args === '') {
+    case 'help': {
+      const normalized = args.trim().toLowerCase();
+      if (normalized === '') {
         host.showHelpPanel('core');
         return;
       }
-      if (args.trim().toLowerCase() === 'advanced') {
+      if (normalized === 'advanced' || normalized === '--all') {
         host.showHelpPanel('advanced');
         return;
       }
-      host.showError('Usage: /help [advanced]');
+      host.showError('Usage: /help [--all|advanced]');
       return;
+    }
     case 'version':
       host.showStatus(`Wukong v${host.state.appState.version}`);
       return;

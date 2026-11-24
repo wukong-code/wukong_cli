@@ -1,6 +1,6 @@
 import { CLI_COMMAND_NAME } from '#/constant/app';
 import { registerMigrateCommand } from '#/migration/index';
-import { Command, Option } from 'commander';
+import { Command, Help, Option } from 'commander';
 
 import type { CLIOptions } from './options';
 import { registerAcpCommand } from './sub/acp';
@@ -25,10 +25,68 @@ import { registerTodayCommand } from './sub/today';
 import { registerVisCommand } from './sub/vis';
 import { registerVerifyCommand } from './sub/verify';
 
+export const CLI_CORE_COMMANDS = [
+  'init',
+  'check',
+  'gate',
+  'summary',
+  'loop',
+  'provider',
+  'doctor',
+  'upgrade',
+] as const;
+
+export const CLI_ADVANCED_COMMANDS = [
+  'export',
+  'review',
+  'roles',
+  'today',
+  'guard',
+  'judge',
+  'login',
+  'logout',
+  'web',
+] as const;
+
+export const CLI_HIDDEN_COMMANDS = [
+  'verify',
+  'scan',
+  'proof',
+  'vis',
+  'acp',
+  'server',
+  'migrate',
+] as const;
+
 export type MainCommandHandler = (opts: CLIOptions) => void;
 export type MigrateCommandHandler = () => void;
 export type PluginNodeRunnerHandler = (entry: string, args: readonly string[]) => void;
 export type UpgradeCommandHandler = () => void | Promise<void>;
+
+export function formatAllCommandsHelp(program: Command): string {
+  const byName = new Map(program.commands.map((sub) => [sub.name(), sub]));
+  const helper = program.createHelp();
+  const formatGroup = (title: string, names: readonly string[]): string[] => {
+    const subs = names
+      .map((name) => byName.get(name))
+      .filter((cmd): cmd is Command => cmd !== undefined);
+    if (subs.length === 0) return [];
+    const terms = subs.map((cmd) => helper.subcommandTerm(cmd));
+    const width = Math.max(20, ...terms.map((term) => term.length));
+    return [
+      `${title}:`,
+      ...subs.map((cmd, idx) => `  ${(terms[idx] ?? cmd.name()).padEnd(width)}  ${cmd.description()}`),
+      '',
+    ];
+  };
+
+  return [
+    program.helpInformation().trimEnd(),
+    '',
+    ...formatGroup('Advanced Commands', CLI_ADVANCED_COMMANDS),
+    ...formatGroup('Diagnostics & Compatibility', CLI_HIDDEN_COMMANDS),
+  ].join('\n');
+}
 
 export function createProgram(
   version: string,
@@ -37,14 +95,36 @@ export function createProgram(
   onPluginNodeRunner: PluginNodeRunnerHandler = () => {},
   onUpgrade: UpgradeCommandHandler = () => {},
 ): Command {
-  const program = new Command(CLI_COMMAND_NAME)
-    .description('Wukong Code — local-first AI coding agent in your terminal.')
+  const program = new Command(CLI_COMMAND_NAME);
+  program
+    .description('Wukong Code — local-first AI coding agent and delivery verification gate.')
     .version(version, '-V, --version')
+    .enablePositionalOptions()
     .allowUnknownOption(false)
-    .configureHelp({ helpWidth: 100 })
+    .addHelpCommand(false)
+    .configureHelp({
+      helpWidth: 100,
+      visibleCommands(cmd: Command): Command[] {
+        if (cmd !== program) {
+          return Help.prototype.visibleCommands.call(this, cmd);
+        }
+        const byName = new Map(cmd.commands.map((sub) => [sub.name(), sub]));
+        const visible: Command[] = [];
+        for (const name of CLI_CORE_COMMANDS) {
+          const sub = byName.get(name);
+          if (sub !== undefined) {
+            visible.push(sub);
+          }
+        }
+        return visible;
+      },
+    })
     .helpOption('-h, --help', 'Show help.')
     .usage('[options] [command]')
-    .addHelpText('after', '\nDocumentation:        https://docs.wukong.today\n');
+    .addHelpText(
+      'after',
+      '\nMore commands:        wukong help --all\nDocumentation:        https://docs.wukong.today\n',
+    );
 
   program
     .addOption(
@@ -121,21 +201,33 @@ export function createProgram(
   registerScanCommand(program);
   registerProofCommand(program);
   registerJudgeCommand(program);
-  registerLoopCommand(program, (loop) => {
+  registerLoopCommand(program, (loop, globals) => {
     const raw = program.opts<Record<string, unknown>>();
     const rawSession = raw['session'] ?? raw['resume'];
-    const session = rawSession === true ? '' : rawSession as string | undefined;
+    const fallbackSession = rawSession === true ? '' : rawSession as string | undefined;
     const legacyAutoApprove = raw['autoApprove'] === true;
-    const yolo = raw['yolo'] === true || legacyAutoApprove;
+    const fallbackYolo = raw['yolo'] === true || legacyAutoApprove;
+    const session = globals?.session ?? fallbackSession;
+    const continueFlag = globals?.continue ?? (raw['continue'] === true || raw['C'] === true);
+    const yolo = globals?.yolo ?? fallbackYolo;
+    const yes = globals?.yes ?? (raw['yes'] === true || legacyAutoApprove);
+    const auto = globals?.auto ?? (raw['auto'] === true || !yolo);
+    const outputFormat = globals?.outputFormat ?? (raw['outputFormat'] as CLIOptions['outputFormat']);
+    const skillsDirs = globals === undefined
+      ? ((raw['skillsDir'] as string[] | undefined) ?? [])
+      : [...globals.skillsDirs];
+    const addDirs = globals === undefined
+      ? ((raw['addDir'] as string[] | undefined) ?? [])
+      : [...globals.addDirs];
     onMain({
       session,
-      continue: raw['continue'] === true || raw['C'] === true,
+      continue: continueFlag,
       yolo,
-      yes: raw['yes'] === true || legacyAutoApprove,
-      auto: raw['auto'] === true || !yolo,
-      plan: raw['plan'] === true,
+      yes,
+      auto,
+      plan: false,
       model: loop.model ?? raw['model'] as string | undefined,
-      outputFormat: raw['outputFormat'] as CLIOptions['outputFormat'],
+      outputFormat,
       prompt: loop.objective,
       headlessGoal: {
         kind: 'loop',
@@ -192,8 +284,8 @@ export function createProgram(
                 loop.acknowledgeReviewSubjectConsentDigest,
             }),
       },
-      skillsDirs: (raw['skillsDir'] as string[] | undefined) ?? [],
-      addDirs: (raw['addDir'] as string[] | undefined) ?? [],
+      skillsDirs,
+      addDirs,
     });
   });
   registerGuardCommand(program);
@@ -211,6 +303,40 @@ export function createProgram(
     .description('Upgrade Wukong to the latest version.')
     .action(async () => {
       await onUpgrade();
+    });
+
+  program
+    .command('help [command]', { hidden: true })
+    .description('Display help for wukong or a specific command.')
+    .option('--all', 'Show all commands, including advanced and diagnostic aliases.', false)
+    .action((commandName: string | undefined, opts: { all?: boolean }) => {
+      const outputConfig = program.configureOutput();
+      const writeOut = (text: string): void => {
+        if (outputConfig.writeOut !== undefined) {
+          outputConfig.writeOut(text);
+          return;
+        }
+        process.stdout.write(text);
+      };
+      if (opts.all === true) {
+        writeOut(formatAllCommandsHelp(program));
+        return;
+      }
+      if (commandName !== undefined) {
+        const target = program.commands.find(
+          (cmd: Command) =>
+            cmd.name() !== '__plugin_run_node'
+            && cmd.name() !== 'help'
+            && (cmd.name() === commandName || cmd.aliases().includes(commandName)),
+        );
+        if (target === undefined) {
+          program.error(`unknown command '${commandName}'. See '${CLI_COMMAND_NAME} --help'.`);
+          return;
+        }
+        writeOut(target.helpInformation());
+        return;
+      }
+      program.outputHelp();
     });
 
   program

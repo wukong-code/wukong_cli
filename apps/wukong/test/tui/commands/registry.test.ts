@@ -64,16 +64,19 @@ describe('built-in slash command registry', () => {
     expect(findBuiltInSlashCommand('yes')).toBeUndefined();
   });
 
-  it('hides /transform until role profiles are enabled', () => {
+  it('hides /transform from core and reveals it in advanced once role profiles are enabled', () => {
     const transform = findBuiltInSlashCommand('transform');
     expect(transform).toBeDefined();
-    expect(isSlashCommandVisible(transform!)).toBe(false);
+    expect(slashCommandTier(transform!)).toBe('advanced');
+    expect(isSlashCommandVisible(transform!, 'core')).toBe(false);
+    expect(isSlashCommandVisible(transform!, 'advanced')).toBe(false);
 
     setExperimentalFeatures([{ id: 'role_profiles', enabled: true }]);
-    expect(isSlashCommandVisible(transform!)).toBe(true);
+    expect(isSlashCommandVisible(transform!, 'core')).toBe(false);
+    expect(isSlashCommandVisible(transform!, 'advanced')).toBe(true);
   });
 
-  it('keeps the default surface Loop-first while preserving advanced and hidden commands', () => {
+  it('converges core slash commands to 8 while keeping demoted and hidden commands reachable', () => {
     const defaultNames = BUILTIN_SLASH_COMMANDS
       .filter((command) => isSlashCommandVisible(command, 'core'))
       .map((command) => command.name)
@@ -82,16 +85,16 @@ describe('built-in slash command registry', () => {
       'exit',
       'feedback',
       'help',
-      'login',
-      'logout',
       'loop',
-      'model',
       'new',
-      'permission',
       'provider',
       'resume',
       'settings',
     ]);
+    for (const demoted of ['permission', 'model', 'transform', 'login', 'logout']) {
+      expect(slashCommandTier(findBuiltInSlashCommand(demoted)!)).toBe('advanced');
+    }
+    expect(isSlashCommandVisible(findBuiltInSlashCommand('model')!, 'advanced')).toBe(true);
     expect(isSlashCommandVisible(findBuiltInSlashCommand('verify')!, 'advanced')).toBe(true);
     for (const name of ['goal', 'auto', 'yolo', 'resume-codex', 'resume-claude', 'resume-cursor']) {
       const command = findBuiltInSlashCommand(name);

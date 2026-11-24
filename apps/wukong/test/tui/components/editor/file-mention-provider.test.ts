@@ -395,4 +395,27 @@ describe('FileMentionProvider', () => {
     );
     expect(dir.lines[0]).toBe('hey @src/');
   });
+
+  it('shows only core slash commands on bare / and reveals advanced commands once a prefix is typed', async () => {
+    const commands = [
+      { name: 'loop', aliases: [], description: 'Run loop', tier: 'core' as const },
+      { name: 'help', aliases: ['h'], description: 'Show help', tier: 'core' as const },
+      { name: 'model', aliases: [], description: 'Switch model', tier: 'advanced' as const },
+      { name: 'permission', aliases: [], description: 'Select permission mode', tier: 'advanced' as const },
+    ];
+    const provider = new FileMentionProvider(commands, workDir, NO_FD);
+
+    const bare = await provider.getSuggestions(['/'], 0, 1, { signal: ctrl() });
+    expect(bare).not.toBeNull();
+    expect(bare!.items.map((item) => item.value)).toEqual(['loop', 'help']);
+
+    const modelPrefix = await provider.getSuggestions(['/mo'], 0, 3, { signal: ctrl() });
+    expect(modelPrefix).not.toBeNull();
+    expect(modelPrefix!.items.map((item) => item.value)).toContain('model');
+    expect(modelPrefix!.items[0]?.value).toBe('model');
+
+    const permPrefix = await provider.getSuggestions(['/per'], 0, 4, { signal: ctrl() });
+    expect(permPrefix).not.toBeNull();
+    expect(permPrefix!.items.map((item) => item.value)).toEqual(['permission']);
+  });
 });
