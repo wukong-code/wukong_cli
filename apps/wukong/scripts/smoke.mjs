@@ -68,4 +68,7 @@ assertIncludes(exportHelpOutput, 'Usage: wukong export', 'export --help');
 const webHelpOutput = await runBundle(['web', '--help']);
 assertIncludes(webHelpOutput, 'Usage: wukong web', 'web --help');
 
+const mcpHelpOutput = await runBundle(['mcp', '--help']);
+assertIncludes(mcpHelpOutput, 'Usage: wukong mcp', 'mcp --help');
+
 console.log(`Bundle smoke passed: ${bundlePath}`);

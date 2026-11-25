@@ -27,6 +27,13 @@ export interface SummaryCliOptions {
   readonly json?: boolean;
 }
 
+export interface SummaryResult {
+  readonly record: GateRunRecord;
+  readonly stale: boolean;
+  readonly outPath?: string;
+  readonly markdown: string;
+}
+
 export interface SummaryDeps {
   readonly cwd: () => string;
   readonly homeDir: () => string | undefined;
@@ -38,6 +45,7 @@ export interface SummaryDeps {
   readonly readGateRun: (runId: string, homeDir?: string) => Promise<GateRunRecord | undefined>;
   readonly listGateRuns: typeof listGateRuns;
   readonly listLoopRuns: typeof listLoopRunsForSummary;
+  readonly onResult?: (result: SummaryResult) => void;
 }
 
 export async function handleSummary(
@@ -105,20 +113,16 @@ export async function handleSummary(
           : currentHeadSha !== sanitized.git.headSha
       );
     const dirtyDrifted = currentDirty && !sanitized.git.dirty;
+    const summaryResult: SummaryResult = {
+      record: sanitized,
+      stale: headDrifted || dirtyDrifted,
+      outPath: options.out,
+      markdown,
+    };
+    deps.onResult?.(summaryResult);
 
     if (options.json === true) {
-      deps.stdout.write(
-        `${JSON.stringify(
-          {
-            record: sanitized,
-            stale: headDrifted || dirtyDrifted,
-            outPath: options.out,
-            markdown,
-          },
-          null,
-          2,
-        )}\n`,
-      );
+      deps.stdout.write(`${JSON.stringify(summaryResult, null, 2)}\n`);
     } else {
       deps.stdout.write(markdown);
     }
@@ -138,7 +142,7 @@ export function registerSummaryCommand(parent: Command, deps?: Partial<SummaryDe
     .option('--force', 'Allow overwriting an existing --out file.', false)
     .option('--json', 'Print the sanitized record and Markdown summary as JSON.', false)
     .action(async (raw: RawSummaryOptions) => {
-      const code = await handleSummary(resolveDeps(deps), {
+      const code = await handleSummary(resolveSummaryDeps(deps), {
         runId: raw.run,
         out: raw.out,
         force: raw.force === true,
@@ -155,7 +159,7 @@ interface RawSummaryOptions {
   readonly json?: boolean;
 }
 
-function resolveDeps(overrides: Partial<SummaryDeps> = {}): SummaryDeps {
+export function resolveSummaryDeps(overrides: Partial<SummaryDeps> = {}): SummaryDeps {
   return {
     cwd: overrides.cwd ?? (() => process.cwd()),
     homeDir: overrides.homeDir ?? (() => resolveWukongHome()),
@@ -167,6 +171,7 @@ function resolveDeps(overrides: Partial<SummaryDeps> = {}): SummaryDeps {
     readGateRun: overrides.readGateRun ?? readGateRun,
     listGateRuns: overrides.listGateRuns ?? listGateRuns,
     listLoopRuns: overrides.listLoopRuns ?? listLoopRunsForSummary,
+    onResult: overrides.onResult,
   };
 }
 

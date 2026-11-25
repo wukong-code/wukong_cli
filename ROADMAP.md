@@ -2,7 +2,7 @@
 
 > Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
 
-> 最后更新：2026-11-25（按小步 `0.2.x` 递增 + 阶段大更新跳 `0.3.0` 重整规划；`v0.2.1` 启动开发）
+> 最后更新：2026-11-25（按小步 `0.2.x` 递增 + 阶段大更新跳 `0.3.0` 重整规划；`v0.2.1` 已合入 `main`，`v0.2.2` 已实现待手动发布）
 > 当前已发布基线：`v0.2.0`（Standalone Gate & Proof Foundation；MIT；Free + local-first + BYOK）
 > 范围：`wukong_cli` 开源本地 CLI 与核心引擎、`wukong-code` 公开分发与文档/Action；官网账号与托管 PR Gate 后端由私有 `wukong_web` 仓库维护。
 > 授权边界：本文件确定产品方向与版本规划；具体条目进入代码实施前须确认技术设计与变更范围。

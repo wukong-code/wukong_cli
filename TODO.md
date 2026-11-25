@@ -7,16 +7,17 @@
 > 方向真相源：[ROADMAP.md](ROADMAP.md)（PLG 全球化 + 路线 A：跨 Agent 独立验收与交付门禁层；小步功能与 fix 走 `0.2.x` 递增，跨仓库生态/结构大更新跳 `0.3.0`）。
 > Web 侧任务见 `wukong_web/TODO.md`。本文件记录各版本待办，实施前按既定技术设计核对边界。
 
-## `v0.2.1` — Local CLI Reviewer Adapter & Native Bundle CI Guard（Now）
+## `v0.2.1` — Local CLI Reviewer Adapter & Native Bundle CI Guard（Merged to main, pending manual release）
 
 - [x] **本机 CLI-backed Reviewer Adapter**：在 `@wukong/wukong-sdk` 与 `wukong gate` 中支持调用本机已登录的 `claude` / `codex` / `gemini` CLI 作为独立 Reviewer 后端（`--reviewer auto|provider|claude|codex|gemini`），零 API Key 即可跑 `wukong gate`
 - [x] **`wukong init` 与 `wukong provider test` 同步感知**：`init` 自动探测本机可用 CLI Reviewer 并展示免 Key 可用提示；`wukong provider test [claude|codex|gemini|cli:<backend>]` 支持本机 CLI 探活与状态分级
 - [x] **PR CI 原生打包与资产前检**：新增 `check:native:preflight` 并接入 `.github/workflows/ci.yml` 的 `build` job，对依赖变更引起的 SEA bundle（`check-bundle.mjs`）或原生资产解析（`assets.mjs`）问题快速失败
 - [ ] **按需手动触发 Release**：小版本默认仅提交与推送，不自动发布；是否打 tag 并执行六平台发布由维护者手动决定
 
-## `v0.2.2` — Built-in Local MCP Server（Next）
+## `v0.2.2` — Built-in Local MCP Server（Now）
 
-- [ ] **内置本地 MCP Server `wukong mcp`**：复用 `@modelcontextprotocol/sdk` 实现 stdio MCP Server，暴露 `wukong_check`、`wukong_gate`、`wukong_summary` 工具供 Cursor / Claude Code / Codex / Windsurf 直接调用
+- [x] **内置本地 MCP Server `wukong mcp`**：复用 `@modelcontextprotocol/sdk` 实现 stdio MCP Server，暴露 `wukong_check`、`wukong_gate`、`wukong_summary` 工具供 Cursor / Claude Code / Codex / Windsurf 直接调用
+- [ ] **按需手动触发 Release**：小版本默认仅提交与推送，不自动发布；是否打 tag 并执行六平台发布由维护者手动决定
 
 ## `v0.2.3` — Agent Ecosystem Integration（Next）
 

@@ -92,6 +92,7 @@ export interface GateDeps {
   readonly now: () => Date;
   readonly detectCliReviewer?: () => CliReviewerAvailability | undefined;
   readonly runCliReviewer?: typeof runCliReviewCompletion;
+  readonly onResult?: (record: GateRunRecord) => void;
 }
 
 export async function handleGate(deps: GateDeps, options: GateCliOptions): Promise<number> {
@@ -158,6 +159,7 @@ export async function handleGate(deps: GateDeps, options: GateCliOptions): Promi
         };
         const record = sanitizeGateRunRecord(rawRecord, homeDir);
         await deps.saveRun(record, homeDir);
+        deps.onResult?.(record);
         await emitGateOutput(deps, record, options, homeDir, cwd);
         return 2;
       }
@@ -280,6 +282,7 @@ export async function handleGate(deps: GateDeps, options: GateCliOptions): Promi
 
     const record = sanitizeGateRunRecord(rawRecord, homeDir);
     await deps.saveRun(record, homeDir);
+    deps.onResult?.(record);
     await emitGateOutput(deps, record, options, homeDir, cwd);
 
     if (record.status === 'PASS') return 0;
@@ -310,7 +313,7 @@ export function registerGateCommand(parent: Command, deps?: Partial<GateDeps>): 
     .option('--save-summary <path>', 'Save the sanitized Markdown Delivery Proof Card to a file.')
     .option('--json', 'Print structured gate verdict JSON.', false)
     .action(async (raw: RawGateOptions) => {
-      const resolved = resolveDeps(deps);
+      const resolved = resolveGateDeps(deps);
       let reviewer: GateReviewerBackend | undefined;
       if (raw.reviewer !== undefined) {
         reviewer = parseGateReviewerBackend(raw.reviewer);
@@ -447,7 +450,7 @@ export function createDefaultGateReviewerExecutor(options: {
   };
 }
 
-function resolveDeps(overrides: Partial<GateDeps> = {}): GateDeps {
+export function resolveGateDeps(overrides: Partial<GateDeps> = {}): GateDeps {
   const homeDirFn = overrides.homeDir ?? (() => resolveWukongHome());
   return {
     cwd: overrides.cwd ?? (() => process.cwd()),
@@ -470,6 +473,7 @@ function resolveDeps(overrides: Partial<GateDeps> = {}): GateDeps {
     now: overrides.now ?? (() => new Date()),
     detectCliReviewer: overrides.detectCliReviewer,
     runCliReviewer: overrides.runCliReviewer,
+    onResult: overrides.onResult,
   };
 }
 
