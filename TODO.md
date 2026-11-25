@@ -14,14 +14,15 @@
 - [x] **PR CI 原生打包与资产前检**：新增 `check:native:preflight` 并接入 `.github/workflows/ci.yml` 的 `build` job，对依赖变更引起的 SEA bundle（`check-bundle.mjs`）或原生资产解析（`assets.mjs`）问题快速失败
 - [ ] **按需手动触发 Release**：小版本默认仅提交与推送，不自动发布；是否打 tag 并执行六平台发布由维护者手动决定
 
-## `v0.2.2` — Built-in Local MCP Server（Now）
+## `v0.2.2` — Built-in Local MCP Server（Merged to main, pending manual release）
 
 - [x] **内置本地 MCP Server `wukong mcp`**：复用 `@modelcontextprotocol/sdk` 实现 stdio MCP Server，暴露 `wukong_check`、`wukong_gate`、`wukong_summary` 工具供 Cursor / Claude Code / Codex / Windsurf 直接调用
 - [ ] **按需手动触发 Release**：小版本默认仅提交与推送，不自动发布；是否打 tag 并执行六平台发布由维护者手动决定
 
-## `v0.2.3` — Agent Ecosystem Integration（Next）
+## `v0.2.3` — Agent Ecosystem Integration（Now）
 
-- [ ] **主流 Agent 原生集成 `wukong integrate`**：支持 `claude`（Stop Hook 未过 Gate 自动退回结构化阻塞原因修复）、`cursor`（MCP + Rules）与 `codex`（规则/钩子）的一键配置、状态校验与清理
+- [x] **主流 Agent 原生集成 `wukong integrate`**：支持 `claude`（Stop Hook 未过 Gate 自动退回结构化阻塞原因修复）、`cursor`（MCP + Rules）与 `codex`（规则/钩子）的一键配置、状态校验与清理
+- [ ] **按需手动触发 Release**：小版本默认仅提交与推送，不自动发布；是否打 tag 并执行六平台发布由维护者手动决定
 
 ## `v0.2.4` — Intent-vs-Diff Cross-Agent Verification（Next）
 
