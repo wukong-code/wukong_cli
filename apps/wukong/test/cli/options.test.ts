@@ -405,6 +405,7 @@ describe('CLI options parsing', () => {
         'gate',
         'summary',
         'mcp',
+        'integrate',
         'provider',
         'acp',
         'server',

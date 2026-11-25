@@ -10,6 +10,7 @@ import { registerExportCommand } from './sub/export';
 import { registerGateCommand } from './sub/gate';
 import { registerGuardCommand } from './sub/guard';
 import { registerInitCommand } from './sub/init';
+import { registerIntegrateCommand } from './sub/integrate';
 import { registerJudgeCommand } from './sub/judge';
 import { registerLoginCommand } from './sub/login';
 import { registerLogoutCommand } from './sub/logout';
@@ -38,6 +39,7 @@ export const CLI_CORE_COMMANDS = [
 ] as const;
 
 export const CLI_ADVANCED_COMMANDS = [
+  'integrate',
   'mcp',
   'export',
   'review',
@@ -197,6 +199,7 @@ export function createProgram(
   registerGateCommand(program);
   registerSummaryCommand(program);
   registerMcpCommand(program);
+  registerIntegrateCommand(program);
   registerProviderCommand(program);
   registerAcpCommand(program);
   registerServerCommand(program);
