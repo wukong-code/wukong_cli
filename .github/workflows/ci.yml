@@ -124,6 +124,8 @@ jobs:
       - run: pnpm run build
       - name: Smoke test CLI bundle
         run: pnpm -C apps/wukong run smoke
+      - name: Check native SEA bundle and asset contract
+        run: pnpm --filter @wukong.today/code run check:native:preflight
 
   test:
     needs: changes

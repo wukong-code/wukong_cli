@@ -74,6 +74,17 @@ describe('native release workflow contract', () => {
     expect(windowsJob).not.toContain('pnpm run test -- --testTimeout=30000');
   });
 
+  it('runs native bundle and asset preflight checks in the PR CI build job', async () => {
+    const source = await workflow('.github/workflows/ci.yml');
+    const buildIndex = source.indexOf('\n  build:');
+    const nextJobIndex = source.indexOf('\n  test:', buildIndex);
+    const buildJob = source.slice(buildIndex, nextJobIndex);
+
+    expect(buildIndex).toBeGreaterThan(0);
+    expect(nextJobIndex).toBeGreaterThan(buildIndex);
+    expect(buildJob).toContain('check:native:preflight');
+  });
+
   it('builds the exact six native targets on matching runner architectures', async () => {
     const source = await workflow('.github/workflows/_native-build.yml');
     const targets = [...source.matchAll(/^\s+target: (\S+)$/gmu)].map((match) => match[1]);

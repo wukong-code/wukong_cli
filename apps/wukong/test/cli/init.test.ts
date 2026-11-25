@@ -234,6 +234,32 @@ describe('handleInit', () => {
     expect(parsed.providerStatus).toBe('config-error');
   });
 
+  it('detects available local CLI reviewers on PATH without exposing absolute paths', async () => {
+    const cwd = await makeTempDir('wukong-init-cli-rev-');
+    const stdoutJson = writable();
+    const deps = {
+      ...makeDeps({ cwd, stdout: stdoutJson }),
+      detectCliReviewers: () => [
+        { backend: 'claude' as const, binary: 'claude', installed: true, resolvedPath: '/opt/secret/bin/claude' },
+        { backend: 'codex' as const, binary: 'codex', installed: false },
+        { backend: 'gemini' as const, binary: 'gemini', installed: true, resolvedPath: '/opt/secret/bin/gemini' },
+      ],
+    };
+
+    expect(await handleInit(deps, { json: true })).toBe(0);
+    const parsed = JSON.parse(stdoutJson.chunks.join('')) as InitResult;
+    expect(parsed.availableCliReviewers).toEqual(['claude', 'gemini']);
+    expect(stdoutJson.chunks.join('')).not.toContain('/opt/secret/bin');
+
+    const stdoutHuman = writable();
+    expect(
+      await handleInit({ ...deps, stdout: stdoutHuman.writer }, { json: false }),
+    ).toBe(0);
+    const humanOut = stdoutHuman.chunks.join('');
+    expect(humanOut).toContain('Local CLI reviewers detected: claude, gemini');
+    expect(humanOut).not.toContain('/opt/secret/bin');
+  });
+
   it('registers wukong init command with expected flags', async () => {
     const cwd = await makeTempDir('wukong-init-cmd-');
     const stdout = writable();
@@ -250,5 +276,6 @@ describe('handleInit', () => {
     await program.parseAsync(['init', '--json'], { from: 'user' });
     const parsed = JSON.parse(stdout.chunks.join('')) as InitResult;
     expect(parsed.files[0].path).toBe('.wukong/checks.json');
+    expect(parsed.availableCliReviewers).toEqual([]);
   });
 });

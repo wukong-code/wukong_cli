@@ -2,7 +2,7 @@
 
 > Internal engineering record — kept in Chinese. English product docs: the user guide and release notes.
 
-> 最后更新：2026-11-24（完成 `v0.2.0` 独立验收与交付证明基线开发与打包发布；PLG 全球化与路线 A 自 `v0.2.0` 起步）
+> 最后更新：2026-11-25（按小步 `0.2.x` 递增 + 阶段大更新跳 `0.3.0` 重整规划；`v0.2.1` 启动开发）
 > 当前已发布基线：`v0.2.0`（Standalone Gate & Proof Foundation；MIT；Free + local-first + BYOK）
 > 范围：`wukong_cli` 开源本地 CLI 与核心引擎、`wukong-code` 公开分发与文档/Action；官网账号与托管 PR Gate 后端由私有 `wukong_web` 仓库维护。
 > 授权边界：本文件确定产品方向与版本规划；具体条目进入代码实施前须确认技术设计与变更范围。
@@ -58,16 +58,32 @@ Wukong Code 不与 Claude Code、Cursor、Codex 争夺“写代码主入口”�
   - Headless 单一确认 run-plan：`--dry-run --plan-out <file>` + `--plan <file> --approve-plan <digest>` 覆盖原有 8 个挑战/摘要参数（旧参数保持兼容过渡）。
   - 统一 `install.sh`、npm postinstall 与 `wukong doctor` 的下一步引导。
 
-### `v0.3.0` — Agent Ecosystem & CI Viral Loop（预计级别：`minor`）
+### `v0.2.1` — Local CLI Reviewer Adapter & Native Bundle CI Guard（预计级别：`patch`）
 
-目标：嵌入 Claude Code / Cursor / Codex 日常工作流，并通过开源 GitHub Action 建立全球开发者社区自然传播。
+目标：降低 `wukong gate` 的 BYOK 冷启动门槛，并把原生 SEA 打包验证前移到 PR CI。
 
-- **`wukong integrate`**：支持 `claude`（安装 Stop Hook，在未过 Gate 时将结构化阻塞原因退回自动修复）、`cursor` 与 `codex` 规则/钩子接入。
-- **`wukong mcp`**：内置本地 MCP Server，暴露 `wukong_check`、`wukong_gate`、`wukong_summary` 工具供外部 Coding Agent 直接调用。
-- **Intent-vs-Diff 跨 Agent 意图对齐验收**：`wukong gate --from-session [claude|codex|cursor|kimi|grok]` 与 `--issue` / `--pr`，复用五来源本地会话解析能力提取用户需求与约束，核对实际 `git diff` 与 checks，抓出遗漏需求与伪通过。
-- **CLI-backed Provider Adapter**：支持调用本机已登录的 `claude` / `codex` / `gemini` CLI 作为独立 Reviewer 后端，降低 BYOK 冷启动门槛。
-- **`wukong gate --ci` 与官方开源 GitHub Action（`wukong-code/gate-action@v1`）**：支持 PR base/head diff、标准退出码与幂等 PR Proof Card 评论。
-- **分发瘦身与文档收口**：将 `apps/vis` 与 `dist-web` 移出默认 CLI/CI 分发包；精简公开文档站为英文优先的路线 A 集成指南。
+- **本机 CLI-backed Reviewer Adapter**：在 `@wukong/wukong-sdk` 与 `wukong gate` 中支持调用本机已登录的 `claude` / `codex` / `gemini` CLI 作为独立 Reviewer 后端（`--reviewer auto|provider|claude|codex|gemini`），零 API Key 即可运行 `wukong gate`。
+- **`wukong init` 与 `wukong provider test` 同步感知**：`init` 自动探测本机可用 CLI Reviewer 并展示免 Key 可用提示；`wukong provider test [claude|codex|gemini|cli:<backend>]` 支持本机 CLI 探活与状态分级。
+- **PR CI 原生打包与资产前检**：新增 `check:native:preflight` 并接入 `.github/workflows/ci.yml` 的 `build` job，对依赖升级导致的 SEA bundle 或原生资产解析问题快速失败。
+
+### `v0.2.2` — Built-in Local MCP Server（预计级别：`patch`）
+
+- **`wukong mcp`**：内置本地 stdio MCP Server，暴露 `wukong_check`、`wukong_gate`、`wukong_summary` 工具供 Cursor / Claude Code / Codex / Windsurf 直接调用。
+
+### `v0.2.3` — Agent Ecosystem Integration（预计级别：`patch`）
+
+- **`wukong integrate`**：支持 `claude`（安装 Stop Hook，在未过 Gate 时将结构化阻塞原因退回自动修复）、`cursor` 与 `codex` 规则/钩子一键接入与清理。
+
+### `v0.2.4` — Intent-vs-Diff Cross-Agent Verification（预计级别：`patch`）
+
+- **Intent-vs-Diff 跨 Agent 意图对齐验收**：`wukong gate --from-session [claude|codex|cursor|kimi|grok]` 与 `--issue` / `--pr`，复用五来源本地会话解析能力提取用户需求与约束，核对真实 `git diff` 与 checks，抓出遗漏需求与伪通过。
+
+### `v0.3.0` — CI Gate, Official GitHub Action & Distribution Slimming（预计级别：`minor` 大版本跳跃）
+
+目标：完成 GitHub PR 原生 CI 闭环、发布面瘦身与全球化开发者文档升级。
+
+- **`wukong gate --ci` 与官方开源 GitHub Action（`wukong-code/gate-action@v1`）**：扩展 PR `base..head` diff 范围与标准退出码，提供 5 行 YAML 接入与幂等 PR Proof Card 评论。
+- **分发瘦身（结构变更）**：将已冻结的 `apps/vis` 与 `dist-web` 移出默认 CLI/CI 分发包；精简公开文档站为英文优先的路线 A 集成指南，并配合官网更新生态着陆页。
 
 ### `v0.4.0` — Cloud PR Gate & Team Policy Sync（预计级别：`minor`）
 
@@ -87,12 +103,14 @@ Wukong Code 不与 Claude Code、Cursor、Codex 争夺“写代码主入口”�
 
 ## 轻量发布分级
 
-延续完整性底线（immutable assets、SHA-256、provenance、publish-no-rebuild、失败不替换旧安装），不再设置阻塞功能开发的人工队列研究、手工案例数量或人工服务前置门槛：
+延续完整性底线（immutable assets、SHA-256、provenance、publish-no-rebuild、失败不替换旧安装），遵循“小步增量 / fix 走 `0.2.x` 递增，大更新跳 `0.3.0`”的节奏：
+
+- **默认提交与推送优先、Release 必须手动触发**：小版本（`0.2.x`）默认仅提交与推送代码，不自动触发 Release；所有正式 Release（打 tag、六平台构建分发与官网更新）均由维护者按需手动决定与触发。
 
 | 级别 | 适用范围 | 必跑验收 |
 |---|---|---|
-| `patch` | 缺陷修复、文案/提示修复、安全维护 | 全量自动化 + typecheck/lint/sherif + 六平台资产校验与安装/升级 smoke |
-| `minor` | 新命令、新适配器、schema 兼容演进 | `patch` 全部 + 新命令/契约回归 + 恢复兼容回归 + 中英文发布面同步 |
+| `patch`（`0.2.x`） | 缺陷修复、文案/提示修复、安全/依赖维护，或单个聚焦的独立增量模块（穿插紧急 fix 直接递增补丁号，后续功能顺延） | 全量自动化 + typecheck/lint/sherif + 六平台资产校验与安装/升级 smoke；含增量能力时补齐命令与契约回归 |
+| `minor`（`0.3.0` / `0.4.0`） | 阶段性大更新：涉及默认分发包结构调整、跨仓库生态发布（CLI + Action + 英文文档/官网大升级）或新体系成型时跳跃次版本号 | `patch` 全部 + 新命令/契约回归 + 恢复兼容回归 + 中英文发布面同步 |
 | `major` | 破坏性参数/别名移除或不可逆 schema 变更（需明确确认） | `minor` 全部 + 迁移路径与回退验收 |
 
 ## 明确冻结与不做

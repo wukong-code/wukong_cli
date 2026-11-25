@@ -1,4 +1,10 @@
-import type { ProviderConfig, ProviderType, WukongHarness } from '@wukong/wukong-sdk';
+import {
+  parseCliReviewerSpecifier,
+  probeLocalCliReviewer,
+  type ProviderConfig,
+  type ProviderType,
+  type WukongHarness,
+} from '@wukong/wukong-sdk';
 
 export type ProviderConnectivityStatus =
   | 'ok'
@@ -58,6 +64,28 @@ export async function testConfiguredProviders(
   if (options.providerId !== undefined) {
     const provider = config.providers[options.providerId];
     if (provider === undefined) {
+      const cliBackend = parseCliReviewerSpecifier(options.providerId);
+      if (cliBackend !== undefined) {
+        const probe = await probeLocalCliReviewer(cliBackend, {
+          timeoutMs,
+          offline,
+          env,
+        });
+        return {
+          results: [
+            {
+              providerId: `cli:${cliBackend}`,
+              type: 'local-cli',
+              endpoint: `local-cli:${cliBackend}`,
+              status: probe.status,
+              httpStatus: undefined,
+              latencyMs: probe.latencyMs,
+              message: probe.message,
+            },
+          ],
+          missingProviderId: undefined,
+        };
+      }
       return { results: [], missingProviderId: options.providerId };
     }
     const result = await probeSingleProvider({

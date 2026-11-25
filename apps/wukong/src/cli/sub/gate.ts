@@ -23,10 +23,19 @@ import {
   type StandaloneReviewerOutcome,
 } from '@wukong/verification';
 import {
+  CliReviewerError,
+  ErrorCodes,
+  WukongError,
   createWukongHarness,
+  detectAvailableCliReviewer,
+  isCliReviewerBackend,
   isWukongError,
   resolveWukongHome,
+  runCliReviewCompletion,
   runIsolatedReviewCompletion,
+  type CliReviewerAvailability,
+  type CliReviewerBackend,
+  type WukongConfig,
 } from '@wukong/wukong-sdk';
 import type { Command } from 'commander';
 
@@ -37,7 +46,12 @@ interface WritableLike {
   write(chunk: string): boolean;
 }
 
+export const GATE_REVIEWER_BACKENDS = ['auto', 'provider', 'claude', 'codex', 'gemini'] as const;
+
+export type GateReviewerBackend = 'auto' | 'provider' | CliReviewerBackend;
+
 export type GateReviewerExecutor = (input: {
+  readonly reviewer?: GateReviewerBackend;
   readonly modelAlias?: string;
   readonly systemPrompt: string;
   readonly userPrompt: string;
@@ -51,6 +65,7 @@ export type GateReviewerExecutor = (input: {
 export interface GateCliOptions {
   readonly cwd?: string;
   readonly objective?: string;
+  readonly reviewer?: GateReviewerBackend;
   readonly model?: string;
   readonly commands?: readonly string[];
   readonly includeBuild?: boolean;
@@ -75,6 +90,8 @@ export interface GateDeps {
   readonly runReviewer: GateReviewerExecutor;
   readonly saveRun: (record: GateRunRecord, homeDir?: string) => Promise<string>;
   readonly now: () => Date;
+  readonly detectCliReviewer?: () => CliReviewerAvailability | undefined;
+  readonly runCliReviewer?: typeof runCliReviewCompletion;
 }
 
 export async function handleGate(deps: GateDeps, options: GateCliOptions): Promise<number> {
@@ -172,6 +189,7 @@ export async function handleGate(deps: GateDeps, options: GateCliOptions): Promi
       let reviewerOutcome: StandaloneReviewerOutcome;
       try {
         const response = await deps.runReviewer({
+          reviewer: options.reviewer,
           modelAlias: options.model,
           systemPrompt: prompt.systemPrompt,
           userPrompt: prompt.userPrompt,
@@ -212,7 +230,9 @@ export async function handleGate(deps: GateDeps, options: GateCliOptions): Promi
           errorCode: classified.errorCode,
           errorMessage: classified.message,
           model: options.model,
-          providerId: undefined,
+          providerId: isCliReviewerBackend(options.reviewer ?? '')
+            ? `cli:${options.reviewer}`
+            : undefined,
         };
       }
 
@@ -276,6 +296,10 @@ export function registerGateCommand(parent: Command, deps?: Partial<GateDeps>): 
     .command('gate')
     .description('Run the standalone verification & fresh-context review gate (PASS / NEEDS_WORK / ERROR).')
     .option('--objective <text>', 'Optional task objective for independent review.')
+    .option(
+      '--reviewer <backend>',
+      'Reviewer backend: auto, provider, claude, codex, or gemini. Defaults to auto (configured provider, else installed local CLI).',
+    )
     .option('-m, --model <alias>', 'Reviewer model alias override. Defaults to default_model in config.toml.')
     .option('--command <command>', 'Run an explicit check command. Can be repeated.', collect, [])
     .option('--build', 'Include package build scripts when auto-detecting checks.', false)
@@ -287,6 +311,17 @@ export function registerGateCommand(parent: Command, deps?: Partial<GateDeps>): 
     .option('--json', 'Print structured gate verdict JSON.', false)
     .action(async (raw: RawGateOptions) => {
       const resolved = resolveDeps(deps);
+      let reviewer: GateReviewerBackend | undefined;
+      if (raw.reviewer !== undefined) {
+        reviewer = parseGateReviewerBackend(raw.reviewer);
+        if (reviewer === undefined) {
+          resolved.stderr.write(
+            'error: --reviewer must be one of: auto, provider, claude, codex, gemini.\n',
+          );
+          process.exitCode = 1;
+          return;
+        }
+      }
       let timeoutSeconds: number | undefined;
       if (raw.timeout !== undefined) {
         timeoutSeconds = parsePositiveInteger(raw.timeout);
@@ -308,6 +343,7 @@ export function registerGateCommand(parent: Command, deps?: Partial<GateDeps>): 
 
       const code = await handleGate(resolved, {
         objective: raw.objective,
+        reviewer,
         model: raw.model,
         commands: raw.command,
         includeBuild: raw.build === true,
@@ -324,6 +360,7 @@ export function registerGateCommand(parent: Command, deps?: Partial<GateDeps>): 
 
 interface RawGateOptions {
   readonly objective?: string;
+  readonly reviewer?: string;
   readonly model?: string;
   readonly command?: string[];
   readonly build?: boolean;
@@ -335,8 +372,82 @@ interface RawGateOptions {
   readonly json?: boolean;
 }
 
-function resolveDeps(overrides: Partial<GateDeps> = {}): GateDeps {
+export function createDefaultGateReviewerExecutor(options: {
+  readonly homeDir: () => string | undefined;
+  readonly getConfig?: () => Promise<WukongConfig>;
+  readonly runIsolated?: typeof runIsolatedReviewCompletion;
+  readonly detectCli?: () => CliReviewerAvailability | undefined;
+  readonly runCli?: typeof runCliReviewCompletion;
+}): GateReviewerExecutor {
   const identity = createWukongCodeHostIdentity();
+  const detectCli = options.detectCli ?? (() => detectAvailableCliReviewer());
+  const runCli = options.runCli ?? runCliReviewCompletion;
+
+  return async (input) => {
+    const backend = input.reviewer ?? 'auto';
+    if (isCliReviewerBackend(backend)) {
+      return runCli({
+        backend,
+        model: input.modelAlias,
+        systemPrompt: input.systemPrompt,
+        userPrompt: input.userPrompt,
+        timeoutMs: input.timeoutMs,
+      });
+    }
+
+    const homeDir = options.homeDir();
+    const resolveAndRun = async (
+      config: WukongConfig,
+      resolveOAuthTokenProvider?: Parameters<typeof runIsolatedReviewCompletion>[0]['resolveOAuthTokenProvider'],
+    ) => {
+      const hasConfiguredModel =
+        nonEmpty(input.modelAlias) !== undefined || nonEmpty(config.defaultModel) !== undefined;
+      if (backend === 'provider' || hasConfiguredModel) {
+        return (options.runIsolated ?? runIsolatedReviewCompletion)({
+          config,
+          modelAlias: input.modelAlias,
+          systemPrompt: input.systemPrompt,
+          userPrompt: input.userPrompt,
+          homeDir,
+          identity,
+          resolveOAuthTokenProvider,
+          timeoutMs: input.timeoutMs,
+        });
+      }
+
+      const detected = detectCli();
+      if (detected !== undefined) {
+        return runCli({
+          backend: detected.backend,
+          systemPrompt: input.systemPrompt,
+          userPrompt: input.userPrompt,
+          timeoutMs: input.timeoutMs,
+        });
+      }
+
+      throw new WukongError(
+        ErrorCodes.CONFIG_INVALID,
+        'No reviewer model configured and no local CLI reviewer (claude, codex, gemini) found on PATH. Configure a provider with `wukong provider catalog add <id>` or install and sign in to Claude Code, Codex, or Gemini CLI.',
+      );
+    };
+
+    if (options.getConfig !== undefined && options.runIsolated !== undefined) {
+      return resolveAndRun(await options.getConfig());
+    }
+
+    const harness = createWukongHarness({ homeDir, identity });
+    try {
+      const config = options.getConfig === undefined
+        ? await harness.getConfig()
+        : await options.getConfig();
+      return await resolveAndRun(config, harness.auth.resolveOAuthTokenProvider);
+    } finally {
+      await harness.close();
+    }
+  };
+}
+
+function resolveDeps(overrides: Partial<GateDeps> = {}): GateDeps {
   const homeDirFn = overrides.homeDir ?? (() => resolveWukongHome());
   return {
     cwd: overrides.cwd ?? (() => process.cwd()),
@@ -348,27 +459,17 @@ function resolveDeps(overrides: Partial<GateDeps> = {}): GateDeps {
     inspectGit: overrides.inspectGit ?? inspectGit,
     selectCommands: overrides.selectCommands ?? selectVerificationCommands,
     resolveWorkspaceIdentity: overrides.resolveWorkspaceIdentity ?? resolveWorkspaceIdentity,
-    runReviewer: overrides.runReviewer ?? (async (input) => {
-      const homeDir = homeDirFn();
-      const harness = createWukongHarness({ homeDir, identity });
-      try {
-        const config = await harness.getConfig();
-        return await runIsolatedReviewCompletion({
-          config,
-          modelAlias: input.modelAlias,
-          systemPrompt: input.systemPrompt,
-          userPrompt: input.userPrompt,
-          homeDir,
-          identity,
-          resolveOAuthTokenProvider: harness.auth.resolveOAuthTokenProvider,
-          timeoutMs: input.timeoutMs,
-        });
-      } finally {
-        await harness.close();
-      }
-    }),
+    runReviewer:
+      overrides.runReviewer
+      ?? createDefaultGateReviewerExecutor({
+        homeDir: homeDirFn,
+        detectCli: overrides.detectCliReviewer,
+        runCli: overrides.runCliReviewer,
+      }),
     saveRun: overrides.saveRun ?? saveGateRun,
     now: overrides.now ?? (() => new Date()),
+    detectCliReviewer: overrides.detectCliReviewer,
+    runCliReviewer: overrides.runCliReviewer,
   };
 }
 
@@ -459,6 +560,9 @@ function formatReviewerLine(record: GateRunRecord): string {
     return `Reviewer: error (${model}) — ${detail}`;
   }
   const model = record.reviewer.model ?? 'default';
+  if (record.reviewer.providerId?.startsWith('cli:') === true) {
+    return `Reviewer: ${record.reviewer.status} (${model} via ${record.reviewer.providerId})`;
+  }
   return `Reviewer: ${record.reviewer.status} (${model})`;
 }
 
@@ -494,6 +598,12 @@ function classifyReviewerError(error: unknown): {
   readonly errorCode: string;
   readonly message: string;
 } {
+  if (error instanceof CliReviewerError) {
+    return {
+      errorCode: error.code,
+      message: error.message,
+    };
+  }
   if (isWukongError(error)) {
     return {
       errorCode: error.code,
@@ -513,6 +623,19 @@ function classifyReviewerError(error: unknown): {
     errorCode: 'reviewer_error',
     message: errorMessage(error),
   };
+}
+
+export function parseGateReviewerBackend(value: string): GateReviewerBackend | undefined {
+  const normalized = value.trim().toLowerCase();
+  return (GATE_REVIEWER_BACKENDS as readonly string[]).includes(normalized)
+    ? (normalized as GateReviewerBackend)
+    : undefined;
+}
+
+function nonEmpty(value: string | undefined): string | undefined {
+  if (typeof value !== 'string') return undefined;
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 function isWorkspaceChangedError(error: unknown): boolean {

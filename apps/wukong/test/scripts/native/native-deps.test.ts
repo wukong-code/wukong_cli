@@ -1,11 +1,15 @@
+import { existsSync } from 'node:fs';
+
 import { describe, expect, it } from 'vitest';
 
+import { collectNativeAssets } from '../../../scripts/native/assets.mjs';
 import {
   nativeDeps,
   resolveTargetDeps,
   isSupportedTarget,
   SUPPORTED_TARGETS,
 } from '../../../scripts/native/native-deps.mjs';
+import { appRoot, targetTriple } from '../../../scripts/native/paths.mjs';
 
 describe('SUPPORTED_TARGETS', () => {
   it('contains the six published targets', () => {
@@ -102,5 +106,27 @@ describe('nativeDeps registry shape', () => {
     const target = nativeDeps.find((d) => d.id === 'koffi-target');
     expect(target?.collect).toBe('native-files');
     expect(target?.parent).toBe('koffi');
+  });
+});
+
+describe('collectNativeAssets integration', () => {
+  it('resolves all native dependency packages and .node binaries for the host target', async () => {
+    const target = targetTriple();
+    const { manifest, assets } = await collectNativeAssets({ appRoot, target });
+    const names = manifest.packages.map((pkg) => pkg.name);
+    expect(names).toContain('@mariozechner/clipboard');
+    expect(names).toContain('koffi');
+    expect(names).toContain('@wukong/reference-verification-skills');
+
+    const nativeSubpackages = resolveTargetDeps(target).filter((dep) => dep.collect === 'native-files');
+    for (const dep of nativeSubpackages) {
+      const pkg = manifest.packages.find((entry) => entry.name === dep.resolvedName);
+      expect(pkg, dep.resolvedName).toBeDefined();
+      expect(pkg?.files.some((file) => file.relativePath.endsWith('.node'))).toBe(true);
+    }
+
+    for (const filePath of Object.values(assets)) {
+      expect(existsSync(filePath), filePath).toBe(true);
+    }
   });
 });

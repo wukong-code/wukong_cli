@@ -4,6 +4,11 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
 import {
+  CliReviewerError,
+  ErrorCodes,
+  type WukongConfig,
+} from '@wukong/wukong-sdk';
+import {
   WorkspaceChangedError,
   resolveWorkspaceIdentity,
   type GitInspection,
@@ -13,7 +18,12 @@ import { Command } from 'commander';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 
 import { readGateRun, saveGateRun } from '#/cli/lib/gate-run-store';
-import { handleGate, registerGateCommand, type GateDeps } from '#/cli/sub/gate';
+import {
+  createDefaultGateReviewerExecutor,
+  handleGate,
+  registerGateCommand,
+  type GateDeps,
+} from '#/cli/sub/gate';
 
 const tempDirs: string[] = [];
 
@@ -366,7 +376,7 @@ describe('handleGate', () => {
     }
   });
 
-  it('validates CLI timeout arguments cleanly', async () => {
+  it('validates CLI timeout and --reviewer arguments cleanly', async () => {
     const stderr = writable();
     const program = new Command();
     program.exitOverride();
@@ -377,5 +387,118 @@ describe('handleGate', () => {
     expect(stderr.chunks.join('')).toContain('--timeout must be a positive integer');
     expect(process.exitCode).toBe(1);
     process.exitCode = undefined;
+
+    const stderrReviewer = writable();
+    const programReviewer = new Command();
+    programReviewer.exitOverride();
+    registerGateCommand(programReviewer, { stderr: stderrReviewer.writer });
+    await programReviewer.parseAsync(['gate', '--reviewer', 'unknown-cli'], { from: 'user' });
+    expect(stderrReviewer.chunks.join('')).toContain(
+      '--reviewer must be one of: auto, provider, claude, codex, gemini',
+    );
+    expect(process.exitCode).toBe(1);
+    process.exitCode = undefined;
+  });
+
+  it('routes --reviewer claude cleanly and surfaces cli_reviewer errors as ERROR (2)', async () => {
+    const cwd = await makeTempDir('wukong-gate-cli-rev-');
+    const homeDir = await makeTempDir('wukong-gate-cli-home-');
+    const stdout = writable();
+    const runReviewer = vi.fn(async () => ({
+      modelAlias: 'claude',
+      providerId: 'cli:claude',
+      text: 'GATE_VERDICT_JSON: {"schemaVersion":1,"status":"PASS","summary":"CLI review passed.","findings":[],"uncoveredItems":[]}',
+    }));
+    const { deps } = await makeDeps({ cwd, homeDir, stdout, runReviewer });
+    const program = new Command();
+    program.exitOverride();
+    registerGateCommand(program, deps);
+
+    await program.parseAsync(['gate', '--reviewer', 'Claude', '--summary'], { from: 'user' });
+    expect(process.exitCode).toBeUndefined();
+    expect(runReviewer).toHaveBeenCalledWith(expect.objectContaining({ reviewer: 'claude' }));
+    expect(stdout.chunks.join('')).toContain('via `cli:claude`');
+
+    const humanStdout = writable();
+    const { deps: humanDeps } = await makeDeps({ cwd, homeDir, stdout: humanStdout, runReviewer });
+    expect(await handleGate(humanDeps, { reviewer: 'claude' })).toBe(0);
+    expect(humanStdout.chunks.join('')).toContain('Reviewer: passed (claude via cli:claude)');
+
+    const errStdout = writable();
+    const { deps: errDeps } = await makeDeps({
+      cwd,
+      homeDir,
+      stdout: errStdout,
+      runReviewer: async () => {
+        throw new CliReviewerError('cli_reviewer_auth_failed', 'Please sign in to claude CLI.');
+      },
+    });
+    expect(await handleGate(errDeps, { reviewer: 'claude', json: true })).toBe(2);
+    const parsedErr = JSON.parse(errStdout.chunks.join('')) as {
+      status: string;
+      reasonCode: string;
+      reviewer: { providerId?: string; errorCode?: string };
+    };
+    expect(parsedErr.status).toBe('ERROR');
+    expect(parsedErr.reasonCode).toBe('cli_reviewer_auth_failed');
+    expect(parsedErr.reviewer.providerId).toBe('cli:claude');
+    expect(parsedErr.reviewer.errorCode).toBe('cli_reviewer_auth_failed');
+  });
+
+  it('selects configured provider first in auto mode and falls back to installed local CLI only when unconfigured', async () => {
+    const isolatedMock = vi.fn(async () => ({
+      modelAlias: 'default',
+      providerId: 'openai',
+      text: 'ok',
+      finishReason: 'completed',
+    }));
+    const cliMock = vi.fn(async () => ({
+      modelAlias: 'gemini',
+      providerId: 'cli:gemini',
+      text: 'ok',
+      finishReason: 'completed',
+    }));
+
+    const unconfiguredConfig: WukongConfig = {
+      providers: {},
+      models: {},
+    };
+    const configuredConfig: WukongConfig = {
+      providers: { openai: { type: 'openai', apiKey: 'YOUR_API_KEY' } },
+      models: { default: { provider: 'openai', model: 'gpt-test', maxContextSize: 128_000 } },
+      defaultModel: 'default',
+    };
+
+    const execAutoFallback = createDefaultGateReviewerExecutor({
+      homeDir: () => undefined,
+      getConfig: async () => unconfiguredConfig,
+      runIsolated: isolatedMock,
+      detectCli: () => ({ backend: 'gemini', binary: 'gemini', installed: true, resolvedPath: '/bin/gemini' }),
+      runCli: cliMock,
+    });
+    await execAutoFallback({ reviewer: 'auto', systemPrompt: 'S', userPrompt: 'U' });
+    expect(cliMock).toHaveBeenCalledWith(expect.objectContaining({ backend: 'gemini' }));
+    expect(isolatedMock).not.toHaveBeenCalled();
+
+    const execConfigured = createDefaultGateReviewerExecutor({
+      homeDir: () => undefined,
+      getConfig: async () => configuredConfig,
+      runIsolated: isolatedMock,
+      detectCli: () => ({ backend: 'gemini', binary: 'gemini', installed: true, resolvedPath: '/bin/gemini' }),
+      runCli: cliMock,
+    });
+    await execConfigured({ reviewer: 'auto', systemPrompt: 'S', userPrompt: 'U' });
+    expect(isolatedMock).toHaveBeenCalledTimes(1);
+
+    const execMissingBoth = createDefaultGateReviewerExecutor({
+      homeDir: () => undefined,
+      getConfig: async () => unconfiguredConfig,
+      runIsolated: isolatedMock,
+      detectCli: () => undefined,
+      runCli: cliMock,
+    });
+    await expect(
+      execMissingBoth({ reviewer: 'auto', systemPrompt: 'S', userPrompt: 'U' }),
+    ).rejects.toMatchObject({ code: ErrorCodes.CONFIG_INVALID });
   });
 });
