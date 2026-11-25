@@ -563,4 +563,110 @@ describe('handleProviderTest', () => {
     expect(combined).not.toContain('BODY_SECRET_LEAK_12345');
     expect(combined).toContain('https://api.example.test/v1/models');
   });
+
+  it('probes local CLI reviewers via cli:<backend> or bare name when not configured in config.providers', async () => {
+    const stdoutNotFound = writeBuffer();
+    await expect(
+      handleProviderTest(
+        makeDeps({
+          harness: makeHarness({ providers: {} }),
+          stdoutBuf: stdoutNotFound,
+          env: {},
+        }),
+        'cli:codex',
+        { json: true },
+      ),
+    ).rejects.toThrow('exit 1');
+    const notFoundPayload = JSON.parse(stdoutNotFound.chunks.join('')) as {
+      ok: boolean;
+      results: Array<{ providerId: string; type: string; endpoint: string; status: string }>;
+    };
+    expect(notFoundPayload.ok).toBe(false);
+    expect(notFoundPayload.results[0]).toMatchObject({
+      providerId: 'cli:codex',
+      type: 'local-cli',
+      endpoint: 'local-cli:codex',
+      status: 'not-found',
+    });
+
+    const stdoutOffline = writeBuffer();
+    await expect(
+      handleProviderTest(
+        makeDeps({
+          harness: makeHarness({ providers: {} }),
+          stdoutBuf: stdoutOffline,
+          env: {},
+        }),
+        'claude',
+        { json: true, offline: true },
+      ),
+    ).rejects.toThrow('exit 1');
+    const offlinePayload = JSON.parse(stdoutOffline.chunks.join('')) as {
+      results: Array<{ providerId: string; status: string }>;
+    };
+    expect(offlinePayload.results[0]).toMatchObject({
+      providerId: 'cli:claude',
+      status: 'offline',
+    });
+
+    // Configured provider with the same name must keep precedence over local CLI probe.
+    const configuredFetch = vi.fn(async () => new Response('{}', { status: 200 }));
+    const stdoutPrecedence = writeBuffer();
+    await handleProviderTest(
+      makeDeps({
+        harness: makeHarness({
+          providers: { claude: { type: 'anthropic', apiKey: 'YOUR_API_KEY' } },
+        }),
+        stdoutBuf: stdoutPrecedence,
+        fetch: configuredFetch as unknown as typeof globalThis.fetch,
+      }),
+      'claude',
+      { json: true },
+    );
+    expect(configuredFetch).toHaveBeenCalledTimes(1);
+    const precPayload = JSON.parse(stdoutPrecedence.chunks.join('')) as {
+      results: Array<{ providerId: string; type: string; status: string }>;
+    };
+    expect(precPayload.results[0]).toMatchObject({
+      providerId: 'claude',
+      type: 'anthropic',
+      status: 'ok',
+    });
+
+    if (process.platform !== 'win32') {
+      const { chmodSync, mkdtempSync, rmSync, writeFileSync } = await import('node:fs');
+      const { tmpdir } = await import('node:os');
+      const { join } = await import('node:path');
+      const binDir = mkdtempSync(join(tmpdir(), 'wukong-prov-cli-'));
+      try {
+        const stub = join(binDir, 'gemini');
+        writeFileSync(stub, `#!/bin/sh\necho "gemini-cli 0.9.1"\n`, 'utf8');
+        chmodSync(stub, 0o755);
+
+        const stdoutOk = writeBuffer();
+        await handleProviderTest(
+          makeDeps({
+            harness: makeHarness({ providers: {} }),
+            stdoutBuf: stdoutOk,
+            env: { PATH: binDir },
+          }),
+          'cli:gemini',
+          { json: true },
+        );
+        const okPayload = JSON.parse(stdoutOk.chunks.join('')) as {
+          ok: boolean;
+          results: Array<{ providerId: string; type: string; status: string; message: string }>;
+        };
+        expect(okPayload.ok).toBe(true);
+        expect(okPayload.results[0]).toMatchObject({
+          providerId: 'cli:gemini',
+          type: 'local-cli',
+          status: 'ok',
+        });
+        expect(okPayload.results[0]?.message).toContain('gemini-cli 0.9.1');
+      } finally {
+        rmSync(binDir, { recursive: true, force: true });
+      }
+    }
+  });
 });

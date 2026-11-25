@@ -101,5 +101,31 @@ export type {
   IsolatedReviewTokenProvider,
 } from '#/isolated-review';
 
+export {
+  CLI_REVIEWER_BACKENDS,
+  CliReviewerError,
+  buildCliReviewerInvocation,
+  detectAvailableCliReviewer,
+  detectLocalCliReviewers,
+  isCliReviewerBackend,
+  parseCliReviewerSpecifier,
+  probeLocalCliReviewer,
+  resolveBinaryOnPath,
+  runCliReviewCompletion,
+  sanitizeCliReviewerText,
+} from '#/cli-reviewer';
+export type {
+  CliExecImpl,
+  CliExecInput,
+  CliExecOutput,
+  CliReviewCompletionOptions,
+  CliReviewCompletionResult,
+  CliReviewerAvailability,
+  CliReviewerBackend,
+  CliReviewerErrorCode,
+  CliReviewerInvocation,
+  CliReviewerProbeResult,
+} from '#/cli-reviewer';
+
 export * from '#/events';
 export type * from '#/types';

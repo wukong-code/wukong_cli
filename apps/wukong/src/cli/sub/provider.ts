@@ -564,7 +564,7 @@ export function registerProviderCommand(parent: Command, deps?: Partial<Provider
 
   provider
     .command('test [providerId]')
-    .description('Test connectivity and authentication for configured providers.')
+    .description('Test connectivity and authentication for configured providers or local CLI reviewers (claude, codex, gemini).')
     .option('--timeout <seconds>', 'Timeout per probe in seconds.')
     .option('--offline', 'Skip network probes and report offline status.', false)
     .option('--json', 'Emit connectivity test results as JSON.', false)

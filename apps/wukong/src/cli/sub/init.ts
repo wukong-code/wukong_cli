@@ -6,7 +6,12 @@ import {
   detectProjectToolchain,
   type DetectedToolchain,
 } from '@wukong/verification';
-import { createWukongHarness, type WukongHarness } from '@wukong/wukong-sdk';
+import {
+  createWukongHarness,
+  detectLocalCliReviewers,
+  type CliReviewerBackend,
+  type WukongHarness,
+} from '@wukong/wukong-sdk';
 import type { Command } from 'commander';
 
 import {
@@ -28,6 +33,7 @@ export interface InitDeps {
   readonly stderr: WritableLike;
   readonly env: NodeJS.ProcessEnv;
   readonly fetch?: typeof globalThis.fetch;
+  readonly detectCliReviewers?: typeof detectLocalCliReviewers;
 }
 
 export interface InitCliOptions {
@@ -51,6 +57,7 @@ export interface InitResult {
   readonly files: readonly [InitFileOutcome, InitFileOutcome];
   readonly providerStatus: 'unconfigured' | 'configured' | 'tested' | 'config-error';
   readonly configuredProviderIds: readonly string[];
+  readonly availableCliReviewers: readonly CliReviewerBackend[];
   readonly providerTests?: readonly ProviderTestResult[];
   readonly missingProviderId?: string;
   readonly nextSteps: readonly string[];
@@ -145,6 +152,12 @@ export async function handleInit(deps: InitDeps, options: InitCliOptions): Promi
       }
     }
 
+    const availableCliReviewers = (deps.detectCliReviewers ?? detectLocalCliReviewers)({
+      env: deps.env,
+    })
+      .filter((entry) => entry.installed)
+      .map((entry) => entry.backend);
+
     const result: InitResult = {
       toolchains: detection.toolchains,
       detectedCommands,
@@ -155,6 +168,7 @@ export async function handleInit(deps: InitDeps, options: InitCliOptions): Promi
       ],
       providerStatus,
       configuredProviderIds,
+      availableCliReviewers,
       providerTests,
       missingProviderId,
       nextSteps: [
@@ -216,6 +230,7 @@ function resolveDeps(overrides: Partial<InitDeps> = {}): InitDeps {
     stderr: overrides.stderr ?? process.stderr,
     env: overrides.env ?? process.env,
     fetch: overrides.fetch,
+    detectCliReviewers: overrides.detectCliReviewers,
   };
 }
 
@@ -265,6 +280,11 @@ function formatInitResult(result: InitResult): string {
       lines.push(`Provider "${result.missingProviderId}" not found.`);
     }
     lines.push('Provider: not configured.');
+    if (result.availableCliReviewers.length > 0) {
+      lines.push(
+        `  Local CLI reviewers detected: ${result.availableCliReviewers.join(', ')} (usable directly via \`wukong gate\` without API keys).`,
+      );
+    }
     lines.push('  Run `wukong`, then enter `/provider`, or run `wukong provider catalog add <providerId>`.');
   } else if (result.providerStatus === 'configured') {
     lines.push(`Provider: configured (${result.configuredProviderIds.join(', ')}).`);
