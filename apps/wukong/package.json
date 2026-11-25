@@ -76,6 +76,7 @@
   },
   "devDependencies": {
     "@earendil-works/pi-tui": "^0.74.0",
+    "@modelcontextprotocol/sdk": "^1.32.2",
     "@types/semver": "^7.7.0",
     "@types/yazl": "^2.4.6",
     "@wukong/acp-adapter": "workspace:^",

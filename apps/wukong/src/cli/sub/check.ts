@@ -102,7 +102,7 @@ export function registerCheckCommand(parent: Command, deps?: Partial<CheckDeps>)
     .option('--json', 'Print the structured check result as JSON.')
     .option('--strict', 'Treat any risk as a failed check.')
     .action(async (raw: RawCheckOptions) => {
-      const resolved = resolveDeps(deps);
+      const resolved = resolveCheckDeps(deps);
       let timeoutSeconds: number | undefined;
       if (raw.timeout !== undefined) {
         timeoutSeconds = parsePositiveInteger(raw.timeout);
@@ -134,7 +134,7 @@ interface RawCheckOptions {
   readonly strict?: boolean;
 }
 
-function resolveDeps(deps: Partial<CheckDeps> | undefined): CheckDeps {
+export function resolveCheckDeps(deps?: Partial<CheckDeps>): CheckDeps {
   return {
     cwd: deps?.cwd ?? (() => process.cwd()),
     stdout: deps?.stdout ?? process.stdout,

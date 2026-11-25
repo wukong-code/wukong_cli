@@ -13,7 +13,8 @@ import { registerInitCommand } from './sub/init';
 import { registerJudgeCommand } from './sub/judge';
 import { registerLoginCommand } from './sub/login';
 import { registerLogoutCommand } from './sub/logout';
-import { parseVerificationSkills, registerLoopCommand } from './sub/loop';
+import { registerLoopCommand, parseVerificationSkills } from './sub/loop';
+import { registerMcpCommand } from './sub/mcp';
 import { registerProofCommand } from './sub/proof';
 import { registerProviderCommand } from './sub/provider';
 import { registerReviewCommand } from './sub/review';
@@ -37,6 +38,7 @@ export const CLI_CORE_COMMANDS = [
 ] as const;
 
 export const CLI_ADVANCED_COMMANDS = [
+  'mcp',
   'export',
   'review',
   'roles',
@@ -194,6 +196,7 @@ export function createProgram(
   registerCheckCommand(program);
   registerGateCommand(program);
   registerSummaryCommand(program);
+  registerMcpCommand(program);
   registerProviderCommand(program);
   registerAcpCommand(program);
   registerServerCommand(program);
